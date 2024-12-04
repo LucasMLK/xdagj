@@ -331,17 +331,6 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
             return ReasonCode.BAD_NETWORK_VERSION;
         }
 
-        // not connected
-//        if (client.getPeerId().equals(peer.getPeerId()) || channelMgr.isActivePeer(peer.getPeerId())) {
-//            return ReasonCode.DUPLICATED_PEER_ID;
-//        }
-
-        // validator can't share IP address
-//        if (channelMgr.isActiveIP(channel.getRemoteIp()) // already connected
-//                && nodeSpec.getNetwork() == Network.MAINNET) { // on main net
-//            return ReasonCode.VALIDATOR_IP_LIMITED;
-//        }
-
         return null;
     }
 

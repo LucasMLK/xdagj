@@ -205,24 +205,8 @@ public class ChannelManager {
         }
     }
 
-    // TODO:怎么发送 目前是发给除receive的节点
     public void sendNewBlock(BlockWrapper blockWrapper) {
-//        Node receive;
-//        Peer blockPeer = blockWrapper.getRemotePeer();
-//        Node node = kernel.getClient().getNode();
-//        // 说明是自己产生的
-//        if (blockPeer == null || (StringUtils.equals(blockPeer.getIp(), node.getIp()) && blockPeer.getPort() == node.getPort())) {
-//            receive = node;
-//        } else {
-//            Channel channel = activeChannels.get(blockWrapper.getRemotePeer().getPeerId());
-//            receive = channel != null ? new Node(channel.getRemoteIp(), channel.getRemotePort()) : null;
-//        }
         for (Channel channel : activeChannels.values()) {
-//            Peer remotePeer = channel.getRemotePeer();
-//            if (StringUtils.equals(remotePeer.getIp(), receive.getIp()) && remotePeer.getPort() == receive.getPort()) {
-//                log.debug("not send to sender node");
-//                continue;
-//            }
             channel.getP2pHandler().sendNewBlock(blockWrapper.getBlock(), blockWrapper.getTtl());
         }
     }

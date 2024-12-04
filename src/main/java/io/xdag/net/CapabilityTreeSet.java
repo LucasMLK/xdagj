@@ -26,7 +26,6 @@ package io.xdag.net;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 import java.util.Objects;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -85,13 +84,6 @@ public class CapabilityTreeSet {
      */
     public int size() {
         return capabilities.size();
-    }
-
-    /**
-     * Converts the capability set to an list of String.
-     */
-    public List<String> toList() {
-        return capabilities.stream().map(Capability::name).collect(Collectors.toList());
     }
 
     /**
