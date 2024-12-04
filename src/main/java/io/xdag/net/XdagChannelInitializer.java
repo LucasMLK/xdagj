@@ -70,9 +70,7 @@ public class XdagChannelInitializer extends ChannelInitializer<SocketChannel> {
             ch.config().setOption(ChannelOption.TCP_NODELAY, true);
 
             // notify disconnection to channel manager
-            ch.closeFuture().addListener(future -> {
-                channelMgr.remove(channel);
-            });
+            ch.closeFuture().addListener(future -> channelMgr.remove(channel));
         } catch (Exception e) {
             log.error("Unexpected error: [{}]", e.getMessage(), e);
         }
