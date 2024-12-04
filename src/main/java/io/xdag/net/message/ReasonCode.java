@@ -23,6 +23,9 @@
  */
 package io.xdag.net.message;
 
+import lombok.Getter;
+
+@Getter
 public enum ReasonCode {
 
     /**
@@ -70,7 +73,7 @@ public enum ReasonCode {
      */
     BAD_PEER(0x08);
 
-    private int code;
+    private final int code;
 
     private static final ReasonCode[] intToCode = new ReasonCode[256];
 
@@ -86,10 +89,6 @@ public enum ReasonCode {
 
     ReasonCode(int code) {
         this.code = code;
-    }
-
-    public int getCode() {
-        return code;
     }
 
     public byte toByte() {

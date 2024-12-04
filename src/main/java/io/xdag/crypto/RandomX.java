@@ -31,29 +31,20 @@ import static io.xdag.config.RandomXConstants.SEEDHASH_EPOCH_LAG;
 import static io.xdag.config.RandomXConstants.SEEDHASH_EPOCH_TESTNET_BLOCKS;
 import static io.xdag.config.RandomXConstants.SEEDHASH_EPOCH_TESTNET_LAG;
 import static io.xdag.config.RandomXConstants.XDAG_RANDOMX;
-import static io.xdag.utils.BytesUtils.bytesToPointer;
 import static io.xdag.utils.BytesUtils.equalBytes;
 
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.Set;
 
+import io.xdag.crypto.randomx.*;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.encoders.Hex;
 
-import com.sun.jna.Memory;
-import com.sun.jna.NativeLong;
-import com.sun.jna.Pointer;
-
 import io.xdag.config.Config;
 import io.xdag.config.MainnetConfig;
 import io.xdag.core.Block;
 import io.xdag.core.Blockchain;
-import io.xdag.crypto.randomx.NativeSize;
-import io.xdag.crypto.randomx.RandomXFlag;
-import io.xdag.crypto.randomx.RandomXJNA;
-import io.xdag.crypto.randomx.RandomXUtils;
 import io.xdag.utils.XdagTime;
 import lombok.Data;
 import lombok.Setter;
@@ -65,11 +56,10 @@ import lombok.extern.slf4j.Slf4j;
 public class RandomX {
 
     protected final RandomXMemory[] globalMemory = new RandomXMemory[2];
-    protected final ReadWriteLock[] globalMemoryLock = new ReentrantReadWriteLock[2];
     protected final Config config;
     protected boolean isTestNet = true;
     protected int mineType;
-    protected int flags;
+    protected Set<RandomXFlag> flagSet;
     protected long randomXForkSeedHeight;
     protected long randomXForkLag;
 
@@ -92,11 +82,11 @@ public class RandomX {
             isTestNet = false;
         }
         this.mineType = XDAG_RANDOMX;
-        // get randomx flags
+
+        flagSet = RandomXUtils.getFlagsSet();
         if (config.getRandomxSpec().getRandomxFlag()) {
-            flags = RandomXJNA.INSTANCE.randomx_get_flags() + RandomXFlag.LARGE_PAGES.getValue() + RandomXFlag.FULL_MEM.getValue();
-        } else {
-            flags = RandomXJNA.INSTANCE.randomx_get_flags();
+            flagSet.add(RandomXFlag.LARGE_PAGES);
+            flagSet.add(RandomXFlag.FULL_MEM);
         }
     }
 
@@ -177,46 +167,28 @@ public class RandomX {
 
         // init memory and lock
         for (int i = 0; i < 2; i++) {
-            globalMemoryLock[i] = new ReentrantReadWriteLock();
             globalMemory[i] = new RandomXMemory();
         }
     }
 
-
-    // 矿池初始化dataset
-    public void randomXPoolInitDataset(Pointer rxCache, Pointer rxDataset) {
-        RandomXJNA.INSTANCE.randomx_init_dataset(rxDataset, rxCache, new NativeLong(0), RandomXJNA.INSTANCE.randomx_dataset_item_count());
-    }
-
-
-    // 计算出hash
-    public Bytes32 randomXPoolCalcHash(Bytes data, int dataSize, long taskTime) {
+    public Bytes32 randomXPoolCalcHash(Bytes data, long taskTime) {
         Bytes32 hash;
         RandomXMemory memory = globalMemory[(int) (randomXPoolMemIndex) & 1];
-        ReadWriteLock readWriteLock;
+
         if (taskTime < memory.switchTime) {
-            readWriteLock = globalMemoryLock[(int) (randomXPoolMemIndex - 1) & 1];
             memory = globalMemory[(int) (randomXPoolMemIndex - 1) & 1];
-        } else {
-            readWriteLock = globalMemoryLock[(int) (randomXPoolMemIndex) & 1];
         }
 
-        readWriteLock.writeLock().lock();
-        try {
-            Pointer hashPointer = new Memory(RandomXUtils.HASH_SIZE);
-            RandomXJNA.INSTANCE.randomx_calculate_hash(memory.poolVm, bytesToPointer(data.toArray()), new NativeSize(dataSize), hashPointer);
-            hash = Bytes32.wrap(hashPointer.getByteArray(0, RandomXUtils.HASH_SIZE));
-        } finally {
-            readWriteLock.writeLock().unlock();
-        }
+
+        byte[] bytes = memory.poolTemplate.calculateHash(data.toArray());
+        hash = Bytes32.wrap(bytes);
 
         return hash;
     }
 
 
-    public byte[] randomXBlockHash(byte[] data, int dataSize, long blockTime) {
+    public byte[] randomXBlockHash(byte[] data, long blockTime) {
         byte[] hash;
-        ReadWriteLock readWriteLock;
         RandomXMemory memory;
         // no seed
         if (randomXHashEpochIndex == 0) {
@@ -228,118 +200,26 @@ public class RandomX {
                 log.debug("Block time {} less then switchtime {}", Long.toHexString(blockTime),
                         Long.toHexString(memory.switchTime));
                 return null;
-            } else {
-                readWriteLock = globalMemoryLock[(int) (randomXHashEpochIndex) & 1];
             }
         } else {
             memory = globalMemory[(int) (randomXHashEpochIndex) & 1];
             if (blockTime < memory.switchTime) {
-                readWriteLock = globalMemoryLock[(int) (randomXHashEpochIndex - 1) & 1];
                 memory = globalMemory[(int) (randomXHashEpochIndex - 1) & 1];
-            } else {
-                readWriteLock = globalMemoryLock[(int) (randomXHashEpochIndex) & 1];
             }
         }
 
-        readWriteLock.writeLock().lock();
-        try {
-            log.debug("Use seed {}", Hex.toHexString(Arrays.reverse(memory.seed)));
-            Pointer hashPointer = new Memory(RandomXUtils.HASH_SIZE);
-            RandomXJNA.INSTANCE.randomx_calculate_hash(memory.blockVm, bytesToPointer(data), new NativeSize(dataSize), hashPointer);
-            hash = hashPointer.getByteArray(0, RandomXUtils.HASH_SIZE);
-        } finally {
-            readWriteLock.writeLock().unlock();
-        }
+        log.debug("Use seed {}", Hex.toHexString(Arrays.reverse(memory.seed)));
+        hash = memory.blockTemplate.calculateHash(data);
 
         return hash;
     }
 
 
-    public Pointer randomXUpdateVm(RandomXMemory randomXMemory, boolean isPoolVm) {
-        if (isPoolVm) {
-            randomXMemory.poolVm = RandomXJNA.INSTANCE.randomx_create_vm(flags, randomXMemory.rxCache, randomXMemory.rxDataset);
-            return randomXMemory.poolVm;
-        } else {
-            randomXMemory.blockVm = RandomXJNA.INSTANCE.randomx_create_vm(flags, randomXMemory.rxCache, randomXMemory.rxDataset);
-            return randomXMemory.blockVm;
-        }
-    }
-
-
     public void randomXPoolUpdateSeed(long memIndex) {
-        ReadWriteLock readWriteLock = globalMemoryLock[(int) (memIndex) & 1];
-        readWriteLock.writeLock().lock();
-        try {
-            RandomXMemory rx_memory = globalMemory[(int) (memIndex) & 1];
-            if (rx_memory.rxCache == null) {
-                rx_memory.rxCache = RandomXJNA.INSTANCE.randomx_alloc_cache(flags);
-                if (rx_memory.rxCache == null) {
-                    // fail alloc
-                    log.debug("Failed alloc cache");
-                    return;
-                }
-            }
-            // 分配成功
-            RandomXJNA.INSTANCE.randomx_init_cache(rx_memory.rxCache, bytesToPointer(rx_memory.seed), new NativeSize(rx_memory.seed.length));
-
-            if (config.getRandomxSpec().getRandomxFlag()) {
-                if (rx_memory.rxDataset == null) {
-                    // 分配dataset
-                    rx_memory.rxDataset = RandomXJNA.INSTANCE.randomx_alloc_dataset(flags);
-                    if (rx_memory.rxDataset == null) {
-                        //分配失败
-                        log.debug("Failed alloc dataset");
-                        return;
-                    }
-                }
-
-                randomXPoolInitDataset(rx_memory.rxCache, rx_memory.rxDataset);
-            } else {
-                rx_memory.rxDataset = null;
-            }
-
-
-            if (randomXUpdateVm(rx_memory, true) == null) {
-                // update failed
-                log.debug("Update pool vm failed");
-                return;
-            }
-
-            // update finished
-            if (randomXUpdateVm(rx_memory, false) == null) {
-                // update failed
-                log.debug("Update block vm failed");
-            }
-
-            // update finished
-
-        } finally {
-            readWriteLock.writeLock().unlock();
-        }
-    }
-
-    // 释放 ，用于程序关闭时
-    public void randomXPoolReleaseMem() {
-        for (int i = 0; i < 2; i++) {
-            globalMemoryLock[i].writeLock().lock();
-            try {
-                RandomXMemory rx_memory = globalMemory[i];
-                if (rx_memory.poolVm != null) {
-                    RandomXJNA.INSTANCE.randomx_destroy_vm(rx_memory.poolVm);
-                }
-                if (rx_memory.blockVm != null) {
-                    RandomXJNA.INSTANCE.randomx_destroy_vm(rx_memory.blockVm);
-                }
-                if (rx_memory.rxCache != null) {
-                    RandomXJNA.INSTANCE.randomx_release_cache(rx_memory.rxCache);
-                }
-                if (rx_memory.rxDataset != null) {
-                    RandomXJNA.INSTANCE.randomx_release_dataset(rx_memory.rxDataset);
-                }
-            } finally {
-                globalMemoryLock[i].writeLock().unlock();
-            }
-        }
+        RandomXMemory rx_memory = globalMemory[(int) (memIndex) & 1];
+        // TODO changeKey should be re-init dataset
+        rx_memory.getPoolTemplate().changeKey(rx_memory.seed);
+        rx_memory.getBlockTemplate().changeKey(rx_memory.seed);
     }
 
     public void randomXLoadingSnapshot(byte[] preseed, long forkTime) {
@@ -419,7 +299,6 @@ public class RandomX {
 
                 randomXPoolUpdateSeed(memoryIndex);
                 randomXHashEpochIndex = memoryIndex;
-//                memory.isSwitched = 0;
                 if (XdagTime.getEpoch(blockchain.getBlockByHeight(blockchain.getXdagStats().nmain).getTimestamp())
                         >= memory.getSwitchTime()) {
                     memory.isSwitched = 1;
@@ -474,7 +353,6 @@ public class RandomX {
 
                 randomXPoolUpdateSeed(memoryIndex);
                 randomXHashEpochIndex = memoryIndex;
-//                memory.isSwitched = 0;
                 if (XdagTime.getEpoch(blockchain.getBlockByHeight(blockchain.getXdagStats().nmain).getTimestamp())
                         >= memory.getSwitchTime()) {
                     memory.isSwitched = 1;
@@ -526,7 +404,6 @@ public class RandomX {
 
                 randomXPoolUpdateSeed(memoryIndex);
                 randomXHashEpochIndex = memoryIndex;
-//                memory.isSwitched = 0;
                 if (XdagTime.getEpoch(blockchain.getBlockByHeight(blockchain.getXdagStats().nmain).getTimestamp())
                         >= memory.getSwitchTime()) {
                     memory.isSwitched = 1;

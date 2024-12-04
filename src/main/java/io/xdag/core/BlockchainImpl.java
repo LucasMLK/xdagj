@@ -1212,7 +1212,7 @@ public class BlockchainImpl implements Blockchain {
         Bytes32 rxHash = Hash.sha256(block.getXdagBlock().getData().slice(0, 512 - 32));
         data.set(0, rxHash);
         data.set(32, block.getXdagBlock().getField(15).getData());
-        byte[] blockHash = randomx.randomXBlockHash(data.toArray(), data.size(), epoch);
+        byte[] blockHash = randomx.randomXBlockHash(data.toArray(), epoch);
         BigInteger diff;
         if (blockHash != null) {
             Bytes32 hash = Bytes32.wrap(Arrays.reverse(blockHash));

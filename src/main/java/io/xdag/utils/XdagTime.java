@@ -34,8 +34,7 @@ public class XdagTime {
      */
     public static long getCurrentTimestamp() {
         long time_ms = System.currentTimeMillis();
-        double ms_tmp = (double) (time_ms << 10);
-        return (long) Math.ceil(ms_tmp / 1000 + 0.5);
+        return msToXdagtimestamp(time_ms);
     }
 
     /**
