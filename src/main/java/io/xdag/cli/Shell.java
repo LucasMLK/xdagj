@@ -47,6 +47,7 @@ import org.jline.reader.Parser;
 import org.jline.reader.impl.DefaultParser;
 import org.jline.terminal.Terminal;
 
+import java.io.PrintWriter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -164,8 +165,10 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
     }
 
     private void println(final String msg) {
-        reader.getTerminal().writer().println(msg);
-        reader.getTerminal().writer().flush();
+        try(PrintWriter writer = reader.getTerminal().writer()) {
+            writer.println(msg);
+            writer.flush();
+        }
     }
 
     private void processAccount(CommandInput input) {
