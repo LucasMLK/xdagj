@@ -32,77 +32,64 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * The Node Specifications
+ * Interface for node configuration specifications
+ * Defines methods to access node parameters and network settings
  */
 public interface NodeSpec {
 
+    // Network related methods
     Network getNetwork();
-
     short getNetworkVersion();
-
     String getNodeTag();
-
     int getWaitEpoch();
 
-//    int getNetMaxMessageQueueSize();
+    // Commented out as appears deprecated
+    // int getNetMaxMessageQueueSize();
 
+    // Network handshake and messaging
     int getNetHandshakeExpiry();
-
     Set<MessageCode> getNetPrioritizedMessages();
-
     int getNetMaxInboundConnectionsPerIp();
-
     int getNetMaxInboundConnections();
-
     int getNetChannelIdleTimeout();
 
+    // Node connection settings
     String getNodeIp();
-
     int getNodePort();
-
     int getMaxConnections();
-
     int getMaxInboundConnectionsPerIp();
-
     int getConnectionReadTimeout();
-
     int getConnectionTimeout();
 
+    // Node operation parameters
     int getTTL();
     int getAwardEpoch();
 
+    // Whitelist management
     List<InetSocketAddress> getWhiteIPList();
-
     void setWhiteIPList(List<InetSocketAddress> list);
 
+    // Storage configuration
     String getStoreDir();
-
-    // Store
     void setStoreDir(String dir);
-
     String getStoreBackupDir();
-
     void setStoreBackupDir(String dir);
-
     String getWhiteListDir();
-
     String getNetDBDir();
-
     int getStoreMaxOpenFiles();
-
     int getStoreMaxThreads();
-
     boolean isStoreFromBackup();
 
+    // Network packet settings
     int getNetMaxFrameBodySize();
-
     int getNetMaxPacketSize();
 
-    // White List
+    // Whitelist and transaction settings
     String getWhitelistUrl();
-    //reject transaction address;
-    String getRejectAddress();
+    String getRejectAddress(); // Address for rejected transactions
     boolean enableRefresh();
+    
+    // There appears to be a typo in method name - should be "getNodeRatio"
     double getNodeRation();
 
 }

@@ -70,7 +70,7 @@ public class XdagPow implements PoW, Listener, Runnable {
     protected Broadcaster broadcaster;
     @Getter
     protected GetShares sharesFromPools;
-    // 当前区块
+    // Current block
     protected AtomicReference<Block> generateBlock = new AtomicReference<>();
     protected AtomicReference<Bytes32> minShare = new AtomicReference<>();
     protected final AtomicReference<Bytes32> minHash = new AtomicReference<>();
@@ -338,17 +338,14 @@ public class XdagPow implements PoW, Listener, Runnable {
     }
 
     /**
-     * Created original task, now deprecated
+     * Create original task, now deprecated
      */
     private Task createTaskByNewBlock(Block block, long sendTime) {
         Task newTask = new Task();
 
         XdagField[] task = new XdagField[2];
         task[1] = block.getXdagBlock().getField(14);
-//        byte[] data = new byte[448];
         MutableBytes data = MutableBytes.create(448);
-
-//        System.arraycopy(block.getXdagBlock().getData(), 0, data, 0, 448);
         data.set(0, block.getXdagBlock().getData().slice(0, 448));
 
         XdagSha256Digest currentTaskDigest = new XdagSha256Digest();
@@ -562,7 +559,7 @@ public class XdagPow implements PoW, Listener, Runnable {
         }
 
         public void getShareInfo(String share) {
-            // todo:Limit the number of shares submitted by each pool within each block production cycle
+            // TODO: Limit the number of shares submitted by each pool within each block production cycle
             if (!shareQueue.offer(share)) {
                 log.error("Failed to get ShareInfo from pools");
             }

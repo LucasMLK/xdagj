@@ -63,13 +63,13 @@ public class Keys {
      *
      * <p>Private keys are encoded using X.509
      */
-    static KeyPair createSecp256k1KeyPair()
+    public static KeyPair createSecp256k1KeyPair()
             throws NoSuchProviderException, NoSuchAlgorithmException,
             InvalidAlgorithmParameterException {
         return createSecp256k1KeyPair(SecureRandomProvider.publicSecureRandom());
     }
 
-    static KeyPair createSecp256k1KeyPair(SecureRandom random)
+    public static KeyPair createSecp256k1KeyPair(SecureRandom random)
             throws NoSuchProviderException, NoSuchAlgorithmException,
             InvalidAlgorithmParameterException {
 
@@ -100,4 +100,3 @@ public class Keys {
     }
 
 }
-

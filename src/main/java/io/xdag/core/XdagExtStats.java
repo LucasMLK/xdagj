@@ -30,16 +30,26 @@ import java.util.Arrays;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Class for tracking extended XDAG statistics including hash rates
+ */
 @Getter
 @Setter
 public class XdagExtStats {
+    // Array to store total network hash rate history
     private BigInteger[] hashRateTotal = new BigInteger[HASH_RATE_LAST_MAX_TIME];
+    // Array to store our node's hash rate history  
     private BigInteger[] hashRateOurs = new BigInteger[HASH_RATE_LAST_MAX_TIME];
+    // Timestamp of last hash rate update
     private long hashrate_last_time;
 
+    /**
+     * Constructor that initializes hash rate arrays to zero
+     * and sets initial timestamp
+     */
     public XdagExtStats() {
-        Arrays.fill(hashRateTotal,BigInteger.ZERO);
-        Arrays.fill(hashRateOurs,BigInteger.ZERO);
+        Arrays.fill(hashRateTotal, BigInteger.ZERO);
+        Arrays.fill(hashRateOurs, BigInteger.ZERO); 
         hashrate_last_time = 0L;
     }
 }

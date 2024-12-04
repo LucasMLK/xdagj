@@ -24,28 +24,34 @@
 
 package io.xdag.consensus;
 
+/**
+ * Interface for Proof of Work (PoW) implementation
+ */
 public interface PoW {
 
     /**
-     * Start thread
+     * Starts the PoW mining thread
      */
     void start();
 
     /**
-     * Stop thread
+     * Stops the PoW mining thread
      */
     void stop();
 
     /**
-     * is running
+     * Checks if the PoW mining thread is currently running
      *
-     * @return .
+     * @return true if mining thread is running, false otherwise
      */
     boolean isRunning();
 
     /**
-     * Receive and process shares sent by pool
+     * Processes new shares received from mining pool
+     *
+     * @param share The share data received from pool
+     * @param hash The hash of the share
+     * @param taskIndex The index of the mining task
      */
-
     void receiveNewShare(String share, String hash, long taskIndex);
 }

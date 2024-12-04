@@ -27,21 +27,53 @@ import io.xdag.Network;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Represents a peer node in the XDAG network
+ */
 @Getter
 public class Peer {
 
+    // Network instance this peer belongs to
     private final Network network;
+    
+    // Protocol version used by this peer
     private final short networkVersion;
+    
+    // Unique identifier for this peer
     private final String peerId;
+    
+    // IP address of the peer
     private final String ip;
+    
+    // Port number used by the peer
     private final int port;
+    
+    // Client software identifier
     private final String clientId;
+    
+    // Supported capabilities/features
     private final String[] capabilities;
+    
+    // Latest block number known by this peer
     @Setter
     private long latestBlockNumber;
+    
+    // Network latency to this peer in milliseconds
     @Setter
     private long latency;
 
+    /**
+     * Creates a new Peer instance
+     *
+     * @param network Network instance
+     * @param networkVersion Protocol version
+     * @param peerId Unique peer identifier
+     * @param ip IP address
+     * @param port Port number
+     * @param clientId Client software identifier
+     * @param capabilities Supported capabilities
+     * @param latestBlockNumber Latest known block number
+     */
     public Peer(Network network, short networkVersion, String peerId, String ip, int port, String clientId,
             String[] capabilities, long latestBlockNumber) {
         this.network = network;
@@ -54,6 +86,9 @@ public class Peer {
         this.latestBlockNumber = latestBlockNumber;
     }
 
+    /**
+     * Returns string representation of peer in format: peerId@ip:port
+     */
     @Override
     public String toString() {
         return getPeerId() + "@" + ip + ":" + port;

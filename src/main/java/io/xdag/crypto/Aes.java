@@ -36,20 +36,21 @@ import org.bouncycastle.crypto.params.ParametersWithIV;
 public class Aes {
 
     private Aes() {
+        // Private constructor to prevent instantiation
     }
 
     private static byte[] cipherData(PaddedBufferedBlockCipher cipher, byte[] data)
             throws DataLengthException, IllegalStateException, InvalidCipherTextException {
-        // create output buffer
+        // Create output buffer
         int size = cipher.getOutputSize(data.length);
         byte[] buf = new byte[size];
 
-        // process data
+        // Process data
         int length1 = cipher.processBytes(data, 0, data.length, buf, 0);
         int length2 = cipher.doFinal(buf, length1);
         int length = length1 + length2;
 
-        // copy buffer to result, without padding
+        // Copy buffer to result, without padding
         byte[] result = new byte[length];
         System.arraycopy(buf, 0, result, 0, result.length);
 
@@ -59,9 +60,12 @@ public class Aes {
     /**
      * Encrypt data with AES/CBC/PKCS5Padding.
      *
+     * @param raw The raw data to be encrypted
+     * @param key The encryption key
+     * @param iv The initialization vector
+     * @return The encrypted data
      */
     public static byte[] encrypt(byte[] raw, byte[] key, byte[] iv) {
-
         try {
             PaddedBufferedBlockCipher aes = new PaddedBufferedBlockCipher(new CBCBlockCipher(new AESEngine()));
             CipherParameters params = new ParametersWithIV(new KeyParameter(key), iv);
@@ -70,14 +74,17 @@ public class Aes {
             return cipherData(aes, raw);
         } catch (DataLengthException | IllegalArgumentException | IllegalStateException
                 | InvalidCipherTextException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Encryption failed", e);
         }
-
     }
 
     /**
      * Decrypt data with AES/CBC/PKCS5Padding
      *
+     * @param encrypted The encrypted data
+     * @param key The decryption key
+     * @param iv The initialization vector
+     * @return The decrypted data
      */
     public static byte[] decrypt(byte[] encrypted, byte[] key, byte[] iv) {
         try {
@@ -88,8 +95,7 @@ public class Aes {
             return cipherData(aes, encrypted);
         } catch (DataLengthException | IllegalArgumentException | IllegalStateException
                 | InvalidCipherTextException e) {
-            throw new RuntimeException(e);
+            throw new RuntimeException("Decryption failed", e);
         }
     }
-
 }

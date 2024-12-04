@@ -27,6 +27,9 @@ package io.xdag.utils;
 import java.math.BigInteger;
 import org.apache.commons.lang3.StringUtils;
 
+/**
+ * Utility class for numeric and hex string conversions
+ */
 public class Numeric {
 
     private static final String HEX_PREFIX = "0x";
@@ -35,6 +38,9 @@ public class Numeric {
     private Numeric() {
     }
 
+    /**
+     * Removes "0x" prefix from hex string if present
+     */
     public static String cleanHexPrefix(String input) {
         if (containsHexPrefix(input)) {
             return input.substring(2);
@@ -43,6 +49,9 @@ public class Numeric {
         }
     }
 
+    /**
+     * Checks if string starts with "0x" prefix
+     */
     public static boolean containsHexPrefix(String input) {
         return !StringUtils.isEmpty(input)
                 && input.length() > 1
@@ -50,27 +59,45 @@ public class Numeric {
                 && input.charAt(1) == 'x';
     }
 
+    /**
+     * Converts byte array to BigInteger
+     */
     public static BigInteger toBigInt(byte[] value) {
         return new BigInteger(1, value);
     }
 
+    /**
+     * Converts hex string to BigInteger, handling "0x" prefix
+     */
     public static BigInteger toBigInt(String hexValue) {
         String cleanValue = cleanHexPrefix(hexValue);
         return toBigIntNoPrefix(cleanValue);
     }
 
+    /**
+     * Converts hex string without prefix to BigInteger
+     */
     public static BigInteger toBigIntNoPrefix(String hexValue) {
         return new BigInteger(hexValue, 16);
     }
 
+    /**
+     * Converts BigInteger to hex string without "0x" prefix
+     */
     public static String toHexStringNoPrefix(BigInteger value) {
         return value.toString(16);
     }
 
+    /**
+     * Converts BigInteger to zero-padded hex string without prefix
+     */
     public static String toHexStringNoPrefixZeroPadded(BigInteger value, int size) {
         return toHexStringZeroPadded(value, size, false);
     }
 
+    /**
+     * Helper method to convert BigInteger to zero-padded hex string
+     */
     private static String toHexStringZeroPadded(BigInteger value, int size, boolean withPrefix) {
         String result = toHexStringNoPrefix(value);
 
@@ -93,6 +120,9 @@ public class Numeric {
         }
     }
 
+    /**
+     * Converts hex string to byte array
+     */
     public static byte[] hexStringToByteArray(String input) {
         String cleanInput = cleanHexPrefix(input);
 
@@ -122,11 +152,17 @@ public class Numeric {
         return data;
     }
 
+    /**
+     * Converts byte array to hex string with offset and length
+     */
     public static String toHexString(byte[] input, int offset, int length, boolean withPrefix) {
         final String output = new String(toHexCharArray(input, offset, length, withPrefix));
         return withPrefix ? HEX_PREFIX + output : output;
     }
 
+    /**
+     * Helper method to convert byte array to hex char array
+     */
     private static char[] toHexCharArray(byte[] input, int offset, int length, boolean withPrefix) {
         final char[] output = new char[length << 1];
         for (int i = offset, j = 0; i < length; i++, j++) {
@@ -137,6 +173,9 @@ public class Numeric {
         return output;
     }
 
+    /**
+     * Converts byte array to hex string with "0x" prefix
+     */
     public static String toHexString(byte[] input) {
         return toHexString(input, 0, input.length, true);
     }

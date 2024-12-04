@@ -1,6 +1,4 @@
 /*
- * The MIT License (MIT)
- *
  * Copyright (c) 2020-2030 The XdagJ Developers
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -28,13 +26,33 @@ import java.math.BigInteger;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Top status of the block tree.
+ *
+ * @author ycx
+ */
 @Getter
 @Setter
 public class XdagTopStatus {
 
+    /**
+     * The top block hash.
+     */
     private byte[] top;
+
+    /**
+     * The top block difficulty.
+     */
     private BigInteger topDiff;
+
+    /**
+     * The pre-top block hash.
+     */
     private byte[] preTop;
+
+    /**
+     * The pre-top block difficulty.
+     */
     private BigInteger preTopDiff;
 
     public XdagTopStatus() {

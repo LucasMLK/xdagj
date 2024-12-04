@@ -23,21 +23,56 @@
  */
 package io.xdag.config.spec;
 
+/**
+ * Interface for snapshot configuration specifications
+ * Defines methods to manage snapshot functionality and parameters
+ */
 public interface SnapshotSpec {
 
+    /**
+     * Check if snapshot functionality is enabled
+     * @return Boolean indicating if snapshot is enabled
+     */
     boolean isSnapshotEnabled();
 
+    /**
+     * Check if using XdagJ snapshot implementation
+     * @return Boolean indicating if using XdagJ snapshot
+     */
     boolean isSnapshotJ();
 
+    /**
+     * Get the block height at which snapshot was taken
+     * @return Long value of snapshot block height
+     */
     long getSnapshotHeight();
 
+    /**
+     * Set the block height for snapshot
+     * @param height Long value specifying snapshot block height
+     */
     void setSnapshotHeight(long height);
 
+    /**
+     * Set whether to use XdagJ snapshot implementation
+     * @param isSnapshotJ Boolean indicating whether to use XdagJ snapshot
+     */
     void setSnapshotJ(boolean isSnapshotJ);
 
+    /**
+     * Enable snapshot functionality
+     */
     void snapshotEnable();
 
+    /**
+     * Get the timestamp of when snapshot was taken
+     * @return Long value of snapshot timestamp
+     */
     long getSnapshotTime();
 
+    /**
+     * Set the timestamp for snapshot
+     * @param time Long value specifying snapshot timestamp
+     */
     void setSnapshotTime(long time);
 }

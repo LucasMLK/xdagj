@@ -29,9 +29,20 @@ import org.apache.tuweni.bytes.MutableBytes32;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Enum representing different results of block import operations
+ * ERROR - Import failed with error
+ * EXIST - Block already exists
+ * NO_PARENT - Parent block not found
+ * INVALID_BLOCK - Block validation failed
+ * IN_MEM - Block is already in memory
+ * IMPORTED_EXTRA - Block imported as extra
+ * IMPORTED_NOT_BEST - Block imported but not in main chain
+ * IMPORTED_BEST - Block imported into main chain
+ */
 public enum ImportResult {
     ERROR,
-    EXIST,
+    EXIST, 
     NO_PARENT,
     INVALID_BLOCK,
     IN_MEM,
@@ -40,16 +51,26 @@ public enum ImportResult {
     IMPORTED_NOT_BEST,
     IMPORTED_BEST;
 
-    MutableBytes32 hashLow;
+    // Truncated hash of the block
+    private MutableBytes32 hashLow;
 
+    // Error message if import failed
     @Setter
     @Getter
-    String errorInfo;
+    private String errorInfo;
 
+    /**
+     * Get the truncated hash of the block
+     * @return The truncated hash as MutableBytes32
+     */
     public MutableBytes32 getHashlow() {
         return hashLow;
     }
 
+    /**
+     * Set the truncated hash of the block
+     * @param hashLow The truncated hash to set
+     */
     public void setHashlow(MutableBytes32 hashLow) {
         this.hashLow = hashLow;
     }

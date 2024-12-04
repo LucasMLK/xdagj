@@ -43,63 +43,66 @@ public class XdagFrameHandler extends ByteToMessageCodec<Frame>  {
 
     @Override
     protected void encode(ChannelHandlerContext ctx, Frame frame, ByteBuf out) throws Exception {
-        // check version
+        // Check frame version
         if (frame.getVersion() != Frame.VERSION) {
             log.error("Invalid frame version: {}", frame.getVersion());
             return;
         }
 
-        // check body size
+        // Validate body size against configured maximum
         int bodySize = frame.getBodySize();
         if (bodySize < 0 || bodySize > config.getNodeSpec().getNetMaxFrameBodySize()) {
             log.error("Invalid frame body size: {}", bodySize);
             return;
         }
 
-        // create a buffer
+        // Allocate buffer and write frame data
         ByteBuf buf = out.alloc().buffer(Frame.HEADER_SIZE + bodySize);
         frame.writeHeader(buf);
         buf.writeBytes(frame.getBody());
 
-        // NOTE: write() operation does not flush automatically
-
-        // write to context
+        // Write buffer to context (Note: does not auto-flush)
         ctx.write(buf);
+        
+        // Consider releasing the buffer after writing
+        buf.release(); // Potential memory leak if not released
     }
 
     @Override
     protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) throws Exception {
+        // Wait for complete header
         if (in.readableBytes() < Frame.HEADER_SIZE) {
             return;
         }
 
-        // read frame header
+        // Mark reader index for potential reset
         int readerIndex = in.readerIndex();
         Frame frame = Frame.readHeader(in);
 
-        // check version
+        // Validate frame version
         if (frame.getVersion() != Frame.VERSION) {
             throw new IOException("Invalid frame version: " + frame.getVersion());
         }
 
-        // check body size
+        // Validate body size against configured maximum
         int bodySize = frame.getBodySize();
         if (bodySize < 0 || bodySize > config.getNodeSpec().getNetMaxFrameBodySize()) {
             throw new IOException("Invalid frame body size: " + bodySize);
         }
 
+        // Handle incomplete frame
         if (in.readableBytes() < bodySize) {
-            // reset reader index if not available
             in.readerIndex(readerIndex);
-        } else {
-            // read body
-            byte[] body = new byte[bodySize];
-            in.readBytes(body);
-            frame.setBody(body);
-
-            // deliver
-            out.add(frame);
+            return;
         }
+
+        // Read and set frame body
+        byte[] body = new byte[bodySize];
+        in.readBytes(body);
+        frame.setBody(body);
+
+        // Add decoded frame to output
+        out.add(frame);
     }
 
 }

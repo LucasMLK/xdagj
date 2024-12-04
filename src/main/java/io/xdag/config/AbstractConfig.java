@@ -50,48 +50,41 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
 
     protected String configName;
 
-    // =========================
-    // Admin spec
-    // =========================
+    // Admin configuration
     protected String telnetIp = "127.0.0.1";
     protected int telnetPort = 7001;
     protected String telnetPassword;
 
-    // =========================
-    // Pool websocket spec
-    // =========================
-
+    // Pool websocket configuration 
     protected int websocketServerPort;
-
     protected int maxShareCountPerChannel = 20;
     protected int awardEpoch = 0xf;
     protected int waitEpoch = 32;
-    // =========================
-    // foundation spec
-    // =========================
+
+    // Foundation configuration
     protected String fundAddress;
     protected double fundRation;
     protected double nodeRation;
-    // =========================
-    // Network
-    // =========================
+
+    // Network configuration
     protected Network network;
     protected short networkVersion;
     protected int netMaxOutboundConnections = 128;
     protected int netMaxInboundConnections = 512;
     protected int netMaxInboundConnectionsPerIp = 5;
-//    protected int netMaxMessageQueueSize = 4096;
     protected int netMaxFrameBodySize = 128 * 1024;
     protected int netMaxPacketSize = 16 * 1024 * 1024;
     protected int netRelayRedundancy = 8;
     protected int netHandshakeExpiry = 5 * 60 * 1000;
     protected int netChannelIdleTimeout = 2 * 60 * 1000;
 
+    // Prioritized network messages
     protected Set<MessageCode> netPrioritizedMessages = new HashSet<>(Arrays.asList(
             MessageCode.NEW_BLOCK,
             MessageCode.BLOCK_REQUEST,
             MessageCode.BLOCKS_REQUEST));
 
+    // Node configuration
     protected String nodeIp;
     protected int nodePort;
     protected String nodeTag;
@@ -103,6 +96,7 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     protected long txPageSizeLimit = 500;
     protected boolean enableGenerateBlock = false;
 
+    // Storage configuration
     protected String rootDir;
     protected String storeDir;
     protected String storeBackupDir;
@@ -115,6 +109,7 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     protected boolean storeFromBackup = false;
     protected String originStoreDir = "./testdate";
 
+    // Whitelist configuration
     protected String whitelistUrl;
     protected boolean enableRefresh = false;
     protected String walletKeyFile;
@@ -123,39 +118,29 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     protected List<InetSocketAddress> whiteIPList = Lists.newArrayList();
     protected List<String> poolWhiteIPList = Lists.newArrayList();
 
-    // =========================
-    // Wallet spec
-    // =========================
+    // Wallet configuration
     protected String walletFilePath;
 
-    // =========================
-    // Xdag spec
-    // =========================
+    // XDAG configuration
     protected long xdagEra;
     protected XdagField.FieldType xdagFieldHeader;
     protected XAmount mainStartAmount;
     protected long apolloForkHeight;
     protected XAmount apolloForkAmount;
 
-    // =========================
-    // Xdag RPC modules
-    // =========================
+    // RPC configuration
     protected List<ModuleDescription> moduleDescriptions;
     protected boolean rpcEnabled = false;
     protected String rpcHost;
     protected int rpcPortHttp;
 
-    // =========================
-    // Xdag Snapshot
-    // =========================
+    // Snapshot configuration
     protected boolean snapshotEnabled = false;
     protected long snapshotHeight;
     protected long snapshotTime;
     protected boolean isSnapshotJ;
 
-    // =========================
-    // Randomx Config
-    // =========================
+    // RandomX configuration
     protected boolean flag;
 
     protected AbstractConfig(String rootDir, String configName, Network network, short networkVersion) {
@@ -271,7 +256,7 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
             int port = Integer.parseInt(addr.split(":")[1]);
             whiteIPList.add(new InetSocketAddress(ip, port));
         }
-        // rpc
+        // RPC configuration
         rpcEnabled = config.hasPath("rpc.enabled") && config.getBoolean("rpc.enabled");
         if (rpcEnabled) {
             rpcHost = config.hasPath("rpc.http.host") ? config.getString("rpc.http.host") : "127.0.0.1";
@@ -295,7 +280,7 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
                 case "-m":
                 case "-s":
                     i++;
-                    // todo 设置挖矿的线程数
+                    // TODO: Set mining thread count
                     break;
                 case "-f":
                     i++;
@@ -306,14 +291,14 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
                     this.changeNode(args[i]);
                     break;
                 case "-r":
-                    // todo only load block but no run
+                    // TODO: Only load block but no run
                     break;
                 case "-d":
                 case "-t":
-                    // only devnet or testnet
+                    // Only devnet or testnet
                     break;
                 default:
-//                    log.error("Illegal instruction");
+                    // log.error("Illegal instruction");
             }
         }
     }

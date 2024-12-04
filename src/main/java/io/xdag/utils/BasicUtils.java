@@ -47,18 +47,29 @@ import static io.xdag.utils.BytesUtils.equalBytes;
 import static io.xdag.utils.BytesUtils.long2UnsignedLong;
 import static io.xdag.utils.WalletUtils.toBase58;
 
+/**
+ * Utility class containing basic operations for XDAG
+ */
 public class BasicUtils {
 
+    /**
+     * Calculate difficulty from hash by shifting right 32 bits (4 bytes)
+     * @param hash Input hash value
+     * @return Calculated difficulty as BigInteger
+     */
     public static BigInteger getDiffByHash(Bytes32 hash) {
         MutableBytes data = MutableBytes.create(16);
-        // 实现了右移32位 4个字节
         data.set(4, hash.slice(0, 12));
         BigInteger res = new BigInteger(data.toUnprefixedHexString(), 16);
-        // max是2的128次方减1 这样效率高吗
         BigInteger max = new BigInteger("ffffffffffffffffffffffffffffffff", 16);
         return max.divide(res);
     }
 
+    /**
+     * Convert hex string address to Bytes32 hash
+     * @param address Hex string address
+     * @return Bytes32 hash or null if address is null
+     */
     public static Bytes32 getHash(String address) {
         Bytes32 hash = null;
         if (address != null) {
@@ -67,18 +78,40 @@ public class BasicUtils {
         return hash;
     }
 
+    /**
+     * Convert string to double with 2 decimal places
+     * @param value String number value
+     * @return Double value rounded to 2 decimal places
+     */
     public static double getDouble(String value) {
         double num = Double.parseDouble(value);
         BigDecimal bigDecimal = new BigDecimal(num);
         return bigDecimal.setScale(2, RoundingMode.HALF_UP).doubleValue();
     }
 
+    /**
+     * Convert hash to base64 address
+     * @param hash Input hash
+     * @return Base64 encoded address
+     */
     public static String hash2Address(Bytes32 hash) {
         return hash.reverse().slice(0, 24).toBase64String();
     }
+
+    /**
+     * Convert hash to public address
+     * @param hash Input hash
+     * @return Base58 encoded public address
+     */
     public static String hash2PubAddress(Bytes32 hash) {
        return toBase58(hash2byte(hash.mutableCopy()));
     }
+
+    /**
+     * Convert hex public address to hash low
+     * @param hexPubAddress Hex string public address
+     * @return Hash low as MutableBytes32
+     */
     public static MutableBytes32 hexPubAddress2Hashlow(String hexPubAddress){
         Bytes hash = Bytes.fromHexString(hexPubAddress);
         MutableBytes32 hashLow = MutableBytes32.create();
@@ -86,6 +119,11 @@ public class BasicUtils {
         return hashLow;
     }
 
+    /**
+     * Convert base64 address to hash
+     * @param address Base64 encoded address
+     * @return Hash as Bytes32
+     */
     public static Bytes32 address2Hash(String address) {
         Bytes ret = Bytes.fromBase64String(address);
         MutableBytes32 res = MutableBytes32.create();
@@ -93,6 +131,11 @@ public class BasicUtils {
         return res;
     }
 
+    /**
+     * Convert public address to hash
+     * @param address Base58 encoded public address
+     * @return Hash as Bytes32
+     */
     public static Bytes32 pubAddress2Hash(String address) {
         Bytes ret = Bytes.wrap(WalletUtils.fromBase58(address));
         MutableBytes32 res = MutableBytes32.create();
@@ -100,6 +143,11 @@ public class BasicUtils {
         return res;
     }
 
+    /**
+     * Convert key pair to hash
+     * @param keyPair Input key pair
+     * @return Hash as Bytes32
+     */
     public static Bytes32 keyPair2Hash(KeyPair keyPair) {
         Bytes ret = Bytes.wrap(Keys.toBytesAddress(keyPair));
         MutableBytes32 res = MutableBytes32.create();
@@ -107,15 +155,32 @@ public class BasicUtils {
         return res;
     }
 
+    /**
+     * Extract bytes from hash
+     * @param hash Input hash as MutableBytes32
+     * @return Byte array
+     */
     public static byte[] hash2byte(MutableBytes32 hash){
         Bytes bytes = hash.slice(8,20);
         return bytes.toArray();
     }
+
+    /**
+     * Extract bytes from hash
+     * @param hash Input hash as Bytes32
+     * @return Byte array
+     */
     public static byte[] hash2byte(Bytes32 hash){
         Bytes bytes = hash.slice(8,20);
         return bytes.toArray();
     }
 
+    /**
+     * Convert XDAG amount to internal representation
+     * @param input XDAG amount as double
+     * @return Internal amount as UInt64
+     * @throws XdagOverFlowException if input is negative
+     */
     public static UInt64 xdag2amount(double input) {
         if (input < 0) {
             throw new XdagOverFlowException();
@@ -123,16 +188,17 @@ public class BasicUtils {
         long amount = (long) Math.floor(input);
 
         UInt64 res = UInt64.valueOf(amount).shiftLeft(32);
-        input -= amount; // 小数部分
+        input -= amount; // Decimal part
         input = input * Math.pow(2, 32);
         long tmp = (long) Math.ceil(input);
         return res.add(tmp);
     }
 
     /**
-     * Xfer:transferred   44796588980   10.430000000 XDAG to the address 0000002f28322e9d817fd94a1357e51a. 10.43
-     * Xfer:transferred   42949672960   10.000000000 XDAG to the address 0000002f28322e9d817fd94a1357e51a. 10
-     * Xfer:transferred 4398046511104 1024.000000000 XDAG to the address 0000002f28322e9d817fd94a1357e51a. 1024
+     * Convert internal amount to XDAG
+     * @param xdag Internal amount as long
+     * @return XDAG amount as double
+     * @throws XdagOverFlowException if input is negative
      */
     public static double amount2xdag(long xdag) {
         if (xdag < 0) {
@@ -145,6 +211,11 @@ public class BasicUtils {
         return bigDecimal.setScale(12, RoundingMode.HALF_UP).doubleValue();
     }
 
+    /**
+     * Convert internal amount to XDAG
+     * @param xdag Internal amount as UInt64
+     * @return XDAG amount as double
+     */
     public static double amount2xdag(UInt64 xdag) {
         UInt64 first = xdag.shiftRight(32);
         UInt64 temp = xdag.subtract(first.shiftLeft(32));
@@ -153,6 +224,12 @@ public class BasicUtils {
         return bigDecimal.setScale(12, RoundingMode.HALF_UP).doubleValue();
     }
 
+    /**
+     * Verify CRC32 checksum
+     * @param src Source data
+     * @param crc Expected CRC value
+     * @return true if checksum matches
+     */
     public static boolean crc32Verify(byte[] src, int crc) {
         CRC32 crc32 = new CRC32();
         crc32.update(src, 0, 512);
@@ -160,6 +237,11 @@ public class BasicUtils {
                 BytesUtils.intToBytes((int) crc32.getValue(), true), BytesUtils.intToBytes(crc, true));
     }
 
+    /**
+     * Calculate logarithm of difficulty
+     * @param diff Input difficulty
+     * @return Logarithm value or 0 if diff <= 0
+     */
     public static double xdag_diff2log(BigInteger diff) {
         if (diff.compareTo(BigInteger.ZERO) > 0) {
             return Math.log(diff.doubleValue());
@@ -168,7 +250,11 @@ public class BasicUtils {
         }
     }
 
-
+    /**
+     * Calculate hash rate from difficulties
+     * @param diffs Array of difficulties
+     * @return Calculated hash rate
+     */
     public static double xdagHashRate(BigInteger[] diffs){
         double sum = 0;
         for (int i = 0; i < HASH_RATE_LAST_MAX_TIME; i++) {
@@ -178,22 +264,43 @@ public class BasicUtils {
         return Math.exp(sum) * Math.pow(2, -48);
     }
 
+    /**
+     * Compare two amounts
+     * @param amount1 First amount
+     * @param amount2 Second amount
+     * @return Comparison result
+     */
     public static int compareAmountTo(long amount1, long amount2) {
         return long2UnsignedLong(amount1).compareTo(long2UnsignedLong(amount2));
     }
 
+    /**
+     * Compare two XAmounts
+     */
     public static int compareAmountTo(XAmount amount1, XAmount amount2) {
         return amount1.compareTo(amount2);
     }
 
+    /**
+     * Compare two UInt64 amounts
+     */
     public static int compareAmountTo(UInt64 amount1, UInt64 amount2) {
         return amount1.compareTo(amount2);
     }
 
+    /**
+     * Compare two UnsignedLong amounts
+     */
     public static int compareAmountTo(UnsignedLong amount1, UnsignedLong amount2) {
         return amount1.compareTo(amount2);
     }
 
+    /**
+     * Convert internal amount to XDAG with BigDecimal precision
+     * @param xdag Internal amount
+     * @return XDAG amount as BigDecimal
+     * @throws XdagOverFlowException if input is negative
+     */
     public static BigDecimal amount2xdagNew(long xdag) {
         if(xdag < 0) throw new XdagOverFlowException();
         long first = xdag >> 32;
@@ -201,11 +308,14 @@ public class BasicUtils {
         double tem = temp / Math.pow(2, 32);
         return new BigDecimal(first + tem);
     }
+
     /**
+     * Perform division with specified scale
      * @param v1 dividend
      * @param v2 divisor
-     * @param scale Accurate to the number of digits after the decimal point
-     * @return The result after rounding
+     * @param scale decimal places to round to
+     * @return Division result rounded to specified scale
+     * @throws IllegalArgumentException if scale is negative
      */
     public static double div(double v1, double v2, int scale) {
         if (scale < 0) {
@@ -215,7 +325,12 @@ public class BasicUtils {
         BigDecimal b2 = BigDecimal.valueOf(v2);
         return b1.divide(b2, scale, RoundingMode.HALF_UP).doubleValue();
     }
-    // Parse and extract IP addresses, for example /133.22.245.177:11328 -> 133.22.245.177
+
+    /**
+     * Extract IP address from address:port string
+     * @param ipAddressAndPort String in format "/ip:port"
+     * @return Extracted IP address or null if not found
+     */
     public static String extractIpAddress(String ipAddressAndPort) {
         String pattern = "/(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}):\\d+";
         Pattern r = Pattern.compile(pattern);

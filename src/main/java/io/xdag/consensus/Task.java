@@ -29,15 +29,21 @@ import io.xdag.utils.XdagSha256Digest;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Task class represents a mining task in the XDAG consensus
+ */
 @Getter
 @Setter
 public class Task implements Cloneable {
+    // Array of XdagFields containing task data
     private XdagField[] task;
+    // Flag to identify task messages
     private static final int TASK_FLAG = 1;
+    // Timestamp of when the task was created
     private long taskTime;
-
+    // Index number of the task
     private long taskIndex;
-
+    // SHA256 digest of the task
     private XdagSha256Digest digest;
 
     @Override
@@ -47,6 +53,10 @@ public class Task implements Cloneable {
                 "}";
     }
 
+    /**
+     * Converts task to JSON string format
+     * @return JSON string representation of the task
+     */
     public String toJsonString() {
         String preHash = "";
         String taskSeed = "";
@@ -67,6 +77,11 @@ public class Task implements Cloneable {
                 "}";
     }
 
+    /**
+     * Creates a deep copy of the Task object
+     * @return Cloned Task object
+     * @throws CloneNotSupportedException if cloning is not supported
+     */
     @Override
     protected Object clone() throws CloneNotSupportedException {
         Task t = (Task) super.clone();
@@ -77,7 +92,9 @@ public class Task implements Cloneable {
             }
             t.setTask(xfArray);
         }
-        t.digest = new XdagSha256Digest(digest);
+        if (digest != null) {
+            t.digest = new XdagSha256Digest(digest);
+        }
         return t;
     }
 }

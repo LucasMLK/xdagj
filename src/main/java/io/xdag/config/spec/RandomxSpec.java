@@ -23,6 +23,14 @@
  */
 package io.xdag.config.spec;
 
+/**
+ * Interface for RandomX configuration specifications
+ * Defines method to access RandomX flag setting
+ */
 public interface RandomxSpec {
+    /**
+     * Get the RandomX flag status
+     * @return Boolean indicating if RandomX is enabled
+     */
     boolean getRandomxFlag();
 }

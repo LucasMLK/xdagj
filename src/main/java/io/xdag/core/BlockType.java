@@ -25,16 +25,30 @@ package io.xdag.core;
 
 import lombok.Getter;
 
+/**
+ * Enum representing different types of blocks in the XDAG blockchain
+ * MAIN_BLOCK - Main chain block that forms the blockchain
+ * WALLET - Wallet block that stores account information
+ * TRANSACTION - Transaction block that records transfers
+ * SNAPSHOT - Snapshot block used for chain state backup
+ */
 @Getter
 public enum BlockType {
     MAIN_BLOCK(0, "Main"),
-    WALLET(1, "Wallet"),
+    WALLET(1, "Wallet"), 
     TRANSACTION(2, "Transaction"),
     SNAPSHOT(3, "Snapshot");
 
+    // Numeric code representing the block type
     private final int code;
+    // Human readable description of the block type
     private final String desc;
 
+    /**
+     * Constructor for BlockType enum
+     * @param code Numeric code for the block type
+     * @param desc Description of the block type
+     */
     BlockType(int code, String desc) {
         this.code = code;
         this.desc = desc;

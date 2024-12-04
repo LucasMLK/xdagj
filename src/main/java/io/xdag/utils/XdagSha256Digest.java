@@ -31,31 +31,50 @@ import org.bouncycastle.util.Arrays;
 
 import java.io.IOException;
 
+/**
+ * Utility class for SHA256 hash operations
+ */
 public class XdagSha256Digest {
 
     private SHA256Digest sha256Digest;
     private DigestOutputStream outputStream;
 
+    /**
+     * Default constructor that initializes SHA256 digest
+     */
     public XdagSha256Digest() {
         sha256Init();
     }
 
+    /**
+     * Copy constructor
+     * @param other The XdagSha256Digest instance to copy from
+     */
     public XdagSha256Digest(XdagSha256Digest other) {
         sha256Digest = new SHA256Digest(other.sha256Digest);
         outputStream = new DigestOutputStream(sha256Digest);
     }
 
+    /**
+     * Initialize SHA256 digest and output stream
+     */
     public void sha256Init() {
         sha256Digest = new SHA256Digest();
         outputStream = new DigestOutputStream(sha256Digest);
     }
 
+    /**
+     * Update the digest with input bytes
+     * @param in Input bytes to update
+     */
     public void sha256Update(Bytes in) throws IOException {
         outputStream.write(in.toArray());
     }
 
     /**
-     * double sha256*
+     * Perform double SHA256 hash and return reversed result
+     * @param in Input bytes to hash
+     * @return Reversed double SHA256 hash result
      */
     public byte[] sha256Final(Bytes in) throws IOException {
         outputStream.write(in.toArray());
@@ -68,7 +87,9 @@ public class XdagSha256Digest {
     }
 
     /**
-     * 获取可以发送给C的state
+     * Get the state that can be sent to C implementation
+     * Extracts 32 bytes from encoded state and converts endianness
+     * @return 32 bytes state with adjusted endianness
      */
     public byte[] getState() {
         byte[] encodedState = sha256Digest.getEncodedState();

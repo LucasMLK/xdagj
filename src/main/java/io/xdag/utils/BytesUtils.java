@@ -35,8 +35,17 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
+/**
+ * Utility class for byte array operations and conversions
+ */
 public class BytesUtils {
 
+    /**
+     * Converts an integer to a byte array
+     * @param value The integer value to convert
+     * @param littleEndian If true, uses little-endian byte order
+     * @return Byte array representation of the integer
+     */
     public static byte[] intToBytes(int value, boolean littleEndian) {
         ByteBuffer buffer = ByteBuffer.allocate(4);
         if (littleEndian) {
@@ -47,7 +56,11 @@ public class BytesUtils {
     }
 
     /**
-     * 改为了4字节 原先为length 8
+     * Converts 4 bytes from a byte array to an integer
+     * @param input Source byte array
+     * @param offset Starting position in the array
+     * @param littleEndian If true, uses little-endian byte order
+     * @return The integer value
      */
     public static int bytesToInt(byte[] input, int offset, boolean littleEndian) {
         ByteBuffer buffer = ByteBuffer.wrap(input, offset, 4);
@@ -57,6 +70,12 @@ public class BytesUtils {
         return buffer.getInt();
     }
 
+    /**
+     * Converts a long to a byte array
+     * @param value The long value to convert
+     * @param littleEndian If true, uses little-endian byte order
+     * @return Byte array representation of the long
+     */
     public static byte[] longToBytes(long value, boolean littleEndian) {
         ByteBuffer buffer = ByteBuffer.allocate(8);
         if (littleEndian) {
@@ -66,6 +85,13 @@ public class BytesUtils {
         return buffer.array();
     }
 
+    /**
+     * Converts 8 bytes from a byte array to a long
+     * @param input Source byte array
+     * @param offset Starting position in the array
+     * @param littleEndian If true, uses little-endian byte order
+     * @return The long value
+     */
     public static long bytesToLong(byte[] input, int offset, boolean littleEndian) {
         ByteBuffer buffer = ByteBuffer.wrap(input, offset, 8);
         if (littleEndian) {
@@ -74,6 +100,12 @@ public class BytesUtils {
         return buffer.getLong();
     }
 
+    /**
+     * Converts a short to a byte array
+     * @param value The short value to convert
+     * @param littleEndian If true, uses little-endian byte order
+     * @return Byte array representation of the short
+     */
     public static byte[] shortToBytes(short value, boolean littleEndian) {
         ByteBuffer buffer = ByteBuffer.allocate(2);
         if (littleEndian) {
@@ -83,6 +115,12 @@ public class BytesUtils {
         return buffer.array();
     }
 
+    /**
+     * Converts a byte to a byte array
+     * @param value The byte value to convert
+     * @param littleEndian If true, uses little-endian byte order
+     * @return Single element byte array
+     */
     public static byte[] byteToBytes(byte value, boolean littleEndian) {
         ByteBuffer buffer = ByteBuffer.allocate(1);
         if (littleEndian) {
@@ -92,6 +130,13 @@ public class BytesUtils {
         return buffer.array();
     }
 
+    /**
+     * Converts 2 bytes from a byte array to a short
+     * @param input Source byte array
+     * @param offset Starting position in the array
+     * @param littleEndian If true, uses little-endian byte order
+     * @return The short value
+     */
     public static short bytesToShort(byte[] input, int offset, boolean littleEndian) {
         ByteBuffer buffer = ByteBuffer.wrap(input, offset, 2);
         if (littleEndian) {
@@ -100,10 +145,21 @@ public class BytesUtils {
         return buffer.getShort();
     }
 
+    /**
+     * Converts a byte array to a hex string
+     * @param data The byte array to convert
+     * @return Lowercase hex string representation
+     */
     public static String toHexString(byte[] data) {
         return data == null ? "" : BaseEncoding.base16().lowerCase().encode(data);
     }
 
+    /**
+     * Converts a BigInteger to a byte array of specified length
+     * @param b The BigInteger to convert
+     * @param numBytes Desired length of resulting byte array
+     * @return Byte array representation of the BigInteger
+     */
     public static byte[] bigIntegerToBytes(BigInteger b, int numBytes) {
         if (b == null) {
             return null;
@@ -116,6 +172,12 @@ public class BytesUtils {
         return bytes;
     }
 
+    /**
+     * Converts a UInt64 to a byte array of specified length
+     * @param b The UInt64 to convert
+     * @param numBytes Desired length of resulting byte array
+     * @return Byte array representation of the UInt64
+     */
     public static byte[] bigIntegerToBytes(UInt64 b, int numBytes) {
         if (b == null) {
             return null;
@@ -128,6 +190,13 @@ public class BytesUtils {
         return bytes;
     }
 
+    /**
+     * Converts a BigInteger to a byte array with endianness control
+     * @param b The BigInteger to convert
+     * @param numBytes Desired length of resulting byte array
+     * @param littleEndian If true, returns array in little-endian order
+     * @return Byte array representation of the BigInteger
+     */
     public static byte[] bigIntegerToBytes(BigInteger b, int numBytes, boolean littleEndian) {
         byte[] bytes = bigIntegerToBytes(b, numBytes);
         if (littleEndian) {
@@ -137,8 +206,9 @@ public class BytesUtils {
     }
 
     /**
-     * @param arrays - arrays to merge
-     * @return - merged array
+     * Merges multiple byte arrays into one
+     * @param arrays Arrays to merge
+     * @return Combined byte array
      */
     public static byte[] merge(byte[]... arrays) {
         int count = 0;
@@ -146,7 +216,6 @@ public class BytesUtils {
             count += array.length;
         }
 
-        // Create new array and copy all array contents
         byte[] mergedArray = new byte[count];
         int start = 0;
         for (byte[] array : arrays) {
@@ -157,7 +226,10 @@ public class BytesUtils {
     }
 
     /**
-     * Merge byte and byte array.
+     * Merges a single byte with a byte array
+     * @param b1 Single byte to prepend
+     * @param b2 Byte array to append
+     * @return Combined byte array
      */
     public static byte[] merge(byte b1, byte[] b2) {
         byte[] res = new byte[1 + b2.length];
@@ -167,10 +239,11 @@ public class BytesUtils {
     }
 
     /**
-     * @param arrays - 字节数组
-     * @param index - 起始索引
-     * @param length - 长度
-     * @return - 子数组
+     * Extracts a subarray from a byte array
+     * @param arrays Source byte array
+     * @param index Starting index
+     * @param length Length of subarray
+     * @return Extracted subarray
      */
     public static byte[] subArray(byte[] arrays, int index, int length) {
         byte[] arrayOfByte = new byte[length];
@@ -185,10 +258,9 @@ public class BytesUtils {
     }
 
     /**
-     * Hex字符串转byte
-     *
-     * @param hexString 待转换的Hex字符串
-     * @return 转换后的byte[]
+     * Converts a hex string to a byte array
+     * @param hexString Hex string to convert
+     * @return Byte array representation
      */
     public static byte[] hexStringToBytes(String hexString) {
         if (hexString == null || hexString.isEmpty()) {
@@ -205,12 +277,16 @@ public class BytesUtils {
         return d;
     }
 
+    /**
+     * Converts a hex character to its byte value
+     */
     private static byte charToByte(char c) {
         return (byte) "0123456789ABCDEF".indexOf(c);
     }
 
     /**
-     * 数组逆序
+     * Reverses a byte array in place
+     * @param origin Array to reverse
      */
     public static void arrayReverse(byte[] origin) {
         byte temp;
@@ -222,16 +298,29 @@ public class BytesUtils {
     }
 
     /**
-     * Convert a byte into a byte array.
+     * Creates a single-element byte array
+     * @param b Byte value
+     * @return Single-element byte array
      */
     public static byte[] of(byte b) {
         return new byte[]{b};
     }
 
+    /**
+     * Gets first byte from a byte array
+     * @param bytes Source array
+     * @return First byte
+     */
     public static byte toByte(byte[] bytes) {
         return bytes[0];
     }
 
+    /**
+     * Checks if a byte array starts with another byte array
+     * @param key Full array
+     * @param part Prefix to check
+     * @return True if key starts with part
+     */
     public static boolean keyStartsWith(byte[] key, byte[] part) {
         if (part.length > key.length) {
             return false;
@@ -244,6 +333,11 @@ public class BytesUtils {
         return true;
     }
 
+    /**
+     * Checks if a byte array contains only zeros
+     * @param input Array to check
+     * @return True if array contains only zeros
+     */
     public static boolean isFullZero(byte[] input) {
         for (byte b : input) {
             if (b != 0) {
@@ -253,20 +347,25 @@ public class BytesUtils {
         return true;
     }
 
+    /**
+     * Checks if two byte arrays are equal
+     * @param b1 First array
+     * @param b2 Second array
+     * @return True if arrays are equal
+     */
     public static boolean equalBytes(byte[] b1, byte[] b2) {
         return b1.length == b2.length && compareTo(b1, 0, b1.length, b2, 0, b2.length) == 0;
     }
 
     /**
-     * Lexicographically compare two byte arrays.
-     *
-     * @param b1 buffer1
-     * @param s1 offset1
-     * @param l1 length1
-     * @param b2 buffer2
-     * @param s2 offset2
-     * @param l2 length2
-     * @return int
+     * Lexicographically compares portions of two byte arrays
+     * @param b1 First array
+     * @param s1 Start index in first array
+     * @param l1 Length in first array
+     * @param b2 Second array
+     * @param s2 Start index in second array
+     * @param l2 Length in second array
+     * @return Comparison result
      */
     public static int compareTo(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
         return LexicographicalComparerHolder.BEST_COMPARER.compareTo(b1, s1, l1, b2, s2, l2);
@@ -277,33 +376,23 @@ public class BytesUtils {
     }
 
     private interface Comparer<T> {
-
         int compareTo(T buffer1, int offset1, int length1, T buffer2, int offset2, int length2);
     }
 
     /**
-     * Uses reflection to gracefully fall back to the Java implementation if
-     * {@code Unsafe} isn't available.
+     * Holder class for lexicographical comparison implementation
      */
     private static class LexicographicalComparerHolder {
-
         static final String UNSAFE_COMPARER_NAME = LexicographicalComparerHolder.class.getName() + "$UnsafeComparer";
-
         static final Comparer<byte[]> BEST_COMPARER = getBestComparer();
 
-        /**
-         * Returns the Unsafe-using Comparer, or falls back to the pure-Java
-         * implementation if unable to do so.
-         */
         static Comparer<byte[]> getBestComparer() {
             try {
                 Class<?> theClass = Class.forName(UNSAFE_COMPARER_NAME);
-
-                // yes, UnsafeComparer does implement Comparer<byte[]>
                 @SuppressWarnings("unchecked")
                 Comparer<byte[]> comparer = (Comparer<byte[]>) theClass.getEnumConstants()[0];
                 return comparer;
-            } catch (Throwable t) { // ensure we really catch *everything*
+            } catch (Throwable t) {
                 return lexicographicalComparerJavaImpl();
             }
         }
@@ -314,7 +403,6 @@ public class BytesUtils {
             @Override
             public int compareTo(
                     byte[] buffer1, int offset1, int length1, byte[] buffer2, int offset2, int length2) {
-                // Short circuit equalBytes case
                 if (buffer1 == buffer2 && offset1 == offset2 && length1 == length2) {
                     return 0;
                 }
@@ -332,15 +420,31 @@ public class BytesUtils {
         }
     }
 
+    /**
+     * Converts a byte array to MutableBytes32
+     * @param value Source byte array
+     * @return MutableBytes32 representation
+     */
     public static MutableBytes32 arrayToByte32(byte[] value){
         MutableBytes32 mutableBytes32 = MutableBytes32.wrap(new byte[32]);
         mutableBytes32.set(8, Bytes.wrap(value));
         return mutableBytes32;
     }
+
+    /**
+     * Extracts a byte array from MutableBytes32
+     * @param value Source MutableBytes32
+     * @return Extracted byte array
+     */
     public static byte[] byte32ToArray(MutableBytes32 value){
         return value.mutableCopy().slice(8,20).toArray();
     }
 
+    /**
+     * Converts a long to UnsignedLong
+     * @param number Source long value
+     * @return UnsignedLong representation
+     */
     public static UnsignedLong long2UnsignedLong(long number) {
         return UnsignedLong.valueOf(toHexString((ByteBuffer.allocate(8).putLong(number).array())),16);
     }

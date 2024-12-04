@@ -33,53 +33,79 @@ import static java.math.RoundingMode.HALF_UP;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.units.bigints.UInt64;
 
+/**
+ * Class representing XDAG amounts with nano precision
+ */
 public class XAmount implements Comparable<XAmount> {
 
+    // Common constants
     public static final XAmount ZERO = new XAmount(0);
     public static final XAmount ONE = new XAmount(1);
     public static final XAmount TEN = new XAmount(10);
 
+    // Amount in nano units
     private final long nano;
 
+    /**
+     * Private constructor to enforce factory methods
+     */
     private XAmount(long nano) {
         this.nano = nano;
     }
 
+    /**
+     * Create XAmount from long value
+     */
     public static XAmount of(long n) {
         return new XAmount(n);
     }
 
+    /**
+     * Create XAmount from string value
+     */
     public static XAmount of(String n) {
         return new XAmount(Long.parseLong(n));
     }
 
+    /**
+     * Create XAmount from bytes
+     */
     public static XAmount of(Bytes bytes) {
         return new XAmount(bytes.toLong());
     }
 
+    /**
+     * Create XAmount with specified unit
+     */
     public static XAmount of(long n, XUnit unit) throws ArithmeticException {
         return new XAmount(Math.multiplyExact(n, unit.factor));
     }
 
+    /**
+     * Create XAmount from BigDecimal with specified unit
+     */
     public static XAmount of(BigDecimal d, XUnit unit) {
         return new XAmount(d.movePointRight(unit.exp).setScale(0, FLOOR).longValueExact());
     }
 
+    /**
+     * Convert to decimal with specified scale and unit
+     */
     public BigDecimal toDecimal(int scale, XUnit unit) {
         BigDecimal nano = BigDecimal.valueOf(this.nano);
         return nano.movePointLeft(unit.exp).setScale(scale, FLOOR);
     }
 
     /**
-     * Of Xdag Amount from C
+     * Convert from C-style XDAG amount representation
      */
     public static XAmount ofXAmount(long n) {
-        BigDecimal d = BasicUtils.amount2xdagNew(n) ;
+        BigDecimal d = BasicUtils.amount2xdagNew(n);
         return new XAmount(d.movePointRight(9).setScale(0, HALF_UP).longValueExact());
     }
 
     /**
-     * To Xdag Amount from C
+     * Convert to C-style XDAG amount representation
      */
     public UInt64 toXAmount() {
         return BasicUtils.xdag2amount(toDecimal(9, XUnit.XDAG).doubleValue());
@@ -100,6 +126,9 @@ public class XAmount implements Comparable<XAmount> {
         return other instanceof XAmount && ((XAmount) other).nano == nano;
     }
 
+    /**
+     * Check if amount is zero
+     */
     public boolean isZero() {
         return nano == 0;
     }
@@ -109,6 +138,9 @@ public class XAmount implements Comparable<XAmount> {
         return String.valueOf(nano);
     }
 
+    /**
+     * Comparison methods
+     */
     public boolean greaterThan(XAmount other) {
         return nano > other.nano;
     }
@@ -141,6 +173,9 @@ public class XAmount implements Comparable<XAmount> {
         return lessThanOrEqual(ZERO);
     }
 
+    /**
+     * Arithmetic operations
+     */
     public XAmount negate() throws ArithmeticException {
         return new XAmount(Math.negateExact(this.nano));
     }
@@ -163,6 +198,9 @@ public class XAmount implements Comparable<XAmount> {
         return XAmount.of(b1.multiply(b2).longValue());
     }
 
+    /**
+     * Static helper for adding two amounts
+     */
     public static XAmount sum(XAmount a, XAmount b) throws ArithmeticException {
         return new XAmount(Math.addExact(a.nano, b.nano));
     }

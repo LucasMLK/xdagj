@@ -23,16 +23,26 @@
  */
 package io.xdag.net;
 
+/**
+ * Enum representing different node capabilities in the XDAG network
+ */
 public enum Capability {
     /**
-     * full node.
+     * Represents a full node that maintains the complete blockchain
      */
     FULL_NODE,
+    
     /**
-     * light node.
+     * Represents a light node that only stores block headers
      */
     LIGHT_NODE;
 
+    /**
+     * Creates a Capability enum from a string name
+     *
+     * @param name The name of the capability
+     * @return The corresponding Capability enum value, or null if invalid
+     */
     public static Capability of(String name) {
         try {
             return valueOf(name);

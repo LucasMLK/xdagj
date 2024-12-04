@@ -33,31 +33,31 @@ public class Constants {
     public static final long MAIN_CHAIN_PERIOD = 64 << 10;
 
     /**
-     * setmain设置区块为主块时标志该位
+     * Flag set when block is marked as main block
      */
     public static final byte BI_MAIN = 0x01;
     /**
-     * 跟BI_MAIN差不多 不过BI_MAIN是确定的 BI_MAIN_CHAIN是还未确定的
+     * Similar to BI_MAIN but indicates block is not yet confirmed as main block
      */
     public static final byte BI_MAIN_CHAIN = 0x02;
     /**
-     * 区块被应用apply后可能会标志该标识位（因为有可能区块存在问题不过还是被指向了 但是会标示为拒绝状态）
+     * Flag set after block is applied (may be set even if block has issues but was referenced)
      */
     public static final byte BI_APPLIED = 0x04;
     /**
-     * 区块应用apply过后会置该标识位
+     * Flag set after block is applied
      */
     public static final byte BI_MAIN_REF = 0x08;
     /**
-     * 从孤块链中移除 即有区块链接孤块的时候 将孤块置为BI_REF
+     * Flag set when orphan block is removed after being linked by another block
      */
     public static final byte BI_REF = 0x10;
     /**
-     * 添加区块时如果该区块的签名可以用自身的公钥解 则说明该区块是自己的区块
+     * Flag set when block signature can be verified with own public key
      */
     public static final byte BI_OURS = 0x20;
     /**
-     * 候补主块未持久化
+     * Flag for candidate main block not yet persisted
      */
     public static final byte BI_EXTRA = 0x40;
     public static final byte BI_REMARK = (byte) 0x80;
@@ -67,20 +67,19 @@ public class Constants {
     public static final long REQUEST_WAIT = 64;
     public static final long MAX_ALLOWED_EXTRA = 65536;
     /**
-     * 每一轮的确认数是16
+     * Number of confirmations per round is 16
      */
     public static final int CONFIRMATIONS_COUNT = 16;
     public static final int MAIN_BIG_PERIOD_LOG = 21;
 
     public static final String WALLET_FILE_NAME = "wallet.data";
 
-
     public static final String CLIENT_NAME = "xdagj";
 
     public static final String CLIENT_VERSION = System.getProperty("xdagj.version");
 
     /**
-     * 同步问题 分叉高度
+     * Fork height for sync issue resolution
      */
     public static final Long SYNC_FIX_HEIGHT = 0L;
 

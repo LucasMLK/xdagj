@@ -27,78 +27,78 @@ package io.xdag.core;
 public enum XdagState {
 
     /**
-     * The pool is initializing......
+     * Pool initialization state
      */
     INIT(0x00),
     /**
-     * wallet generating keys....
+     * Wallet key generation state
      */
     KEYS(0x01),
     /**
-     * The local storage is corrupted. Resetting blocks engine.
+     * Local storage corruption state - resetting blocks engine
      */
     REST(0x02),
     /**
-     * Loading blocks from the local storage.
+     * Loading blocks from local storage state
      */
     LOAD(0x03),
     /**
-     * Blocks loaded. Waiting for 'run' command.
+     * Blocks loaded state - waiting for run command
      */
     STOP(0x04),
     /**
-     * Trying to connect to the  dev network.
+     * Attempting to connect to dev network
      */
     WDST(0x05),
     /**
-     * Trying to connect to the test network.
+     * Attempting to connect to test network
      */
     WTST(0x06),
     /**
-     * Trying to connect to the main network.
+     * Attempting to connect to main network
      */
     WAIT(0x07),
 
     /**
-     * Connected to the  dev network. Synchronizing.
+     * Connected to dev network - synchronizing
      */
     CDST(0x08),
     /**
-     * Connected to the dev network. Synchronizing from low to high.
+     * Connected to dev network - synchronizing from low to high
      */
     CDSTP(0x10),
     /**
-     * Connected to the test network. Synchronizing.
+     * Connected to test network - synchronizing
      */
     CTST(0x09),
     /**
-     * Connected to the test network. Synchronizing from low to high.
+     * Connected to test network - synchronizing from low to high
      */
     CTSTP(0x11),
     /**
-     * Connected to the main network. Synchronizing.
+     * Connected to main network - synchronizing
      */
     CONN(0x0a),
     /**
-     * Connected to the main network. Synchronizing from low to high.
+     * Connected to main network - synchronizing from low to high
      */
     CONNP(0x12),
 
     /**
-     * Synchronized with the  dev network. Normal testing.
+     * Synchronized with dev network - normal testing
      */
     SDST(0x0b),
     /**
-     * Synchronized with the test network. Normal testing.
+     * Synchronized with test network - normal testing
      */
     STST(0x0c),
     /**
-     * Synchronized with the main network. Normal operation.
+     * Synchronized with main network - normal operation
      */
     SYNC(0x0d),
 
     /**
-     * Waiting for transfer to complete.
+     * Transfer in progress state
      */
     XFER(0x0e);
 
@@ -136,13 +136,13 @@ public enum XdagState {
             case 0x02 -> "The local storage is corrupted. Resetting blocks engine.";
             case 0x03 -> "Loading blocks from the local storage.";
             case 0x04 -> "Blocks loaded. Waiting for 'run' command.";
-            case 0x05 -> "Trying to connect to the  dev network.";
+            case 0x05 -> "Trying to connect to the dev network.";
             case 0x06 -> "Trying to connect to the test network.";
             case 0x07 -> "Trying to connect to the main network.";
-            case 0x08 -> "Connected to the  dev network. Synchronizing.";
+            case 0x08 -> "Connected to the dev network. Synchronizing.";
             case 0x09 -> "Connected to the test network. Synchronizing.";
             case 0x0a -> "Connected to the main network. Synchronizing.";
-            case 0x0b -> "Synchronized with the  dev network. Normal testing.";
+            case 0x0b -> "Synchronized with the dev network. Normal testing.";
             case 0x0c -> "Synchronized with the test network. Normal testing.";
             case 0x0d -> "Synchronized with the main network. Normal operation.";
             case 0x0e -> "Waiting for transfer to complete.";

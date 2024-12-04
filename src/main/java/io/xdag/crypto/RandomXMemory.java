@@ -28,21 +28,25 @@ import io.xdag.crypto.randomx.RandomXTemplate;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Represents the memory state for RandomX, holding 
+ * relevant parameters for the computation.
+ */
 @Getter
 @Setter
 public class RandomXMemory {
 
-    protected byte[] seed;
-    protected long seedHeight;
-    protected long seedTime;
-    protected long switchTime;
-    protected int isSwitched;
+    protected byte[] seed; // The seed used for RandomX
+    protected long seedHeight; // The height at which the seed was created
+    protected long seedTime; // The time when the seed was created
+    protected long switchTime; // The time when the algorithm switched
+    protected int isSwitched; // Flag to indicate if the algorithm has switched
 
-    protected RandomXTemplate poolTemplate;
-    protected RandomXTemplate blockTemplate;
+    protected RandomXTemplate poolTemplate; // Template for the pool
+    protected RandomXTemplate blockTemplate; // Template for the block
 
     public RandomXMemory() {
-        this.switchTime = -1;
-        this.isSwitched = -1;
+        this.switchTime = -1; // Initialize switchTime to -1 indicating no switch
+        this.isSwitched = -1; // Initialize isSwitched to -1 indicating not switched
     }
 }

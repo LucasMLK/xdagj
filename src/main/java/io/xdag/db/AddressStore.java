@@ -47,7 +47,7 @@ public interface AddressStore {
 
     void saveAddressSize(byte[] addressSize);
 
-    void savaAmountSum(XAmount balanceSum);
+    void saveAmountSum(XAmount balanceSum);
 
     void updateAllBalance(XAmount balance);
 

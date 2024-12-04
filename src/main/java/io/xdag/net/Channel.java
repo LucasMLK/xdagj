@@ -37,7 +37,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * @author wawa
+ * Channel represents a network connection between two peers in the XDAG network
  */
 @Getter
 @Setter
@@ -52,14 +52,21 @@ public class Channel {
     private XdagP2pHandler p2pHandler;
 
     /**
-     * Creates a new channel instance.
+     * Creates a new channel instance with the given socket
+     * 
+     * @param socket The socket channel for network communication
      */
     public Channel(SocketChannel socket) {
         this.socket = socket;
     }
 
     /**
-     * Initializes this channel.
+     * Initializes the channel with pipeline handlers and network settings
+     * 
+     * @param pipe Pipeline to add handlers to
+     * @param isInbound Whether this is an inbound connection
+     * @param remoteAddress Remote peer's address
+     * @param kernel Reference to the main kernel
      */
     public void init(ChannelPipeline pipe, boolean isInbound, InetSocketAddress remoteAddress, Kernel kernel) {
         this.isInbound = isInbound;
@@ -68,7 +75,7 @@ public class Channel {
 
         this.msgQueue = new MessageQueue(kernel.getConfig());
 
-        // register channel handlers
+        // Register channel handlers
         if (isInbound) {
             pipe.addLast("inboundLimitHandler",
                     new ConnectionLimitHandler(kernel.getConfig().getNodeSpec().getNetMaxInboundConnectionsPerIp()));
@@ -80,39 +87,68 @@ public class Channel {
         pipe.addLast("xdagP2pHandler", p2pHandler);
     }
 
+    /**
+     * Closes the socket connection
+     */
     public void close() {
         socket.close();
     }
 
+    /**
+     * Gets the message queue for this channel
+     */
     public MessageQueue getMessageQueue() {
         return msgQueue;
     }
 
+    /**
+     * Checks if this is an inbound connection
+     */
     public boolean isInbound() {
         return isInbound;
     }
 
+    /**
+     * Checks if this is an outbound connection
+     */
     public boolean isOutbound() {
         return !isInbound();
     }
 
+    /**
+     * Checks if the channel is active
+     */
     public boolean isActive() {
         return isActive;
     }
 
+    /**
+     * Activates the channel with the given remote peer
+     * 
+     * @param remotePeer The remote peer to activate with
+     */
     public void setActive(Peer remotePeer) {
         this.remotePeer = remotePeer;
         this.isActive = true;
     }
 
+    /**
+     * Deactivates the channel
+     */
     public void setInactive() {
         this.isActive = false;
     }
 
+    /**
+     * Gets the remote peer's IP address
+     */
     public String getRemoteIp() {
         return remoteAddress.getAddress().getHostAddress();
     }
 
+    /**
+     * Gets the remote peer's port number
+     */
     public int getRemotePort() {
         return remoteAddress.getPort();
     }

@@ -28,8 +28,9 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Represent a network packet frame in the xdagj. Numbers are signed and in big-endian.
+ * Represents a network packet frame in the XDAG network protocol. Numbers are signed and in big-endian format.
  *
+ * Frame structure:
  * <ul>
  * <li><code>FRAME := HEADER (16 bytes) + BODY (variable length)</code></li>
  * <li><code>HEADER := VERSION + COMPRESS_TYPE + PACKET_TYPE + PACKET_ID + PACKET_SIZE + BODY_SIZE</code></li>
@@ -45,15 +46,26 @@ public class Frame {
     public static final byte COMPRESS_NONE = 0;
     public static final byte COMPRESS_SNAPPY = 1;
 
-    protected final short version;     /* version,       2 bytes */
-    protected final byte compressType; /* compress type, 1 byte  */
-    protected final byte packetType;   /* packet type,   1 byte  */
-    protected final int packetId;      /* packet id,     4 bytes */
-    protected final int packetSize;    /* packet size,   4 bytes */
-    protected final int bodySize;      /* body size,     4 bytes */
+    protected final short version;     /* Protocol version, 2 bytes */
+    protected final byte compressType; /* Compression type, 1 byte */
+    protected final byte packetType;   /* Type of packet, 1 byte */
+    protected final int packetId;      /* Unique packet ID, 4 bytes */
+    protected final int packetSize;    /* Total packet size, 4 bytes */
+    protected final int bodySize;      /* Size of body data, 4 bytes */
 
     protected byte[] body;
 
+    /**
+     * Creates a new Frame with the specified parameters
+     *
+     * @param version Protocol version
+     * @param compressType Type of compression used
+     * @param packetType Type of packet
+     * @param packetId Unique packet identifier
+     * @param packetSize Total size of packet
+     * @param bodySize Size of body data
+     * @param body Actual body data bytes
+     */
     public Frame(short version, byte compressType, byte packetType, int packetId, int packetSize, int bodySize,
             byte[] body) {
         this.version = version;
@@ -62,20 +74,22 @@ public class Frame {
         this.packetId = packetId;
         this.packetSize = packetSize;
         this.bodySize = bodySize;
-
         this.body = body;
     }
 
     /**
-     * Returns whether the packet is chunked.
+     * Checks if the packet is chunked by comparing body size with packet size
+     *
+     * @return true if packet is chunked, false otherwise
      */
     public boolean isChunked() {
         return bodySize != packetSize;
     }
 
     /**
-     * Writes frame header into the buffer.
+     * Writes the frame header fields to the provided ByteBuf
      *
+     * @param buf ByteBuf to write header data to
      */
     public void writeHeader(ByteBuf buf) {
         buf.writeShort(getVersion());
@@ -87,7 +101,10 @@ public class Frame {
     }
 
     /**
-     * Reads frame header from the given buffer.
+     * Reads frame header data from the provided ByteBuf and creates a new Frame
+     *
+     * @param in ByteBuf containing header data to read
+     * @return new Frame instance with header data (body is null)
      */
     public static Frame readHeader(ByteBuf in) {
         short version = in.readShort();
@@ -102,7 +119,7 @@ public class Frame {
 
     @Override
     public String toString() {
-        return "PacketFrame [version=" + version + ", compressType=" + compressType + ", packetType=" + packetType
+        return "Frame [version=" + version + ", compressType=" + compressType + ", packetType=" + packetType
                 + ", packetId=" + packetId + ", packetSize=" + packetSize + ", bodySize=" + bodySize + "]";
     }
 

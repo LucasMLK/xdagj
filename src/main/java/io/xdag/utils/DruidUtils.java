@@ -33,6 +33,9 @@ import java.io.InputStream;
 import java.sql.*;
 import java.util.Properties;
 
+/**
+ * Utility class for managing Druid database connections
+ */
 @Slf4j
 public final class DruidUtils {
     @Getter
@@ -49,16 +52,26 @@ public final class DruidUtils {
         }
     }
 
-    public static Connection getConnection(){
+    /**
+     * Gets a connection from the data source
+     * @return Database connection, or null if connection fails
+     */
+    public static Connection getConnection() {
         try {
             return dataSource.getConnection();
         } catch (SQLException e) {
-            e.printStackTrace();
+            log.error(e.getMessage(), e);
             return null;
         }
     }
-    public static void close(Connection connection, Statement statement){
-        if (statement != null){
+
+    /**
+     * Closes database connection and statement resources
+     * @param connection Database connection to close
+     * @param statement Statement to close
+     */
+    public static void close(Connection connection, Statement statement) {
+        if (statement != null) {
             try {
                 statement.close();
             } catch (SQLException e) {
@@ -66,7 +79,7 @@ public final class DruidUtils {
             }
         }
 
-        if (connection != null){
+        if (connection != null) {
             try {
                 connection.close();
             } catch (SQLException e) {
@@ -74,8 +87,15 @@ public final class DruidUtils {
             }
         }
     }
-    public static void close(Connection connection, Statement statement, ResultSet resultSet){
-        if(resultSet != null) {
+
+    /**
+     * Closes database connection, statement and result set resources
+     * @param connection Database connection to close
+     * @param statement Statement to close
+     * @param resultSet Result set to close
+     */
+    public static void close(Connection connection, Statement statement, ResultSet resultSet) {
+        if (resultSet != null) {
             try {
                 resultSet.close();
             } catch (SQLException e) {
@@ -83,7 +103,7 @@ public final class DruidUtils {
             }
         }
 
-        if(statement != null) {
+        if (statement != null) {
             try {
                 statement.close();
             } catch (SQLException e) {
@@ -91,19 +111,23 @@ public final class DruidUtils {
             }
         }
 
-        if(connection != null) {
+        if (connection != null) {
             try {
-                if (resultSet != null) {
-                    resultSet.close();
-                }
+                connection.close();
             } catch (SQLException e) {
                 log.error(e.getMessage(), e);
             }
         }
     }
 
-    public static void close(Connection connection, PreparedStatement statement, ResultSet resultSet){
-        if(resultSet != null) {
+    /**
+     * Closes database connection, prepared statement and result set resources
+     * @param connection Database connection to close
+     * @param statement Prepared statement to close
+     * @param resultSet Result set to close
+     */
+    public static void close(Connection connection, PreparedStatement statement, ResultSet resultSet) {
+        if (resultSet != null) {
             try {
                 resultSet.close();
             } catch (SQLException e) {
@@ -111,7 +135,7 @@ public final class DruidUtils {
             }
         }
 
-        if(statement != null) {
+        if (statement != null) {
             try {
                 statement.close();
             } catch (SQLException e) {
@@ -119,7 +143,7 @@ public final class DruidUtils {
             }
         }
 
-        if(connection != null) {
+        if (connection != null) {
             try {
                 connection.close();
             } catch (SQLException e) {

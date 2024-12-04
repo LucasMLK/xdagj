@@ -27,8 +27,17 @@ import com.google.common.primitives.UnsignedLong;
 import io.xdag.db.BlockStore;
 import org.apache.tuweni.bytes.Bytes32;
 
+/**
+ * Utility class for block-related operations
+ */
 public final class BlockUtils {
 
+    /**
+     * Generates a key for time-based block lookup
+     * @param timestamp Block timestamp
+     * @param hashlow Lower 32 bytes of block hash
+     * @return Generated key as byte array
+     */
     public static byte[] getTimeKey(long timestamp, Bytes32 hashlow) {
         long t = UnsignedLong.fromLongBits(timestamp >> 16).longValue();
         byte[] key = BytesUtils.merge(BlockStore.TIME_HASH_INFO, BytesUtils.longToBytes(t, false));
@@ -38,16 +47,32 @@ public final class BlockUtils {
         return BytesUtils.merge(key, hashlow.toArray());
     }
 
+    /**
+     * Generates a key for our block lookup by index and hash
+     * @param index Block index
+     * @param hashlow Lower bytes of block hash
+     * @return Generated key as byte array
+     */
     public static byte[] getOurKey(int index, byte[] hashlow) {
         byte[] key = BytesUtils.merge(BlockStore.OURS_BLOCK_INFO, BytesUtils.intToBytes(index, false));
         key = BytesUtils.merge(key, hashlow);
         return key;
     }
 
+    /**
+     * Generates a key for block height lookup
+     * @param height Block height
+     * @return Generated key as byte array
+     */
     public static byte[] getHeight(long height) {
         return BytesUtils.merge(BlockStore.BLOCK_HEIGHT, BytesUtils.longToBytes(height, false));
     }
 
+    /**
+     * Extracts block index from a key
+     * @param key Source key
+     * @return Block index, or 0 if extraction fails
+     */
     public static int getOurIndex(byte[] key) {
         try {
             byte[] index = BytesUtils.subArray(key, 1, 4);
@@ -57,6 +82,11 @@ public final class BlockUtils {
         }
     }
 
+    /**
+     * Extracts block hash from a key
+     * @param key Source key
+     * @return Block hash as byte array, or null if extraction fails
+     */
     public static byte[] getOurHash(byte[] key) {
         try {
             return BytesUtils.subArray(key, 5, 32);

@@ -32,8 +32,25 @@ import org.apache.tuweni.units.bigints.UInt64;
 import io.xdag.Network;
 import io.xdag.core.XAmount;
 
+/**
+ * Configuration class for the development network (devnet)
+ * Extends AbstractConfig to provide devnet-specific settings
+ */
 public class DevnetConfig extends AbstractConfig {
 
+    /**
+     * Constructor initializes devnet configuration with specific parameters:
+     * - Network type: DEVNET
+     * - Version: DEVNET_VERSION
+     * - Empty whitelist URL
+     * - Wait epoch: 1
+     * - XDAG era: 0x16900000000L
+     * - Main start amount: 2^42 XDAG
+     * - Apollo fork height: 1000
+     * - Apollo fork amount: 2^39 XDAG
+     * - Field header type: XDAG_FIELD_HEAD_TEST
+     * - Wallet file paths for testnet
+     */
     public DevnetConfig() {
         super("devnet", "xdag-devnet", Network.DEVNET, Constants.DEVNET_VERSION);
         this.whitelistUrl = StringUtils.EMPTY;

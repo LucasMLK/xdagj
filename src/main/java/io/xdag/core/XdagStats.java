@@ -28,34 +28,40 @@ import java.math.BigInteger;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Class for tracking XDAG network statistics
+ */
 @Getter
 @Setter
 public class XdagStats {
 
     public BigInteger difficulty;
     public BigInteger maxdifficulty;
-    public long nblocks;
-    public long totalnblocks;
-    public long nmain;
-    public long totalnmain;
-    public int nhosts;
-    public int totalnhosts;
-    public long nwaitsync;
-    public long nnoref;
-    public long nextra;
-    public long maintime;
+    public long nblocks;          // Number of blocks
+    public long totalnblocks;     // Total number of blocks
+    public long nmain;            // Number of main blocks
+    public long totalnmain;       // Total number of main blocks
+    public int nhosts;            // Number of hosts
+    public int totalnhosts;       // Total number of hosts
+    public long nwaitsync;        // Number of blocks waiting for synchronization
+    public long nnoref;           // Number of blocks with no references
+    public long nextra;           // Number of extra blocks
+    public long maintime;         // Timestamp of the main block
     public XAmount balance = XAmount.ZERO;
 
-    private byte[] globalMiner;
-    private byte[] ourLastBlockHash;
+    private byte[] globalMiner;       // Global miner address
+    private byte[] ourLastBlockHash;  // Hash of our last block
 
+    /**
+     * Default constructor initializing difficulties to zero
+     */
     public XdagStats() {
         difficulty = BigInteger.ZERO;
         maxdifficulty = BigInteger.ZERO;
     }
 
     /**
-     * 用于记录remote node的
+     * Constructor for remote node statistics
      */
     public XdagStats(
             BigInteger maxdifficulty,
@@ -70,6 +76,9 @@ public class XdagStats {
         this.maintime = maintime;
     }
 
+    /**
+     * Copy constructor
+     */
     public XdagStats(XdagStats xdagStats) {
         this.difficulty = xdagStats.difficulty;
         this.maxdifficulty = xdagStats.maxdifficulty;
@@ -81,12 +90,18 @@ public class XdagStats {
         this.totalnhosts = xdagStats.totalnhosts;
     }
 
+    /**
+     * Initialize statistics with initial values
+     */
     public void init(BigInteger diff, long totalnmain, long totalnblocks) {
         this.difficulty = this.maxdifficulty = diff;
         this.nblocks = this.totalnblocks = totalnblocks;
         this.nmain = this.totalnmain = totalnmain;
     }
 
+    /**
+     * Update statistics with data from remote node
+     */
     public void update(XdagStats remoteXdagStats) {
         this.totalnhosts = Math.max(this.totalnhosts, remoteXdagStats.totalnhosts);
         this.totalnblocks = Math.max(this.totalnblocks, remoteXdagStats.totalnblocks);
@@ -97,14 +112,20 @@ public class XdagStats {
         }
     }
 
+    /**
+     * Update maximum difficulty if new value is higher
+     */
     public void updateMaxDiff(BigInteger maxdifficulty) {
         if (this.getMaxdifficulty().compareTo(maxdifficulty) < 0) {
             this.maxdifficulty = maxdifficulty;
         }
     }
 
+    /**
+     * Update current difficulty if new value is higher
+     */
     public void updateDiff(BigInteger difficulty) {
-        if (this.difficulty.compareTo(difficulty) <0) {
+        if (this.difficulty.compareTo(difficulty) < 0) {
             this.difficulty = difficulty;
         }
     }

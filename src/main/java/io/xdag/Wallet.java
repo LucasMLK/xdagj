@@ -86,8 +86,7 @@ public class Wallet {
     private static final int BCRYPT_COST = 12;
     private static final String MNEMONIC_PASS_PHRASE = "";
     /**
-     * -- GETTER --
-     *  Returns the file where the wallet is persisted.
+     * Returns the file where the wallet is persisted.
      */
     @Getter
     private final File file;
@@ -96,7 +95,7 @@ public class Wallet {
     private final Map<Bytes, KeyPair> accounts = Collections.synchronizedMap(new LinkedHashMap<>());
     private String password;
 
-    // hd wallet key
+    // HD wallet key
     private String mnemonicPhrase = "";
     private int nextAccountIndex = 0;
 
@@ -479,24 +478,31 @@ public class Wallet {
         }
     }
 
+    /**
+     * Creates transaction blocks from a map of our keys and addresses to a destination address
+     * 
+     * @param ourKeys Map of addresses and their corresponding keypairs that we own
+     * @param to Destination address
+     * @param remark Optional remark to include in transaction
+     * @return List of transaction block wrappers
+     */
     public List<BlockWrapper> createTransactionBlock(Map<Address, KeyPair> ourKeys, Bytes32 to, String remark) {
-        // 判断是否有remark
+        // Check if remark exists
         int hasRemark = remark == null ? 0 : 1;
 
         List<BlockWrapper> res = Lists.newArrayList();
 
-        // 遍历ourKeys 计算每个区块最多能放多少个
-        // int res = 1 + pairs.size() + to.size() + 3*keys.size() + (defKeyIndex == -1 ? 2 : 0);
+        // Process ourKeys to calculate max entries per block
         LinkedList<Entry<Address, KeyPair>> stack = new LinkedList<>(ourKeys.entrySet());
 
-        // 每次创建区块用到的keys
+        // Keys used for current block
         Map<Address, KeyPair> keys = new HashMap<>();
-        // 保证key的唯一性
+        // Ensure key uniqueness
         Set<KeyPair> keysPerBlock = new HashSet<>();
-        // 放入defkey
+        // Add default key
         keysPerBlock.add(getDefKey());
 
-        // base count a block <header + send address + defKey signature>
+        // Base count for block (header + send address + default key signature)
         int base = 1 + 1 + 2 + hasRemark;
         XAmount amount = XAmount.ZERO;
 
@@ -505,19 +511,20 @@ public class Wallet {
             base += 1;
             int originSize = keysPerBlock.size();
             keysPerBlock.add(key.getValue());
-            // 说明新增加的key没有重复
+            // New unique key added
             if (keysPerBlock.size() > originSize) {
-                // 一个字段公钥加两个字段签名
+                // Add fields for public key and signatures
                 base += 3;
             }
-            // 可以将该输入 放进一个区块
+            // Can fit in current block
             if (base < 16) {
                 amount = amount.add(key.getKey().getAmount());
                 keys.put(key.getKey(), key.getValue());
                 stack.poll();
             } else {
+                // Create block with current keys
                 res.add(createTransaction(to, amount, keys, remark));
-                // 清空keys，准备下一个
+                // Reset for next block
                 keys = new HashMap<>();
                 keysPerBlock = new HashSet<>();
                 keysPerBlock.add(getDefKey());
@@ -532,6 +539,15 @@ public class Wallet {
         return res;
     }
 
+    /**
+     * Creates a single transaction block
+     * 
+     * @param to Destination address
+     * @param amount Transaction amount
+     * @param keys Map of addresses and keypairs to use as inputs
+     * @param remark Optional remark
+     * @return Transaction block wrapper
+     */
     private BlockWrapper createTransaction(Bytes32 to, XAmount amount, Map<Address, KeyPair> keys, String remark) {
 
         List<Address> tos = Lists.newArrayList(new Address(to, XDAG_FIELD_OUTPUT, amount,true));
@@ -545,7 +561,7 @@ public class Wallet {
         KeyPair defaultKey = getDefKey();
 
         boolean isdefaultKey = false;
-        // 签名
+        // Sign with all keys
         for (KeyPair ecKey : Set.copyOf(new HashMap<>(keys).values())) {
             if (ecKey.equals(defaultKey)) {
                 isdefaultKey = true;
@@ -554,7 +570,7 @@ public class Wallet {
                 block.signIn(ecKey);
             }
         }
-        // 如果默认密钥被更改，需要重新对输出签名签属
+        // Re-sign with default key if changed
         if (!isdefaultKey) {
             block.signOut(getDefKey());
         }
@@ -562,23 +578,31 @@ public class Wallet {
         return new BlockWrapper(block, getConfig().getNodeSpec().getTTL());
     }
 
+    /**
+     * Creates a new transaction block
+     * 
+     * @param pairs Map of input addresses and keypairs
+     * @param to List of output addresses
+     * @param remark Optional remark
+     * @return New transaction block
+     */
     private Block createNewBlock(Map<Address, KeyPair> pairs, List<Address> to,
             String remark) {
         int hasRemark = remark == null ? 0 : 1;
 
         int defKeyIndex = -1;
 
-        // if no input, return null
+        // Validate inputs
         if (pairs == null || pairs.isEmpty()) {
             return null;
         }
 
-        // if no output, return null
+        // Validate outputs
         if (to == null || to.isEmpty()) {
             return null;
         }
 
-        // 遍历所有key 判断是否有defKey
+        // Find default key index
         List<KeyPair> keys = new ArrayList<>(Set.copyOf(pairs.values()));
         for (int i = 0; i < keys.size(); i++) {
             if (keys.get(i).equals(getDefKey())) {
@@ -590,10 +614,10 @@ public class Wallet {
         all.addAll(pairs.keySet());
         all.addAll(to);
 
-        // TODO: 判断pair是否有重复
+        // Calculate total fields needed
         int res = 1 + pairs.size() + to.size() + 3 * keys.size() + (defKeyIndex == -1 ? 2 : 0) + hasRemark;
 
-        // TODO : 如果区块字段不足
+        // Validate block size
         if (res > 16) {
             return null;
         }
@@ -602,7 +626,5 @@ public class Wallet {
 
         return new Block(getConfig(), sendTime, all, null, false, keys, remark, defKeyIndex, XAmount.of(100, XUnit.MILLI_XDAG));
     }
-
-
 
 }

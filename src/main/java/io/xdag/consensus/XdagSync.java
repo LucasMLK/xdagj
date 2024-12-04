@@ -89,14 +89,13 @@ public class XdagSync {
     }
 
     /**
-     * 不断发送send request
+     * Continuously send sync requests
      */
     public void start() {
         if (status != Status.SYNCING) {
             isRunning = true;
             status = Status.SYNCING;
-            // TODO: paulochen 开始同步的时间点/快照时间点
-//            startSyncTime = 1588687929343L; // 1716ffdffff 171e52dffff
+            // TODO: Set sync start time/snapshot time
             sendFuture = sendTask.scheduleAtFixedRate(this::syncLoop, 32, 10, TimeUnit.SECONDS);
         }
     }
@@ -116,7 +115,7 @@ public class XdagSync {
     }
 
     /**
-     *  Use syncWindow to request blocks in segments.
+     * Use syncWindow to request blocks in segments
      */
     private void getBlocks() {
         List<Channel> any = getAnyNode();
@@ -128,18 +127,18 @@ public class XdagSync {
         Channel xc = any.get(index);
         long lastTime = getLastTime();
 
-        // Extract the time that has been synchronized.
+        // Remove synchronized time periods
         while (!syncWindow.isEmpty() && syncWindow.get(0) < lastTime) {
             syncWindow.pollFirst();
         }
 
-        // Segmented requests, each request for 32 time periods.
+        // Request blocks in segments, 32 time periods per request
         int size = syncWindow.size();
         for (int i = 0; i < 128; i++) {
             if (i >= size) {
                 break;
             }
-            //when the synchronization process channel is removed and reset, update the channel
+            // Update channel if sync channel is removed/reset
             if (!xc.isActive()){
                 log.debug("sync channel need to update");
                 return;
@@ -150,18 +149,16 @@ public class XdagSync {
                 sendGetBlocks(xc, time, sf);
                 lastRequestTime = time;
             }
-
         }
-
     }
 
-
     /**
+     * Request blocks for a time range
      * @param t start time
-     * @param dt interval time
+     * @param dt time interval
      */
     private void requestBlocks(long t, long dt) {
-        // Not in sync state, synchronization is complete, stop synchronization task.
+        // Stop sync if not in SYNCING state
         if (status != Status.SYNCING) {
             stop();
             return;
@@ -190,7 +187,7 @@ public class XdagSync {
     }
 
     /**
-     * Request blocks from remote nodes.
+     * Send request to get blocks from remote node
      * @param t request time
      */
     private void sendGetBlocks(Channel xc, long t, SettableFuture<Bytes> sf) {
@@ -204,9 +201,8 @@ public class XdagSync {
         }
     }
 
-
     /**
-     * Recursively find the time periods to request.
+     * Recursively find time periods to request blocks
      */
     private void findGetBlocks(Channel xc, long t, long dt, SettableFuture<Bytes> sf) {
         MutableBytes lSums = MutableBytes.create(256);
@@ -256,7 +252,7 @@ public class XdagSync {
     }
 
     /**
-     * Obtain the timestamp of the latest confirmed main block.
+     * Get timestamp of latest confirmed main block
      */
     public long getLastTime() {
         long height = blockStore.getXdagStatus().nmain;
@@ -272,7 +268,6 @@ public class XdagSync {
         return channelMgr.getActiveChannels();
     }
 
-
     public void stop() {
         log.debug("stop sync");
         if (isRunning) {
@@ -280,7 +275,7 @@ public class XdagSync {
                 if (sendFuture != null) {
                     sendFuture.cancel(true);
                 }
-                // 关闭线程池
+                // Shutdown thread pool
                 sendTask.shutdownNow();
                 sendTask.awaitTermination(5, TimeUnit.SECONDS);
             } catch (InterruptedException e) {
@@ -297,7 +292,7 @@ public class XdagSync {
 
     public enum Status {
         /**
-         * syncing
+         * Sync states
          */
         SYNCING, SYNC_DONE
     }

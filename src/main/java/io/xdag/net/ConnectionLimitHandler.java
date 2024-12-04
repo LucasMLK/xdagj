@@ -34,26 +34,33 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Handler to limit the number of concurrent connections from a single IP address
+ */
 @Slf4j
 @ChannelHandler.Sharable
 public class ConnectionLimitHandler extends ChannelInboundHandlerAdapter {
 
+    // Map to track connection count per IP address
     private static final Map<String, AtomicInteger> connectionCount = new ConcurrentHashMap<>();
 
+    // Maximum allowed inbound connections per IP
     private final int maxInboundConnectionsPerIp;
 
     /**
-     * @param maxConnectionsPerIp Maximum allowed connections of each unique IP address.
+     * Creates a new connection limit handler
+     * 
+     * @param maxConnectionsPerIp Maximum allowed connections from each unique IP address
      */
     public ConnectionLimitHandler(int maxConnectionsPerIp) {
         this.maxInboundConnectionsPerIp = maxConnectionsPerIp;
     }
 
     /**
-     * Get the connection count of an address
+     * Gets the current connection count for an IP address
      *
-     * @param address an IP address
-     * @return current connection count
+     * @param address The IP address to check
+     * @return Current number of connections from this IP
      */
     public static int getConnectionsCount(InetAddress address) {
         AtomicInteger cnt = connectionCount.get(address.getHostAddress());
@@ -61,22 +68,26 @@ public class ConnectionLimitHandler extends ChannelInboundHandlerAdapter {
     }
 
     /**
-     * Check whether there is a counter of the provided address.
+     * Checks if an IP address has any active connections
      *
-     * @param address an IP address
-     * @return whether there is a counter of the address.
+     * @param address The IP address to check
+     * @return true if the IP has active connections, false otherwise
      */
     public static boolean containsAddress(InetAddress address) {
         return connectionCount.get(address.getHostAddress()) != null;
     }
 
     /**
-     * Reset connection count
+     * Resets all connection counters
      */
     public static void reset() {
         connectionCount.clear();
     }
 
+    /**
+     * Handles new channel connections
+     * Increments connection counter and closes connection if limit exceeded
+     */
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         InetAddress address = ((InetSocketAddress) ctx.channel().remoteAddress()).getAddress();
@@ -89,6 +100,10 @@ public class ConnectionLimitHandler extends ChannelInboundHandlerAdapter {
         }
     }
 
+    /**
+     * Handles channel disconnections
+     * Decrements connection counter and removes IP from tracking if count reaches 0
+     */
     @Override
     public void channelInactive(ChannelHandlerContext ctx) throws Exception {
         InetAddress address = ((InetSocketAddress) ctx.channel().remoteAddress()).getAddress();
@@ -96,7 +111,7 @@ public class ConnectionLimitHandler extends ChannelInboundHandlerAdapter {
         if (cnt.decrementAndGet() <= 0) {
             connectionCount.remove(address.getHostAddress());
         }
-        log.debug("Inactive channel with {}",address.getHostAddress());
+        log.debug("Inactive channel with {}", address.getHostAddress());
         super.channelInactive(ctx);
     }
 }

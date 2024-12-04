@@ -163,7 +163,6 @@ public class TransactionHistoryStoreImpl implements TransactionHistoryStore {
         return result;
     }
 
-
     @Override
     public List<TxHistory> listTxHistoryByAddress(String address, int page, Object... parameters) {
         Connection conn = null;
@@ -226,7 +225,7 @@ public class TransactionHistoryStoreImpl implements TransactionHistoryStore {
                 rs = pstmt.executeQuery();
                 while (rs.next()) {
                     TxHistory txHistory = new TxHistory();
-                    // Bytes32 addr = BasicUtils.address2Hash(rs.getString(1));
+                    // Convert address from hash to Bytes32 format
                     String hash = rs.getString(3);
                     txHistory.setHash(hash);
                     XAmount amount = XAmount.of(rs.getBigDecimal(4), XUnit.XDAG);

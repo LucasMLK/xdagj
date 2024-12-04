@@ -58,24 +58,24 @@ public class Block implements Cloneable {
 
     public static final int MAX_LINKS = 15;
     /**
-     * 区块是否存在于本地*
+     * Whether the block exists locally
      */
     public boolean isSaved;
     private Address coinBase;
     private BlockInfo info;
     private long transportHeader;
     /**
-     * 区块的links 列表 输入输出*
+     * List of block links (inputs and outputs)
      */
     @Getter
     private List<Address> inputs = new CopyOnWriteArrayList<>();
     /**
-     * ouput包含pretop
+     * Outputs including pretop
      */
     @Getter
     private List<Address> outputs = new CopyOnWriteArrayList<>();
     /**
-     * 记录公钥 前缀+压缩公钥*
+     * Record public keys (prefix + compressed public key)
      */
     @Getter
     private List<SECPPublicKey> pubKeys = new CopyOnWriteArrayList<>();
@@ -83,7 +83,7 @@ public class Block implements Cloneable {
     private Map<SECPSignature, Integer> insigs = new LinkedHashMap<>();
     private SECPSignature outsig;
     /**
-     * 主块的nonce记录矿工地址跟nonce*
+     * Main block nonce records miner address and nonce
      */
     @Getter
     private Bytes32 nonce;
@@ -211,7 +211,7 @@ public class Block implements Cloneable {
     }
 
     /**
-     * 计算区块hash*
+     * Calculate block hash
      */
     private byte[] calcHash() {
         if (xdagBlock == null) {
@@ -221,15 +221,15 @@ public class Block implements Cloneable {
     }
 
     /**
-     * 重计算 避免矿工挖矿发送share时直接更新 hash
-     **/
+     * Recalculate to avoid directly updating hash when miner sends share
+     */
     public Bytes32 recalcHash() {
         xdagBlock = new XdagBlock(toBytes());
         return Bytes32.wrap(Hash.hashTwice(Bytes.wrap(xdagBlock.getData())).reverse());
     }
 
     /**
-     * 解析512字节数据*
+     * Parse 512 bytes data
      */
     public void parse() {
         if (this.parsed) {
@@ -297,7 +297,7 @@ public class Block implements Cloneable {
                 Bytes key = xdagBlock.getField(i).getData();
                 boolean yBit = (field.getType().ordinal() == XDAG_FIELD_PUBLIC_KEY_1.ordinal());
                 ECPoint point = Sign.decompressKey(key.toUnsignedBigInteger(), yBit);
-                // 解析成非压缩去前缀 公钥
+                // Parse to uncompressed public key without prefix
                 byte[] encodePub = point.getEncoded(false);
                 SECPPublicKey publicKey = SECPPublicKey.create(
                         new BigInteger(1, Arrays.copyOfRange(encodePub, 1, encodePub.length)), Sign.CURVE_NAME);
@@ -402,7 +402,7 @@ public class Block implements Cloneable {
     }
 
     /**
-     * 只匹配输入签名 并返回有用的key
+     * Only match input signatures and return useful keys
      */
     public List<SECPPublicKey> verifiedKeys() {
         List<SECPPublicKey> keys = getPubKeys();
@@ -412,7 +412,7 @@ public class Block implements Cloneable {
         for (SECPSignature sig : this.getInsigs().keySet()) {
             digest = getSubRawData(this.getInsigs().get(sig) - 1);
             for (SECPPublicKey publicKey : keys) {
-                // TODO： paulochen 是不是可以替换
+                // TODO: paulochen can this be replaced?
                 byte[] pubkeyBytes = publicKey.asEcPoint(Sign.CURVE).getEncoded(true);
                 hash = Hash.hashTwice(Bytes.wrap(digest, Bytes.wrap(pubkeyBytes)));
                 if (Sign.SECP256K1.verify(hash, sig, publicKey)) {
@@ -422,7 +422,7 @@ public class Block implements Cloneable {
         }
         digest = getSubRawData(getOutsigIndex() - 2);
         for (SECPPublicKey publicKey : keys) {
-            // TODO： paulochen 是不是可以替换
+            // TODO: paulochen can this be replaced?
             byte[] pubkeyBytes = publicKey.asEcPoint(Sign.CURVE).getEncoded(true);
             hash = Hash.hashTwice(Bytes.wrap(digest, Bytes.wrap(pubkeyBytes)));
             if (Sign.SECP256K1.verify(hash, this.getOutsig(), publicKey)) {
@@ -433,7 +433,7 @@ public class Block implements Cloneable {
     }
 
     /**
-     * 取输出签名在字段的索引
+     * Get the field index of output signature
      */
     public int getOutsigIndex() {
         int i = 1;
@@ -502,7 +502,7 @@ public class Block implements Cloneable {
     }
 
     /**
-     * 根据length获取前length个字段的数据 主要用于签名*
+     * Get data of first length fields for signing
      */
     public MutableBytes getSubRawData(int length) {
         Bytes data = getXdagBlock().getData();

@@ -31,12 +31,28 @@ import org.apache.tuweni.units.bigints.UInt64;
 import io.xdag.Network;
 import io.xdag.core.XAmount;
 
+/**
+ * Configuration class for the test network (testnet)
+ * Extends AbstractConfig to provide testnet-specific settings
+ */
 public class TestnetConfig extends AbstractConfig {
 
+    /**
+     * Constructor initializes testnet configuration with specific parameters:
+     * - Network type: TESTNET
+     * - Version: TESTNET_VERSION
+     * - Whitelist URL: GitHub raw content URL for netdb-white-testnet.txt
+     * - Wait epoch: 1
+     * - XDAG era: 0x16900000000L
+     * - Main start amount: 2^42 XDAG
+     * - Apollo fork height: 196250
+     * - Apollo fork amount: 2^39 XDAG
+     * - Field header type: XDAG_FIELD_HEAD_TEST
+     * - Wallet file paths for testnet
+     */
     public TestnetConfig() {
         super("testnet", "xdag-testnet", Network.TESTNET, Constants.TESTNET_VERSION);
         this.whitelistUrl = "https://raw.githubusercontent.com/XDagger/xdag/master/client/netdb-white-testnet.txt";
-        // testnet wait 1 epoch
         this.waitEpoch = 1;
         this.xdagEra = 0x16900000000L;
         this.mainStartAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 42).toLong());

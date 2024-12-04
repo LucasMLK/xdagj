@@ -30,6 +30,9 @@ import org.jline.builtins.telnet.Telnet;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 
+/**
+ * Telnet server implementation for remote CLI access
+ */
 @Slf4j
 public class TelnetServer {
 
@@ -37,12 +40,22 @@ public class TelnetServer {
     private final String ip;
     private final int port;
 
+    /**
+     * Constructor for TelnetServer
+     * @param ip IP address to bind the server to
+     * @param port Port number to listen on
+     * @param kernel Kernel instance for XDAG operations
+     */
     public TelnetServer(final String ip, final int port, final Kernel kernel) {
         this.ip = ip;
         this.port = port;
         this.kernel = kernel;
     }
 
+    /**
+     * Starts the telnet server
+     * Creates a terminal, initializes the shell and starts listening for connections
+     */
     public void start() {
         try {
             Terminal terminal = TerminalBuilder.builder().build();

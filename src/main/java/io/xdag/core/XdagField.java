@@ -68,34 +68,37 @@ public class XdagField implements Cloneable {
     }
 
     public enum FieldType {
-        // nonce字段
+        // Nonce field
         XDAG_FIELD_NONCE(0x00),
-        // 头部字段
+        // Header field
         XDAG_FIELD_HEAD(0x01),
-        // 输入
+        // Input field
         XDAG_FIELD_IN(0x02),
-
-        // 输入
+        // Output field
         XDAG_FIELD_OUT(0x03),
-        // 输入签名
+        // Input signature
         XDAG_FIELD_SIGN_IN(0x04),
-        // 输出签名
+        // Output signature
         XDAG_FIELD_SIGN_OUT(0x05),
+        // Public key part 0
         XDAG_FIELD_PUBLIC_KEY_0(0x06),
+        // Public key part 1
         XDAG_FIELD_PUBLIC_KEY_1(0x07),
+        // Test header field
         XDAG_FIELD_HEAD_TEST(0x08),
+        // Remark/memo field
         XDAG_FIELD_REMARK(0x09),
+        // Snapshot field
         XDAG_FIELD_SNAPSHOT(0x0A),
-        /***
-         *sava address mined mainBlock
-         */
+        // Coinbase field - stores address that mined main block
         XDAG_FIELD_COINBASE(0x0B),
-        /***
-         *new tx type
-         */
-        XDAG_FIELD_INPUT(0x0C),//12
-        XDAG_FIELD_OUTPUT(0x0D),//13
+        // New transaction input type
+        XDAG_FIELD_INPUT(0x0C),
+        // New transaction output type
+        XDAG_FIELD_OUTPUT(0x0D),
+        // Reserved field 5
         XDAG_FIELD_RESERVE5(0x0E),
+        // Reserved field 6
         XDAG_FIELD_RESERVE6(0x0F);
 
         private static final Map<Integer, FieldType> intToTypeMap = new HashMap<>();

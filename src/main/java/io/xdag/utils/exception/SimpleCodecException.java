@@ -26,27 +26,53 @@ package io.xdag.utils.exception;
 
 import java.io.Serial;
 
+/**
+ * Exception thrown when there is an error during codec operations
+ */
 public class SimpleCodecException extends RuntimeException {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
+    /**
+     * Constructs a new SimpleCodecException with no message
+     */
     public SimpleCodecException() {
     }
 
+    /**
+     * Constructs a new SimpleCodecException with the specified message
+     * @param s The error message
+     */
     public SimpleCodecException(String s) {
         super(s);
     }
 
+    /**
+     * Constructs a new SimpleCodecException with the specified message and cause
+     * @param s The error message
+     * @param throwable The cause of the exception
+     */
     public SimpleCodecException(String s, Throwable throwable) {
         super(s, throwable);
     }
 
+    /**
+     * Constructs a new SimpleCodecException with the specified cause
+     * @param throwable The cause of the exception
+     */
     public SimpleCodecException(Throwable throwable) {
         super(throwable);
     }
 
-    public SimpleCodecException(String s, Throwable throwable, boolean b, boolean b1) {
-        super(s, throwable, b, b1);
+    /**
+     * Constructs a new SimpleCodecException with the specified message, cause, and flags
+     * @param s The error message
+     * @param throwable The cause of the exception
+     * @param enableSuppression Whether suppression is enabled
+     * @param writableStackTrace Whether the stack trace should be writable
+     */
+    public SimpleCodecException(String s, Throwable throwable, boolean enableSuppression, boolean writableStackTrace) {
+        super(s, throwable, enableSuppression, writableStackTrace);
     }
 }

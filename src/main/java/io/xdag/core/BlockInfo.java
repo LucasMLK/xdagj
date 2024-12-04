@@ -31,24 +31,39 @@ import java.util.Objects;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Block information class that contains block metadata
+ */
 @Getter
 @Setter
 public class BlockInfo {
 
+    // Block type
     public long type;
+    // Block flags indicating various states
     public int flags;
+    // Block height in the chain
     private long height;
+    // Block difficulty value
     private BigInteger difficulty;
+    // Reference to another block
     private byte[] ref;
+    // Link to block with maximum difficulty
     private byte[] maxDiffLink;
+    // Transaction fee
     private XAmount fee = XAmount.ZERO;
+    // Block remark/memo field
     private byte[] remark;
+    // Block full hash
     private byte[] hash;
+    // Block truncated hash
     private byte[] hashlow;
+    // Block amount/value
     private XAmount amount = XAmount.ZERO;
+    // Block timestamp
     private long timestamp;
 
-    // snapshot
+    // Snapshot related fields
     private boolean isSnapshot = false;
     private SnapshotInfo snapshotInfo = null;
 

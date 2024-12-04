@@ -24,33 +24,72 @@
 
 package io.xdag.cli;
 
+/**
+ * Enum class defining command line options for XDAG CLI
+ */
 public enum XdagOption {
 
+    /**
+     * Display help information
+     */
     HELP("help"),
 
+    /**
+     * Display version information
+     */
     VERSION("version"),
 
+    /**
+     * Account management operations
+     */
     ACCOUNT("account"),
 
+    /**
+     * Change wallet password
+     */
     CHANGE_PASSWORD("changepassword"),
 
+    /**
+     * Password option
+     */
     PASSWORD("password"),
 
+    /**
+     * Export private key for an address
+     */
     DUMP_PRIVATE_KEY("dumpprivatekey"),
 
+    /**
+     * Import a private key
+     */
     IMPORT_PRIVATE_KEY("importprivatekey"),
 
+    /**
+     * Import wallet using mnemonic phrase
+     */
     IMPORT_MNEMONIC("importmnemonic"),
 
+    /**
+     * Convert wallet from old format
+     */
     CONVERT_OLD_WALLET("convertoldwallet"),
 
-    // Snapshot enable
+    /**
+     * Enable snapshot functionality
+     */
     ENABLE_SNAPSHOT("enablesnapshot"),
 
+    /**
+     * Create a new snapshot
+     */
     MAKE_SNAPSHOT("makesnapshot");
 
     private final String name;
 
+    /**
+     * Constructor
+     * @param s Option name string
+     */
     XdagOption(String s) {
         name = s;
     }

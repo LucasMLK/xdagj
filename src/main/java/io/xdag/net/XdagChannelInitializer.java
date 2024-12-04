@@ -21,7 +21,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
 package io.xdag.net;
 
 import io.netty.channel.ChannelInitializer;
@@ -60,14 +59,15 @@ public class XdagChannelInitializer extends ChannelInitializer<SocketChannel> {
                 ch.disconnect();
                 return;
             }
-            Channel channel = new Channel(ch);
-            channel.init(ch.pipeline(), isServer, address, kernel);
-            channelMgr.add(channel);
+
             int bufferSize = Frame.HEADER_SIZE + kernel.getConfig().getNodeSpec().getNetMaxFrameBodySize();
             ch.config().setRecvByteBufAllocator(new FixedRecvByteBufAllocator(bufferSize));
             ch.config().setOption(ChannelOption.SO_RCVBUF, bufferSize);
-            ch.config().setOption(ChannelOption.SO_BACKLOG, 1024);
             ch.config().setOption(ChannelOption.TCP_NODELAY, true);
+            
+            Channel channel = new Channel(ch);
+            channel.init(ch.pipeline(), isServer, address, kernel);
+            channelMgr.add(channel);
 
             // notify disconnection to channel manager
             ch.closeFuture().addListener(future -> channelMgr.remove(channel));

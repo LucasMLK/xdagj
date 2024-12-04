@@ -63,7 +63,7 @@ public class RandomX {
     protected long randomXForkSeedHeight;
     protected long randomXForkLag;
 
-    // 默认为最大值
+    // Default to maximum value
     protected long randomXForkTime = Long.MAX_VALUE;
 
     protected long randomXPoolMemIndex;
@@ -72,9 +72,8 @@ public class RandomX {
     @Setter
     protected Blockchain blockchain;
 
-    protected boolean is_full_mem;
-    protected boolean is_Large_pages;
-
+    protected boolean isFullMem;
+    protected boolean isLargePages;
 
     public RandomX(Config config) {
         this.config = config;
@@ -90,12 +89,12 @@ public class RandomX {
         }
     }
 
-    // 外部使用
+    // Public method to check if it's a RandomX fork
     public boolean isRandomxFork(long epoch) {
         return mineType == XDAG_RANDOMX && epoch > randomXForkTime;
     }
 
-    // 外部使用
+    // Public method to set the fork time
     public void randomXSetForkTime(Block block) {
         long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
         seedEpoch -= 1;
@@ -128,7 +127,7 @@ public class RandomX {
         }
     }
 
-    // 外部使用
+    // Public method to unset the fork time
     public void randomXUnsetForkTime(Block block) {
         long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
         seedEpoch -= 1;
@@ -148,8 +147,8 @@ public class RandomX {
     }
 
 
-    // 系统初始化时使用
-    // 钱包 type为fast 矿池为 light
+    // Used during system initialization
+    // Wallet type is fast, pool is light
     public void init() {
         if (isTestNet) {
             randomXForkSeedHeight = RANDOMX_TESTNET_FORK_HEIGHT;
@@ -161,11 +160,11 @@ public class RandomX {
 
         long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
         if ((randomXForkSeedHeight & (seedEpoch - 1)) != 0) {
-            // TODO:
+            // TODO: Handle case where randomXForkSeedHeight is not aligned with seedEpoch
             return;
         }
 
-        // init memory and lock
+        // Initialize memory and lock
         for (int i = 0; i < 2; i++) {
             globalMemory[i] = new RandomXMemory();
         }
@@ -179,25 +178,23 @@ public class RandomX {
             memory = globalMemory[(int) (randomXPoolMemIndex - 1) & 1];
         }
 
-
         byte[] bytes = memory.poolTemplate.calculateHash(data.toArray());
         hash = Bytes32.wrap(bytes);
 
         return hash;
     }
 
-
     public byte[] randomXBlockHash(byte[] data, long blockTime) {
         byte[] hash;
         RandomXMemory memory;
-        // no seed
+        // If there is no seed
         if (randomXHashEpochIndex == 0) {
             return null;
         } else if (randomXHashEpochIndex == 1) { // first seed
             memory = globalMemory[(int) (randomXHashEpochIndex) & 1];
             if (blockTime < memory.switchTime) {
-                // block time less then switchtime
-                log.debug("Block time {} less then switchtime {}", Long.toHexString(blockTime),
+                // Block time is less than switch time
+                log.debug("Block time {} less than switch time {}", Long.toHexString(blockTime),
                         Long.toHexString(memory.switchTime));
                 return null;
             }
@@ -214,16 +211,15 @@ public class RandomX {
         return hash;
     }
 
-
     public void randomXPoolUpdateSeed(long memIndex) {
         RandomXMemory rx_memory = globalMemory[(int) (memIndex) & 1];
-        // TODO changeKey should be re-init dataset
+        // TODO: changeKey should re-initialize dataset
         rx_memory.getPoolTemplate().changeKey(rx_memory.seed);
         rx_memory.getBlockTemplate().changeKey(rx_memory.seed);
     }
 
     public void randomXLoadingSnapshot(byte[] preseed, long forkTime) {
-        // TODO:
+        // TODO: Implement loading snapshot logic
         long firstMemIndex = randomXHashEpochIndex + 1;
         randomXPoolMemIndex = -1;
         RandomXMemory firstMemory = globalMemory[(int) (firstMemIndex) & 1];
@@ -247,7 +243,7 @@ public class RandomX {
     }
 
     public void randomXLoadingForkTimeSnapshot(byte[] preseed, long forkTime) {
-        // 如果快照在还没切到下一个seed更换周期时就重启，那么还是第一个seed是初始的preseed
+        // If the snapshot is being restarted before the next seed change cycle, use the initial preseed
         if (blockchain.getXdagStats().nmain < config.getSnapshotSpec().getSnapshotHeight() + (isTestNet
                 ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS)) {
             randomXLoadingSnapshot(preseed, forkTime);
@@ -256,7 +252,7 @@ public class RandomX {
         }
     }
 
-    public void randomXLoadingSnapshot(){
+    public void randomXLoadingSnapshot() {
         Block block;
         long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
         if (blockchain.getXdagStats().nmain >= config.getSnapshotSpec().getSnapshotHeight()) {
@@ -309,11 +305,11 @@ public class RandomX {
         }
     }
 
-    public void randomXLoadingSnapshotJ(){
+    public void randomXLoadingSnapshotJ() {
         Block block;
         long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
         if (blockchain.getXdagStats().nmain >= config.getSnapshotSpec().getSnapshotHeight()) {
-            if(config.getSnapshotSpec().getSnapshotHeight()>RANDOMX_FORK_HEIGHT) {
+            if (config.getSnapshotSpec().getSnapshotHeight() > RANDOMX_FORK_HEIGHT) {
                 block = blockchain.getBlockByHeight(
                         config.getSnapshotSpec().getSnapshotHeight() - config.getSnapshotSpec().getSnapshotHeight() % seedEpoch);
                 randomXForkTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag;
@@ -413,6 +409,4 @@ public class RandomX {
             }
         }
     }
-
-
 }

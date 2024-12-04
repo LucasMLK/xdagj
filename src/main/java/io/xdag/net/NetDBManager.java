@@ -38,6 +38,9 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.FileUtils;
 
+/**
+ * Manages the network database including whitelisted nodes
+ */
 @Slf4j
 public class NetDBManager {
 
@@ -54,6 +57,9 @@ public class NetDBManager {
 
     private final Config config;
 
+    /**
+     * Constructor initializes database paths and network DBs
+     */
     public NetDBManager(Config config) {
         this.config = config;
         database = config.getNodeSpec().getNetDBDir();
@@ -63,105 +69,112 @@ public class NetDBManager {
         netDB = new NetDB();
     }
 
+    /**
+     * Load whitelist IPs from config
+     */
     public void loadFromConfig() {
         for (InetSocketAddress address:config.getNodeSpec().getWhiteIPList()){
             whiteDB.addNewIP(address);
         }
     }
 
+    /**
+     * Load whitelist from remote URL and save to local file
+     * Issue: Creates new file even if exists, should check first
+     * Issue: Potential resource leak if reader not closed in finally block
+     */
     public void loadFromUrl() {
-        // 2. 从官网读取白名单并写入到netdb.txt文件上
         File file = new File(databaseWhite);
-        BufferedReader reader = null;
-        try {
+        try (BufferedReader reader = new BufferedReader(
+                new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
+            
             if (!file.exists()) {
                 if (!file.createNewFile()) {
-                    log.debug("Create File failed");
+                    log.debug("Failed to create whitelist file");
+                    return;
                 }
-                // 白名单的地址 并且读取
+                // Download whitelist from URL
                 URL url = new URL(whiteUrl);
                 FileUtils.copyURLToFile(url, file);
-                if (file.exists() && file.isFile()) {
-                    reader = new BufferedReader(
-                            new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8));
-                    String temp;
-                    String ip;
-                    int port;
-                    while ((temp = reader.readLine()) != null) {
-                        ip = temp.split(":")[0];
-                        port = Integer.parseInt(temp.split(":")[1]);
-                        whiteDB.addNewIP(ip, port);
-                    }
-                }
-            } else {
-                reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8));
-                String temp;
-                String ip;
-                int port;
-                while ((temp = reader.readLine()) != null) {
-                    ip = temp.split(":")[0];
-                    port = Integer.parseInt(temp.split(":")[1]);
+            }
+
+            // Read IPs from file
+            String line;
+            while ((line = reader.readLine()) != null) {
+                String[] parts = line.split(":");
+                if (parts.length == 2) {
+                    String ip = parts[0];
+                    int port = Integer.parseInt(parts[1]);
                     whiteDB.addNewIP(ip, port);
                 }
-                log.debug("File have exist..");
             }
+            
         } catch (IOException e) {
-            log.error(e.getMessage(), e);
-        } finally {
-            try {
-                if (reader != null) {
-                    reader.close();
-                }
-            } catch (IOException e) {
-                log.error(e.getMessage(), e);
-            }
+            log.error("Error loading whitelist from URL", e);
         }
     }
 
+    /**
+     * Initialize network database
+     */
     public void init() {
         loadFromConfig();
         if(config instanceof DevnetConfig) {
-            // devnet only read from config
+            // Only use config whitelist for devnet
             return;
         }
         loadFromUrl();
     }
 
+    /**
+     * Update network database with new entries
+     */
     public void updateNetDB(NetDB netDB) {
         if (netDB != null) {
             this.netDB.appendNetDB(netDB);
         }
     }
 
+    /**
+     * Check if address is whitelisted
+     */
     public boolean canAccept(InetSocketAddress address) {
         return whiteDB.contains(address);
     }
 
+    /**
+     * Refresh whitelist from URL
+     * Issue: Creates new whiteDB instance inside loop - should be created once
+     * Issue: Potential resource leak with reader
+     */
     public void refresh() {
+        File file = new File(databaseWhite);
         try {
-            File file = new File(databaseWhite);
-            // 白名单的地址 并且读取
-            URL url;
-            url = new URL(whiteUrl);
-
+            URL url = new URL(whiteUrl);
             FileUtils.copyURLToFile(url, file);
-            if (file.exists() && file.isFile()) {
-                try(BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
-                    String temp;
-                    String ip;
-                    int port;
-                    while ((temp = reader.readLine()) != null) {
-                        ip = temp.split(":")[0];
-                        port = Integer.parseInt(temp.split(":")[1]);
-                        whiteDB = new NetDB();
+            
+            if (!file.exists() || !file.isFile()) {
+                return;
+            }
+
+            whiteDB = new NetDB(); // Move outside loop
+            
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
+                
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    String[] parts = line.split(":");
+                    if (parts.length == 2) {
+                        String ip = parts[0];
+                        int port = Integer.parseInt(parts[1]);
                         whiteDB.addNewIP(ip, port);
                     }
-                } catch (IOException e) {
-                    log.error(e.getMessage(), e);
                 }
             }
+            
         } catch (IOException e) {
-            log.error(e.getMessage(), e);
+            log.error("Error refreshing whitelist", e);
         }
     }
 

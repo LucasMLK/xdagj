@@ -46,7 +46,7 @@ import lombok.extern.slf4j.Slf4j;
 public class NetDB {
 
     /**
-     * remote
+     * List of remote IP addresses
      */
     List<IP> ipList = Lists.newArrayList();
 
@@ -54,7 +54,7 @@ public class NetDB {
     }
 
     /**
-     * 从remote节点获取的iplist
+     * Create NetDB from data received from remote nodes
      */
     public NetDB(byte[] data) {
         parse(data);
@@ -98,7 +98,7 @@ public class NetDB {
     }
 
     /**
-     * address 6字节 4字节ip+2字节port
+     * Add new IP from 6-byte address (4 bytes IP + 2 bytes port)
      */
     public void addNewIP(byte[] address) {
         byte[] ip = BytesUtils.subArray(address, 0, 4);
@@ -110,7 +110,7 @@ public class NetDB {
     }
 
     /**
-     * 获取remote接收到的新IP
+     * Get list of nodes from received remote IPs
      */
     public Set<Node> getIPList() {
         Set<Node> res = Sets.newHashSet();
@@ -123,9 +123,9 @@ public class NetDB {
     }
 
     /**
-     * 解析字节数组到List中
+     * Parse byte array into IP list
      *
-     * @param data 消息内容
+     * @param data Message content
      */
     public void parse(byte[] data) {
         int size = data.length / 6;
@@ -152,7 +152,9 @@ public class NetDB {
         return res;
     }
 
-    //todo
+    /**
+     * Get number of IPs in the list
+     */
     public int getSize() {
         return ipList.size();
     }
@@ -166,6 +168,9 @@ public class NetDB {
         return stringBuilder.toString();
     }
 
+    /**
+     * Append IPs from another NetDB
+     */
     public void appendNetDB(NetDB netDB) {
         if (netDB.ipList.isEmpty()) {
             log.debug("size 0");

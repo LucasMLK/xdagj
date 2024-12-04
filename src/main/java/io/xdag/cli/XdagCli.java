@@ -527,24 +527,32 @@ public class XdagCli extends Launcher {
         System.out.println("snapshot height: " + snapshotStore.getHeight());
         System.out.println("next start frame: " + Long.toHexString(XdagTime.getEndOfEpoch(snapshotStore.getNextTime()) + 1));
     }
+
+    /**
+     * Copy directory recursively
+     */
     public static void copyDir(String sourcePath, String newPath) {
         File start = new File(sourcePath);
         File end = new File(newPath);
-        String[] filePath = start.list();		//获取该文件夹下的所有文件以及目录的名字
+        String[] filePath = start.list();  // Get all files and directories under this folder
         if(!end.exists()) {
             end.mkdir();
         }
         for(String temp:filePath) {
-            //查看其数组中每一个是文件还是文件夹
+            // Check if each item is a file or directory
             if(new File(sourcePath+File.separator+temp).isDirectory()) {
-                //为文件夹，进行递归
+                // For directory, recursively copy
                 copyDir(sourcePath+File.separator+temp, newPath+File.separator+temp);
             }else {
-                //为文件则进行拷贝
+                // For file, copy directly
                 copyFile(sourcePath+File.separator+temp, newPath+File.separator+temp);
             }
         }
     }
+
+    /**
+     * Copy single file
+     */
     public static void copyFile(String sourcePath, String newPath) {
         File start = new File(sourcePath);
         File end = new File(newPath);

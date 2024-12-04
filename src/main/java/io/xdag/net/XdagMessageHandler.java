@@ -73,7 +73,12 @@ public class XdagMessageHandler extends MessageToMessageCodec<Frame, Message>  {
 
         switch (COMPRESS_TYPE) {
         case Frame.COMPRESS_SNAPPY:
-            dataCompressed = Snappy.compress(data);
+            try {
+                dataCompressed = Snappy.compress(data);
+            } catch (IOException e) {
+                log.error("Failed to compress data", e);
+                return;
+            }
             break;
         case Frame.COMPRESS_NONE:
             break;
@@ -92,6 +97,11 @@ public class XdagMessageHandler extends MessageToMessageCodec<Frame, Message>  {
         }
 
         int limit = config.getNodeSpec().getNetMaxFrameBodySize();
+        if (limit <= 0) {
+            log.error("Invalid frame body size limit: {}", limit);
+            return;
+        }
+
         int total = (dataCompressed.length - 1) / limit + 1;
         for (int i = 0; i < total; i++) {
             byte[] body = new byte[(i < total - 1) ? limit : dataCompressed.length % limit];
@@ -103,6 +113,10 @@ public class XdagMessageHandler extends MessageToMessageCodec<Frame, Message>  {
 
     @Override
     protected void decode(ChannelHandlerContext ctx, Frame frame, List<Object> out) throws Exception {
+        if (frame == null) {
+            throw new MessageException("Frame cannot be null");
+        }
+
         Message decodedMsg = null;
 
         if (frame.isChunked()) {
@@ -148,6 +162,10 @@ public class XdagMessageHandler extends MessageToMessageCodec<Frame, Message>  {
 
         byte packetType = head.getPacketType();
         int packetSize = head.getPacketSize();
+
+        if (packetSize < 0 || packetSize > netMaxPacketSize) {
+            throw new MessageException("Invalid packet size: " + packetSize);
+        }
 
         byte[] data = new byte[packetSize];
         int pos = 0;

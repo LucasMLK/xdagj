@@ -34,46 +34,63 @@ import java.util.Map;
 
 public interface Blockchain {
 
-    // for snapshot pre-seed
+    // Get pre-seed for snapshot initialization
     byte[] getPreSeed();
 
+    // Try to connect a new block to the blockchain
     ImportResult tryToConnect(Block block);
 
+    // Create a new block with given parameters
     Block createNewBlock(Map<Address, KeyPair> pairs, List<Address> to, boolean mining, String remark, XAmount fee);
 
+    // Get block by its hash
     Block getBlockByHash(Bytes32 hash, boolean isRaw);
 
+    // Get block by its height
     Block getBlockByHeight(long height);
 
+    // Check and update main chain
     void checkNewMain();
 
+    // Get the latest main block number
     long getLatestMainBlockNumber();
 
+    // Get list of main blocks with specified count
     List<Block> listMainBlocks(int count);
 
+    // Get list of mined blocks with specified count
     List<Block> listMinedBlocks(int count);
+
+    // Get memory blocks created by current node
     Map<Bytes, Integer> getMemOurBlocks();
 
+    // Get XDAG network statistics
     XdagStats getXdagStats();
 
+    // Get XDAG top status
     XdagTopStatus getXdagTopStatus();
 
+    // Calculate reward for given main block number
     XAmount getReward(long nmain);
 
+    // Calculate total supply at given main block number
     XAmount getSupply(long nmain);
 
+    // Get blocks within specified time range
     List<Block> getBlocksByTime(long starttime, long endtime);
 
-    // 启动检查主块链线程
+    // Start main chain check thread with given period
     void startCheckMain(long period);
 
-    // 关闭检查主块链线程
+    // Stop main chain check thread
     void stopCheckMain();
 
-    // 注册监听器
+    // Register blockchain event listener
     void registerListener(Listener listener);
 
+    // Get transaction history for given address
     List<TxHistory> getBlockTxHistoryByAddress(Bytes32 addressHashlow, int page, Object... parameters);
 
+    // Get extended XDAG network statistics
     XdagExtStats getXdagExtStats();
 }

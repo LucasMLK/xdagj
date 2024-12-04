@@ -49,7 +49,7 @@ public class ChannelManager {
      * Queue with new blocks from other peers
      */
     private final BlockingQueue<BlockWrapper> newForeignBlocks = new LinkedBlockingQueue<>();
-    // 广播区块
+    // Thread for block distribution
     private final Thread blockDistributeThread;
     private final Set<InetSocketAddress> addressSet = new HashSet<>();
     protected ConcurrentHashMap<InetSocketAddress, Channel> channels = new ConcurrentHashMap<>();
@@ -73,11 +73,11 @@ public class ChannelManager {
     }
 
     public boolean isAcceptable(InetSocketAddress address) {
-        //对于进来的连接，只判断ip，不判断port
+        // For incoming connections, only check IP, not port
         if (!addressSet.isEmpty()) {
             for (InetSocketAddress inetSocketAddress : addressSet) {
-                // 不连接自己
-                if (!isSelfAddress(address)&&inetSocketAddress.getAddress().equals(address.getAddress())) {
+                // Don't connect to self
+                if (!isSelfAddress(address) && inetSocketAddress.getAddress().equals(address.getAddress())) {
                     return true;
                 }
             }
@@ -230,10 +230,10 @@ public class ChannelManager {
     public void stop() {
         log.debug("Channel Manager stop...");
         if (blockDistributeThread != null) {
-            // 中断
+            // Interrupt the thread
             blockDistributeThread.interrupt();
         }
-        // 关闭所有连接
+        // Close all connections
         for (Channel channel : activeChannels.values()) {
             channel.close();
         }

@@ -38,12 +38,12 @@ public class XdagBlock {
     public static final int XDAG_BLOCK_SIZE = 512;
 
     /**
-     * data 以添加签名
+     * Block data with signature
      */
     private MutableBytes data;
     /**
      * -- GETTER --
-     *  获取区块sums*
+     * Get block sums
      */
     @Getter
     private long sum;

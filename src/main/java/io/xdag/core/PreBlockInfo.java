@@ -27,24 +27,39 @@ import java.math.BigInteger;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Class representing preliminary block information before full block creation
+ */
 @Getter
 @Setter
 public class PreBlockInfo {
 
+    // Block type (main/wallet/transaction/snapshot)
     public long type;
+    // Block flags for various attributes
     public int flags;
+    // Block height in the chain
     private long height;
+    // Block mining difficulty
     private BigInteger difficulty;
+    // Reference to previous blocks
     private byte[] ref;
+    // Link to block with maximum difficulty
     private byte[] maxDiffLink;
+    // Transaction fee amount
     private long fee;
+    // Block remark/memo field
     private byte[] remark;
+    // Block full hash
     private byte[] hash;
+    // Block truncated hash
     private byte[] hashlow;
+    // Block amount/value
     private XAmount amount;
+    // Block timestamp
     private long timestamp;
 
-    // snapshot
+    // Snapshot related fields
     private boolean isSnapshot = false;
     private SnapshotInfo snapshotInfo = null;
 
