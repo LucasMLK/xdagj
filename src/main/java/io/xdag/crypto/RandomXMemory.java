@@ -24,8 +24,7 @@
 
 package io.xdag.crypto;
 
-import com.sun.jna.Pointer;
-
+import io.xdag.crypto.randomx.RandomXTemplate;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -38,10 +37,9 @@ public class RandomXMemory {
     protected long seedTime;
     protected long switchTime;
     protected int isSwitched;
-    protected Pointer rxCache;
-    protected Pointer rxDataset;
-    protected Pointer poolVm;
-    protected Pointer blockVm;
+
+    protected RandomXTemplate poolTemplate;
+    protected RandomXTemplate blockTemplate;
 
     public RandomXMemory() {
         this.switchTime = -1;

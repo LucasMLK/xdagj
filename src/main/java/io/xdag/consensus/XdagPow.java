@@ -267,8 +267,7 @@ public class XdagPow implements PoW, Listener, Runnable {
                 taskData.set(0, task.getTask()[0].getData());// preHash
                 taskData.set(32, share);// share
                 // Calculate hash
-                hash = Bytes32.wrap(kernel.getRandomx()
-                        .randomXPoolCalcHash(taskData, taskData.size(), task.getTaskTime()).reverse());
+                hash = Bytes32.wrap(kernel.getRandomx().randomXPoolCalcHash(taskData, task.getTaskTime()).reverse());
             } else {
                 XdagSha256Digest digest = new XdagSha256Digest(task.getDigest());
                 hash = Bytes32.wrap(digest.sha256Final(share.reverse()));

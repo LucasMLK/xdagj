@@ -425,9 +425,6 @@ public class Kernel {
             dbFactory.getDB(name).close();
         }
 
-        // release
-        randomx.randomXPoolReleaseMem();
-        log.info("Release randomx");
         webSocketServer.stop();
         log.info("WebSocket server stop.");
         poolAwardManager.stop();

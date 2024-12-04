@@ -26,8 +26,6 @@ package io.xdag.utils;
 
 import com.google.common.io.BaseEncoding;
 import com.google.common.primitives.UnsignedLong;
-import com.sun.jna.Memory;
-import com.sun.jna.Pointer;
 
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.MutableBytes32;
@@ -100,12 +98,6 @@ public class BytesUtils {
             buffer.order(ByteOrder.LITTLE_ENDIAN);
         }
         return buffer.getShort();
-    }
-
-    public static Pointer bytesToPointer(byte[] bytes) {
-        Pointer pointer = new Memory(bytes.length);
-        pointer.write(0, bytes, 0, bytes.length);
-        return pointer;
     }
 
     public static String toHexString(byte[] data) {
@@ -199,7 +191,7 @@ public class BytesUtils {
      * @return 转换后的byte[]
      */
     public static byte[] hexStringToBytes(String hexString) {
-        if (hexString == null || "".equals(hexString)) {
+        if (hexString == null || hexString.isEmpty()) {
             return null;
         }
         hexString = hexString.toUpperCase();

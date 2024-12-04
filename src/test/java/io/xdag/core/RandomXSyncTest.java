@@ -102,9 +102,6 @@ public class RandomXSyncTest {
 
         String kernel2Diff = kernel2.getBlockchain().getBlockByHeight(nmain - 1).getInfo().getDifficulty().toString(16);
         assertEquals(expected, kernel2Diff);
-
-        kernel1.getRandomx().randomXPoolReleaseMem();
-        kernel2.getRandomx().randomXPoolReleaseMem();
     }
 
     public void sync(Kernel kernel1, Kernel kernel2, long startTime, long endTime, String syncName) {
