@@ -46,6 +46,6 @@ public class CorsConfiguration {
     }
 
     public boolean hasHeader() {
-        return this.header != null && this.header.length() != 0;
+        return this.header != null && !this.header.isEmpty();
     }
 }
