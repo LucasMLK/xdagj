@@ -67,36 +67,27 @@ public class Block implements Cloneable {
     /**
      * List of block links (inputs and outputs)
      */
-    @Getter
     private List<Address> inputs = new CopyOnWriteArrayList<>();
     /**
      * Outputs including pretop
      */
-    @Getter
     private List<Address> outputs = new CopyOnWriteArrayList<>();
     /**
      * Record public keys (prefix + compressed public key)
      */
-    @Getter
     private List<SECPPublicKey> pubKeys = new CopyOnWriteArrayList<>();
-    @Getter
     private Map<SECPSignature, Integer> insigs = new LinkedHashMap<>();
     private SECPSignature outsig;
     /**
      * Main block nonce records miner address and nonce
      */
-    @Getter
     private Bytes32 nonce;
     private XdagBlock xdagBlock;
     private boolean parsed;
     private boolean isOurs;
     private byte[] encoded;
     private int tempLength;
-    @Getter
-    @Setter
     private boolean pretopCandidate;
-    @Getter
-    @Setter
     private BigInteger pretopCandidateDiff;
 
     public Block(
