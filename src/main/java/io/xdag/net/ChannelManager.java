@@ -85,20 +85,6 @@ public class ChannelManager {
         return false;
     }
 
-    public boolean isActiveIP(String ip) {
-        for (Channel c : activeChannels.values()) {
-            if (c.getRemoteIp().equals(ip)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    public boolean isActivePeer(String peerId) {
-        return activeChannels.containsKey(peerId);
-    }
-
     public int size() {
         return channels.size();
     }
@@ -118,30 +104,10 @@ public class ChannelManager {
         }
     }
 
-    public void closeBlacklistedChannels() {
-        for (Map.Entry<InetSocketAddress, Channel> entry : channels.entrySet()) {
-            Channel channel = entry.getValue();
-            if (!isAcceptable(channel.getRemoteAddress())) {
-                remove(channel);
-                channel.close();
-            }
-        }
-    }
-
     public void onChannelActive(Channel channel, Peer peer) {
         channel.setActive(peer);
         activeChannels.put(peer.getPeerId(), channel);
         log.debug("activeChannel size:{}", activeChannels.size());
-    }
-
-    public List<Peer> getActivePeers() {
-        List<Peer> list = new ArrayList<>();
-
-        for (Channel c : activeChannels.values()) {
-            list.add(c.getRemotePeer());
-        }
-
-        return list;
     }
 
     public Set<InetSocketAddress> getActiveAddresses() {
@@ -157,30 +123,6 @@ public class ChannelManager {
 
     public List<Channel> getActiveChannels() {
         return new ArrayList<>(activeChannels.values());
-    }
-
-    public List<Channel> getActiveChannels(List<String> peerIds) {
-        List<Channel> list = new ArrayList<>();
-
-        for (String peerId : peerIds) {
-            if (activeChannels.containsKey(peerId)) {
-                list.add(activeChannels.get(peerId));
-            }
-        }
-
-        return list;
-    }
-
-    public List<Channel> getIdleChannels() {
-        List<Channel> list = new ArrayList<>();
-
-        for (Channel c : activeChannels.values()) {
-            if (c.getMessageQueue().isIdle()) {
-                list.add(c);
-            }
-        }
-
-        return list;
     }
 
     /**
