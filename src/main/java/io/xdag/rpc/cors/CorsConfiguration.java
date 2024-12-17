@@ -24,8 +24,10 @@
 
 package io.xdag.rpc.cors;
 
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
+@Getter
 @Slf4j
 public class CorsConfiguration {
 
@@ -41,10 +43,6 @@ public class CorsConfiguration {
         if (header != null && (header.contains("\n") || header.contains("\r"))) {
             throw new IllegalArgumentException("corsheader");
         }
-    }
-
-    public String getHeader() {
-        return this.header;
     }
 
     public boolean hasHeader() {

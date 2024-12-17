@@ -43,7 +43,7 @@ public class HttpUtils {
         if (indexOfSemicolon != -1) {
             return contentTypeValue.substring(0, indexOfSemicolon);
         } else {
-            return contentTypeValue.length() > 0 ? contentTypeValue : null;
+            return !contentTypeValue.isEmpty() ? contentTypeValue : null;
         }
 
     }

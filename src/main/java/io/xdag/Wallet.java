@@ -88,7 +88,6 @@ public class Wallet {
     /**
      * Returns the file where the wallet is persisted.
      */
-    @Getter
     private final File file;
     private final Config config;
 
