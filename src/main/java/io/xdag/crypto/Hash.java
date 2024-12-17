@@ -28,7 +28,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-import org.bouncycastle.crypto.digests.RIPEMD160Digest;
 import org.bouncycastle.crypto.digests.SHA512Digest;
 import org.bouncycastle.crypto.macs.HMac;
 import org.bouncycastle.crypto.params.KeyParameter;
@@ -117,11 +116,6 @@ public class Hash {
      * @return the RIPEMD-160 hash of the given input
      */
     public static byte[] sha256hash160(Bytes input) {
-        Bytes32 sha256 = sha256(input);
-        RIPEMD160Digest digest = new RIPEMD160Digest();
-        digest.update(sha256.toArray(), 0, sha256.size());
-        byte[] out = new byte[20];
-        digest.doFinal(out, 0);
-        return out;
+        return org.hyperledger.besu.crypto.Hash.ripemd160(sha256(input)).toArray();
     }
 }
