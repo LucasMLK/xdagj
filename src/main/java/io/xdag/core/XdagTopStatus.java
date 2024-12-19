@@ -1,4 +1,6 @@
 /*
+ * The MIT License (MIT)
+ *
  * Copyright (c) 2020-2030 The XdagJ Developers
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -19,7 +21,6 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
 package io.xdag.core;
 
 import java.math.BigInteger;
