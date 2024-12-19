@@ -63,14 +63,9 @@ public class PeerClient {
 
     private final String ip;
     private final int port;
-
-    @Getter
     private final KeyPair coinbase;
-
     private final EventLoopGroup workerGroup;
-
     private final Config config;
-
     private final Set<InetSocketAddress> whitelist;
     private Node node;
 

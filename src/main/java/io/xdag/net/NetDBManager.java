@@ -41,20 +41,14 @@ import org.apache.commons.io.FileUtils;
 /**
  * Manages the network database including whitelisted nodes
  */
+@Getter
 @Slf4j
 public class NetDBManager {
-
-    @Getter
     private final String database;
-    @Getter
     private final String databaseWhite;
-    @Getter
     private final String whiteUrl;
-    @Getter
     private final NetDB netDB;
-    @Getter
     private NetDB whiteDB;
-
     private final Config config;
 
     /**

@@ -46,14 +46,10 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class XdagMessageHandler extends MessageToMessageCodec<Frame, Message>  {
     private static final int MAX_PACKETS = 16;
-
     private static final byte COMPRESS_TYPE = Frame.COMPRESS_SNAPPY;
-
     private final Cache<Integer, Pair<List<Frame>, AtomicInteger>> incompletePackets = Caffeine.newBuilder()
             .maximumSize(MAX_PACKETS).build();
-
     private final Config config;
-
     private final MessageFactory messageFactory;
     private final AtomicInteger count;
 
