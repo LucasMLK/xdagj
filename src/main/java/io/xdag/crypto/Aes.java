@@ -24,11 +24,13 @@
 
 package io.xdag.crypto;
 
+import org.bouncycastle.crypto.BlockCipher;
 import org.bouncycastle.crypto.CipherParameters;
 import org.bouncycastle.crypto.DataLengthException;
 import org.bouncycastle.crypto.InvalidCipherTextException;
 import org.bouncycastle.crypto.engines.AESEngine;
 import org.bouncycastle.crypto.modes.CBCBlockCipher;
+import org.bouncycastle.crypto.modes.CBCModeCipher;
 import org.bouncycastle.crypto.paddings.PaddedBufferedBlockCipher;
 import org.bouncycastle.crypto.params.KeyParameter;
 import org.bouncycastle.crypto.params.ParametersWithIV;
@@ -67,7 +69,9 @@ public class Aes {
      */
     public static byte[] encrypt(byte[] raw, byte[] key, byte[] iv) {
         try {
-            PaddedBufferedBlockCipher aes = new PaddedBufferedBlockCipher(new CBCBlockCipher(new AESEngine()));
+            BlockCipher blockCipher = AESEngine.newInstance();
+            CBCModeCipher cbcModeCipher = CBCBlockCipher.newInstance(blockCipher);
+            PaddedBufferedBlockCipher aes = new PaddedBufferedBlockCipher(cbcModeCipher);
             CipherParameters params = new ParametersWithIV(new KeyParameter(key), iv);
             aes.init(true, params);
 
@@ -88,7 +92,9 @@ public class Aes {
      */
     public static byte[] decrypt(byte[] encrypted, byte[] key, byte[] iv) {
         try {
-            PaddedBufferedBlockCipher aes = new PaddedBufferedBlockCipher(new CBCBlockCipher(new AESEngine()));
+            BlockCipher blockCipher = AESEngine.newInstance();
+            CBCModeCipher cbcModeCipher = CBCBlockCipher.newInstance(blockCipher);
+            PaddedBufferedBlockCipher aes = new PaddedBufferedBlockCipher(cbcModeCipher);
             CipherParameters params = new ParametersWithIV(new KeyParameter(key), iv);
             aes.init(false, params);
 
