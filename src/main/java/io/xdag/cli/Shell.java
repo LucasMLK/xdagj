@@ -165,10 +165,9 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
     }
 
     private void println(final String msg) {
-        try(PrintWriter writer = reader.getTerminal().writer()) {
-            writer.println(msg);
-            writer.flush();
-        }
+        PrintWriter writer = reader.getTerminal().writer();
+        writer.println(msg);
+        writer.flush();
     }
 
     private void processAccount(CommandInput input) {
