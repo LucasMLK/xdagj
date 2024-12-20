@@ -26,18 +26,22 @@ package io.xdag.rpc.netty;
 
 import static org.junit.Assert.assertEquals;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.security.cert.X509Certificate;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
+import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
@@ -53,11 +57,6 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.xdag.rpc.Web3;
 import io.xdag.rpc.cors.CorsConfiguration;
 import io.xdag.rpc.modules.ModuleDescription;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
 
 public class Web3HttpServerTest {
 
@@ -65,39 +64,29 @@ public class Web3HttpServerTest {
     private static final JsonNodeFactory JSON_NODE_FACTORY = JsonNodeFactory.instance;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-    private static OkHttpClient getUnsafeOkHttpClient() {
-        try {
-            // Create a trust manager that does not validate certificate chains
-            final TrustManager[] trustAllCerts = new TrustManager[]{
-                    new X509TrustManager() {
-                        @Override
-                        public void checkClientTrusted(java.security.cert.X509Certificate[] chain,
-                                String authType) {
-                        }
-
-                        @Override
-                        public void checkServerTrusted(java.security.cert.X509Certificate[] chain,
-                                String authType) {
-                        }
-
-                        @Override
-                        public java.security.cert.X509Certificate[] getAcceptedIssuers() {
-                            return new X509Certificate[0];
-                        }
+    private static HttpURLConnection getUnsafeConnection(URL url) throws Exception {
+        // Create a trust manager that does not validate certificate chains
+        TrustManager[] trustAllCerts = new TrustManager[]{
+                new X509TrustManager() {
+                    public X509Certificate[] getAcceptedIssuers() {
+                        return new X509Certificate[0];
                     }
-            };
-            // Install the all-trusting trust manager
-            final SSLContext sslContext = SSLContext.getInstance("SSL");
-            sslContext.init(null, trustAllCerts, new java.security.SecureRandom());
-            // Create an ssl socket factory with our all-trusting manager
-            final SSLSocketFactory sslSocketFactory = sslContext.getSocketFactory();
+                    public void checkClientTrusted(X509Certificate[] certs, String authType) {}
+                    public void checkServerTrusted(X509Certificate[] certs, String authType) {}
+                }
+        };
 
-            return new OkHttpClient.Builder()
-                    .sslSocketFactory(sslSocketFactory, (X509TrustManager) trustAllCerts[0])
-                    .hostnameVerifier((hostname, session) -> true)
-                    .build();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        // Install the all-trusting trust manager
+        SSLContext sc = SSLContext.getInstance("SSL");
+        sc.init(null, trustAllCerts, new java.security.SecureRandom());
+
+        if (url.getProtocol().equals("https")) {
+            HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
+            conn.setSSLSocketFactory(sc.getSocketFactory());
+            conn.setHostnameVerifier((hostname, session) -> true);
+            return conn;
+        } else {
+            return (HttpURLConnection) url.openConnection();
         }
     }
 
@@ -153,7 +142,7 @@ public class Web3HttpServerTest {
         Mockito.when(mockCorsConfiguration.hasHeader()).thenReturn(true);
         Mockito.when(mockCorsConfiguration.getHeader()).thenReturn("*");
 
-        int randomPort = 9999;//new ServerSocket(0).getLocalPort();
+        int randomPort = 9999;
 
         List<ModuleDescription> filteredModules = Collections.singletonList(
                 new ModuleDescription("web3", "1.0", true, Collections.emptyList(), Collections.emptyList()));
@@ -163,10 +152,10 @@ public class Web3HttpServerTest {
                 mockCorsConfiguration, filterHandler, serverHandler);
         server.start();
         try {
-            Response response = sendJsonRpcMessage(randomPort, contentType, host);
-            JsonNode jsonRpcResponse = OBJECT_MAPPER.readTree(Objects.requireNonNull(response.body()).string());
+            HttpResponse response = sendJsonRpcMessage(randomPort, contentType, host);
+            JsonNode jsonRpcResponse = OBJECT_MAPPER.readTree(response.body);
 
-            assertEquals(response.code(), HttpResponseStatus.OK.code());
+            assertEquals(response.statusCode, HttpResponseStatus.OK.code());
             assertEquals(jsonRpcResponse.at("/result").asText(), mockResult);
         } finally {
             server.stop();
@@ -177,20 +166,47 @@ public class Web3HttpServerTest {
         smokeTest(contentType, "127.0.0.1");
     }
 
-    private Response sendJsonRpcMessage(int port, String contentType, String host) throws IOException {
+    private static class HttpResponse {
+        final int statusCode;
+        final String body;
+
+        HttpResponse(int statusCode, String body) {
+            this.statusCode = statusCode;
+            this.body = body;
+        }
+    }
+
+    private HttpResponse sendJsonRpcMessage(int port, String contentType, String host) throws Exception {
         Map<String, JsonNode> jsonRpcRequestProperties = new HashMap<>();
         jsonRpcRequestProperties.put("jsonrpc", JSON_NODE_FACTORY.textNode("2.0"));
         jsonRpcRequestProperties.put("id", JSON_NODE_FACTORY.numberNode(13));
         jsonRpcRequestProperties.put("method", JSON_NODE_FACTORY.textNode("web3_sha3"));
         jsonRpcRequestProperties.put("params", JSON_NODE_FACTORY.arrayNode().add("value"));
 
-        RequestBody requestBody = RequestBody.Companion.create(JSON_NODE_FACTORY.objectNode()
-                .setAll(jsonRpcRequestProperties).toString(), MediaType.parse(contentType));
+        String jsonBody = JSON_NODE_FACTORY.objectNode()
+                .setAll(jsonRpcRequestProperties).toString();
+
         URL url = new URL("http", "localhost", port, "/");
-        Request request = new Request.Builder().url(url)
-                .addHeader("Host", host)
-//                .addHeader("Accept-Encoding", "identity")
-                .post(requestBody).build();
-        return getUnsafeOkHttpClient().newCall(request).execute();
+        HttpURLConnection conn = getUnsafeConnection(url);
+        conn.setRequestMethod("POST");
+        conn.setRequestProperty("Content-Type", contentType);
+        conn.setRequestProperty("Host", host);
+        conn.setDoOutput(true);
+
+        try (OutputStream os = conn.getOutputStream()) {
+            byte[] input = jsonBody.getBytes(StandardCharsets.UTF_8);
+            os.write(input, 0, input.length);
+        }
+
+        StringBuilder response = new StringBuilder();
+        try (BufferedReader br = new BufferedReader(
+                new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+            String responseLine;
+            while ((responseLine = br.readLine()) != null) {
+                response.append(responseLine.trim());
+            }
+        }
+
+        return new HttpResponse(conn.getResponseCode(), response.toString());
     }
 }
