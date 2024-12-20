@@ -61,11 +61,8 @@ public class XdagFrameHandler extends ByteToMessageCodec<Frame>  {
         frame.writeHeader(buf);
         buf.writeBytes(frame.getBody());
 
-        // Write buffer to context (Note: does not auto-flush)
         ctx.write(buf);
-        
-        // Consider releasing the buffer after writing
-        buf.release(); // Potential memory leak if not released
+        ctx.flush();
     }
 
     @Override
