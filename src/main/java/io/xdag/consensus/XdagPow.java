@@ -24,6 +24,8 @@
 
 package io.xdag.consensus;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.xdag.Kernel;
 import io.xdag.Wallet;
 import io.xdag.core.*;
@@ -34,7 +36,7 @@ import io.xdag.listener.BlockMessage;
 import io.xdag.listener.Listener;
 import io.xdag.listener.PretopMessage;
 import io.xdag.net.ChannelManager;
-import io.xdag.net.websocket.ChannelSupervise;
+import io.xdag.pool.ChannelSupervise;
 import io.xdag.pool.PoolAwardManager;
 import io.xdag.utils.BytesUtils;
 import io.xdag.utils.XdagRandomUtils;
@@ -46,8 +48,6 @@ import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -540,18 +540,19 @@ public class XdagPow implements PoW, Listener, Runnable {
                 } catch (InterruptedException e) {
                     log.error(e.getMessage(), e);
                 }
+
                 if (shareInfo != null) {
                     try {
-                        JSONObject shareJson = new JSONObject(shareInfo);
-                        if (shareJson.getInt("msgType") == SHARE_FLAG) {
-                            receiveNewShare(shareJson.getJSONObject("msgContent").getString("share"),
-                                    shareJson.getJSONObject("msgContent").getString("hash"),
-                                    shareJson.getJSONObject("msgContent").getLong("taskIndex"));
+                        JsonObject shareJson = JsonParser.parseString(shareInfo).getAsJsonObject();
+                        if (shareJson.get("msgType").getAsInt() == SHARE_FLAG) {
+                            JsonObject msgContent = shareJson.getAsJsonObject("msgContent");
+                            receiveNewShare(msgContent.get("share").getAsString(),
+                                    msgContent.get("hash").getAsString(),
+                                    msgContent.get("taskIndex").getAsLong());
                         } else {
                             log.error("Share format error! Current share: {}", shareInfo);
                         }
-
-                    } catch (JSONException e) {
+                    } catch (Exception e) {
                         log.error("Share format error, current share: {}", shareInfo);
                     }
                 }

@@ -41,7 +41,7 @@ import io.xdag.db.rocksdb.*;
 import io.xdag.net.*;
 import io.xdag.net.message.MessageQueue;
 import io.xdag.net.node.NodeManager;
-import io.xdag.net.websocket.WebSocketServer;
+import io.xdag.pool.WebSocketServer;
 import io.xdag.pool.PoolAwardManagerImpl;
 import io.xdag.rpc.Web3;
 import io.xdag.rpc.Web3Impl;

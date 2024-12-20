@@ -28,7 +28,6 @@ import io.xdag.Wallet;
 import io.xdag.cli.Commands;
 import io.xdag.config.Config;
 import io.xdag.core.*;
-import io.xdag.net.websocket.ChannelSupervise;
 import io.xdag.utils.BasicUtils;
 import io.xdag.utils.WalletUtils;
 import lombok.Setter;
