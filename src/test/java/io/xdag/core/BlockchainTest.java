@@ -38,7 +38,6 @@ import io.xdag.db.BlockStore;
 import io.xdag.db.OrphanBlockStore;
 import io.xdag.db.TransactionHistoryStore;
 import io.xdag.db.rocksdb.*;
-import io.xdag.rpc.modules.xdag.XdagModuleTransactionBase;
 import io.xdag.utils.BytesUtils;
 import io.xdag.utils.WalletUtils;
 import io.xdag.utils.XdagTime;
@@ -163,9 +162,6 @@ public class BlockchainTest {
             if (link.getType() == XDAG_FIELD_OUTPUT){assertEquals(WalletUtils.toBase58(link.getAddress().slice(8, 20).toArray()), "8FfenZ1xewHGa3Ydx9zhppgou1hgesX97");}
         }
         assertEquals(kernel.getConfig().getNodeSpec().getRejectAddress(), ""); //默认为空
-
-        XdagModuleTransactionBase testRPC = new XdagModuleTransactionBase(kernel);
-        assertTrue(testRPC.checkTransaction(block));
     }
 
     @Test

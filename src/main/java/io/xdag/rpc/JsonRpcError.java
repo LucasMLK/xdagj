@@ -22,30 +22,44 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.rpc.jsonrpc;
+package io.xdag.rpc;
 
-import java.util.Objects;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
 
-public class JsonRpcError implements JsonRpcResultOrError {
+@Getter
+public class JsonRpcError {
+    // Standard JSON-RPC 2.0 errors
+    public static final int PARSE_ERROR = -32700;
+    public static final int INVALID_REQUEST = -32600;
+    public static final int METHOD_NOT_FOUND = -32601;
+    public static final int INVALID_PARAMS = -32602;
+    public static final int INTERNAL_ERROR = -32603;
+    public static final int SERVER_ERROR = -32000;
 
+    // XDAG specific errors
+    public static final int INVALID_ADDRESS = -32100;
+    public static final int BLOCK_NOT_FOUND = -32101;
+    public static final int INSUFFICIENT_FUNDS = -32102;
+    public static final int TRANSACTION_ERROR = -32103;
+    public static final int POOL_ERROR = -32104;
+
+    @JsonProperty("code")
     private final int code;
+
+    @JsonProperty("message")
     private final String message;
 
+    @JsonProperty("data")
+    private final Object data;
+
     public JsonRpcError(int code, String message) {
+        this(code, message, null);
+    }
+
+    public JsonRpcError(int code, String message, Object data) {
         this.code = code;
-        this.message = Objects.requireNonNull(message);
-    }
-
-    public String getMessage() {
-        return message;
-    }
-
-    public int getCode() {
-        return code;
-    }
-
-    @Override
-    public JsonRpcIdentifiableMessage responseFor(int messageId) {
-        return new JsonRpcErrorResponse(messageId, this);
+        this.message = message;
+        this.data = data;
     }
 }

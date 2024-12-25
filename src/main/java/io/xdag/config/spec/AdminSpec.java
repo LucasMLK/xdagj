@@ -34,17 +34,17 @@ public interface AdminSpec {
      * Get the IP address for the telnet server
      * @return String containing the telnet server IP address
      */
-    String getTelnetIp();
+    String getAdminTelnetIp();
 
     /**
      * Get the port number for the telnet server
      * @return Integer containing the telnet server port number
      */
-    int getTelnetPort();
+    int getAdminTelnetPort();
 
     /**
      * Get the password for telnet server authentication
      * @return String containing the telnet server password
      */
-    String getTelnetPassword();
+    String getAdminTelnetPassword();
 }

@@ -22,91 +22,78 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.rpc.modules.xdag;
+package io.xdag.rpc;
 
-import io.xdag.rpc.Web3;
 import io.xdag.rpc.dto.BlockResultDTO;
-import io.xdag.rpc.utils.TypeConverter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class XdagModule implements XdagModuleTransaction, XdagModuleWallet, XdagModuleChain {
+public class XdagChainImpl implements XdagChain {
 
-    private final XdagModuleWallet xdagModuleWallet;
-    private final XdagModuleTransaction xdagModuleTransaction;
-    private final XdagModuleChain xdagModuleChain;
+    private final XdagChain xdagChain;
     private final byte chainId;
 
-    public XdagModule(byte chainId, XdagModuleWallet xdagModuleWallet, XdagModuleTransaction xdagModuleTransaction,
-            XdagModuleChain xdagModuleChain) {
+    public XdagChainImpl(byte chainId, XdagChain xdagChain) {
         this.chainId = chainId;
-        this.xdagModuleWallet = xdagModuleWallet;
-        this.xdagModuleTransaction = xdagModuleTransaction;
-        this.xdagModuleChain = xdagModuleChain;
+        this.xdagChain = xdagChain;
     }
-
 
     public String chainId() {
         return TypeConverter.toJsonHex(new byte[]{chainId});
     }
 
     @Override
-    public String sendTransaction(Web3.CallArguments args) {
-        return xdagModuleTransaction.sendTransaction(args);
+    public String sendTransaction(Web3XdagChain.CallArguments args) {
+        return xdagChain.sendTransaction(args);
     }
 
     @Override
-    public Object personalSendTransaction(Web3.CallArguments args, String passphrase) {
-        return xdagModuleTransaction.personalSendTransaction(args, passphrase);
+    public Object personalSendTransaction(Web3XdagChain.CallArguments args, String passphrase) {
+        return xdagChain.personalSendTransaction(args, passphrase);
     }
 
     @Override
     public String sendRawTransaction(String rawData) {
-        return xdagModuleTransaction.sendRawTransaction(rawData);
+        return xdagChain.sendRawTransaction(rawData);
     }
 
     @Override
     public String[] accounts() {
-        return xdagModuleWallet.accounts();
+        return xdagChain.accounts();
     }
 
     @Override
     public String sign(String addr, String data) {
-        return xdagModuleWallet.sign(addr, data);
-    }
-
-    @Override
-    public String getCoinBase() {
-        return null;
+        return xdagChain.sign(addr, data);
     }
 
     @Override
     public BlockResultDTO getBlockByHash(String hash, int page,Object... parameters ) {
-        return xdagModuleChain.getBlockByHash(hash, page, parameters);
+        return xdagChain.getBlockByHash(hash, page, parameters);
     }
 
     @Override
     public BlockResultDTO getBlockByNumber(String bnOrId, int page, Object... parameters) {
-        return xdagModuleChain.getBlockByNumber(bnOrId, page, parameters);
+        return xdagChain.getBlockByNumber(bnOrId, page, parameters);
     }
 
     @Override
     public String getRewardByNumber(String bnOrId) {
-        return xdagModuleChain.getRewardByNumber(bnOrId);
+        return xdagChain.getRewardByNumber(bnOrId);
     }
 
     @Override
     public String getBalanceByNumber(String number) {
-        return xdagModuleChain.getBalanceByNumber(number);
+        return xdagChain.getBalanceByNumber(number);
     }
 
     @Override
     public Object getBlocksByNumber(String number) {
-        return xdagModuleChain.getBlocksByNumber(number);
+        return xdagChain.getBlocksByNumber(number);
     }
 
     @Override
     public String getMaxXferBalance() {
-        return xdagModuleChain.getMaxXferBalance();
+        return xdagChain.getMaxXferBalance();
     }
 }

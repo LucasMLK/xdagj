@@ -22,29 +22,43 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.rpc.modules.xdag;
+package io.xdag.rpc;
 
-import io.xdag.rpc.Web3;
 import io.xdag.rpc.dto.BlockResultDTO;
-import io.xdag.rpc.dto.ConfigDTO;
 import io.xdag.rpc.dto.StatusDTO;
 
 
-public interface Web3XdagModule {
+public interface Web3XdagChain {
+
+    class CallArguments {
+        public String from;
+        public String to;
+        public String value;
+        public String remark;
+        @Override
+        public String toString() {
+            return "CallArguments{" +
+                    "from='" + from + '\'' +
+                    ", to='" + to + '\'' +
+                    ", value='" + value + '\'' +
+                    ", remark='" + remark + '\'' +
+                    '}';
+        }
+    }
 
     default String[] xdag_accounts() {
-        return getXdagModule().accounts();
+        return getXdagChain().accounts();
     }
 
     default String xdag_sign(String addr, String data) {
-        return getXdagModule().sign(addr, data);
+        return getXdagChain().sign(addr, data);
     }
 
     default String xdag_chainId() {
-        return getXdagModule().chainId();
+        return getXdagChain().chainId();
     }
 
-    XdagModule getXdagModule();
+    XdagChainImpl getXdagChain();
 
     String xdag_protocolVersion();
 
@@ -63,51 +77,51 @@ public interface Web3XdagModule {
     }
 
     default BlockResultDTO xdag_getBlockByNumber(String bnOrId, int page) {
-        return getXdagModule().getBlockByNumber(bnOrId, page);
+        return getXdagChain().getBlockByNumber(bnOrId, page);
     }
 
     default BlockResultDTO xdag_getBlockByNumber(String bnOrId, int page, int pageSize) {
-        return getXdagModule().getBlockByNumber(bnOrId, page, pageSize);
+        return getXdagChain().getBlockByNumber(bnOrId, page, pageSize);
     }
 
     default String xdag_getRewardByNumber(String bnOrId) {
-        return getXdagModule().getRewardByNumber(bnOrId);
+        return getXdagChain().getRewardByNumber(bnOrId);
     }
 
     default String xdag_getBalanceByNumber(String bnOrId) {
-        return getXdagModule().getBalanceByNumber(bnOrId);
+        return getXdagChain().getBalanceByNumber(bnOrId);
     }
 
     default Object xdag_getBlocksByNumber(String bnOrId) {
-        return getXdagModule().getBlocksByNumber(bnOrId);
+        return getXdagChain().getBlocksByNumber(bnOrId);
     }
 
     default String xdag_sendRawTransaction(String rawData) {
-        return getXdagModule().sendRawTransaction(rawData);
+        return getXdagChain().sendRawTransaction(rawData);
     }
 
-    default String xdag_sendTransaction(Web3.CallArguments args) {
-        return getXdagModule().sendTransaction(args);
+    default String xdag_sendTransaction(CallArguments args) {
+        return getXdagChain().sendTransaction(args);
     }
 
-    default Object xdag_personal_sendTransaction(Web3.CallArguments args, String passphrase) {
-        return getXdagModule().personalSendTransaction(args, passphrase);
+    default Object xdag_personal_sendTransaction(CallArguments args, String passphrase) {
+        return getXdagChain().personalSendTransaction(args, passphrase);
     }
 
     default BlockResultDTO xdag_getBlockByHash(String blockHash, int page, String startTime, String endTime) {
-        return getXdagModule().getBlockByHash(blockHash, page, startTime, endTime);
+        return getXdagChain().getBlockByHash(blockHash, page, startTime, endTime);
     }
 
     default BlockResultDTO xdag_getBlockByHash(String blockHash, int page) {
-        return getXdagModule().getBlockByHash(blockHash, page);
+        return getXdagChain().getBlockByHash(blockHash, page);
     }
 
     default BlockResultDTO xdag_getBlockByHash(String blockHash, int page, String startTime, String endTime, int pageSize) {
-        return getXdagModule().getBlockByHash(blockHash, page, startTime, endTime, pageSize);
+        return getXdagChain().getBlockByHash(blockHash, page, startTime, endTime, pageSize);
     }
 
     default BlockResultDTO xdag_getBlockByHash(String blockHash, int page, int pageSize) {
-        return getXdagModule().getBlockByHash(blockHash, page, pageSize);
+        return getXdagChain().getBlockByHash(blockHash, page, pageSize);
     }
 
     StatusDTO xdag_getStatus() throws Exception;

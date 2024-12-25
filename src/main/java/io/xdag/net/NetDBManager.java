@@ -46,9 +46,8 @@ import org.apache.commons.io.FileUtils;
 public class NetDBManager {
     private final String database;
     private final String databaseWhite;
-    private final String whiteUrl;
-    private final NetDB netDB;
-    private NetDB whiteDB;
+//    private final NetDB netDB;
+    private final NetDB whiteDB;
     private final Config config;
 
     /**
@@ -58,9 +57,8 @@ public class NetDBManager {
         this.config = config;
         database = config.getNodeSpec().getNetDBDir();
         databaseWhite = config.getNodeSpec().getWhiteListDir();
-        whiteUrl = config.getNodeSpec().getWhitelistUrl();
         whiteDB = new NetDB();
-        netDB = new NetDB();
+//        netDB = new NetDB();
     }
 
     /**
@@ -72,104 +70,32 @@ public class NetDBManager {
         }
     }
 
-    /**
-     * Load whitelist from remote URL and save to local file
-     * Issue: Creates new file even if exists, should check first
-     * Issue: Potential resource leak if reader not closed in finally block
-     */
-    public void loadFromUrl() {
-        File file = new File(databaseWhite);
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
-            
-            if (!file.exists()) {
-                if (!file.createNewFile()) {
-                    log.debug("Failed to create whitelist file");
-                    return;
-                }
-                // Download whitelist from URL
-                URL url = new URL(whiteUrl);
-                FileUtils.copyURLToFile(url, file);
-            }
-
-            // Read IPs from file
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String[] parts = line.split(":");
-                if (parts.length == 2) {
-                    String ip = parts[0];
-                    int port = Integer.parseInt(parts[1]);
-                    whiteDB.addNewIP(ip, port);
-                }
-            }
-            
-        } catch (IOException e) {
-            log.error("Error loading whitelist from URL", e);
-        }
-    }
 
     /**
      * Initialize network database
      */
     public void init() {
         loadFromConfig();
-        if(config instanceof DevnetConfig) {
-            // Only use config whitelist for devnet
-            return;
-        }
-        loadFromUrl();
+//        if(config instanceof DevnetConfig) {
+//            // Only use config whitelist for devnet
+//            return;
+//        }
     }
 
-    /**
-     * Update network database with new entries
-     */
-    public void updateNetDB(NetDB netDB) {
-        if (netDB != null) {
-            this.netDB.appendNetDB(netDB);
-        }
-    }
+//    /**
+//     * Update network database with new entries
+//     */
+//    public void updateNetDB(NetDB netDB) {
+//        if (netDB != null) {
+//            this.netDB.appendNetDB(netDB);
+//        }
+//    }
 
     /**
      * Check if address is whitelisted
      */
     public boolean canAccept(InetSocketAddress address) {
         return whiteDB.contains(address);
-    }
-
-    /**
-     * Refresh whitelist from URL
-     * Issue: Creates new whiteDB instance inside loop - should be created once
-     * Issue: Potential resource leak with reader
-     */
-    public void refresh() {
-        File file = new File(databaseWhite);
-        try {
-            URL url = new URL(whiteUrl);
-            FileUtils.copyURLToFile(url, file);
-            
-            if (!file.exists() || !file.isFile()) {
-                return;
-            }
-
-            whiteDB = new NetDB(); // Move outside loop
-            
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8))) {
-                
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    String[] parts = line.split(":");
-                    if (parts.length == 2) {
-                        String ip = parts[0];
-                        int port = Integer.parseInt(parts[1]);
-                        whiteDB.addNewIP(ip, port);
-                    }
-                }
-            }
-            
-        } catch (IOException e) {
-            log.error("Error refreshing whitelist", e);
-        }
     }
 
 }

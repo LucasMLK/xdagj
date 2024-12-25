@@ -21,32 +21,36 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+package io.xdag.config;
 
-package io.xdag.rpc.exception;
+import lombok.Getter;
+import lombok.Setter;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.exc.InvalidFormatException;
-import com.googlecode.jsonrpc4j.ErrorResolver;
-import java.lang.reflect.Method;
-import java.util.List;
+@Getter
+@Setter
+public class JsonRpcConfig {
+    private String host = "127.0.0.1";
+    private int port = 10001;
+    private String corsOrigins = "*";
+    private boolean enabled = true;
+    private int maxContentLength = 1024 * 1024; // 1MB
+    private int bossThreads = 1;
+    private int workerThreads = 0; // 0 means use Netty default (2 * CPU cores)
+    private boolean enableHttps = false;
+    private String certFile;
+    private String keyFile;
 
-import lombok.extern.slf4j.Slf4j;
+    public JsonRpcConfig() {
+    }
 
-@Slf4j
-public class XdagErrorResolver implements ErrorResolver {
+    public JsonRpcConfig(String host, int port) {
+        this.host = host;
+        this.port = port;
+    }
 
-    @Override
-    public ErrorResolver.JsonError resolveError(Throwable t, Method method, List<JsonNode> arguments) {
-        ErrorResolver.JsonError error;
-        if (t instanceof XdagJsonRpcRequestException) {
-            error = new ErrorResolver.JsonError(((XdagJsonRpcRequestException) t).getCode(), t.getMessage(), null);
-        } else if (t instanceof InvalidFormatException) {
-            error = new ErrorResolver.JsonError(-32603, "Internal server error, probably due to invalid parameter type",
-                    null);
-        } else {
-            log.error("JsonRPC error when for method {} with arguments {}", method, arguments, t);
-            error = new ErrorResolver.JsonError(-32603, "Internal server error", null);
-        }
-        return error;
+    public JsonRpcConfig(String host, int port, String corsOrigins) {
+        this.host = host;
+        this.port = port;
+        this.corsOrigins = corsOrigins;
     }
 }

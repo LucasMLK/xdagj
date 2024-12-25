@@ -24,124 +24,151 @@
 
 package io.xdag.rpc;
 
-import io.xdag.rpc.dto.BlockResultDTO;
-import io.xdag.rpc.dto.ConfigDTO;
-import io.xdag.rpc.dto.StatusDTO;
-import io.xdag.rpc.modules.xdag.Web3XdagModule;
-import io.xdag.rpc.modules.xdag.XdagModule;
+import io.xdag.rpc.dto.*;
+import lombok.RequiredArgsConstructor;
 
-public class Web3Impl implements Web3 {
+@RequiredArgsConstructor
+public class Web3Impl implements Web3XdagChain {
 
-    Web3XdagModule web3XdagModule;
-
-    public Web3Impl(Web3XdagModule web3XdagModule) {
-        this.web3XdagModule = web3XdagModule;
-    }
+    private final Web3XdagChain web3XdagChain;
 
     @Override
-    public String web3_sha3(String data) {
-        return null;
-    }
-
-
-    @Override
-    public XdagModule getXdagModule() {
-        return web3XdagModule.getXdagModule();
+    public XdagChainImpl getXdagChain() {
+        return web3XdagChain.getXdagChain();
     }
 
     @Override
     public String xdag_protocolVersion() {
-        return web3XdagModule.xdag_protocolVersion();
+        return web3XdagChain.xdag_protocolVersion();
     }
 
     @Override
     public Object xdag_syncing() {
-        return web3XdagModule.xdag_syncing();
+        return web3XdagChain.xdag_syncing();
     }
 
     @Override
     public String xdag_coinbase() {
-        return web3XdagModule.xdag_coinbase();
+        return web3XdagChain.xdag_coinbase();
     }
 
     @Override
     public String xdag_blockNumber() {
-        return web3XdagModule.xdag_blockNumber();
+        return web3XdagChain.xdag_blockNumber();
     }
 
     @Override
     public String xdag_getBalance(String address) throws Exception {
-        return web3XdagModule.xdag_getBalance(address);
+        return web3XdagChain.xdag_getBalance(address);
     }
 
     @Override
     public String xdag_getTotalBalance() throws Exception {
-        return web3XdagModule.xdag_getTotalBalance();
+        return web3XdagChain.xdag_getTotalBalance();
+    }
+
+    @Override
+    public BlockResultDTO xdag_getTransactionByHash(String hash, int page) throws Exception {
+        return web3XdagChain.xdag_getTransactionByHash(hash, page);
     }
 
     @Override
     public BlockResultDTO xdag_getBlockByNumber(String bnOrId, int page) {
-        return web3XdagModule.xdag_getBlockByNumber(bnOrId, page);
+        return web3XdagChain.xdag_getBlockByNumber(bnOrId, page);
     }
 
+    @Override
     public BlockResultDTO xdag_getBlockByNumber(String bnOrId, int page, int pageSize) {
-        return web3XdagModule.xdag_getBlockByNumber(bnOrId, page, pageSize);
+        return web3XdagChain.xdag_getBlockByNumber(bnOrId, page, pageSize);
     }
 
     @Override
     public String xdag_getRewardByNumber(String bnOrId) {
-        return web3XdagModule.xdag_getRewardByNumber(bnOrId);
+        return web3XdagChain.xdag_getRewardByNumber(bnOrId);
     }
 
     @Override
     public String xdag_getBalanceByNumber(String bnOrId) {
-        return web3XdagModule.xdag_getBalanceByNumber(bnOrId);
+        return web3XdagChain.xdag_getBalanceByNumber(bnOrId);
     }
 
     @Override
     public Object xdag_getBlocksByNumber(String bnOrId) {
-        return web3XdagModule.xdag_getBlocksByNumber(bnOrId);
+        return web3XdagChain.xdag_getBlocksByNumber(bnOrId);
+    }
+
+    @Override
+    public String xdag_sendRawTransaction(String rawData) {
+        return web3XdagChain.xdag_sendRawTransaction(rawData);
+    }
+
+    @Override
+    public String xdag_sendTransaction(CallArguments args) {
+        return web3XdagChain.xdag_sendTransaction(args);
+    }
+
+    @Override
+    public Object xdag_personal_sendTransaction(CallArguments args, String passphrase) {
+        return web3XdagChain.xdag_personal_sendTransaction(args, passphrase);
     }
 
     @Override
     public BlockResultDTO xdag_getBlockByHash(String blockHash, int page, String startTime, String endTime) {
-        return web3XdagModule.xdag_getBlockByHash(blockHash, page, startTime, endTime);
+        return web3XdagChain.xdag_getBlockByHash(blockHash, page, startTime, endTime);
     }
 
+    @Override
     public BlockResultDTO xdag_getBlockByHash(String blockHash, int page) {
-        return web3XdagModule.xdag_getBlockByHash(blockHash, page);
+        return web3XdagChain.xdag_getBlockByHash(blockHash, page);
     }
 
+    @Override
     public BlockResultDTO xdag_getBlockByHash(String blockHash, int page, String startTime, String endTime, int pageSize) {
-        return web3XdagModule.xdag_getBlockByHash(blockHash, page, startTime, endTime, pageSize);
+        return web3XdagChain.xdag_getBlockByHash(blockHash, page, startTime, endTime, pageSize);
     }
 
+    @Override
     public BlockResultDTO xdag_getBlockByHash(String blockHash, int page, int pageSize) {
-        return web3XdagModule.xdag_getBlockByHash(blockHash, page, pageSize);
+        return web3XdagChain.xdag_getBlockByHash(blockHash, page, pageSize);
     }
 
     @Override
     public StatusDTO xdag_getStatus() throws Exception {
-        return web3XdagModule.xdag_getStatus();
+        return web3XdagChain.xdag_getStatus();
     }
 
     @Override
     public Object xdag_netType() throws Exception {
-        return web3XdagModule.xdag_netType();
+        return web3XdagChain.xdag_netType();
     }
 
     @Override
     public Object xdag_poolConfig() throws Exception {
-        return web3XdagModule.xdag_poolConfig();
+        return web3XdagChain.xdag_poolConfig();
     }
 
     @Override
     public Object xdag_netConnectionList() throws Exception {
-        return web3XdagModule.xdag_netConnectionList();
+        return web3XdagChain.xdag_netConnectionList();
     }
 
     @Override
     public String xdag_getMaxXferBalance() throws Exception {
-        return web3XdagModule.xdag_getMaxXferBalance();
+        return web3XdagChain.xdag_getMaxXferBalance();
+    }
+
+    @Override
+    public String[] xdag_accounts() {
+        return web3XdagChain.xdag_accounts();
+    }
+
+    @Override
+    public String xdag_sign(String addr, String data) {
+        return web3XdagChain.xdag_sign(addr, data);
+    }
+
+    @Override
+    public String xdag_chainId() {
+        return web3XdagChain.xdag_chainId();
     }
 }

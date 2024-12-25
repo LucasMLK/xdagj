@@ -84,10 +84,7 @@ public interface NodeSpec {
     int getNetMaxFrameBodySize();
     int getNetMaxPacketSize();
 
-    // Whitelist and transaction settings
-    String getWhitelistUrl();
     String getRejectAddress(); // Address for rejected transactions
-    boolean enableRefresh();
     
     // There appears to be a typo in method name - should be "getNodeRatio"
     double getNodeRation();

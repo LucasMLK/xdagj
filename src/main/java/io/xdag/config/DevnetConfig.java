@@ -53,7 +53,6 @@ public class DevnetConfig extends AbstractConfig {
      */
     public DevnetConfig() {
         super("devnet", "xdag-devnet", Network.DEVNET, Constants.DEVNET_VERSION);
-        this.whitelistUrl = StringUtils.EMPTY;
         this.waitEpoch = 1;
         this.xdagEra = 0x16900000000L;
         this.mainStartAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 42).toLong());

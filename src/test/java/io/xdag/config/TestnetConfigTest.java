@@ -35,19 +35,16 @@ import io.xdag.core.XUnit;
 public class TestnetConfigTest {
 
     private Config config;
-    private String whitelistUrl;
 
     @Before
     public void setUp() {
         config = new TestnetConfig();
-        whitelistUrl = "https://raw.githubusercontent.com/XDagger/xdag/master/client/netdb-white-testnet.txt";
     }
 
     @Test
     public void testParams() {
         assertEquals("testnet", config.getRootDir());
         assertEquals("xdag-testnet", config.getConfigName());
-        assertEquals(whitelistUrl, config.getNodeSpec().getWhitelistUrl());
         assertEquals(0x16900000000L, config.getXdagEra());
         assertEquals(XDAG_FIELD_HEAD_TEST, config.getXdagFieldHeader());
         assertEquals(196250, config.getApolloForkHeight());

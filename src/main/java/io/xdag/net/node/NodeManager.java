@@ -74,7 +74,6 @@ public class NodeManager {
     private final Config config;
     private volatile boolean isRunning;
     private ScheduledFuture<?> connectFuture;
-    private ScheduledFuture<?> fetchFuture;
 
     public NodeManager(Kernel kernel) {
         this.kernel = kernel;
@@ -95,9 +94,6 @@ public class NodeManager {
 
             // every 0.5 seconds, delayed by 1 seconds (kernel boot up)
             connectFuture = exec.scheduleAtFixedRate(this::doConnect, 1000, 500, TimeUnit.MILLISECONDS);
-            // every 100 seconds, delayed by 5 seconds (public IP lookup)
-            fetchFuture = exec.scheduleAtFixedRate(this::doFetch, 5, 100, TimeUnit.SECONDS);
-
             isRunning = true;
             log.debug("Node manager started");
         }
@@ -106,7 +102,6 @@ public class NodeManager {
     public synchronized void stop() {
         if (isRunning) {
             connectFuture.cancel(true);
-            fetchFuture.cancel(false);
             isRunning = false;
             exec.shutdown();
             log.debug("Node manager stop...");
@@ -134,21 +129,6 @@ public class NodeManager {
         while (queueSize() > MAX_QUEUE_SIZE) {
             deque.removeLast();
         }
-    }
-
-
-    /**
-     * from net update seed nodes
-     */
-    protected void doFetch() {
-        log.debug("Do fetch node size:{}", deque.size());
-        if (config.getNodeSpec().enableRefresh()) {
-            netDBManager.refresh();
-        }
-        // 从白名单获得新节点
-        addNodes(getSeedNodes(netDBManager.getWhiteDB()));
-        // 从netdb获取新节点
-        addNodes(getSeedNodes(netDBManager.getNetDB()));
     }
 
     public Set<Node> getSeedNodes(NetDB netDB) {

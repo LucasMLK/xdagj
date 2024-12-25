@@ -22,21 +22,31 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.rpc.jsonrpc;
+package io.xdag.rpc;
 
-import java.util.Objects;
+import io.xdag.rpc.dto.BlockResultDTO;
 
-public class JsonRpcResultResponse extends JsonRpcIdentifiableMessage {
+public interface XdagChain {
 
-    private final JsonRpcResult result;
+    BlockResultDTO getBlockByHash(String hash, int page, Object... parameters);
 
-    public JsonRpcResultResponse(int id, JsonRpcResult result) {
-        super(JsonRpcVersion.V2_0, id);
-        this.result = Objects.requireNonNull(result);
-    }
+    BlockResultDTO getBlockByNumber(String bnOrId, int page, Object... parameters );
 
-    @SuppressWarnings("unused")
-    public JsonRpcResult getResult() {
-        return result;
-    }
+    String getRewardByNumber(String bnOrId);
+
+    String getBalanceByNumber(String bnOrId);
+
+    Object getBlocksByNumber(String number);
+
+    String getMaxXferBalance();
+
+    String[] accounts();
+
+    String sign(String addr, String data);
+
+    String sendTransaction(Web3XdagChain.CallArguments args);
+
+    String sendRawTransaction(String rawData);
+
+    Object personalSendTransaction(Web3XdagChain.CallArguments args, String passphrase);
 }

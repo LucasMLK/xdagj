@@ -500,7 +500,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         } while (StringUtils.isEmpty(line));
 
         if (isTelnet) {
-            return line.equals(kernel.getConfig().getAdminSpec().getTelnetPassword());
+            return line.equals(kernel.getConfig().getAdminSpec().getAdminTelnetPassword());
         }
 
         return true;

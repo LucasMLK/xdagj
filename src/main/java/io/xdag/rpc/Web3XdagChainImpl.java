@@ -22,11 +22,10 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.rpc.modules.xdag;
+package io.xdag.rpc;
 
 import com.google.common.collect.Lists;
 import io.xdag.Kernel;
-import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.config.MainnetConfig;
@@ -48,25 +47,25 @@ import java.util.Objects;
 
 import static io.xdag.config.Constants.CLIENT_VERSION;
 import static io.xdag.crypto.Keys.toBytesAddress;
-import static io.xdag.rpc.utils.TypeConverter.toQuantityJsonHex;
+import static io.xdag.rpc.TypeConverter.toQuantityJsonHex;
 import static io.xdag.utils.BasicUtils.*;
 import static io.xdag.utils.WalletUtils.*;
 
 @Slf4j
-public class Web3XdagModuleImpl implements Web3XdagModule {
+public class Web3XdagChainImpl implements Web3XdagChain {
 
     private final Blockchain blockchain;
-    private final XdagModule xdagModule;
+    private final XdagChainImpl xdagModule;
     private final Kernel kernel;
 
-    public Web3XdagModuleImpl(XdagModule xdagModule, Kernel kernel) {
+    public Web3XdagChainImpl(XdagChainImpl xdagModule, Kernel kernel) {
         this.blockchain = kernel.getBlockchain();
         this.xdagModule = xdagModule;
         this.kernel = kernel;
     }
 
     @Override
-    public XdagModule getXdagModule() {
+    public XdagChainImpl getXdagChain() {
         return xdagModule;
     }
 
@@ -213,41 +212,14 @@ public class Web3XdagModuleImpl implements Web3XdagModule {
     }
 
     static class SyncingResult {
-
         public String currentBlock;
         public String highestBlock;
         public boolean isSyncDone;
 
     }
 
-//    @Override
-//    public Object xdag_updatePoolConfig(ConfigDTO configDTO, String passphrase) {
-//        try {
-//            //unlock
-//            if (checkPassword(passphrase)) {
-//                double poolFeeRation = configDTO.getPoolFeeRation() != null ?
-//                        Double.parseDouble(configDTO.getPoolFeeRation()) : kernel.getConfig().getPoolSpec().getPoolRation();
-//                double poolRewardRation = configDTO.getPoolRewardRation() != null ?
-//                        Double.parseDouble(configDTO.getPoolRewardRation()) : kernel.getConfig().getPoolSpec().getRewardRation();
-//                double poolDirectRation = configDTO.getPoolDirectRation() != null ?
-//                        Double.parseDouble(configDTO.getPoolDirectRation()) : kernel.getConfig().getPoolSpec().getDirectRation();
-//                double poolFundRation = configDTO.getPoolFundRation() != null ?
-//                        Double.parseDouble(configDTO.getPoolFundRation()) : kernel.getConfig().getPoolSpec().getFundRation();
-//                kernel.getAwardManager().updatePoolConfig(poolFeeRation, poolRewardRation, poolDirectRation, poolFundRation);
-//            }
-//        } catch (NumberFormatException e) {
-//            return "Error";
-//        }
-//        return "Success";
-//    }
-
     @Override
     public String xdag_getMaxXferBalance() {
         return xdagModule.getMaxXferBalance();
-    }
-
-    private boolean checkPassword(String passphrase) {
-        Wallet wallet = new Wallet(kernel.getConfig());
-        return wallet.unlock(passphrase);
     }
 }

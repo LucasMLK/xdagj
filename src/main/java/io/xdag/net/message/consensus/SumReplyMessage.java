@@ -39,8 +39,8 @@ public class SumReplyMessage extends XdagMessage {
 
     MutableBytes sum;
 
-    public SumReplyMessage(long endtime, long random, XdagStats xdagStats, MutableBytes sum, NetDB localNetdb) {
-        super(MessageCode.SUMS_REPLY, null, 1, endtime, random, xdagStats, localNetdb);
+    public SumReplyMessage(long endtime, long random, XdagStats xdagStats, MutableBytes sum) {
+        super(MessageCode.SUMS_REPLY, null, 1, endtime, random, xdagStats);
 
         SimpleEncoder enc = super.encode();
         enc.writeBytes(sum.toArray());

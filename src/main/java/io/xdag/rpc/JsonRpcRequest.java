@@ -22,38 +22,28 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.rpc.jsonrpc;
+package io.xdag.rpc;
 
-import com.fasterxml.jackson.annotation.JsonValue;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
+import lombok.Setter;
 
-public class JsonRpcBooleanResult extends JsonRpcResult {
+import java.util.List;
 
-    private final boolean result;
+@Setter
+@Getter
+public class JsonRpcRequest {
+    // Getters and Setters
+    @JsonProperty("jsonrpc")
+    private String jsonrpc = "2.0";
+    
+    @JsonProperty("method")
+    private String method;
+    
+    @JsonProperty("params")
+    private List<Object> params;
+    
+    @JsonProperty("id")
+    private String id;
 
-    public JsonRpcBooleanResult(boolean result) {
-        this.result = result;
-    }
-
-    @JsonValue
-    public boolean getResult() {
-        return result;
-    }
-
-    @Override
-    public int hashCode() {
-        return Boolean.hashCode(result);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == this) {
-            return true;
-        }
-
-        if (!(o instanceof JsonRpcBooleanResult other)) {
-            return false;
-        }
-
-        return this.result == other.result;
-    }
 }

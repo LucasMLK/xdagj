@@ -29,8 +29,8 @@ import io.xdag.net.message.MessageCode;
 
 public class BlocksReplyMessage extends XdagMessage  {
 
-    public BlocksReplyMessage(long starttime, long endtime, long random, XdagStats xdagStats, NetDB localNetdb) {
-        super(MessageCode.BLOCKS_REPLY, null, starttime, endtime, random, xdagStats, localNetdb);
+    public BlocksReplyMessage(long starttime, long endtime, long random, XdagStats xdagStats) {
+        super(MessageCode.BLOCKS_REPLY, null, starttime, endtime, random, xdagStats);
     }
 
     public BlocksReplyMessage(byte[] body) {

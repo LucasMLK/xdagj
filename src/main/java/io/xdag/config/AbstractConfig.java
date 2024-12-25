@@ -26,7 +26,6 @@ package io.xdag.config;
 
 import com.google.common.collect.Lists;
 import com.typesafe.config.ConfigFactory;
-import com.typesafe.config.ConfigObject;
 import io.xdag.Network;
 import io.xdag.config.spec.*;
 import io.xdag.core.XAmount;
@@ -34,7 +33,6 @@ import io.xdag.core.XdagField;
 import io.xdag.net.Capability;
 import io.xdag.net.CapabilityTreeSet;
 import io.xdag.net.message.MessageCode;
-import io.xdag.rpc.modules.ModuleDescription;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -51,9 +49,9 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     protected String configName;
 
     // Admin configuration
-    protected String telnetIp = "127.0.0.1";
-    protected int telnetPort = 7001;
-    protected String telnetPassword;
+    protected String adminTelnetIp = "127.0.0.1";
+    protected int adminTelnetPort = 7001;
+    protected String adminTelnetPassword;
 
     // Pool websocket configuration 
     protected int websocketServerPort;
@@ -110,8 +108,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     protected String originStoreDir = "./testdate";
 
     // Whitelist configuration
-    protected String whitelistUrl;
-    protected boolean enableRefresh = false;
     protected String walletKeyFile;
 
     protected int TTL = 5;
@@ -129,10 +125,9 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     protected XAmount apolloForkAmount;
 
     // RPC configuration
-    protected List<ModuleDescription> moduleDescriptions;
-    protected boolean rpcEnabled = false;
-    protected String rpcHost;
-    protected int rpcPortHttp;
+    protected boolean rpcHttpEnabled = false;
+    protected String rpcHttpHost;
+    protected int rpcHttpPort;
 
     // Snapshot configuration
     protected boolean snapshotEnabled = false;
@@ -155,8 +150,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     public void setDir() {
         storeDir = getRootDir() + "/rocksdb/xdagdb";
         storeBackupDir = getRootDir() + "/rocksdb/xdagdb/backupdata";
-        whiteListDir = getRootDir() + "/netdb-white.txt";
-        netDBDir = getRootDir() + "/netdb.txt";
     }
 
     @Override
@@ -231,9 +224,9 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     public void getSetting() {
         com.typesafe.config.Config config = ConfigFactory.load(getConfigName());
 
-        telnetIp = config.hasPath("admin.telnet.ip") ? config.getString("admin.telnet.ip") : "127.0.0.1";
-        telnetPort = config.hasPath("admin.telnet.port") ? config.getInt("admin.telnet.port") : 6001;
-        telnetPassword = config.getString("admin.telnet.password");
+        adminTelnetIp = config.hasPath("admin.telnet.ip") ? config.getString("admin.telnet.ip") : "127.0.0.1";
+        adminTelnetPort = config.hasPath("admin.telnet.port") ? config.getInt("admin.telnet.port") : 6001;
+        adminTelnetPassword = config.getString("admin.telnet.password");
 
         poolWhiteIPList = config.hasPath("pool.whiteIPs") ? config.getStringList("pool.whiteIPs") : Collections.singletonList("127.0.0.1");
         log.info("Pool whitelist {}. Any IP allowed? {}", poolWhiteIPList, poolWhiteIPList.contains("0.0.0.0"));
@@ -257,10 +250,10 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
             whiteIPList.add(new InetSocketAddress(ip, port));
         }
         // RPC configuration
-        rpcEnabled = config.hasPath("rpc.enabled") && config.getBoolean("rpc.enabled");
-        if (rpcEnabled) {
-            rpcHost = config.hasPath("rpc.http.host") ? config.getString("rpc.http.host") : "127.0.0.1";
-            rpcPortHttp = config.hasPath("rpc.http.port") ? config.getInt("rpc.http.port") : 10001;
+        rpcHttpEnabled = config.hasPath("rpc.http.enabled") && config.getBoolean("rpc.http.enabled");
+        if (rpcHttpEnabled) {
+            rpcHttpHost = config.hasPath("rpc.http.host") ? config.getString("rpc.http.host") : "127.0.0.1";
+            rpcHttpPort = config.hasPath("rpc.http.port") ? config.getInt("rpc.http.port") : 10001;
         }
         flag = config.hasPath("randomx.flags.fullmem") && config.getBoolean("randomx.flags.fullmem");
 
@@ -325,51 +318,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     }
 
     @Override
-    public boolean enableRefresh() {
-        return this.enableRefresh;
-    }
-
-    @Override
-    public List<ModuleDescription> getRpcModules() {
-
-        if (!rpcEnabled) {
-            return null;
-        }
-
-        if (this.moduleDescriptions != null) {
-            return this.moduleDescriptions;
-        }
-
-        List<ModuleDescription> modules = Lists.newArrayList();
-
-        com.typesafe.config.Config configFromFiles = ConfigFactory.load("rpc_modules");
-        List<? extends ConfigObject> list = configFromFiles.getObjectList("rpc.modules");
-
-        for (ConfigObject configObject : list) {
-            com.typesafe.config.Config configElement = configObject.toConfig();
-            String name = configElement.getString("name");
-            String version = configElement.getString("version");
-            boolean enabled = configElement.getBoolean("enabled");
-            List<String> enabledMethods = null;
-            List<String> disabledMethods = null;
-
-            if (configElement.hasPath("methods.enabled")) {
-                enabledMethods = configElement.getStringList("methods.enabled");
-            }
-
-            if (configElement.hasPath("methods.disabled")) {
-                disabledMethods = configElement.getStringList("methods.disabled");
-            }
-
-            modules.add(new ModuleDescription(name, version, enabled, enabledMethods, disabledMethods));
-        }
-
-        this.moduleDescriptions = modules;
-
-        return modules;
-    }
-
-    @Override
     public List<String> getPoolWhiteIPList() {
         return poolWhiteIPList;
     }
@@ -380,19 +328,17 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     }
 
     @Override
-    public boolean isRPCEnabled() {
-        return rpcEnabled;
+    public boolean isRpcHttpEnabled() {
+        return rpcHttpEnabled;
     }
 
     @Override
-    public String getRPCHost() {
-        return rpcHost;
+    public String getRpcHttpHost() {
+        return rpcHttpHost;
     }
 
     @Override
-    public int getRPCPortByHttp() {
-        return rpcPortHttp;
-    }
+    public int getRpcHttpPort() { return rpcHttpPort;}
 
     @Override
     public boolean isSnapshotEnabled() {
