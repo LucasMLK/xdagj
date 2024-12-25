@@ -33,7 +33,7 @@ public interface AddressStore {
     byte AMOUNT_SUM = (byte) 0x20;
     byte ADDRESS = (byte) 0x30;
 
-    void init();
+    void start();
 
     void reset();
 

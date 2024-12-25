@@ -72,7 +72,7 @@ public class RandomXSyncTest {
     private long forkHeight;
 
     @Before
-    public void init() {
+    public void start() {
         RandomXConstants.SEEDHASH_EPOCH_TESTNET_BLOCKS = 64;
         RandomXConstants.RANDOMX_TESTNET_FORK_HEIGHT = 128;
         RandomXConstants.SEEDHASH_EPOCH_TESTNET_LAG = 4;
@@ -211,7 +211,7 @@ public class RandomXSyncTest {
 
         MockBlockchain blockchain = new MockBlockchain(kernel);
         kernel.setBlockchain(blockchain);
-        randomX.init();
+        randomX.start();
 
         return kernel;
     }

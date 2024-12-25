@@ -126,8 +126,18 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
 
     // RPC configuration
     protected boolean rpcHttpEnabled = false;
-    protected String rpcHttpHost;
-    protected int rpcHttpPort;
+    protected String rpcHttpHost = "127.0.0.1";
+    protected int rpcHttpPort = 10001;
+    protected boolean rpcEnableHttps = false;
+    protected String rpcHttpCorsOrigins = "*";
+    protected String  rpcHttpsCertFile;
+    protected String rpcHttpsKeyFile;
+    protected int rpcHttpMaxContentLength = 1024 * 1024; // 1MB
+
+    // RPC netty configuration
+    protected int rpcHttpBossThreads = 1;
+    protected int rpcHttpWorkerThreads = 4; // 0 means use Netty default (2 * CPU cores)
+
 
     // Snapshot configuration
     protected boolean snapshotEnabled = false;
@@ -339,6 +349,27 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
 
     @Override
     public int getRpcHttpPort() { return rpcHttpPort;}
+
+    @Override
+    public boolean isRpcEnableHttps() {return rpcEnableHttps;}
+
+    @Override
+    public String getRpcHttpCorsOrigins() {return rpcHttpCorsOrigins;}
+
+    @Override
+    public int getRpcHttpMaxContentLength() {return rpcHttpMaxContentLength;}
+
+    @Override
+    public int getRpcHttpBossThreads() {return rpcHttpBossThreads;}
+
+    @Override
+    public int getRpcHttpWorkerThreads() {return rpcHttpWorkerThreads;}
+
+    @Override
+    public String getRpcHttpsCertFile() {return rpcHttpsCertFile;}
+
+    @Override
+    public String getRpcHttpsKeyFile() {return rpcHttpsKeyFile;}
 
     @Override
     public boolean isSnapshotEnabled() {

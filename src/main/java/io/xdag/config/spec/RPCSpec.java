@@ -48,4 +48,18 @@ public interface RPCSpec {
      */
     int getRpcHttpPort();
 
+    boolean isRpcEnableHttps();
+
+    String getRpcHttpCorsOrigins();
+
+    int getRpcHttpMaxContentLength();
+
+    int getRpcHttpBossThreads();
+
+    int getRpcHttpWorkerThreads();
+
+    String getRpcHttpsCertFile();
+
+    String getRpcHttpsKeyFile();
+
 }

@@ -38,7 +38,8 @@ import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
-import io.xdag.config.JsonRpcConfig;
+import io.xdag.Kernel;
+import io.xdag.config.spec.RPCSpec;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
@@ -48,19 +49,22 @@ import java.util.List;
 
 @Slf4j
 public class JsonRpcServer {
-    private final JsonRpcConfig config;
+    private final Kernel kernel;
+    private final RPCSpec rpcSpec;
     private final Web3XdagChain web3Service;
     private Channel channel;
     private EventLoopGroup bossGroup;
     private EventLoopGroup workerGroup;
 
-    public JsonRpcServer(JsonRpcConfig config, Web3XdagChain web3Service) {
-        this.config = config;
-        this.web3Service = web3Service;
+
+    public JsonRpcServer(final Kernel kernel) {
+        this.kernel = kernel;
+        this.rpcSpec = kernel.getConfig().getRPCSpec();
+        this.web3Service = kernel.getWeb3();
     }
 
     public void start() {
-        if (!config.isEnabled()) {
+        if (!kernel.getConfig().getRPCSpec().isRpcHttpEnabled()) {
             log.info("JSON-RPC server is disabled");
             return;
         }
@@ -72,9 +76,9 @@ public class JsonRpcServer {
 
             // 创建SSL上下文（如果启用了HTTPS）
             final SslContext sslCtx;
-            if (config.isEnableHttps()) {
-                File certFile = new File(config.getCertFile());
-                File keyFile = new File(config.getKeyFile());
+            if (rpcSpec.isRpcEnableHttps()) {
+                File certFile = new File(rpcSpec.getRpcHttpsCertFile());
+                File keyFile = new File(rpcSpec.getRpcHttpsKeyFile());
                 if (!certFile.exists() || !keyFile.exists()) {
                     throw new RuntimeException("SSL certificate or key file not found");
                 }
@@ -84,8 +88,8 @@ public class JsonRpcServer {
             }
 
             // 创建事件循环组
-            bossGroup = new NioEventLoopGroup(config.getBossThreads());
-            workerGroup = new NioEventLoopGroup(config.getWorkerThreads());
+            bossGroup = new NioEventLoopGroup(rpcSpec.getRpcHttpBossThreads());
+            workerGroup = new NioEventLoopGroup(rpcSpec.getRpcHttpWorkerThreads());
 
             ServerBootstrap b = new ServerBootstrap();
             b.group(bossGroup, workerGroup)
@@ -105,17 +109,17 @@ public class JsonRpcServer {
                             // HTTP 编解码
                             p.addLast(new HttpServerCodec());
                             // HTTP 消息聚合
-                            p.addLast(new HttpObjectAggregator(config.getMaxContentLength()));
+                            p.addLast(new HttpObjectAggregator(rpcSpec.getRpcHttpMaxContentLength()));
                             // CORS 处理
-                            p.addLast(new CorsHandler(config.getCorsOrigins()));
+                            p.addLast(new CorsHandler(rpcSpec.getRpcHttpCorsOrigins()));
                             // JSON-RPC 处理
                             p.addLast(new JsonRpcHandler(handlers));
                         }
                     });
 
-            channel = b.bind(InetAddress.getByName(config.getHost()), config.getPort()).sync().channel();
-            log.info("JSON-RPC server started on {}:{} (SSL: {})", 
-                    config.getHost(), config.getPort(), config.isEnableHttps());
+            channel = b.bind(InetAddress.getByName(rpcSpec.getRpcHttpHost()), rpcSpec.getRpcHttpPort()).sync().channel();
+            log.info("JSON-RPC server started on {}:{} (SSL: {})",
+                    rpcSpec.getRpcHttpHost(), rpcSpec.getRpcHttpPort(), rpcSpec.isRpcEnableHttps());
         } catch (Exception e) {
             log.error("Failed to start JSON-RPC server", e);
             stop();

@@ -100,7 +100,6 @@ public class Kernel {
     protected AtomicBoolean isRunning = new AtomicBoolean(false);
     
     // Start time epoch
-    @Getter
     protected long startEpoch;
 
     // RPC related components
@@ -112,8 +111,6 @@ public class Kernel {
         this.wallet = wallet;
         this.coinbase = wallet.getDefKey();
         this.xdagState = XdagState.INIT;
-        this.telnetServer = new TelnetServer(config.getAdminSpec().getAdminTelnetIp(), config.getAdminSpec().getAdminTelnetPort(),
-                this);
     }
 
     public Kernel(Config config, KeyPair coinbase) {
@@ -134,13 +131,9 @@ public class Kernel {
         // Initialize channel manager
         channelMgr = new ChannelManager(this);
         channelMgr.start();
-        log.info("Channel Manager start...");
-        netDBMgr = new NetDBManager(this.config);
-        netDBMgr.init();
-        log.info("NetDB Manager init.");
 
-        // Initialize wallet
-        log.info("Wallet init.");
+        netDBMgr = new NetDBManager(this.config);
+        netDBMgr.start();
 
         // Initialize database components
         dbFactory = new RocksdbFactory(this.config);
@@ -150,15 +143,14 @@ public class Kernel {
                 dbFactory.getDB(DatabaseName.TIME),
                 dbFactory.getDB(DatabaseName.TXHISTORY));
         log.info("Block Store init.");
-        blockStore.init();
+        blockStore.start();
 
         addressStore = new AddressStoreImpl(dbFactory.getDB(DatabaseName.ADDRESS));
-        addressStore.init();
-        log.info("Address Store init");
+        addressStore.start();
+
 
         orphanBlockStore = new OrphanBlockStoreImpl(dbFactory.getDB(DatabaseName.ORPHANIND));
-        log.info("Orphan Pool init.");
-        orphanBlockStore.init();
+        orphanBlockStore.start();
 
         if (config.getEnableTxHistory()) {
             long txPageSizeLimit = config.getTxPageSizeLimit();
@@ -168,12 +160,10 @@ public class Kernel {
 
         // Initialize network components
         netDB = new NetDB();
-        log.info("NetDB init");
 
         // Initialize RandomX
         randomx = new RandomX(config);
-        randomx.init();
-        log.info("RandomX init");
+        randomx.start();
 
         // Initialize blockchain
         blockchain = new BlockchainImpl(this);
@@ -192,7 +182,6 @@ public class Kernel {
         } else {
             firstAccount = Keys.toBytesAddress(wallet.getDefKey().getPublicKey());
         }
-        log.info("Blockchain init");
 
         // Initialize RandomX based on snapshot configuration
         if (config.getSnapshotSpec().isSnapshotJ()) {
@@ -211,35 +200,6 @@ public class Kernel {
             }
         }
 
-        log.info("RandomX reload");
-
-        // Initialize P2P networking
-        p2p = new PeerServer(this);
-        p2p.start();
-        log.info("Node server start...");
-        client = new PeerClient(this.config, this.coinbase);
-
-        // Initialize node management
-        nodeMgr = new NodeManager(this);
-        nodeMgr.start();
-        log.info("Node manager start...");
-
-        // Initialize synchronization
-        sync = new XdagSync(this);
-        sync.start();
-        log.info("XdagSync start...");
-
-        syncMgr = new SyncManager(this);
-        syncMgr.start();
-        log.info("SyncManager start...");
-        poolAwardManager = new PoolAwardManagerImpl(this);
-
-        // Initialize mining
-        pow = new XdagPow(this);
-        //getWsServer().start();
-        log.info("Node to pool websocket start...");
-        blockchain.registerListener(pow);
-
         // Set initial state based on network type
         if (config instanceof MainnetConfig) {
             xdagState = XdagState.WAIT;
@@ -249,22 +209,41 @@ public class Kernel {
             xdagState = XdagState.WDST;
         }
 
-        // Start RPC if enabled
-        startWeb3();
+        // Initialize P2P networking
+        p2p = new PeerServer(this);
+        p2p.start();
+        client = new PeerClient(this.config, this.coinbase);
 
-        // Start telnet server
+        // Initialize node management
+        nodeMgr = new NodeManager(this);
+        nodeMgr.start();
+
+        // Initialize synchronization
+        sync = new XdagSync(this);
+        sync.start();
+
+        syncMgr = new SyncManager(this);
+        syncMgr.start();
+
+        poolAwardManager = new PoolAwardManagerImpl(this);
+
+        // Initialize mining
+        pow = new XdagPow(this);
+        pow.start();
+
+        //getWsServer().start();
+
+        // Start RPC Server
+        rpcServer = new JsonRpcServer(this);
+        rpcServer.start();
+
+        // Start Telnet Server
+        telnetServer = new TelnetServer(this);
         telnetServer.start();
 
-        Launcher.registerShutdownHook("kernel", this::testStop);
-    }
+        blockchain.registerListener(pow);
 
-    protected void startWeb3() {
-        if (config.getRPCSpec().isRpcHttpEnabled()) {
-            //web3 = new Web3Impl(this);
-            //rpcServer = new XdagJsonRpcServer(web3, config.getRPCSpec().getRpcHttpHost(), config.getRPCSpec().getRpcHttpPort());
-            rpcServer.start();
-            log.info("RPC server started at {}:{}", config.getRPCSpec().getRpcHttpHost(), config.getRPCSpec().getRpcHttpPort());
-        }
+        Launcher.registerShutdownHook("kernel", this::testStop);
     }
 
     protected void stopWeb3() {
@@ -291,27 +270,19 @@ public class Kernel {
 
         // Stop consensus layer
         sync.stop();
-        log.info("XdagSync stop.");
         syncMgr.stop();
-        log.info("SyncManager stop.");
         pow.stop();
-        log.info("Block production stop.");
 
         // Stop networking layer
         channelMgr.stop();
-        log.info("ChannelMgr stop.");
         nodeMgr.stop();
-        log.info("Node manager stop.");
-        log.info("ChannelManager stop.");
 
         // Close message queue timer
         MessageQueue.timer.shutdown();
 
         // Close P2P networking
         p2p.close();
-        log.info("Node server stop.");
         client.close();
-        log.info("Node client stop.");
 
         // Stop data layer
         blockchain.stopCheckMain();
@@ -323,9 +294,7 @@ public class Kernel {
 
         // Stop remaining services
         webSocketServer.stop();
-        log.info("WebSocket server stop.");
         poolAwardManager.stop();
-        log.info("Pool award manager stop.");
     }
 
     public enum Status {

@@ -46,7 +46,6 @@ import org.apache.commons.io.FileUtils;
 public class NetDBManager {
     private final String database;
     private final String databaseWhite;
-//    private final NetDB netDB;
     private final NetDB whiteDB;
     private final Config config;
 
@@ -58,7 +57,6 @@ public class NetDBManager {
         database = config.getNodeSpec().getNetDBDir();
         databaseWhite = config.getNodeSpec().getWhiteListDir();
         whiteDB = new NetDB();
-//        netDB = new NetDB();
     }
 
     /**
@@ -70,26 +68,12 @@ public class NetDBManager {
         }
     }
 
-
     /**
      * Initialize network database
      */
-    public void init() {
+    public void start() {
         loadFromConfig();
-//        if(config instanceof DevnetConfig) {
-//            // Only use config whitelist for devnet
-//            return;
-//        }
     }
-
-//    /**
-//     * Update network database with new entries
-//     */
-//    public void updateNetDB(NetDB netDB) {
-//        if (netDB != null) {
-//            this.netDB.appendNetDB(netDB);
-//        }
-//    }
 
     /**
      * Check if address is whitelisted

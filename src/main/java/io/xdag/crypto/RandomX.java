@@ -149,7 +149,7 @@ public class RandomX {
 
     // Used during system initialization
     // Wallet type is fast, pool is light
-    public void init() {
+    public void start() {
         if (isTestNet) {
             randomXForkSeedHeight = RANDOMX_TESTNET_FORK_HEIGHT;
             randomXForkLag = SEEDHASH_EPOCH_TESTNET_LAG;

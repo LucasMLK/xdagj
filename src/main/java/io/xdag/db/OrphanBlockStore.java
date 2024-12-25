@@ -37,7 +37,7 @@ public interface OrphanBlockStore {
      */
     byte[] ORPHAN_SIZE = Hex.decode("FFFFFFFFFFFFFFFF");
 
-    void init();
+    void start();
 
     void reset();
 

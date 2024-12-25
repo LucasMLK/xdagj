@@ -49,7 +49,7 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
         this.orphanSource = orphan;
     }
 
-    public void init() {
+    public void start() {
         this.orphanSource.init();
         if (orphanSource.get(ORPHAN_SIZE) == null) {
             this.orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(0, false));

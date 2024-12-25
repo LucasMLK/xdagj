@@ -115,7 +115,7 @@ public class RewardTest {
         RandomXConstants.SEEDHASH_EPOCH_TESTNET_LAG = 4;
 
         RandomX randomXUtils = new RandomX(config);
-        randomXUtils.init();
+        randomXUtils.start();
         kernel.setRandomx(randomXUtils);
 
         Bytes32 targetBlock = Bytes32.ZERO;

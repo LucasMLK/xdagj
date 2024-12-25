@@ -42,13 +42,11 @@ public class TelnetServer {
 
     /**
      * Constructor for TelnetServer
-     * @param ip IP address to bind the server to
-     * @param port Port number to listen on
      * @param kernel Kernel instance for XDAG operations
      */
-    public TelnetServer(final String ip, final int port, final Kernel kernel) {
-        this.ip = ip;
-        this.port = port;
+    public TelnetServer(final Kernel kernel) {
+        this.ip = kernel.getConfig().getAdminSpec().getAdminTelnetIp();
+        this.port = kernel.getConfig().getAdminSpec().getAdminTelnetPort();
         this.kernel = kernel;
     }
 

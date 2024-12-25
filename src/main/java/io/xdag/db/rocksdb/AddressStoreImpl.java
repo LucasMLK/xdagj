@@ -40,7 +40,7 @@ public class AddressStoreImpl implements AddressStore {
         this.addressSource = addressSource;
     }
 
-    public void init() {
+    public void start() {
         this.addressSource.init();
         if (addressSource.get(new byte[]{ADDRESS_SIZE}) == null) {
             addressSource.put(new byte[]{ADDRESS_SIZE}, BytesUtils.longToBytes(0, false));

@@ -135,7 +135,7 @@ public class BlockStoreImpl implements BlockStore {
         }
     }
 
-    public void init() {
+    public void start() {
         indexSource.init();
         timeSource.init();
         blockSource.init();

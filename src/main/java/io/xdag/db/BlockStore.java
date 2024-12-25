@@ -46,7 +46,7 @@ public interface BlockStore {
     byte TX_HISTORY = (byte) 0xa0;
     String SUM_FILE_NAME = "sums.dat";
 
-    void init();
+    void start();
 
     void reset();
 
