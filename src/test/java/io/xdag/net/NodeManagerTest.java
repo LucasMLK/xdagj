@@ -58,7 +58,7 @@ public class NodeManagerTest {
     @Test
     public void testWhiteList() {
         NetDBManager netDBMgr = new NetDBManager(this.config);
-        netDBMgr.init();
+        netDBMgr.start();
         assertTrue(netDBMgr.canAccept(new InetSocketAddress("127.0.0.1",1001)));
         assertTrue(netDBMgr.canAccept(new InetSocketAddress("127.0.0.1",1002)));
     }

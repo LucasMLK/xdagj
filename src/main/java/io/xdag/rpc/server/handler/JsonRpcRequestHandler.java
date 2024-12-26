@@ -1,4 +1,7 @@
-package io.xdag.rpc;
+package io.xdag.rpc.server.handler;
+
+import io.xdag.rpc.error.JsonRpcException;
+import io.xdag.rpc.server.protocol.JsonRpcRequest;
 
 public interface JsonRpcRequestHandler {
     /**

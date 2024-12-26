@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.rpc;
+package io.xdag.rpc.server.handler;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.buffer.ByteBuf;
@@ -30,6 +30,10 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.*;
+import io.xdag.rpc.error.JsonRpcError;
+import io.xdag.rpc.error.JsonRpcException;
+import io.xdag.rpc.server.protocol.JsonRpcRequest;
+import io.xdag.rpc.server.protocol.JsonRpcResponse;
 import lombok.extern.slf4j.Slf4j;
 
 import java.nio.charset.StandardCharsets;
@@ -65,7 +69,7 @@ public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest>
             return;
         } catch (Exception e) {
             log.debug("Failed to parse JSON-RPC request", e);
-            sendError(ctx, new JsonRpcError(JsonRpcError.PARSE_ERROR, "Invalid JSON request"));
+            sendError(ctx, new JsonRpcError(JsonRpcError.ERR_PARSE, "Invalid JSON request"));
             return;
         }
 
@@ -77,7 +81,7 @@ public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest>
             sendError(ctx, new JsonRpcError(e.getCode(), e.getMessage(), e.getData()));
         } catch (Exception e) {
             log.error("Error processing request", e);
-            sendError(ctx, new JsonRpcError(JsonRpcError.INTERNAL_ERROR, "Internal error"));
+            sendError(ctx, new JsonRpcError(JsonRpcError.ERR_INTERNAL, "Internal error"));
         }
     }
 
@@ -104,7 +108,7 @@ public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest>
             sendHttpResponse(ctx, content, HttpResponseStatus.OK);
         } catch (Exception e) {
             log.error("Error sending response", e);
-            sendError(ctx, new JsonRpcError(JsonRpcError.INTERNAL_ERROR, "Error serializing response"));
+            sendError(ctx, new JsonRpcError(JsonRpcError.ERR_INTERNAL, "Error serializing response"));
         }
     }
 

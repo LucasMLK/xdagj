@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.rpc;
+package io.xdag.rpc.util;
 
 import java.math.BigInteger;
 import java.util.regex.Pattern;

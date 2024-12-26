@@ -26,10 +26,7 @@ package io.xdag.consensus;
 
 import com.google.common.util.concurrent.SettableFuture;
 import io.xdag.Kernel;
-import io.xdag.config.Config;
-import io.xdag.config.DevnetConfig;
-import io.xdag.config.MainnetConfig;
-import io.xdag.config.TestnetConfig;
+import io.xdag.config.*;
 import io.xdag.core.Block;
 import io.xdag.core.XdagState;
 import io.xdag.db.BlockStore;
@@ -52,7 +49,7 @@ import static io.xdag.config.Constants.REQUEST_BLOCKS_MAX_TIME;
 import static io.xdag.config.Constants.REQUEST_WAIT;
 
 @Slf4j
-public class XdagSync {
+public class XdagSync implements XdagLifecycle {
 
     private static final ThreadFactory factory = new BasicThreadFactory.Builder()
             .namingPattern("XdagSync-thread-%d")

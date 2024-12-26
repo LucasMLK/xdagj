@@ -56,6 +56,16 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
         }
     }
 
+    @Override
+    public void stop() {
+        orphanSource.close();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return false;
+    }
+
     public void reset() {
         this.orphanSource.reset();
         this.orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(0, false));

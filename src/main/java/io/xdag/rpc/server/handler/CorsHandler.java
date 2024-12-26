@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.rpc;
+package io.xdag.rpc.server.handler;
 
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
@@ -67,7 +67,7 @@ public class CorsHandler extends ChannelInboundHandlerAdapter {
                 ctx.fireChannelRead(msg);
             } else {
                 log.warn("Blocked request from unauthorized origin: {}", origin);
-                sendError(ctx, HttpResponseStatus.FORBIDDEN);
+                sendError(ctx);
             }
         } else {
             ctx.fireChannelRead(msg);
@@ -77,7 +77,7 @@ public class CorsHandler extends ChannelInboundHandlerAdapter {
     private void handlePreflightRequest(ChannelHandlerContext ctx, HttpRequest request) {
         String origin = request.headers().get(HttpHeaderNames.ORIGIN);
         if (origin == null || !isOriginAllowed(origin)) {
-            sendError(ctx, HttpResponseStatus.FORBIDDEN);
+            sendError(ctx);
             return;
         }
 
@@ -104,10 +104,10 @@ public class CorsHandler extends ChannelInboundHandlerAdapter {
         ctx.channel().attr(CORS_ORIGIN).set(origin);
     }
 
-    private void sendError(ChannelHandlerContext ctx, HttpResponseStatus status) {
+    private void sendError(ChannelHandlerContext ctx) {
         FullHttpResponse response = new DefaultFullHttpResponse(
-                HttpVersion.HTTP_1_1, 
-                status);
+                HttpVersion.HTTP_1_1,
+                HttpResponseStatus.FORBIDDEN);
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
         ctx.writeAndFlush(response);
     }

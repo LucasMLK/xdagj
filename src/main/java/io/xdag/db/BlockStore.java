@@ -23,6 +23,7 @@
  */
 package io.xdag.db;
 
+import io.xdag.config.XdagLifecycle;
 import io.xdag.core.*;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.tuweni.bytes.Bytes;
@@ -32,7 +33,7 @@ import org.apache.tuweni.bytes.MutableBytes;
 import java.util.List;
 import java.util.function.Function;
 
-public interface BlockStore {
+public interface BlockStore extends XdagLifecycle {
 
     byte SETTING_STATS = (byte) 0x10;
     byte TIME_HASH_INFO = (byte) 0x20;
@@ -45,8 +46,6 @@ public interface BlockStore {
     byte SNAPSHOT_PRESEED = (byte) 0x90;
     byte TX_HISTORY = (byte) 0xa0;
     String SUM_FILE_NAME = "sums.dat";
-
-    void start();
 
     void reset();
 

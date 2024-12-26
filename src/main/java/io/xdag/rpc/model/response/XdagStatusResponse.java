@@ -22,28 +22,26 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.rpc;
+package io.xdag.rpc.model.response;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Builder;
+import lombok.Data;
 
-import java.util.List;
+@Data
+@Builder
+public class XdagStatusResponse {
 
-@Setter
-@Getter
-public class JsonRpcRequest {
-    // Getters and Setters
-    @JsonProperty("jsonrpc")
-    private String jsonrpc = "2.0";
-    
-    @JsonProperty("method")
-    private String method;
-    
-    @JsonProperty("params")
-    private List<Object> params;
-    
-    @JsonProperty("id")
-    private String id;
+    // status info
+    private final String nblock;
+    private final String totalNblocks;
+    private final String nmain;
+    private final String totalNmain;
+    private final String curDiff;
+    private final String netDiff;
+    private final String hashRateOurs;
+    private final String hashRateTotal;
+
+    private final String ourSupply;
+    private final String netSupply;
 
 }

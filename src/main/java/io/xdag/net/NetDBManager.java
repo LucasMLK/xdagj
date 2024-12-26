@@ -25,25 +25,18 @@
 package io.xdag.net;
 
 import io.xdag.config.Config;
-import io.xdag.config.DevnetConfig;
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
-import java.net.URL;
-import java.nio.charset.StandardCharsets;
+
+import io.xdag.config.XdagLifecycle;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.io.FileUtils;
 
 /**
  * Manages the network database including whitelisted nodes
  */
 @Getter
 @Slf4j
-public class NetDBManager {
+public class NetDBManager implements XdagLifecycle {
     private final String database;
     private final String databaseWhite;
     private final NetDB whiteDB;
@@ -73,6 +66,15 @@ public class NetDBManager {
      */
     public void start() {
         loadFromConfig();
+    }
+
+    @Override
+    public void stop() {
+    }
+
+    @Override
+    public boolean isRunning() {
+        return false;
     }
 
     /**

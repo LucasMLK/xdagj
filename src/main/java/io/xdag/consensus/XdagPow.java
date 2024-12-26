@@ -28,6 +28,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.xdag.Kernel;
 import io.xdag.Wallet;
+import io.xdag.config.XdagLifecycle;
 import io.xdag.core.*;
 import io.xdag.crypto.Hash;
 import io.xdag.crypto.RandomX;
@@ -61,7 +62,7 @@ import static io.xdag.utils.BytesUtils.compareTo;
 import static io.xdag.utils.BytesUtils.equalBytes;
 
 @Slf4j
-public class XdagPow implements PoW, Listener, Runnable {
+public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
 
 
     private final Kernel kernel;

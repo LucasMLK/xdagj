@@ -24,7 +24,6 @@
 package io.xdag.net.message.consensus;
 
 import io.xdag.core.XdagStats;
-import io.xdag.net.NetDB;
 import io.xdag.net.message.MessageCode;
 
 public class BlocksReplyMessage extends XdagMessage  {

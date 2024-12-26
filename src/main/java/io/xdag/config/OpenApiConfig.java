@@ -28,7 +28,7 @@ import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
 import io.swagger.v3.oas.models.servers.Server;
 import io.swagger.v3.jaxrs2.Reader;
-import io.xdag.rpc.XdagApiDocs;
+import io.xdag.rpc.api.XdagApi;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.List;
@@ -61,7 +61,7 @@ public class OpenApiConfig {
         // 扫描API文档类
         Reader reader = new Reader(openAPI);
         try {
-            reader.read(XdagApiDocs.class);
+            reader.read(XdagApi.class);
         } catch (Exception e) {
             log.error("Error reading OpenAPI documentation", e);
         }

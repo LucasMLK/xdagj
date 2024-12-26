@@ -21,32 +21,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+package io.xdag.rpc.model.response;
 
-package io.xdag.rpc;
+import lombok.Builder;
+import lombok.Data;
+import java.net.InetSocketAddress;
 
-import io.xdag.rpc.dto.BlockResultDTO;
+@Data
+@Builder
+public class NetConnResponse {
 
-public interface XdagChain {
-
-    BlockResultDTO getBlockByHash(String hash, int page, Object... parameters);
-
-    BlockResultDTO getBlockByNumber(String bnOrId, int page, Object... parameters );
-
-    String getRewardByNumber(String bnOrId);
-
-    String getBalanceByNumber(String bnOrId);
-
-    Object getBlocksByNumber(String number);
-
-    String getMaxXferBalance();
-
-    String[] accounts();
-
-    String sign(String addr, String data);
-
-    String sendTransaction(Web3XdagChain.CallArguments args);
-
-    String sendRawTransaction(String rawData);
-
-    Object personalSendTransaction(Web3XdagChain.CallArguments args, String passphrase);
+    InetSocketAddress nodeAddress;
+    long connectTime;
+    long inBound;
+    long outBound;
 }

@@ -22,54 +22,28 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.rpc.dto;
+package io.xdag.rpc.server.protocol;
+
+import com.fasterxml.jackson.annotation.JsonProperty;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.List;
-import lombok.Builder;
-import lombok.Data;
 
-@Data
-@Builder
-public class BlockResultDTO {
-
-    private long height;
-    private String balance;
-    private long blockTime;
-    private long timeStamp; // xdagTime
-    private String state;
-    private String hash;
-    private String address;
-    private String remark;
-    private String diff;
-    private String type;
-    private String flags;
-    private int totalPage;
-    private List<Link> refs; // means all the ref block
-    private List<TxLink> transactions; // means transaction a wallet have
-
-
-    @Data
-    @Builder
-    public static class TxLink {
-
-        private int direction; // 0 input 1 output 2 earning
-        private String hashlow;
-        private String address;
-        private String amount;
-        private long time;
-        private String remark;
-    }
-
-    @Data
-    @Builder
-    public static class Link {
-        private int direction; // 0 input 1 output 2 fee
-        private String address;
-        private String hashlow;
-        private String amount;
-    }
-
+@Setter
+@Getter
+public class JsonRpcRequest {
+    // Getters and Setters
+    @JsonProperty("jsonrpc")
+    private String jsonrpc = "2.0";
+    
+    @JsonProperty("method")
+    private String method;
+    
+    @JsonProperty("params")
+    private List<Object> params;
+    
+    @JsonProperty("id")
+    private String id;
 
 }
-
-

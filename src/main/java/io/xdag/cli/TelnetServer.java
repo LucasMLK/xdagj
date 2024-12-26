@@ -25,6 +25,7 @@
 package io.xdag.cli;
 
 import io.xdag.Kernel;
+import io.xdag.config.XdagLifecycle;
 import lombok.extern.slf4j.Slf4j;
 import org.jline.builtins.telnet.Telnet;
 import org.jline.terminal.Terminal;
@@ -34,11 +35,14 @@ import org.jline.terminal.TerminalBuilder;
  * Telnet server implementation for remote CLI access
  */
 @Slf4j
-public class TelnetServer {
+public class TelnetServer implements XdagLifecycle {
 
     private final Kernel kernel;
     private final String ip;
     private final int port;
+    private Terminal terminal;
+    private Shell xShell;
+    private Telnet telnetServer;
 
     /**
      * Constructor for TelnetServer
@@ -56,13 +60,30 @@ public class TelnetServer {
      */
     public void start() {
         try {
-            Terminal terminal = TerminalBuilder.builder().build();
-            Shell xShell = new Shell();
+            terminal = TerminalBuilder.builder().build();
+            xShell = new Shell();
             xShell.setKernel(kernel);
-            Telnet telnetServer = new Telnet(terminal, xShell);
+            telnetServer = new Telnet(terminal, xShell);
             telnetServer.telnetd(new String[]{"-i" + ip, "-p" + port, "start"});
         } catch (Exception e) {
             log.error(e.getMessage(), e);
         }
+    }
+
+    @Override
+    public void stop() {
+        if (telnetServer != null) {
+            try {
+                terminal.close();
+                telnetServer.telnetd(new String[]{"stop"});
+            } catch (Exception e) {
+                log.error(e.getMessage(), e);
+            }
+        }
+    }
+
+    @Override
+    public boolean isRunning() {
+        return false;
     }
 }

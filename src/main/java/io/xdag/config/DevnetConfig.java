@@ -26,7 +26,6 @@ package io.xdag.config;
 
 import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_HEAD_TEST;
 
-import org.apache.commons.lang3.StringUtils;
 import org.apache.tuweni.units.bigints.UInt64;
 
 import io.xdag.Network;

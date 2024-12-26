@@ -142,6 +142,19 @@ public class BlockStoreImpl implements BlockStore {
         txHistorySource.init();
     }
 
+    @Override
+    public void stop() {
+        indexSource.close();
+        timeSource.close();
+        blockSource.close();
+        txHistorySource.close();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return false;
+    }
+
     public void reset() {
         indexSource.reset();
         timeSource.reset();

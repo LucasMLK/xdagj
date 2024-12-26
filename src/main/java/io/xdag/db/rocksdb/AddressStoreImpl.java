@@ -50,6 +50,16 @@ public class AddressStoreImpl implements AddressStore {
         }
     }
 
+    @Override
+    public void stop() {
+        addressSource.close();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return false;
+    }
+
     public void reset() {
         this.addressSource.reset();
         addressSource.put(new byte[]{ADDRESS_SIZE}, BytesUtils.longToBytes(0, false));

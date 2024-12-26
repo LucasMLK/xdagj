@@ -26,10 +26,7 @@ package io.xdag.consensus;
 
 import com.google.common.collect.Queues;
 import io.xdag.Kernel;
-import io.xdag.config.Config;
-import io.xdag.config.DevnetConfig;
-import io.xdag.config.MainnetConfig;
-import io.xdag.config.TestnetConfig;
+import io.xdag.config.*;
 import io.xdag.core.*;
 import io.xdag.db.TransactionHistoryStore;
 import io.xdag.net.Channel;
@@ -62,7 +59,7 @@ import static io.xdag.utils.XdagTime.msToXdagtimestamp;
 @Slf4j
 @Getter
 @Setter
-public class SyncManager {
+public class SyncManager implements XdagLifecycle {
     // Maximum size of syncMap
     public static final int MAX_SIZE = 500000;
     // Number of keys to remove when syncMap exceeds MAX_SIZE
@@ -109,7 +106,7 @@ public class SyncManager {
         this.txHistoryStore = kernel.getTxHistoryStore();
     }
 
-    public void start() throws InterruptedException {
+    public void start() {
         log.debug("Download receiveBlock run...");
         new Thread(this.stateListener, "xdag-stateListener").start();
         checkStateFuture = checkStateTask.scheduleAtFixedRate(this::checkState, 64, 5, TimeUnit.SECONDS);
@@ -363,6 +360,11 @@ public class SyncManager {
             this.stateListener.isRunning = false;
         }
         stopStateTask();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return false;
     }
 
     private void stopStateTask() {

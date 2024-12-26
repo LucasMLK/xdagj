@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.rpc;
+package io.xdag.rpc.server.core;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -40,6 +40,11 @@ import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.xdag.Kernel;
 import io.xdag.config.spec.RPCSpec;
+import io.xdag.rpc.api.XdagApi;
+import io.xdag.rpc.server.handler.CorsHandler;
+import io.xdag.rpc.server.handler.JsonRequestHandler;
+import io.xdag.rpc.server.handler.JsonRpcHandler;
+import io.xdag.rpc.server.handler.JsonRpcRequestHandler;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
@@ -51,7 +56,7 @@ import java.util.List;
 public class JsonRpcServer {
     private final Kernel kernel;
     private final RPCSpec rpcSpec;
-    private final Web3XdagChain web3Service;
+    private final XdagApi xdagApi;
     private Channel channel;
     private EventLoopGroup bossGroup;
     private EventLoopGroup workerGroup;
@@ -60,7 +65,7 @@ public class JsonRpcServer {
     public JsonRpcServer(final Kernel kernel) {
         this.kernel = kernel;
         this.rpcSpec = kernel.getConfig().getRPCSpec();
-        this.web3Service = kernel.getWeb3();
+        this.xdagApi = kernel.getRpc();
     }
 
     public void start() {
@@ -72,7 +77,7 @@ public class JsonRpcServer {
         try {
             // 创建请求处理器
             List<JsonRpcRequestHandler> handlers = new ArrayList<>();
-            handlers.add(new JsonRequestHandler(web3Service));
+            handlers.add(new JsonRequestHandler(xdagApi));
 
             // 创建SSL上下文（如果启用了HTTPS）
             final SslContext sslCtx;

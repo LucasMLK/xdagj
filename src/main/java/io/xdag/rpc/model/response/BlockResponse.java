@@ -21,30 +21,51 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.rpc.dto;
 
-import lombok.AllArgsConstructor;
+package io.xdag.rpc.model.response;
+
+import java.util.List;
 import lombok.Builder;
 import lombok.Data;
-import lombok.NoArgsConstructor;
 
 @Data
 @Builder
-@NoArgsConstructor
-@AllArgsConstructor
-public class ConfigDTO {
+public class BlockResponse {
 
-    String poolIp;
-    int poolPort;
-    String nodeIp;
-    int nodePort;
-    int globalMinerLimit;
-    int maxConnectMinerPerIp;
-    int maxMinerPerAccount;
+    private long height;
+    private String balance;
+    private long blockTime;
+    private long timeStamp; // xdagTime
+    private String state;
+    private String hash;
+    private String address;
+    private String remark;
+    private String diff;
+    private String type;
+    private String flags;
+    private int totalPage;
+    private List<Link> refs; // means all the ref block
+    private List<TxLink> transactions; // means transaction a wallet have
 
-    String poolFeeRation;
-    String poolRewardRation;
-    String poolDirectRation;
-    String poolFundRation;
+
+    @Data
+    @Builder
+    public static class TxLink {
+        private int direction; // 0 input 1 output 2 earning
+        private String hashlow;
+        private String address;
+        private String amount;
+        private long time;
+        private String remark;
+    }
+
+    @Data
+    @Builder
+    public static class Link {
+        private int direction; // 0 input 1 output 2 fee
+        private String address;
+        private String hashlow;
+        private String amount;
+    }
 
 }

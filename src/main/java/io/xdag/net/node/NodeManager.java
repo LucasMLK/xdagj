@@ -29,6 +29,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.Kernel;
 import io.xdag.config.Config;
+import io.xdag.config.XdagLifecycle;
 import io.xdag.net.PeerClient;
 import io.xdag.net.XdagChannelInitializer;
 import io.xdag.net.NetDBManager;
@@ -48,7 +49,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 
 @Slf4j
-public class NodeManager {
+public class NodeManager implements XdagLifecycle {
 
     private static final ThreadFactory factory = new BasicThreadFactory.Builder()
             .namingPattern("NodeManager-thread-%d")
@@ -106,6 +107,11 @@ public class NodeManager {
             exec.shutdown();
             log.debug("Node manager stop...");
         }
+    }
+
+    @Override
+    public boolean isRunning() {
+        return false;
     }
 
     public int queueSize() {

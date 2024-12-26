@@ -43,8 +43,8 @@ import io.xdag.net.message.MessageQueue;
 import io.xdag.net.node.NodeManager;
 import io.xdag.pool.WebSocketServer;
 import io.xdag.pool.PoolAwardManagerImpl;
-import io.xdag.rpc.Web3XdagChain;
-import io.xdag.rpc.JsonRpcServer;
+import io.xdag.rpc.api.XdagApi;
+import io.xdag.rpc.api.impl.XdagApiImpl;
 import io.xdag.utils.XdagTime;
 import lombok.Getter;
 import lombok.Setter;
@@ -103,8 +103,7 @@ public class Kernel {
     protected long startEpoch;
 
     // RPC related components
-    protected Web3XdagChain web3;
-    protected JsonRpcServer rpcServer;
+    protected XdagApi rpc;
 
     public Kernel(Config config, Wallet wallet) {
         this.config = config;
@@ -233,9 +232,9 @@ public class Kernel {
 
         //getWsServer().start();
 
-        // Start RPC Server
-        rpcServer = new JsonRpcServer(this);
-        rpcServer.start();
+        // Start RPC
+        rpc = new XdagApiImpl(this);
+        rpc.start();
 
         // Start Telnet Server
         telnetServer = new TelnetServer(this);
@@ -246,12 +245,11 @@ public class Kernel {
         Launcher.registerShutdownHook("kernel", this::testStop);
     }
 
-    protected void stopWeb3() {
-        if (rpcServer != null) {
-            rpcServer.stop();
-            rpcServer = null;
-            web3 = null;
-            log.info("RPC server stopped");
+    protected void stopRpc() {
+        if (rpc != null) {
+            rpc.stop();
+            rpc = null;
+            log.info("RPC stopped");
         }
     }
 
@@ -266,7 +264,7 @@ public class Kernel {
         isRunning.set(false);
 
         // Stop RPC services
-        stopWeb3();
+        stopRpc();
 
         // Stop consensus layer
         sync.stop();

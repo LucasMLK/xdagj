@@ -27,7 +27,6 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
 
 import io.xdag.core.XdagStats;
-import io.xdag.net.NetDB;
 import io.xdag.net.message.MessageCode;
 
 public class SyncBlockRequestMessage extends XdagMessage {

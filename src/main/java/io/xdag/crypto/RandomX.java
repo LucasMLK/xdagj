@@ -35,6 +35,7 @@ import static io.xdag.utils.BytesUtils.equalBytes;
 
 import java.util.Set;
 
+import io.xdag.config.XdagLifecycle;
 import io.xdag.crypto.randomx.*;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
@@ -53,7 +54,7 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Data
-public class RandomX {
+public class RandomX implements XdagLifecycle {
 
     protected final RandomXMemory[] globalMemory = new RandomXMemory[2];
     protected final Config config;
@@ -168,6 +169,16 @@ public class RandomX {
         for (int i = 0; i < 2; i++) {
             globalMemory[i] = new RandomXMemory();
         }
+    }
+
+    @Override
+    public void stop() {
+
+    }
+
+    @Override
+    public boolean isRunning() {
+        return false;
     }
 
     public Bytes32 randomXPoolCalcHash(Bytes data, long taskTime) {

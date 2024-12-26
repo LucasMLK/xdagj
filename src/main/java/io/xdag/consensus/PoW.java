@@ -30,23 +30,6 @@ package io.xdag.consensus;
 public interface PoW {
 
     /**
-     * Starts the PoW mining thread
-     */
-    void start();
-
-    /**
-     * Stops the PoW mining thread
-     */
-    void stop();
-
-    /**
-     * Checks if the PoW mining thread is currently running
-     *
-     * @return true if mining thread is running, false otherwise
-     */
-    boolean isRunning();
-
-    /**
      * Processes new shares received from mining pool
      *
      * @param share The share data received from pool

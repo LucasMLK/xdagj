@@ -21,18 +21,16 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.rpc.dto;
+package io.xdag.rpc.model.response;
 
 import java.util.List;
 import lombok.Builder;
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
 
-
-@Data
 @Builder
-public class ProcessResult {
+@Data
+public class ProcessResponse {
+
     private int code; // success:0 failed:err code
     private List<String> result; // if success return tx hash, else return errMsg
     private String errMsg;
