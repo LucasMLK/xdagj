@@ -1,4 +1,4 @@
-package io.xdag.config;
+package io.xdag.core;
 
 public interface XdagLifecycle {
     void start();

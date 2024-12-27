@@ -35,7 +35,7 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.NettyRuntime;
 import io.xdag.Kernel;
-import io.xdag.config.XdagLifecycle;
+import io.xdag.core.XdagLifecycle;
 import io.xdag.utils.NettyUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.SystemUtils;

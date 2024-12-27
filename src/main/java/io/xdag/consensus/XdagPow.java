@@ -28,7 +28,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.xdag.Kernel;
 import io.xdag.Wallet;
-import io.xdag.config.XdagLifecycle;
+import io.xdag.core.XdagLifecycle;
 import io.xdag.core.*;
 import io.xdag.crypto.Hash;
 import io.xdag.crypto.RandomX;

@@ -28,7 +28,7 @@ import io.xdag.config.Config;
 import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import io.xdag.config.XdagLifecycle;
+import io.xdag.core.XdagLifecycle;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 

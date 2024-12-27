@@ -47,7 +47,6 @@
         <h2.version>2.3.232</h2.version>
         <gson.version>2.11.0</gson.version>
         <surefire.test.excludes>**/*RandomXSyncTest.java,**/*SyncTest.java,**/*SnapshotJTest.java</surefire.test.excludes>
-        <swagger.version>2.2.27</swagger.version>
     </properties>
 
     <organization>
@@ -745,33 +744,6 @@
             <artifactId>gson</artifactId>
             <version>${gson.version}</version>
             <scope>compile</scope>
-        </dependency>
-
-        <!-- Swagger Dependencies -->
-        <dependency>
-            <groupId>io.swagger.core.v3</groupId>
-            <artifactId>swagger-core</artifactId>
-            <version>${swagger.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.swagger.core.v3</groupId>
-            <artifactId>swagger-jaxrs2</artifactId>
-            <version>${swagger.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.swagger.core.v3</groupId>
-            <artifactId>swagger-annotations</artifactId>
-            <version>${swagger.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>io.swagger.core.v3</groupId>
-            <artifactId>swagger-integration</artifactId>
-            <version>${swagger.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.webjars</groupId>
-            <artifactId>swagger-ui</artifactId>
-            <version>5.18.2</version>
         </dependency>
 
     </dependencies>

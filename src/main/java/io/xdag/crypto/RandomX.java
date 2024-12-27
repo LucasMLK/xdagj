@@ -36,7 +36,7 @@ import static io.xdag.utils.BytesUtils.equalBytes;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import io.xdag.config.XdagLifecycle;
+import io.xdag.core.XdagLifecycle;
 import io.xdag.crypto.randomx.*;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;

@@ -23,7 +23,7 @@
  */
 package io.xdag.db;
 
-import io.xdag.config.XdagLifecycle;
+import io.xdag.core.XdagLifecycle;
 import org.apache.tuweni.units.bigints.UInt64;
 
 import io.xdag.core.XAmount;

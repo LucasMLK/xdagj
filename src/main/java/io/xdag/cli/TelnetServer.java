@@ -25,7 +25,7 @@
 package io.xdag.cli;
 
 import io.xdag.Kernel;
-import io.xdag.config.XdagLifecycle;
+import io.xdag.core.XdagLifecycle;
 import lombok.extern.slf4j.Slf4j;
 import org.jline.builtins.telnet.Telnet;
 import org.jline.terminal.Terminal;

@@ -24,15 +24,7 @@
 
 package io.xdag.rpc.api;
 
-import io.swagger.v3.oas.annotations.OpenAPIDefinition;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.info.Info;
-import io.swagger.v3.oas.annotations.tags.Tag;
-import io.xdag.config.XdagLifecycle;
+import io.xdag.core.XdagLifecycle;
 import io.xdag.rpc.model.response.BlockResponse;
 import io.xdag.rpc.model.request.TransactionRequest;
 import io.xdag.rpc.model.response.NetConnResponse;
@@ -41,206 +33,146 @@ import io.xdag.rpc.model.response.XdagStatusResponse;
 
 import java.util.List;
 
-@OpenAPIDefinition(
-    info = @Info(
-        title = "XDAG JSON-RPC API",
-        version = "2.0",
-        description = "JSON-RPC 2.0 API for XDAG Blockchain"
-    )
-)
-@Tag(name = "XDAG JSON-RPC", description = "All JSON-RPC methods are called via POST request")
+/**
+ * XdagApi interface provides RPC methods for interacting with the XDAG blockchain.
+ * It extends XdagLifecycle to manage the lifecycle of the API service.
+ */
 public interface XdagApi extends XdagLifecycle {
 
-    @Operation(
-        summary = "Get block information",
-        description = "Get detailed block information by block hash",
-        method = "POST"
-    )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Successfully returned block information",
-        content = @Content(
-            mediaType = "application/json",
-            schema = @Schema(implementation = BlockResponse.class)
-        )
-    )
-    BlockResponse xdag_getBlockByHash(
-        @Parameter(description = "Block hash") String hash,
-        @Parameter(description = "Page number") int page
-    );
+    /**
+     * Get block information by its hash.
+     *
+     * @param hash Block hash
+     * @param page Page number for pagination
+     * @return Block information response
+     */
+    BlockResponse xdag_getBlockByHash(String hash, int page);
+
+    /**
+     * Get block information by its hash with custom page size.
+     *
+     * @param hash Block hash
+     * @param page Page number for pagination
+     * @param pageSize Number of items per page
+     * @return Block information response
+     */
     BlockResponse xdag_getBlockByHash(String hash, int page, int pageSize);
+
+    /**
+     * Get block information by its hash within a time range.
+     *
+     * @param hash Block hash
+     * @param page Page number for pagination
+     * @param startTime Start time for filtering
+     * @param endTime End time for filtering
+     * @return Block information response
+     */
     BlockResponse xdag_getBlockByHash(String hash, int page, String startTime, String endTime);
+
+    /**
+     * Get block information by its hash within a time range with custom page size.
+     *
+     * @param hash Block hash
+     * @param page Page number for pagination
+     * @param startTime Start time for filtering
+     * @param endTime End time for filtering
+     * @param pageSize Number of items per page
+     * @return Block information response
+     */
     BlockResponse xdag_getBlockByHash(String hash, int page, String startTime, String endTime, int pageSize);
 
-    @Operation(
-        summary = "Get block by number",
-        description = "Get block information by block number or ID",
-        method = "POST"
-    )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Successfully returned block information",
-        content = @Content(
-            mediaType = "application/json",
-            schema = @Schema(implementation = BlockResponse.class)
-        )
-    )
-    BlockResponse xdag_getBlockByNumber(
-        @Parameter(description = "Block number or ID") String bnOrId,
-        @Parameter(description = "Page number") int page
-    );
+    /**
+     * Get block information by its number or ID.
+     *
+     * @param bnOrId Block number or ID
+     * @param page Page number for pagination
+     * @return Block information response
+     */
+    BlockResponse xdag_getBlockByNumber(String bnOrId, int page);
+
+    /**
+     * Get block information by its number or ID with custom page size.
+     *
+     * @param bnOrId Block number or ID
+     * @param page Page number for pagination
+     * @param pageSize Number of items per page
+     * @return Block information response
+     */
     BlockResponse xdag_getBlockByNumber(String bnOrId, int page, int pageSize);
 
-    @Operation(
-        summary = "Get current block number",
-        description = "Get the latest block number",
-        method = "POST"
-    )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Successfully returned block number",
-        content = @Content(
-            mediaType = "application/json",
-            schema = @Schema(example = "\"12345\"")
-        )
-    )
+    /**
+     * Get the current block number of the XDAG blockchain.
+     *
+     * @return Current block number as string
+     */
     String xdag_blockNumber();
 
-    @Operation(
-        summary = "Get mining address",
-        description = "Get the mining address of current node",
-        method = "POST"
-    )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Successfully returned mining address",
-        content = @Content(
-            mediaType = "application/json",
-            schema = @Schema(example = "\"XDAG_ADDRESS\"")
-        )
-    )
+    /**
+     * Get the coinbase address of the node.
+     *
+     * @return Coinbase address as string
+     */
     String xdag_coinbase();
 
-    @Operation(
-        summary = "Get account balance",
-        description = "Get XDAG balance of specified address",
-        method = "POST"
-    )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Successfully returned balance",
-        content = @Content(
-            mediaType = "application/json",
-            schema = @Schema(example = "\"1234.000000000\"")
-        )
-    )
-    String xdag_getBalance(@Parameter(description = "XDAG address") String address);
+    /**
+     * Get the balance of a specific address.
+     *
+     * @param address XDAG address
+     * @return Balance as string
+     */
+    String xdag_getBalance(String address);
 
-    @Operation(
-        summary = "Get total balance",
-        description = "Get total balance of all addresses",
-        method = "POST"
-    )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Successfully returned total balance",
-        content = @Content(
-            mediaType = "application/json",
-            schema = @Schema(example = "\"1234567.000000000\"")
-        )
-    )
+    /**
+     * Get the total balance of the node.
+     *
+     * @return Total balance as string
+     */
     String xdag_getTotalBalance();
 
-    @Operation(
-        summary = "Get node status",
-        description = "Get current node status information",
-        method = "POST"
-    )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Successfully returned node status",
-        content = @Content(
-            mediaType = "application/json",
-            schema = @Schema(implementation = XdagStatusResponse.class)
-        )
-    )
+    /**
+     * Get the current status of the XDAG node.
+     *
+     * @return Node status information
+     */
     XdagStatusResponse xdag_getStatus();
 
-    @Operation(
-        summary = "Send transaction",
-        description = "Send an XDAG transaction",
-        method = "POST"
-    )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Successfully returned transaction result",
-        content = @Content(
-            mediaType = "application/json",
-            schema = @Schema(implementation = ProcessResponse.class)
-        )
-    )
-    ProcessResponse xdag_personal_sendTransaction(
-        @Parameter(description = "Transaction request object") TransactionRequest request,
-        @Parameter(description = "Wallet passphrase") String passphrase
-    );
+    /**
+     * Send a transaction using the personal account.
+     *
+     * @param request Transaction request details
+     * @param passphrase Passphrase for account unlocking
+     * @return Transaction process response
+     */
+    ProcessResponse xdag_personal_sendTransaction(TransactionRequest request, String passphrase);
 
-    @Operation(
-        summary = "Get block reward",
-        description = "Get mining reward of specified block",
-        method = "POST"
-    )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Successfully returned block reward",
-        content = @Content(
-            mediaType = "application/json",
-            schema = @Schema(example = "\"1024.000000000\"")
-        )
-    )
-    String xdag_getRewardByNumber(@Parameter(description = "Block number or ID") String bnOrId);
+    /**
+     * Get the reward amount for a specific block.
+     *
+     * @param bnOrId Block number or ID
+     * @return Reward amount as string
+     */
+    String xdag_getRewardByNumber(String bnOrId);
 
-    @Operation(
-        summary = "Send raw transaction",
-        description = "Send a raw transaction data",
-        method = "POST"
-    )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Successfully returned transaction hash",
-        content = @Content(
-            mediaType = "application/json",
-            schema = @Schema(example = "\"0x...\"")
-        )
-    )
-    String xdag_sendRawTransaction(@Parameter(description = "Raw transaction data") String rawData);
+    /**
+     * Send a raw transaction to the network.
+     *
+     * @param rawData Raw transaction data
+     * @return Transaction hash as string
+     */
+    String xdag_sendRawTransaction(String rawData);
 
-    @Operation(
-        summary = "Get network connections",
-        description = "Get network connection information of current node",
-        method = "POST"
-    )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Successfully returned network connections",
-        content = @Content(
-            mediaType = "application/json",
-            schema = @Schema(implementation = NetConnResponse.class)
-        )
-    )
+    /**
+     * Get the list of network connections.
+     *
+     * @return List of network connection information
+     * @throws Exception if there's an error retrieving the connections
+     */
     List<NetConnResponse> xdag_netConnectionList() throws Exception;
 
-    @Operation(
-        summary = "Get network type",
-        description = "Get current network type (mainnet/testnet)",
-        method = "POST"
-    )
-    @ApiResponse(
-        responseCode = "200",
-        description = "Successfully returned network type",
-        content = @Content(
-            mediaType = "application/json",
-            schema = @Schema(example = "\"mainnet\"")
-        )
-    )
+    /**
+     * Get the network type (mainnet, testnet, or devnet).
+     *
+     * @return Network type as string
+     */
     String xdag_netType();
 }

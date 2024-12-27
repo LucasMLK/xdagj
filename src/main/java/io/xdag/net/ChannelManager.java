@@ -27,7 +27,7 @@ package io.xdag.net;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.Kernel;
-import io.xdag.config.XdagLifecycle;
+import io.xdag.core.XdagLifecycle;
 import io.xdag.core.BlockWrapper;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;

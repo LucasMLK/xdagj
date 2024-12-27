@@ -29,7 +29,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.Kernel;
 import io.xdag.config.Config;
-import io.xdag.config.XdagLifecycle;
+import io.xdag.core.XdagLifecycle;
 import io.xdag.net.PeerClient;
 import io.xdag.net.XdagChannelInitializer;
 import io.xdag.net.NetDBManager;

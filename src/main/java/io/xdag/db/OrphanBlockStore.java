@@ -23,7 +23,7 @@
  */
 package io.xdag.db;
 
-import io.xdag.config.XdagLifecycle;
+import io.xdag.core.XdagLifecycle;
 import io.xdag.core.Address;
 import io.xdag.core.Block;
 import java.util.List;

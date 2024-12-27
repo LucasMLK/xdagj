@@ -28,6 +28,7 @@ import com.google.common.util.concurrent.SettableFuture;
 import io.xdag.Kernel;
 import io.xdag.config.*;
 import io.xdag.core.Block;
+import io.xdag.core.XdagLifecycle;
 import io.xdag.core.XdagState;
 import io.xdag.db.BlockStore;
 import io.xdag.net.Channel;
