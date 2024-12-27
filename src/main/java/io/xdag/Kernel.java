@@ -228,7 +228,6 @@ public class Kernel {
 
         // Initialize mining
         pow = new XdagPow(this);
-        pow.start();
 
         //getWsServer().start();
 
