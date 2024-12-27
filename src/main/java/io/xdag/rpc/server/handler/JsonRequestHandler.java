@@ -57,16 +57,18 @@ public class JsonRequestHandler implements JsonRpcRequestHandler {
                     }
                     if (params.length > 2) {
                         String startTime = params[2].toString();
-                        String endTime = params[3].toString();
-                        if (params.length > 4) {
-                            try {
-                                int pageSize = Integer.parseInt(params[4].toString());
-                                yield xdagApi.xdag_getBlockByHash(hash, page, startTime, endTime, pageSize);
-                            } catch (NumberFormatException e) {
-                                throw JsonRpcException.invalidParams("Invalid page size");
+                        if (params.length > 3) {
+                            String endTime = params[3].toString();
+                            if (params.length > 4) {
+                                try {
+                                    int pageSize = Integer.parseInt(params[4].toString());
+                                    yield xdagApi.xdag_getBlockByHash(hash, page, startTime, endTime, pageSize);
+                                } catch (NumberFormatException e) {
+                                    throw JsonRpcException.invalidParams("Invalid page size");
+                                }
                             }
+                            yield xdagApi.xdag_getBlockByHash(hash, page, startTime, endTime);
                         }
-                        yield xdagApi.xdag_getBlockByHash(hash, page, startTime, endTime);
                     }
                     yield xdagApi.xdag_getBlockByHash(hash, page);
                 }
