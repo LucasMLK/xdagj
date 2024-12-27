@@ -121,7 +121,7 @@ public class JsonRequestHandler implements JsonRpcRequestHandler {
                     if (params == null || params.length < 2) {
                         throw JsonRpcException.invalidParams("Missing transaction arguments or passphrase");
                     }
-                    TransactionRequest txRequest = MAPPER.convertValue(params[0], TransactionRequest.class);;
+                    TransactionRequest txRequest = MAPPER.convertValue(params[0], TransactionRequest.class);
                     String pwd = params[1].toString();
                     txRequest.setFrom(xdagApi.xdag_coinbase());
                     yield xdagApi.xdag_personal_sendTransaction(txRequest, pwd);
