@@ -52,7 +52,7 @@ import static io.xdag.utils.BasicUtils.*;
 import static io.xdag.utils.BytesUtils.compareTo;
 
 @Slf4j
-public class PoolAwardManagerImpl implements PoolAwardManager, Runnable {
+public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolAwardManager, Runnable {
     private static final String TX_REMARK = "";
     private final Kernel kernel;
     protected Config config;
@@ -75,7 +75,6 @@ public class PoolAwardManagerImpl implements PoolAwardManager, Runnable {
             .namingPattern("PoolAwardManager-work-thread")
             .daemon(true)
             .build());
-    private volatile boolean isRunning = false;
 
     public PoolAwardManagerImpl(Kernel kernel) {
         this.kernel = kernel;
@@ -101,21 +100,19 @@ public class PoolAwardManagerImpl implements PoolAwardManager, Runnable {
     }
 
     @Override
-    public void start() {
-        isRunning = true;
+    protected void doStart() {
         workExecutor.execute(this);
         log.debug("PoolAwardManager started.");
     }
 
     @Override
-    public void stop() {
-        isRunning = false;
+    protected void doStop() {
         workExecutor.shutdown();
     }
 
     @Override
     public void run() {
-        while (isRunning) {
+        while (isRunning()) {
             try {
                 AwardBlock awardBlock = awardBlockBlockingQueue.poll(1, TimeUnit.SECONDS);
                 if (awardBlock != null) {

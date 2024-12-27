@@ -59,7 +59,7 @@ import static io.xdag.utils.XdagTime.msToXdagtimestamp;
 @Slf4j
 @Getter
 @Setter
-public class SyncManager implements XdagLifecycle {
+public class SyncManager extends AbstractXdagLifecycle {
     // Maximum size of syncMap
     public static final int MAX_SIZE = 500000;
     // Number of keys to remove when syncMap exceeds MAX_SIZE
@@ -96,7 +96,6 @@ public class SyncManager implements XdagLifecycle {
 
     private ScheduledFuture<?> checkStateFuture;
     private final TransactionHistoryStore txHistoryStore;
-    private final AtomicBoolean running = new AtomicBoolean(false);
 
     public SyncManager(Kernel kernel) {
         this.kernel = kernel;
@@ -107,12 +106,20 @@ public class SyncManager implements XdagLifecycle {
         this.txHistoryStore = kernel.getTxHistoryStore();
     }
 
-    public void start() {
-        if (running.compareAndSet(false, true)) {
-            log.debug("Download receiveBlock run...");
-            new Thread(this.stateListener, "xdag-stateListener").start();
-            checkStateFuture = checkStateTask.scheduleAtFixedRate(this::checkState, 64, 5, TimeUnit.SECONDS);
+    @Override
+    protected void doStart() {
+        log.debug("Download receiveBlock run...");
+        new Thread(this.stateListener, "xdag-stateListener").start();
+        checkStateFuture = checkStateTask.scheduleAtFixedRate(this::checkState, 64, 5, TimeUnit.SECONDS);
+    }
+
+    @Override
+    protected void doStop() {
+        log.debug("sync manager stop");
+        if (this.stateListener.isRunning) {
+            this.stateListener.isRunning = false;
         }
+        stopStateTask();
     }
 
     private void checkState() {
@@ -355,21 +362,6 @@ public class SyncManager implements XdagLifecycle {
     public boolean isSyncOld() {
         return kernel.getXdagState() == CONNP || kernel.getXdagState() == CTSTP
                 || kernel.getXdagState() == CDSTP;
-    }
-
-    public void stop() {
-        log.debug("sync manager stop");
-        if (running.compareAndSet(true, false)) {
-            if (this.stateListener.isRunning) {
-                this.stateListener.isRunning = false;
-            }
-            stopStateTask();
-        }
-    }
-
-    @Override
-    public boolean isRunning() {
-        return running.get();
     }
 
     private void stopStateTask() {

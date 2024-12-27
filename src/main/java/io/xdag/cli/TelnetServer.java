@@ -25,18 +25,17 @@
 package io.xdag.cli;
 
 import io.xdag.Kernel;
-import io.xdag.core.XdagLifecycle;
+import io.xdag.core.AbstractXdagLifecycle;
 import lombok.extern.slf4j.Slf4j;
 import org.jline.builtins.telnet.Telnet;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Telnet server implementation for remote CLI access
  */
 @Slf4j
-public class TelnetServer implements XdagLifecycle {
+public class TelnetServer extends AbstractXdagLifecycle {
 
     private final Kernel kernel;
     private final String ip;
@@ -44,7 +43,6 @@ public class TelnetServer implements XdagLifecycle {
     private Terminal terminal;
     private Shell xShell;
     private Telnet telnetServer;
-    private final AtomicBoolean running = new AtomicBoolean(false);
 
     /**
      * Constructor for TelnetServer
@@ -60,37 +58,29 @@ public class TelnetServer implements XdagLifecycle {
      * Starts the telnet server
      * Creates a terminal, initializes the shell and starts listening for connections
      */
-    public void start() {
-        if (running.compareAndSet(false, true)) {
+    @Override
+    protected void doStart() {
+        try {
+            terminal = TerminalBuilder.builder().build();
+            xShell = new Shell();
+            xShell.setKernel(kernel);
+            telnetServer = new Telnet(terminal, xShell);
+            telnetServer.telnetd(new String[]{"-i" + ip, "-p" + port, "start"});
+        } catch (Exception e) {
+            log.error(e.getMessage(), e);
+        }
+    }
+
+    @Override
+    protected void doStop() {
+        if (telnetServer != null) {
             try {
-                terminal = TerminalBuilder.builder().build();
-                xShell = new Shell();
-                xShell.setKernel(kernel);
-                telnetServer = new Telnet(terminal, xShell);
-                telnetServer.telnetd(new String[]{"-i" + ip, "-p" + port, "start"});
+                terminal.close();
+                telnetServer.telnetd(new String[]{"stop"});
             } catch (Exception e) {
-                running.set(false);
                 log.error(e.getMessage(), e);
             }
         }
     }
 
-    @Override
-    public void stop() {
-        if (running.compareAndSet(true, false)) {
-            if (telnetServer != null) {
-                try {
-                    terminal.close();
-                    telnetServer.telnetd(new String[]{"stop"});
-                } catch (Exception e) {
-                    log.error(e.getMessage(), e);
-                }
-            }
-        }
-    }
-
-    @Override
-    public boolean isRunning() {
-        return running.get();
-    }
 }

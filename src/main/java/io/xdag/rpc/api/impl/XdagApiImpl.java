@@ -55,7 +55,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static io.xdag.cli.Commands.getStateByFlags;
@@ -73,12 +72,11 @@ import static io.xdag.utils.WalletUtils.*;
 import static io.xdag.utils.XdagTime.xdagTimestampToMs;
 
 @Slf4j
-public class XdagApiImpl implements XdagApi {
+public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     private final Kernel kernel;
     private final Blockchain blockchain;
     private final RPCSpec rpcSpec;
     private JsonRpcServer server;
-    private final AtomicBoolean running = new AtomicBoolean(false);
 
     public XdagApiImpl(Kernel kernel) {
         this.kernel = kernel;
@@ -101,40 +99,30 @@ public class XdagApiImpl implements XdagApi {
     }
 
     @Override
-    public void start() {
-        if (running.compareAndSet(false, true)) {
-            try {
-                if (rpcSpec.isRpcHttpEnabled()) {
-                    server.start();
-                    log.info("JSON-RPC server started on {}:{} (SSL: {})", rpcSpec.getRpcHttpHost(), rpcSpec.getRpcHttpPort(), rpcSpec.isRpcEnableHttps());
-                }
-            } catch (Exception e) {
-                running.set(false);
-                log.error("Failed to start RPC server", e);
-                throw new RuntimeException("Failed to start RPC server", e);
+    protected void doStart() {
+        try {
+            if (rpcSpec.isRpcHttpEnabled()) {
+                server.start();
+                log.info("JSON-RPC server started on {}:{} (SSL: {})", rpcSpec.getRpcHttpHost(), rpcSpec.getRpcHttpPort(), rpcSpec.isRpcEnableHttps());
             }
+        } catch (Exception e) {
+            log.error("Failed to start RPC server", e);
+            throw new RuntimeException("Failed to start RPC server", e);
         }
     }
 
     @Override
-    public void stop() {
-        if (running.compareAndSet(true, false)) {
-            try {
-                if (server != null) {
-                    server.stop();
-                    server = null;
-                }
-            } catch (Exception e) {
-                log.error("Error while stopping RPC server", e);
-            } finally {
-                log.info("JSON-RPC server stopped");
+    protected void doStop() {
+        try {
+            if (server != null) {
+                server.stop();
+                server = null;
             }
+        } catch (Exception e) {
+            log.error("Error while stopping RPC server", e);
+        } finally {
+            log.info("JSON-RPC server stopped");
         }
-    }
-
-    @Override
-    public boolean isRunning() {
-        return running.get();
     }
 
     @Override

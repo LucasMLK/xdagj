@@ -29,7 +29,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.Kernel;
 import io.xdag.config.Config;
-import io.xdag.core.XdagLifecycle;
+import io.xdag.core.AbstractXdagLifecycle;
 import io.xdag.net.PeerClient;
 import io.xdag.net.XdagChannelInitializer;
 import io.xdag.net.NetDBManager;
@@ -45,12 +45,11 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 
 @Slf4j
-public class NodeManager implements XdagLifecycle {
+public class NodeManager extends AbstractXdagLifecycle {
 
     private static final ThreadFactory factory = new BasicThreadFactory.Builder()
             .namingPattern("NodeManager-thread-%d")
@@ -74,7 +73,6 @@ public class NodeManager implements XdagLifecycle {
     private final ChannelManager channelMgr;
     private final NetDBManager netDBManager;
     private final Config config;
-    private final AtomicBoolean running = new AtomicBoolean(false);
     private ScheduledFuture<?> connectFuture;
 
     public NodeManager(Kernel kernel) {
@@ -89,28 +87,21 @@ public class NodeManager implements XdagLifecycle {
     /**
      * start the node manager
      */
-    public synchronized void start() {
-        if (running.compareAndSet(false, true)) {
-            // addNodes(getSeedNodes(config.getWhiteListDir()));
-            addNodes(getSeedNodes(netDBManager.getWhiteDB()));
+    @Override
+    protected synchronized void doStart() {
+        // addNodes(getSeedNodes(config.getWhiteListDir()));
+        addNodes(getSeedNodes(netDBManager.getWhiteDB()));
 
-            // every 0.5 seconds, delayed by 1 seconds (kernel boot up)
-            connectFuture = exec.scheduleAtFixedRate(this::doConnect, 1000, 500, TimeUnit.MILLISECONDS);
-            log.debug("Node manager started");
-        }
-    }
-
-    public synchronized void stop() {
-        if (running.compareAndSet(true, false)) {
-            connectFuture.cancel(true);
-            exec.shutdown();
-            log.debug("Node manager stop...");
-        }
+        // every 0.5 seconds, delayed by 1 seconds (kernel boot up)
+        connectFuture = exec.scheduleAtFixedRate(this::doConnect, 1000, 500, TimeUnit.MILLISECONDS);
+        log.debug("Node manager started");
     }
 
     @Override
-    public boolean isRunning() {
-        return running.get();
+    protected synchronized void doStop() {
+        connectFuture.cancel(true);
+        exec.shutdown();
+        log.debug("Node manager stop...");
     }
 
     public int queueSize() {

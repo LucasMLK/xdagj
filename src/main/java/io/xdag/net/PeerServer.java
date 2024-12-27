@@ -35,13 +35,13 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.util.NettyRuntime;
 import io.xdag.Kernel;
-import io.xdag.core.XdagLifecycle;
+import io.xdag.core.AbstractXdagLifecycle;
 import io.xdag.utils.NettyUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.SystemUtils;
 
 @Slf4j
-public class PeerServer implements XdagLifecycle {
+public class PeerServer extends AbstractXdagLifecycle {
     private final Kernel kernel;
     private EventLoopGroup bossGroup;
     private EventLoopGroup workerGroup;
@@ -52,18 +52,14 @@ public class PeerServer implements XdagLifecycle {
         this.kernel = kernel;
     }
 
-    public void start() {
+    @Override
+    protected void doStart() {
         start(kernel.getConfig().getNodeSpec().getNodeIp(), kernel.getConfig().getNodeSpec().getNodePort());
     }
 
     @Override
-    public void stop() {
+    protected void doStop() {
         close();
-    }
-
-    @Override
-    public boolean isRunning() {
-        return false;
     }
 
     public void start(String ip, int port) {

@@ -26,9 +26,8 @@ package io.xdag.net;
 
 import io.xdag.config.Config;
 import java.net.InetSocketAddress;
-import java.util.concurrent.atomic.AtomicBoolean;
 
-import io.xdag.core.XdagLifecycle;
+import io.xdag.core.AbstractXdagLifecycle;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -37,12 +36,11 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Getter
 @Slf4j
-public class NetDBManager implements XdagLifecycle {
+public class NetDBManager extends AbstractXdagLifecycle {
     private final String database;
     private final String databaseWhite;
     private final NetDB whiteDB;
     private final Config config;
-    private final AtomicBoolean running = new AtomicBoolean(false);
 
     /**
      * Constructor initializes database paths and network DBs
@@ -67,20 +65,12 @@ public class NetDBManager implements XdagLifecycle {
      * Initialize network database
      */
     @Override
-    public void start() {
-        if (running.compareAndSet(false, true)) {
-            loadFromConfig();
-        }
+    protected void doStart() {
+        loadFromConfig();
     }
 
     @Override
-    public void stop() {
-        running.compareAndSet(true, false);
-    }
-
-    @Override
-    public boolean isRunning() {
-        return running.get();
+    protected void doStop() {
     }
 
     /**

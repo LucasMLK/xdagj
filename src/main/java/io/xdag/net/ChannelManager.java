@@ -27,7 +27,7 @@ package io.xdag.net;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.Kernel;
-import io.xdag.core.XdagLifecycle;
+import io.xdag.core.AbstractXdagLifecycle;
 import io.xdag.core.BlockWrapper;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -37,13 +37,12 @@ import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class ChannelManager implements XdagLifecycle {
+public class ChannelManager extends AbstractXdagLifecycle {
 
     private final Kernel kernel;
     /**
@@ -55,8 +54,6 @@ public class ChannelManager implements XdagLifecycle {
     private final Set<InetSocketAddress> addressSet = new HashSet<>();
     protected ConcurrentHashMap<InetSocketAddress, Channel> channels = new ConcurrentHashMap<>();
     protected ConcurrentHashMap<String, Channel> activeChannels = new ConcurrentHashMap<>();
-    private final AtomicBoolean running = new AtomicBoolean(false);
-
     private static final int LRU_CACHE_SIZE = 1024;
 
     @Getter
@@ -70,9 +67,21 @@ public class ChannelManager implements XdagLifecycle {
         initWhiteIPs();
     }
 
-    public void start() {
-        if (running.compareAndSet(false, true)) {
-            blockDistributeThread.start();
+    @Override
+    protected void doStart() {
+        blockDistributeThread.start();
+    }
+
+    @Override
+    protected void doStop() {
+        log.debug("Channel Manager stop...");
+        if (blockDistributeThread != null) {
+            // Interrupt the thread
+            blockDistributeThread.interrupt();
+        }
+        // Close all connections
+        for (Channel channel : activeChannels.values()) {
+            channel.close();
         }
     }
 
@@ -173,22 +182,4 @@ public class ChannelManager implements XdagLifecycle {
                 .getNodeSpec().getNodePort());
     }
 
-    public void stop() {
-        if (running.compareAndSet(true, false)) {
-            log.debug("Channel Manager stop...");
-            if (blockDistributeThread != null) {
-                // Interrupt the thread
-                blockDistributeThread.interrupt();
-            }
-            // Close all connections
-            for (Channel channel : activeChannels.values()) {
-                channel.close();
-            }
-        }
-    }
-
-    @Override
-    public boolean isRunning() {
-        return running.get();
-    }
 }

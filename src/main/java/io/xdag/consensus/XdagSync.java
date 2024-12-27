@@ -27,8 +27,8 @@ package io.xdag.consensus;
 import com.google.common.util.concurrent.SettableFuture;
 import io.xdag.Kernel;
 import io.xdag.config.*;
+import io.xdag.core.AbstractXdagLifecycle;
 import io.xdag.core.Block;
-import io.xdag.core.XdagLifecycle;
 import io.xdag.core.XdagState;
 import io.xdag.db.BlockStore;
 import io.xdag.net.Channel;
@@ -45,13 +45,12 @@ import java.nio.ByteOrder;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static io.xdag.config.Constants.REQUEST_BLOCKS_MAX_TIME;
 import static io.xdag.config.Constants.REQUEST_WAIT;
 
 @Slf4j
-public class XdagSync implements XdagLifecycle {
+public class XdagSync extends AbstractXdagLifecycle {
 
     private static final ThreadFactory factory = new BasicThreadFactory.Builder()
             .namingPattern("XdagSync-thread-%d")
@@ -74,8 +73,6 @@ public class XdagSync implements XdagLifecycle {
 
     private final Kernel kernel;
     private ScheduledFuture<?> sendFuture;
-    private final AtomicBoolean running = new AtomicBoolean(false);
-
     private long lastRequestTime;
 
     public XdagSync(Kernel kernel) {
@@ -88,8 +85,8 @@ public class XdagSync implements XdagLifecycle {
     }
 
     @Override
-    public void start() {
-        if (status != Status.SYNCING && running.compareAndSet(false, true)) {
+    protected void doStart() {
+        if (status != Status.SYNCING) {
             status = Status.SYNCING;
             // TODO: Set sync start time/snapshot time
             sendFuture = sendTask.scheduleAtFixedRate(this::syncLoop, 32, 10, TimeUnit.SECONDS);
@@ -97,21 +94,18 @@ public class XdagSync implements XdagLifecycle {
     }
 
     @Override
-    public void stop() {
-        log.debug("start sync stop");
-        if (running.compareAndSet(true, false)) {
-            try {
-                if (sendFuture != null) {
-                    sendFuture.cancel(true);
-                }
-                // Shutdown thread pool
-                sendTask.shutdownNow();
-                sendTask.awaitTermination(5, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                log.error(e.getMessage(), e);
+    protected void doStop() {
+        try {
+            if (sendFuture != null) {
+                sendFuture.cancel(true);
             }
-            log.debug("sync stop done");
+            // Shutdown thread pool
+            sendTask.shutdownNow();
+            sendTask.awaitTermination(5, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            log.error(e.getMessage(), e);
         }
+        log.debug("sync stop done");
     }
 
     private void syncLoop() {
@@ -280,11 +274,6 @@ public class XdagSync implements XdagLifecycle {
 
     public List<Channel> getAnyNode() {
         return channelMgr.getActiveChannels();
-    }
-
-    @Override
-    public boolean isRunning() {
-        return running.get();
     }
 
     public enum Status {
