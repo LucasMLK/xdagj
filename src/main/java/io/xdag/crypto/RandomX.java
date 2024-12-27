@@ -34,6 +34,7 @@ import static io.xdag.config.RandomXConstants.XDAG_RANDOMX;
 import static io.xdag.utils.BytesUtils.equalBytes;
 
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import io.xdag.config.XdagLifecycle;
 import io.xdag.crypto.randomx.*;
@@ -63,6 +64,7 @@ public class RandomX implements XdagLifecycle {
     protected Set<RandomXFlag> flagSet;
     protected long randomXForkSeedHeight;
     protected long randomXForkLag;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
     // Default to maximum value
     protected long randomXForkTime = Long.MAX_VALUE;
@@ -151,34 +153,36 @@ public class RandomX implements XdagLifecycle {
     // Used during system initialization
     // Wallet type is fast, pool is light
     public void start() {
-        if (isTestNet) {
-            randomXForkSeedHeight = RANDOMX_TESTNET_FORK_HEIGHT;
-            randomXForkLag = SEEDHASH_EPOCH_TESTNET_LAG;
-        } else {
-            randomXForkSeedHeight = RANDOMX_FORK_HEIGHT;
-            randomXForkLag = SEEDHASH_EPOCH_LAG;
-        }
+        if (running.compareAndSet(false, true)) {
+            if (isTestNet) {
+                randomXForkSeedHeight = RANDOMX_TESTNET_FORK_HEIGHT;
+                randomXForkLag = SEEDHASH_EPOCH_TESTNET_LAG;
+            } else {
+                randomXForkSeedHeight = RANDOMX_FORK_HEIGHT;
+                randomXForkLag = SEEDHASH_EPOCH_LAG;
+            }
 
-        long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
-        if ((randomXForkSeedHeight & (seedEpoch - 1)) != 0) {
-            // TODO: Handle case where randomXForkSeedHeight is not aligned with seedEpoch
-            return;
-        }
+            long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
+            if ((randomXForkSeedHeight & (seedEpoch - 1)) != 0) {
+                // TODO: Handle case where randomXForkSeedHeight is not aligned with seedEpoch
+                return;
+            }
 
-        // Initialize memory and lock
-        for (int i = 0; i < 2; i++) {
-            globalMemory[i] = new RandomXMemory();
+            // Initialize memory and lock
+            for (int i = 0; i < 2; i++) {
+                globalMemory[i] = new RandomXMemory();
+            }
         }
     }
 
     @Override
     public void stop() {
-
+        running.compareAndSet(true, false);
     }
 
     @Override
     public boolean isRunning() {
-        return false;
+        return running.get();
     }
 
     public Bytes32 randomXPoolCalcHash(Bytes data, long taskTime) {

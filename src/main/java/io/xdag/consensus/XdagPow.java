@@ -53,6 +53,7 @@ import org.apache.tuweni.bytes.MutableBytes;
 import java.io.IOException;
 import java.util.Objects;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -101,7 +102,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
             .build());
 
     protected RandomX randomXUtils;
-    private boolean isRunning = false;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
 
     public XdagPow(Kernel kernel) {
@@ -119,8 +120,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
 
     @Override
     public void start() {
-        if (!this.isRunning) {
-            this.isRunning = true;
+        if (running.compareAndSet(false, true)) {
             getSharesExecutor.execute(this.sharesFromPools);
             mainExecutor.execute(this);
             kernel.getPoolAwardManager().start();
@@ -131,12 +131,10 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
 
     @Override
     public void stop() {
-        if (isRunning) {
-            isRunning = false;
+        if (running.compareAndSet(true, false)) {
             timer.isRunning = false;
             broadcaster.isRunning = false;
             sharesFromPools.isRunning = false;
-
         }
     }
 
@@ -220,7 +218,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
 
     @Override
     public boolean isRunning() {
-        return this.isRunning;
+        return running.get();
     }
 
     /**
@@ -229,7 +227,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
     @Override
     public void receiveNewShare(String share, String hash, long taskIndex) {
 
-        if (!this.isRunning) {
+        if (!running.get()) {
             return;
         }
         if (currentTask.get() == null) {
@@ -245,7 +243,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
 
     public void receiveNewPretop(Bytes pretop) {
         // make sure the PoW is running and the main block is generating
-        if (!this.isRunning || !isWorking) {
+        if (!running.get() || !isWorking) {
             return;
         }
 
@@ -372,7 +370,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
         timer.timeout(XdagTime.getEndOfEpoch(XdagTime.getCurrentTimestamp() + 64));
         // init pretop
         globalPretop = null;
-        while (this.isRunning) {
+        while (running.get()) {
             try {
                 Event ev = events.poll(10, TimeUnit.MILLISECONDS);
                 if (ev == null) {

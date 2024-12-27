@@ -45,6 +45,7 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 
@@ -73,7 +74,7 @@ public class NodeManager implements XdagLifecycle {
     private final ChannelManager channelMgr;
     private final NetDBManager netDBManager;
     private final Config config;
-    private volatile boolean isRunning;
+    private final AtomicBoolean running = new AtomicBoolean(false);
     private ScheduledFuture<?> connectFuture;
 
     public NodeManager(Kernel kernel) {
@@ -89,21 +90,19 @@ public class NodeManager implements XdagLifecycle {
      * start the node manager
      */
     public synchronized void start() {
-        if (!isRunning) {
+        if (running.compareAndSet(false, true)) {
             // addNodes(getSeedNodes(config.getWhiteListDir()));
             addNodes(getSeedNodes(netDBManager.getWhiteDB()));
 
             // every 0.5 seconds, delayed by 1 seconds (kernel boot up)
             connectFuture = exec.scheduleAtFixedRate(this::doConnect, 1000, 500, TimeUnit.MILLISECONDS);
-            isRunning = true;
             log.debug("Node manager started");
         }
     }
 
     public synchronized void stop() {
-        if (isRunning) {
+        if (running.compareAndSet(true, false)) {
             connectFuture.cancel(true);
-            isRunning = false;
             exec.shutdown();
             log.debug("Node manager stop...");
         }
@@ -111,7 +110,7 @@ public class NodeManager implements XdagLifecycle {
 
     @Override
     public boolean isRunning() {
-        return false;
+        return running.get();
     }
 
     public int queueSize() {

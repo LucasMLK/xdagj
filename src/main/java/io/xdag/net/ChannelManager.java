@@ -37,6 +37,7 @@ import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -54,6 +55,7 @@ public class ChannelManager implements XdagLifecycle {
     private final Set<InetSocketAddress> addressSet = new HashSet<>();
     protected ConcurrentHashMap<InetSocketAddress, Channel> channels = new ConcurrentHashMap<>();
     protected ConcurrentHashMap<String, Channel> activeChannels = new ConcurrentHashMap<>();
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
     private static final int LRU_CACHE_SIZE = 1024;
 
@@ -69,7 +71,9 @@ public class ChannelManager implements XdagLifecycle {
     }
 
     public void start() {
-        blockDistributeThread.start();
+        if (running.compareAndSet(false, true)) {
+            blockDistributeThread.start();
+        }
     }
 
     public boolean isAcceptable(InetSocketAddress address) {
@@ -170,19 +174,21 @@ public class ChannelManager implements XdagLifecycle {
     }
 
     public void stop() {
-        log.debug("Channel Manager stop...");
-        if (blockDistributeThread != null) {
-            // Interrupt the thread
-            blockDistributeThread.interrupt();
-        }
-        // Close all connections
-        for (Channel channel : activeChannels.values()) {
-            channel.close();
+        if (running.compareAndSet(true, false)) {
+            log.debug("Channel Manager stop...");
+            if (blockDistributeThread != null) {
+                // Interrupt the thread
+                blockDistributeThread.interrupt();
+            }
+            // Close all connections
+            for (Channel channel : activeChannels.values()) {
+                channel.close();
+            }
         }
     }
 
     @Override
     public boolean isRunning() {
-        return true;
+        return running.get();
     }
 }

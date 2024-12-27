@@ -96,6 +96,7 @@ public class SyncManager implements XdagLifecycle {
 
     private ScheduledFuture<?> checkStateFuture;
     private final TransactionHistoryStore txHistoryStore;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
     public SyncManager(Kernel kernel) {
         this.kernel = kernel;
@@ -107,9 +108,11 @@ public class SyncManager implements XdagLifecycle {
     }
 
     public void start() {
-        log.debug("Download receiveBlock run...");
-        new Thread(this.stateListener, "xdag-stateListener").start();
-        checkStateFuture = checkStateTask.scheduleAtFixedRate(this::checkState, 64, 5, TimeUnit.SECONDS);
+        if (running.compareAndSet(false, true)) {
+            log.debug("Download receiveBlock run...");
+            new Thread(this.stateListener, "xdag-stateListener").start();
+            checkStateFuture = checkStateTask.scheduleAtFixedRate(this::checkState, 64, 5, TimeUnit.SECONDS);
+        }
     }
 
     private void checkState() {
@@ -356,15 +359,17 @@ public class SyncManager implements XdagLifecycle {
 
     public void stop() {
         log.debug("sync manager stop");
-        if (this.stateListener.isRunning) {
-            this.stateListener.isRunning = false;
+        if (running.compareAndSet(true, false)) {
+            if (this.stateListener.isRunning) {
+                this.stateListener.isRunning = false;
+            }
+            stopStateTask();
         }
-        stopStateTask();
     }
 
     @Override
     public boolean isRunning() {
-        return false;
+        return running.get();
     }
 
     private void stopStateTask() {

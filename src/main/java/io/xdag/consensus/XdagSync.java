@@ -44,6 +44,7 @@ import java.nio.ByteOrder;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static io.xdag.config.Constants.REQUEST_BLOCKS_MAX_TIME;
 import static io.xdag.config.Constants.REQUEST_WAIT;
@@ -72,7 +73,7 @@ public class XdagSync implements XdagLifecycle {
 
     private final Kernel kernel;
     private ScheduledFuture<?> sendFuture;
-    private volatile boolean isRunning;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
     private long lastRequestTime;
 
@@ -87,8 +88,7 @@ public class XdagSync implements XdagLifecycle {
 
     @Override
     public void start() {
-        if (status != Status.SYNCING) {
-            isRunning = true;
+        if (status != Status.SYNCING && running.compareAndSet(false, true)) {
             status = Status.SYNCING;
             // TODO: Set sync start time/snapshot time
             sendFuture = sendTask.scheduleAtFixedRate(this::syncLoop, 32, 10, TimeUnit.SECONDS);
@@ -98,7 +98,7 @@ public class XdagSync implements XdagLifecycle {
     @Override
     public void stop() {
         log.debug("start sync stop");
-        if (isRunning) {
+        if (running.compareAndSet(true, false)) {
             try {
                 if (sendFuture != null) {
                     sendFuture.cancel(true);
@@ -109,7 +109,6 @@ public class XdagSync implements XdagLifecycle {
             } catch (InterruptedException e) {
                 log.error(e.getMessage(), e);
             }
-            isRunning = false;
             log.debug("sync stop done");
         }
     }
@@ -282,8 +281,9 @@ public class XdagSync implements XdagLifecycle {
         return channelMgr.getActiveChannels();
     }
 
+    @Override
     public boolean isRunning() {
-        return isRunning;
+        return running.get();
     }
 
     public enum Status {
