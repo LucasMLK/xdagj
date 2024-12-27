@@ -84,7 +84,7 @@ public class XdagApiImpl implements XdagApi {
         this.kernel = kernel;
         this.blockchain = kernel.getBlockchain();
         this.rpcSpec = kernel.getConfig().getRPCSpec();
-        this.server = new JsonRpcServer(kernel);
+        this.server = new JsonRpcServer(rpcSpec, this);
 
         validateConfiguration();
     }
@@ -105,9 +105,8 @@ public class XdagApiImpl implements XdagApi {
         if (running.compareAndSet(false, true)) {
             try {
                 if (rpcSpec.isRpcHttpEnabled()) {
-                    server = new JsonRpcServer(kernel);
                     server.start();
-                    log.info("RPC started on {}:{}", rpcSpec.getRpcHttpHost(), rpcSpec.getRpcHttpPort());
+                    log.info("JSON-RPC server started on {}:{} (SSL: {})", rpcSpec.getRpcHttpHost(), rpcSpec.getRpcHttpPort(), rpcSpec.isRpcEnableHttps());
                 }
             } catch (Exception e) {
                 running.set(false);
@@ -128,7 +127,7 @@ public class XdagApiImpl implements XdagApi {
             } catch (Exception e) {
                 log.error("Error while stopping RPC server", e);
             } finally {
-                log.info("RPC stopped");
+                log.info("JSON-RPC server stopped");
             }
         }
     }

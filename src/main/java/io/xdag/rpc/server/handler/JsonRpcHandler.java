@@ -23,6 +23,8 @@
  */
 package io.xdag.rpc.server.handler;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -43,7 +45,15 @@ import java.util.List;
 @ChannelHandler.Sharable
 public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
-    private final ObjectMapper mapper = new ObjectMapper();
+    public static final ObjectMapper MAPPER;
+
+    static {
+        MAPPER = new ObjectMapper()
+                .configure(JsonParser.Feature.INCLUDE_SOURCE_IN_LOCATION, true)
+                .configure(JsonParser.Feature.ALLOW_UNQUOTED_FIELD_NAMES, true)
+                .configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
+                .configure(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT, true);
+    }
     private final List<JsonRpcRequestHandler> handlers;
 
     public JsonRpcHandler(List<JsonRpcRequestHandler> handlers) {
@@ -60,7 +70,7 @@ public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         String content = request.content().toString(StandardCharsets.UTF_8);
         JsonRpcRequest rpcRequest;
         try {
-            rpcRequest = mapper.readValue(content, JsonRpcRequest.class);
+            rpcRequest = MAPPER.readValue(content, JsonRpcRequest.class);
             if (rpcRequest.getJsonrpc() == null || !rpcRequest.getJsonrpc().equals("2.0")) {
                 throw JsonRpcException.invalidRequest("Invalid JSON-RPC version");
             }
@@ -102,7 +112,7 @@ public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     private void sendResponse(ChannelHandlerContext ctx, JsonRpcResponse response) {
         try {
             ByteBuf content = Unpooled.copiedBuffer(
-                    mapper.writeValueAsString(response), 
+                    MAPPER.writeValueAsString(response),
                     StandardCharsets.UTF_8
             );
             sendHttpResponse(ctx, content, HttpResponseStatus.OK);
@@ -115,7 +125,7 @@ public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     private void sendError(ChannelHandlerContext ctx, JsonRpcError error) {
         try {
             ByteBuf content = Unpooled.copiedBuffer(
-                    mapper.writeValueAsString(new JsonRpcResponse(null, null, error)),
+                    MAPPER.writeValueAsString(new JsonRpcResponse(null, null, error)),
                     StandardCharsets.UTF_8
             );
             sendHttpResponse(ctx, content, HttpResponseStatus.OK);
@@ -141,7 +151,7 @@ public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                 .set(HttpHeaderNames.CONTENT_LENGTH, content.readableBytes());
 
         // 获取CORS Origin并设置相应的头
-//        String origin = ctx.channel().attr(AttributeKey.valueOf("CorsOrigin")).get();
+//        String origin = ctx.channel().attr(AttributeKey.valueOf("CorsOrigin")).get().toString();
 //        if (origin != null) {
 //            response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin);
 //        }

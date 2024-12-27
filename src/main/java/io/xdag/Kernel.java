@@ -103,7 +103,7 @@ public class Kernel {
     protected long startEpoch;
 
     // RPC related components
-    protected XdagApi rpc;
+    protected XdagApi api;
 
     public Kernel(Config config, Wallet wallet) {
         this.config = config;
@@ -233,8 +233,8 @@ public class Kernel {
         //getWsServer().start();
 
         // Start RPC
-        rpc = new XdagApiImpl(this);
-        rpc.start();
+        api = new XdagApiImpl(this);
+        api.start();
 
         // Start Telnet Server
         telnetServer = new TelnetServer(this);
@@ -243,14 +243,6 @@ public class Kernel {
         blockchain.registerListener(pow);
 
         Launcher.registerShutdownHook("kernel", this::testStop);
-    }
-
-    protected void stopRpc() {
-        if (rpc != null) {
-            rpc.stop();
-            rpc = null;
-            log.info("RPC stopped");
-        }
     }
 
     /**
@@ -263,10 +255,12 @@ public class Kernel {
 
         isRunning.set(false);
 
-        // Stop RPC services
-        stopRpc();
+        // Stop Api
+        if (api != null) {
+            api.stop();
+        }
 
-        // Stop consensus layer
+        // Stop consensus
         sync.stop();
         syncMgr.stop();
         pow.stop();
@@ -291,7 +285,10 @@ public class Kernel {
         }
 
         // Stop remaining services
-        webSocketServer.stop();
+        if(webSocketServer != null) {
+            webSocketServer.stop();
+
+        }
         poolAwardManager.stop();
     }
 

@@ -85,15 +85,32 @@ public class XdagSync implements XdagLifecycle {
         blocksRequestMap = new ConcurrentHashMap<>();
     }
 
-    /**
-     * Continuously send sync requests
-     */
+    @Override
     public void start() {
         if (status != Status.SYNCING) {
             isRunning = true;
             status = Status.SYNCING;
             // TODO: Set sync start time/snapshot time
             sendFuture = sendTask.scheduleAtFixedRate(this::syncLoop, 32, 10, TimeUnit.SECONDS);
+        }
+    }
+
+    @Override
+    public void stop() {
+        log.debug("start sync stop");
+        if (isRunning) {
+            try {
+                if (sendFuture != null) {
+                    sendFuture.cancel(true);
+                }
+                // Shutdown thread pool
+                sendTask.shutdownNow();
+                sendTask.awaitTermination(5, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                log.error(e.getMessage(), e);
+            }
+            isRunning = false;
+            log.debug("sync stop done");
         }
     }
 
@@ -263,24 +280,6 @@ public class XdagSync implements XdagLifecycle {
 
     public List<Channel> getAnyNode() {
         return channelMgr.getActiveChannels();
-    }
-
-    public void stop() {
-        log.debug("stop sync");
-        if (isRunning) {
-            try {
-                if (sendFuture != null) {
-                    sendFuture.cancel(true);
-                }
-                // Shutdown thread pool
-                sendTask.shutdownNow();
-                sendTask.awaitTermination(5, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                log.error(e.getMessage(), e);
-            }
-            isRunning = false;
-            log.debug("Sync Stop");
-        }
     }
 
     public boolean isRunning() {

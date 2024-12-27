@@ -41,7 +41,7 @@ public class JsonRpcRequest {
     private String method;
     
     @JsonProperty("params")
-    private List<Object> params;
+    private Object[] params;
     
     @JsonProperty("id")
     private String id;

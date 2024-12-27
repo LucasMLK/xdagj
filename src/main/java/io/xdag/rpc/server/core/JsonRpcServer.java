@@ -52,9 +52,7 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 
-@Slf4j
 public class JsonRpcServer {
-    private final Kernel kernel;
     private final RPCSpec rpcSpec;
     private final XdagApi xdagApi;
     private Channel channel;
@@ -62,18 +60,12 @@ public class JsonRpcServer {
     private EventLoopGroup workerGroup;
 
 
-    public JsonRpcServer(final Kernel kernel) {
-        this.kernel = kernel;
-        this.rpcSpec = kernel.getConfig().getRPCSpec();
-        this.xdagApi = kernel.getRpc();
+    public JsonRpcServer(final RPCSpec rpcSpec, final XdagApi xdagApi) {
+        this.rpcSpec = rpcSpec;
+        this.xdagApi = xdagApi;
     }
 
     public void start() {
-        if (!kernel.getConfig().getRPCSpec().isRpcHttpEnabled()) {
-            log.info("JSON-RPC server is disabled");
-            return;
-        }
-
         try {
             // 创建请求处理器
             List<JsonRpcRequestHandler> handlers = new ArrayList<>();
@@ -123,10 +115,7 @@ public class JsonRpcServer {
                     });
 
             channel = b.bind(InetAddress.getByName(rpcSpec.getRpcHttpHost()), rpcSpec.getRpcHttpPort()).sync().channel();
-            log.info("JSON-RPC server started on {}:{} (SSL: {})",
-                    rpcSpec.getRpcHttpHost(), rpcSpec.getRpcHttpPort(), rpcSpec.isRpcEnableHttps());
         } catch (Exception e) {
-            log.error("Failed to start JSON-RPC server", e);
             stop();
             throw new RuntimeException("Failed to start JSON-RPC server", e);
         }
@@ -145,6 +134,5 @@ public class JsonRpcServer {
             workerGroup.shutdownGracefully();
             workerGroup = null;
         }
-        log.info("JSON-RPC server stopped");
     }
 }
