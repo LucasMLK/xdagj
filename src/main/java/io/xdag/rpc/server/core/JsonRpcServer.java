@@ -38,14 +38,12 @@ import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
-import io.xdag.Kernel;
 import io.xdag.config.spec.RPCSpec;
 import io.xdag.rpc.api.XdagApi;
 import io.xdag.rpc.server.handler.CorsHandler;
 import io.xdag.rpc.server.handler.JsonRequestHandler;
 import io.xdag.rpc.server.handler.JsonRpcHandler;
 import io.xdag.rpc.server.handler.JsonRpcRequestHandler;
-import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.net.InetAddress;
@@ -67,11 +65,11 @@ public class JsonRpcServer {
 
     public void start() {
         try {
-            // 创建请求处理器
+            // Create request handlers
             List<JsonRpcRequestHandler> handlers = new ArrayList<>();
             handlers.add(new JsonRequestHandler(xdagApi));
 
-            // 创建SSL上下文（如果启用了HTTPS）
+            // Create SSL context (if HTTPS is enabled)
             final SslContext sslCtx;
             if (rpcSpec.isRpcEnableHttps()) {
                 File certFile = new File(rpcSpec.getRpcHttpsCertFile());
@@ -84,7 +82,7 @@ public class JsonRpcServer {
                 sslCtx = null;
             }
 
-            // 创建事件循环组
+            // Create event loop groups
             bossGroup = new NioEventLoopGroup(rpcSpec.getRpcHttpBossThreads());
             workerGroup = new NioEventLoopGroup(rpcSpec.getRpcHttpWorkerThreads());
 
@@ -103,13 +101,13 @@ public class JsonRpcServer {
                                 p.addLast(sslCtx.newHandler(ch.alloc()));
                             }
 
-                            // HTTP 编解码
+                            // HTTP codec
                             p.addLast(new HttpServerCodec());
-                            // HTTP 消息聚合
+                            // HTTP message aggregator
                             p.addLast(new HttpObjectAggregator(rpcSpec.getRpcHttpMaxContentLength()));
-                            // CORS 处理
+                            // CORS handler
                             p.addLast(new CorsHandler(rpcSpec.getRpcHttpCorsOrigins()));
-                            // JSON-RPC 处理
+                            // JSON-RPC handler
                             p.addLast(new JsonRpcHandler(handlers));
                         }
                     });

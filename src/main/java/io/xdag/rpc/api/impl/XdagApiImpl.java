@@ -439,7 +439,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             }
 
             XAmount Amount =txHistory.getAddress().getAmount();
-            //判断是交易块，才减0.1有inputs才是交易块
+            // Check if it's a transaction block, only subtract 0.1 if it has inputs
             if (!block.getInputs().isEmpty() && txHistory.getAddress().getType().equals(XDAG_FIELD_OUTPUT)){
                 Amount = Amount.subtract(MIN_GAS);
             }
@@ -581,12 +581,12 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         MutableBytes32 to = MutableBytes32.create();
         to.set(8, toAddress.slice(8, 20));
 
-        // 待转账余额
+        // Remaining balance to transfer
         AtomicReference<XAmount> remain = new AtomicReference<>(amount);
-        // 转账输入
+        // Transfer inputs
         Map<Address, KeyPair> ourAccounts = Maps.newHashMap();
 
-        // 如果没有from则从节点账户里搜索
+        // If no from address, search from node accounts
         if (fromAddress == null) {
             log.debug("fromAddress is null, search all our blocks");
             // our block select
@@ -610,7 +610,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             MutableBytes32 from = MutableBytes32.create();
             from.set(8, fromAddress.slice(8, 20));
             byte[] addr = from.slice(8, 20).toArray();
-            // 如果余额足够
+            // If balance is sufficient
             if (compareAmountTo(kernel.getAddressStore().getBalanceByAddress(addr), remain.get()) >= 0) {
                 // if (fromBlock.getInfo().getAmount() >= remain.get()) {
                 ourAccounts.put(new Address(from, XDAG_FIELD_INPUT, remain.get(), true),
@@ -619,7 +619,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             }
         }
 
-        // 余额不足
+        // Insufficient balance
         if (compareAmountTo(remain.get(), XAmount.ZERO) > 0) {
             processResponse.setCode(ERR_XDAG_BALANCE);
             processResponse.setErrMsg("balance not enough");
