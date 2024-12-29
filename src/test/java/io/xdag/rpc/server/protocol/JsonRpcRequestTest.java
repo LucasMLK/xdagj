@@ -2,7 +2,6 @@ package io.xdag.rpc.server.protocol;
 
 import io.xdag.rpc.error.JsonRpcException;
 import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class JsonRpcRequestTest {
 

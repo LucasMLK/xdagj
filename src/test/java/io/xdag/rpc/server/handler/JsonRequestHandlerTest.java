@@ -34,11 +34,8 @@ import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.util.Set;
-
 import static io.xdag.rpc.server.handler.JsonRpcHandler.MAPPER;
 import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.*;
 
