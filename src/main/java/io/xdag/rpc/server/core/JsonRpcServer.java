@@ -108,7 +108,7 @@ public class JsonRpcServer {
                             // CORS handler
                             p.addLast(new CorsHandler(rpcSpec.getRpcHttpCorsOrigins()));
                             // JSON-RPC handler
-                            p.addLast(new JsonRpcHandler(handlers));
+                            p.addLast(new JsonRpcHandler(rpcSpec, handlers));
                         }
                     });
 

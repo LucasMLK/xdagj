@@ -45,14 +45,46 @@ public class JsonRpcResponse {
     private String id;
 
     public JsonRpcResponse(String id, Object result) {
-        this.id = id;
-        this.result = result;
+        this(id, result, null);
     }
 
     public JsonRpcResponse(String id, Object result, JsonRpcError error) {
         this.id = id;
-        this.result = result;
+        this.result = error == null ? result : null;
         this.error = error;
+    }
+
+    /**
+     * Creates an error response
+     * @param id the request id
+     * @param error the error object
+     * @return a new JsonRpcResponse with the error
+     * @throws IllegalArgumentException if error is null
+     */
+    public static JsonRpcResponse error(String id, JsonRpcError error) {
+        if (error == null) {
+            throw new IllegalArgumentException("Error cannot be null");
+        }
+        return new JsonRpcResponse(id, null, error);
+    }
+
+    /**
+     * Creates a success response
+     * @param id the request id
+     * @param result the result object
+     * @return a new JsonRpcResponse with the result
+     */
+    public static JsonRpcResponse success(String id, Object result) {
+        return new JsonRpcResponse(id, result, null);
+    }
+
+    /**
+     * Creates a notification response (without id)
+     * @param result the result object
+     * @return a new JsonRpcResponse without id
+     */
+    public static JsonRpcResponse notification(Object result) {
+        return new JsonRpcResponse(null, result, null);
     }
 
 }

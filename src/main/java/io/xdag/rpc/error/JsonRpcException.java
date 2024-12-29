@@ -47,7 +47,7 @@ public class JsonRpcException extends RuntimeException {
     }
 
     public static JsonRpcException invalidRequest(String message) {
-        return new JsonRpcException(JsonRpcError.ERR_INVALID_PARAMS, message);
+        return new JsonRpcException(JsonRpcError.ERR_INVALID_REQUEST, message);
     }
 
     public static JsonRpcException methodNotFound(String method) {

@@ -25,8 +25,10 @@
 package io.xdag.rpc.server.protocol;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.xdag.rpc.error.JsonRpcException;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.commons.lang3.StringUtils;
 
 @Setter
 @Getter
@@ -44,4 +46,22 @@ public class JsonRpcRequest {
     @JsonProperty("id")
     private String id;
 
+    /**
+     * Validate the JSON-RPC request
+     * @throws JsonRpcException if the request is invalid
+     */
+    public void validate() throws JsonRpcException {
+        // Check JSON-RPC version
+        if (StringUtils.isBlank(jsonrpc) || !jsonrpc.equals("2.0")) {
+            throw JsonRpcException.invalidRequest("Invalid JSON-RPC version, must be '2.0'");
+        }
+
+        // Check method
+        if (StringUtils.isBlank(method)) {
+            throw JsonRpcException.invalidRequest("Method cannot be null or empty");
+        }
+
+        // ID can be any valid JSON value or null according to JSON-RPC 2.0 spec
+        // No validation needed for id
+    }
 }

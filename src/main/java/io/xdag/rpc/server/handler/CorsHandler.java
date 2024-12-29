@@ -35,8 +35,10 @@ import java.util.Set;
 
 @Slf4j
 public class CorsHandler extends ChannelInboundHandlerAdapter {
-    private static final AttributeKey<String> CORS_ORIGIN = AttributeKey.valueOf("CorsOrigin");
+    public static final AttributeKey<String> CORS_ORIGIN = AttributeKey.valueOf("CorsOrigin");
     private final Set<String> allowedOrigins;
+    private static final String ALLOWED_HEADERS = "content-type, authorization";
+    private static final String ALLOWED_METHODS = "GET, POST, OPTIONS";
 
     public CorsHandler(String corsDomainsString) {
         if (corsDomainsString != null && !corsDomainsString.isEmpty()) {
@@ -58,6 +60,9 @@ public class CorsHandler extends ChannelInboundHandlerAdapter {
 
         if (request.method() == HttpMethod.OPTIONS) {
             handlePreflightRequest(ctx, request);
+            if (request instanceof FullHttpRequest) {
+                ((FullHttpRequest) request).release();
+            }
             return;
         }
 
@@ -67,7 +72,10 @@ public class CorsHandler extends ChannelInboundHandlerAdapter {
                 ctx.fireChannelRead(msg);
             } else {
                 log.warn("Blocked request from unauthorized origin: {}", origin);
-                sendError(ctx);
+                sendError(ctx, origin);
+                if (request instanceof FullHttpRequest) {
+                    ((FullHttpRequest) request).release();
+                }
             }
         } else {
             ctx.fireChannelRead(msg);
@@ -77,7 +85,7 @@ public class CorsHandler extends ChannelInboundHandlerAdapter {
     private void handlePreflightRequest(ChannelHandlerContext ctx, HttpRequest request) {
         String origin = request.headers().get(HttpHeaderNames.ORIGIN);
         if (origin == null || !isOriginAllowed(origin)) {
-            sendError(ctx);
+            sendError(ctx, origin);
             return;
         }
 
@@ -87,10 +95,11 @@ public class CorsHandler extends ChannelInboundHandlerAdapter {
 
         response.headers()
                 .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin)
-                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS")
-                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, 
-                        "Content-Type, Authorization, Content-Length, X-Requested-With")
+                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, ALLOWED_METHODS)
+                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, ALLOWED_HEADERS)
+                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true")
                 .set(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE, "3600")
+                .set(HttpHeaderNames.VARY, "Origin")
                 .set(HttpHeaderNames.CONTENT_LENGTH, 0);
 
         ctx.writeAndFlush(response);
@@ -104,10 +113,18 @@ public class CorsHandler extends ChannelInboundHandlerAdapter {
         ctx.channel().attr(CORS_ORIGIN).set(origin);
     }
 
-    private void sendError(ChannelHandlerContext ctx) {
+    private void sendError(ChannelHandlerContext ctx, String origin) {
         FullHttpResponse response = new DefaultFullHttpResponse(
                 HttpVersion.HTTP_1_1,
                 HttpResponseStatus.FORBIDDEN);
+        
+        if (origin != null && isOriginAllowed(origin)) {
+            response.headers()
+                    .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin)
+                    .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true")
+                    .set(HttpHeaderNames.VARY, "Origin");
+        }
+        
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
         ctx.writeAndFlush(response);
     }

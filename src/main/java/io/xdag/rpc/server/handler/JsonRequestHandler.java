@@ -57,99 +57,79 @@ public class JsonRequestHandler implements JsonRpcRequestHandler {
     @Override
     public Object handle(JsonRpcRequest request) throws JsonRpcException {
         if (request == null) {
-            throw JsonRpcException.invalidRequest("Request cannot be null");
+            throw JsonRpcException.invalidParams("Request cannot be null");
         }
-        
-        if (request.getMethod() == null) {
-            throw JsonRpcException.invalidRequest("Method cannot be null");
-        }
-        
+
+        String method = request.getMethod();
+        Object[] params = request.getParams();
+
         try {
-            Object[] params = request.getParams();
-            return switch (request.getMethod()) {
+            return switch (method) {
                 case "xdag_getBlockByHash" -> {
-                    if (params == null || params.length < 2) {
-                        throw JsonRpcException.invalidParams("Missing block hash or page parameters");
+                    validateParams(params, "Missing block hash parameter");
+                    if (params.length == 1) {
+                        yield xdagApi.xdag_getBlockByHash(params[0].toString(), 1);
+                    } else if (params.length == 2) {
+                        validatePageParam(params[1]);
+                        yield xdagApi.xdag_getBlockByHash(params[0].toString(), Integer.parseInt(params[1].toString()));
+                    } else if (params.length == 3) {
+                        validatePageParam(params[1]);
+                        validatePageSizeParam(params[2]);
+                        yield xdagApi.xdag_getBlockByHash(params[0].toString(), Integer.parseInt(params[1].toString()), Integer.parseInt(params[2].toString()));
+                    } else if (params.length == 4) {
+                        validatePageParam(params[1]);
+                        validateTimeParam(params[2], "Invalid start time");
+                        validateTimeParam(params[3], "Invalid end time");
+                        yield xdagApi.xdag_getBlockByHash(params[0].toString(), Integer.parseInt(params[1].toString()), params[2].toString(), params[3].toString());
+                    } else if (params.length == 5) {
+                        validatePageParam(params[1]);
+                        validateTimeParam(params[2], "Invalid start time");
+                        validateTimeParam(params[3], "Invalid end time");
+                        validatePageSizeParam(params[4]);
+                        yield xdagApi.xdag_getBlockByHash(params[0].toString(), Integer.parseInt(params[1].toString()), params[2].toString(), params[3].toString(), Integer.parseInt(params[4].toString()));
+                    } else {
+                        throw JsonRpcException.invalidParams("Invalid number of parameters for xdag_getBlockByHash");
                     }
-                    String hash = params[0].toString();
-                    int page;
-                    try {
-                        page = Integer.parseInt(params[1].toString());
-                    } catch (NumberFormatException e) {
-                        throw JsonRpcException.invalidParams("Invalid page number");
-                    }
-                    if (params.length > 2) {
-                        String startTime = params[2].toString();
-                        if (params.length > 3) {
-                            String endTime = params[3].toString();
-                            if (params.length > 4) {
-                                try {
-                                    int pageSize = Integer.parseInt(params[4].toString());
-                                    yield xdagApi.xdag_getBlockByHash(hash, page, startTime, endTime, pageSize);
-                                } catch (NumberFormatException e) {
-                                    throw JsonRpcException.invalidParams("Invalid page size");
-                                }
-                            }
-                            yield xdagApi.xdag_getBlockByHash(hash, page, startTime, endTime);
-                        }
-                    }
-                    yield xdagApi.xdag_getBlockByHash(hash, page);
                 }
                 case "xdag_getBlockByNumber" -> {
-                    if (params == null || params.length < 2) {
-                        throw JsonRpcException.invalidParams("Missing block number or page parameters");
+                    validateParams(params, "Missing block number parameter");
+                    if (params.length == 1) {
+                        yield xdagApi.xdag_getBlockByNumber(params[0].toString(), 1);
+                    } else if (params.length == 2) {
+                        validatePageParam(params[1]);
+                        yield xdagApi.xdag_getBlockByNumber(params[0].toString(), Integer.parseInt(params[1].toString()));
+                    } else {
+                        throw JsonRpcException.invalidParams("Invalid number of parameters for xdag_getBlockByNumber");
                     }
-                    String bnOrId = params[0].toString();
-                    int page;
-                    try {
-                        page = Integer.parseInt(params[1].toString());
-                    } catch (NumberFormatException e) {
-                        throw JsonRpcException.invalidParams("Invalid page number");
-                    }
-                    if (params.length > 2) {
-                        try {
-                            int pageSize = Integer.parseInt(params[2].toString());
-                            yield xdagApi.xdag_getBlockByNumber(bnOrId, page, pageSize);
-                        } catch (NumberFormatException e) {
-                            throw JsonRpcException.invalidParams("Invalid page size");
-                        }
-                    }
-                    yield xdagApi.xdag_getBlockByNumber(bnOrId, page);
                 }
-                case "xdag_coinbase" -> xdagApi.xdag_coinbase();
                 case "xdag_blockNumber" -> xdagApi.xdag_blockNumber();
+                case "xdag_coinbase" -> xdagApi.xdag_coinbase();
                 case "xdag_getBalance" -> {
-                    if (request.getParams() == null) {
-                        throw JsonRpcException.invalidParams("Missing address parameter");
-                    }
-                    yield xdagApi.xdag_getBalance(request.getParams()[0].toString());
+                    validateParams(params, "Missing address parameter");
+                    yield xdagApi.xdag_getBalance(params[0].toString());
                 }
                 case "xdag_getTotalBalance" -> xdagApi.xdag_getTotalBalance();
                 case "xdag_getStatus" -> xdagApi.xdag_getStatus();
                 case "xdag_netConnectionList" -> xdagApi.xdag_netConnectionList();
                 case "xdag_netType" -> xdagApi.xdag_netType();
                 case "xdag_getRewardByNumber" -> {
-                    if (params == null) {
-                        throw JsonRpcException.invalidParams("Missing block number parameter");
-                    }
+                    validateParams(params, "Missing block number parameter");
                     yield xdagApi.xdag_getRewardByNumber(params[0].toString());
                 }
                 case "xdag_sendRawTransaction" -> {
-                    if (params == null) {
-                        throw JsonRpcException.invalidParams("Missing raw data parameter");
-                    }
+                    validateParams(params, "Missing raw data parameter");
                     yield xdagApi.xdag_sendRawTransaction(params[0].toString());
                 }
                 case "xdag_personal_sendTransaction" -> {
-                    if (params == null || params.length < 2) {
+                    validateParams(params, "Missing transaction arguments or passphrase");
+                    if (params.length < 2) {
                         throw JsonRpcException.invalidParams("Missing transaction arguments or passphrase");
                     }
                     TransactionRequest txRequest = MAPPER.convertValue(params[0], TransactionRequest.class);
-                    String pwd = params[1].toString();
-                    txRequest.setFrom(xdagApi.xdag_coinbase());
-                    yield xdagApi.xdag_personal_sendTransaction(txRequest, pwd);
+                    validateTransactionRequest(txRequest);
+                    yield xdagApi.xdag_personal_sendTransaction(txRequest, params[1].toString());
                 }
-                default -> throw JsonRpcException.methodNotFound(request.getMethod());
+                default -> throw JsonRpcException.methodNotFound(method);
             };
         } catch (JsonRpcException e) {
             throw e;
@@ -159,8 +139,69 @@ public class JsonRequestHandler implements JsonRpcRequestHandler {
         }
     }
 
+    private void validateParams(Object[] params, String message) throws JsonRpcException {
+        if (params == null || params.length == 0 || params[0] == null || params[0].toString().trim().isEmpty()) {
+            throw JsonRpcException.invalidParams(message);
+        }
+    }
+
+    private void validatePageParam(Object param) throws JsonRpcException {
+        if (param == null) {
+            throw JsonRpcException.invalidParams("Page number cannot be null");
+        }
+        try {
+            int page = Integer.parseInt(param.toString());
+            if (page < 0) {
+                throw JsonRpcException.invalidParams("Page number must be greater than 0");
+            }
+        } catch (NumberFormatException e) {
+            throw JsonRpcException.invalidParams("Invalid page number format");
+        }
+    }
+
+    private void validatePageSizeParam(Object param) throws JsonRpcException {
+        if (param == null) {
+            throw JsonRpcException.invalidParams("Page size cannot be null");
+        }
+        try {
+            int pageSize = Integer.parseInt(param.toString());
+            if (pageSize < 1 || pageSize > 100) {
+                throw JsonRpcException.invalidParams("Page size must be between 1 and 100");
+            }
+        } catch (NumberFormatException e) {
+            throw JsonRpcException.invalidParams("Invalid page size format");
+        }
+    }
+
+    private void validateTimeParam(Object param, String message) throws JsonRpcException {
+        if (param == null || param.toString().trim().isEmpty()) {
+            throw JsonRpcException.invalidParams(message);
+        }
+        // Time format validation could be added here if needed
+    }
+
+    private void validateTransactionRequest(TransactionRequest request) throws JsonRpcException {
+        if (request == null) {
+            throw JsonRpcException.invalidParams("Transaction request cannot be null");
+        }
+        if (request.getTo() == null || request.getTo().trim().isEmpty()) {
+            throw JsonRpcException.invalidParams("Recipient address cannot be null or empty");
+        }
+        if (request.getValue() == null || request.getValue().trim().isEmpty()) {
+            throw JsonRpcException.invalidParams("Transaction value cannot be null or empty");
+        }
+        try {
+            double value = Double.parseDouble(request.getValue());
+            if (value <= 0) {
+                throw JsonRpcException.invalidParams("Transaction value must be greater than 0");
+            }
+        } catch (NumberFormatException e) {
+            throw JsonRpcException.invalidParams("Invalid transaction value format");
+        }
+    }
+
     @Override
     public boolean supportsMethod(String methodName) {
-        return SUPPORTED_METHODS.contains(methodName);
+        return methodName != null && SUPPORTED_METHODS.contains(methodName);
     }
 }

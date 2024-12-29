@@ -32,6 +32,7 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.*;
+import io.xdag.config.spec.RPCSpec;
 import io.xdag.rpc.error.JsonRpcError;
 import io.xdag.rpc.error.JsonRpcException;
 import io.xdag.rpc.server.protocol.JsonRpcRequest;
@@ -46,6 +47,8 @@ import java.util.List;
 public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
     public static final ObjectMapper MAPPER;
+    private final RPCSpec rpcSpec;
+    private final List<JsonRpcRequestHandler> handlers;
 
     static {
         MAPPER = new ObjectMapper()
@@ -54,16 +57,30 @@ public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                 .configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true)
                 .configure(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT, true);
     }
-    private final List<JsonRpcRequestHandler> handlers;
 
-    public JsonRpcHandler(List<JsonRpcRequestHandler> handlers) {
+    public JsonRpcHandler(RPCSpec rpcSpec, List<JsonRpcRequestHandler> handlers) {
+        this.rpcSpec = rpcSpec;
         this.handlers = handlers;
     }
 
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
+        // Check request size
+        if (request.content().readableBytes() > rpcSpec.getRpcHttpMaxContentLength()) {
+            sendError(ctx, new JsonRpcError(JsonRpcError.ERR_INVALID_REQUEST, "Request too large, max size: " + rpcSpec.getRpcHttpMaxContentLength() + " bytes"));
+            return;
+        }
+
+        // Check HTTP method
         if (!request.method().equals(HttpMethod.POST)) {
-            sendError(ctx, HttpResponseStatus.METHOD_NOT_ALLOWED);
+            sendError(ctx, new JsonRpcError(JsonRpcError.ERR_INVALID_REQUEST, "Only POST method is allowed"));
+            return;
+        }
+
+        // Check content type
+        String contentType = request.headers().get(HttpHeaderNames.CONTENT_TYPE);
+        if (contentType == null || !contentType.contains("application/json")) {
+            sendError(ctx, new JsonRpcError(JsonRpcError.ERR_INVALID_REQUEST, "Content-Type must be application/json"));
             return;
         }
 
@@ -71,15 +88,12 @@ public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest>
         JsonRpcRequest rpcRequest;
         try {
             rpcRequest = MAPPER.readValue(content, JsonRpcRequest.class);
-            if (rpcRequest.getJsonrpc() == null || !rpcRequest.getJsonrpc().equals("2.0")) {
-                throw JsonRpcException.invalidRequest("Invalid JSON-RPC version");
-            }
         } catch (JsonRpcException e) {
-            sendError(ctx, new JsonRpcError(e.getCode(), e.getMessage(), e.getData()));
+            sendError(ctx, new JsonRpcError(e.getCode(), e.getMessage(), e.getData()), null);
             return;
         } catch (Exception e) {
             log.debug("Failed to parse JSON-RPC request", e);
-            sendError(ctx, new JsonRpcError(JsonRpcError.ERR_PARSE, "Invalid JSON request"));
+            sendError(ctx, new JsonRpcError(JsonRpcError.ERR_PARSE, "Invalid JSON request: " + e.getMessage()));
             return;
         }
 
@@ -88,10 +102,10 @@ public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest>
             sendResponse(ctx, new JsonRpcResponse(rpcRequest.getId(), result));
         } catch (JsonRpcException e) {
             log.debug("RPC error: {}", e.getMessage());
-            sendError(ctx, new JsonRpcError(e.getCode(), e.getMessage(), e.getData()));
+            sendError(ctx, new JsonRpcError(e.getCode(), e.getMessage(), e.getData()), rpcRequest);
         } catch (Exception e) {
             log.error("Error processing request", e);
-            sendError(ctx, new JsonRpcError(JsonRpcError.ERR_INTERNAL, "Internal error"));
+            sendError(ctx, new JsonRpcError(JsonRpcError.ERR_INTERNAL, "Internal error: " + e.getMessage()), rpcRequest);
         }
     }
 
@@ -118,14 +132,14 @@ public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest>
             sendHttpResponse(ctx, content, HttpResponseStatus.OK);
         } catch (Exception e) {
             log.error("Error sending response", e);
-            sendError(ctx, new JsonRpcError(JsonRpcError.ERR_INTERNAL, "Error serializing response"));
+            sendError(ctx, new JsonRpcError(JsonRpcError.ERR_INTERNAL, "Error serializing response: " + e.getMessage()));
         }
     }
 
-    private void sendError(ChannelHandlerContext ctx, JsonRpcError error) {
+    private void sendError(ChannelHandlerContext ctx, JsonRpcError error, JsonRpcRequest request) {
         try {
             ByteBuf content = Unpooled.copiedBuffer(
-                    MAPPER.writeValueAsString(new JsonRpcResponse(null, null, error)),
+                    MAPPER.writeValueAsString(new JsonRpcResponse(request != null ? request.getId() : null, null, error)),
                     StandardCharsets.UTF_8
             );
             sendHttpResponse(ctx, content, HttpResponseStatus.OK);
@@ -133,6 +147,10 @@ public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest>
             log.error("Error sending error response", e);
             sendError(ctx, HttpResponseStatus.INTERNAL_SERVER_ERROR);
         }
+    }
+
+    private void sendError(ChannelHandlerContext ctx, JsonRpcError error) {
+        sendError(ctx, error, null);
     }
 
     private void sendError(ChannelHandlerContext ctx, HttpResponseStatus status) {
@@ -150,11 +168,14 @@ public class JsonRpcHandler extends SimpleChannelInboundHandler<FullHttpRequest>
                 .set(HttpHeaderNames.CONTENT_TYPE, "application/json")
                 .set(HttpHeaderNames.CONTENT_LENGTH, content.readableBytes());
 
-        // 获取CORS Origin并设置相应的头
-//        String origin = ctx.channel().attr(AttributeKey.valueOf("CorsOrigin")).get().toString();
-//        if (origin != null) {
-//            response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin);
-//        }
+        // Get CORS Origin and set corresponding headers
+        String origin = ctx.channel().attr(CorsHandler.CORS_ORIGIN).get();
+        if (origin != null) {
+            response.headers()
+                    .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin)
+                    .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true")
+                    .set(HttpHeaderNames.VARY, "Origin");
+        }
 
         ctx.writeAndFlush(response);
     }
