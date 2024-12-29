@@ -23,7 +23,6 @@
  */
 package io.xdag.rpc.server.handler;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.xdag.rpc.api.XdagApi;
 import io.xdag.rpc.error.JsonRpcError;
 import io.xdag.rpc.error.JsonRpcException;
