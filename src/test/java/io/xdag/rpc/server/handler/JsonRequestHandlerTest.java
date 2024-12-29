@@ -23,13 +23,13 @@
  */
 package io.xdag.rpc.server.handler;
 
+import static io.xdag.rpc.server.handler.JsonRpcHandler.MAPPER;
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 import static org.mockito.ArgumentMatchers.any;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import io.xdag.core.Block;
 import io.xdag.rpc.api.XdagApi;
 import io.xdag.rpc.model.response.BlockResponse;
 import io.xdag.rpc.model.response.ProcessResponse;
@@ -48,7 +48,6 @@ public class JsonRequestHandlerTest {
     private XdagApi xdagApi;
 
     private JsonRequestHandler handler;
-    private ObjectMapper mapper = new ObjectMapper();
 
     @Before
     public void setUp() {
@@ -119,7 +118,7 @@ public class JsonRequestHandlerTest {
                 }""";
 
         // When
-        Object result = handler.handle(mapper.readValue(requestJson, JsonRpcRequest.class));
+        Object result = handler.handle(MAPPER.readValue(requestJson, JsonRpcRequest.class));
 
         // Then
         assertTrue("Result should be instance of BlockResponse", result instanceof BlockResponse);
@@ -204,7 +203,7 @@ public class JsonRequestHandlerTest {
                 }""";
 
         // When
-        Object result = handler.handle(mapper.readValue(requestJson, JsonRpcRequest.class));
+        Object result = handler.handle(MAPPER.readValue(requestJson, JsonRpcRequest.class));
 
         // Then
         assertTrue("Result should be instance of BlockResponse", result instanceof BlockResponse);
@@ -265,7 +264,7 @@ public class JsonRequestHandlerTest {
                 }""";
 
         // When
-        Object result = handler.handle(mapper.readValue(requestJson, JsonRpcRequest.class));
+        Object result = handler.handle(MAPPER.readValue(requestJson, JsonRpcRequest.class));
 
         // Then
         assertTrue("Result should be instance of BlockResponse", result instanceof BlockResponse);
@@ -310,7 +309,7 @@ public class JsonRequestHandlerTest {
                 }""";
 
         // When
-        Object result = handler.handle(mapper.readValue(requestJson, JsonRpcRequest.class));
+        Object result = handler.handle(MAPPER.readValue(requestJson, JsonRpcRequest.class));
 
         // Then
         assertEquals("Incorrect block number", "0", result);
@@ -329,7 +328,7 @@ public class JsonRequestHandlerTest {
                 }""";
 
         // When
-        Object result = handler.handle(mapper.readValue(requestJson, JsonRpcRequest.class));
+        Object result = handler.handle(MAPPER.readValue(requestJson, JsonRpcRequest.class));
 
         // Then
         assertEquals("Incorrect coinbase address", "LF82sqRiZuJTDEfQ6GqkE2DpnXrbCu4kK", result);
@@ -348,7 +347,7 @@ public class JsonRequestHandlerTest {
                 }""";
 
         // When
-        Object result = handler.handle(mapper.readValue(requestJson, JsonRpcRequest.class));
+        Object result = handler.handle(MAPPER.readValue(requestJson, JsonRpcRequest.class));
 
         // Then
         assertEquals("Incorrect balance", "0.000000000", result);
@@ -367,7 +366,7 @@ public class JsonRequestHandlerTest {
                 }""";
 
         // When
-        Object result = handler.handle(mapper.readValue(requestJson, JsonRpcRequest.class));
+        Object result = handler.handle(MAPPER.readValue(requestJson, JsonRpcRequest.class));
 
         // Then
         assertEquals("Incorrect total balance", "0.000000000", result);
@@ -400,7 +399,7 @@ public class JsonRequestHandlerTest {
                 }""";
 
         // When
-        Object result = handler.handle(mapper.readValue(requestJson, JsonRpcRequest.class));
+        Object result = handler.handle(MAPPER.readValue(requestJson, JsonRpcRequest.class));
 
         // Then
         assertTrue("Result should be instance of XdagStatusResponse", result instanceof XdagStatusResponse);
@@ -428,7 +427,7 @@ public class JsonRequestHandlerTest {
                 }""";
 
         // When
-        Object result = handler.handle(mapper.readValue(requestJson, JsonRpcRequest.class));
+        Object result = handler.handle(MAPPER.readValue(requestJson, JsonRpcRequest.class));
 
         // Then
         assertEquals("Incorrect reward value", "128.000000000", result);
@@ -447,7 +446,7 @@ public class JsonRequestHandlerTest {
                 }""";
 
         // When
-        Object result = handler.handle(mapper.readValue(requestJson, JsonRpcRequest.class));
+        Object result = handler.handle(MAPPER.readValue(requestJson, JsonRpcRequest.class));
 
         // Then
         assertEquals("Incorrect network type", "devnet", result);
@@ -466,7 +465,7 @@ public class JsonRequestHandlerTest {
                 }""";
 
         // When
-        Object result = handler.handle(mapper.readValue(requestJson, JsonRpcRequest.class));
+        Object result = handler.handle(MAPPER.readValue(requestJson, JsonRpcRequest.class));
 
         // Then
         assertTrue("Result should be a List", result instanceof List);
@@ -487,7 +486,7 @@ public class JsonRequestHandlerTest {
                 }""".formatted(rawTx);
 
         // When
-        Object result = handler.handle(mapper.readValue(requestJson, JsonRpcRequest.class));
+        Object result = handler.handle(MAPPER.readValue(requestJson, JsonRpcRequest.class));
 
         // Then
         assertTrue("Result should contain error message", result.toString().contains("INVALID_BLOCK"));
@@ -518,7 +517,7 @@ public class JsonRequestHandlerTest {
                 }""";
 
         // When
-        Object result = handler.handle(mapper.readValue(requestJson, JsonRpcRequest.class));
+        Object result = handler.handle(MAPPER.readValue(requestJson, JsonRpcRequest.class));
 
         // Then
         assertTrue("Result should be instance of ProcessResponse", result instanceof ProcessResponse);

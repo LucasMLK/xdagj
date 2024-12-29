@@ -35,7 +35,6 @@ import io.xdag.core.AbstractXdagLifecycle;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import javax.annotation.Nullable;
 import java.util.List;
 
 @Getter
