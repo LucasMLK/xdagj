@@ -47,11 +47,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.hyperledger.besu.crypto.KeyPair;
 
+/**
+ * Client implementation for peer-to-peer network communication
+ */
 @Slf4j
 @Getter
 @Setter
 public class PeerClient {
 
+    // Thread factory for client worker threads
     private static final ThreadFactory factory = new BasicThreadFactory.Builder()
             .namingPattern("XdagClient-thread-%d")
             .daemon(true)
@@ -59,31 +63,40 @@ public class PeerClient {
 
     private final String ip;
     private final int port;
-
-    @Getter
     private final KeyPair coinbase;
-
     private final EventLoopGroup workerGroup;
-
     private final Config config;
-
-    private final Set<InetSocketAddress> whilelist;
+    private final Set<InetSocketAddress> whitelist;
     private Node node;
 
+    /**
+     * Constructor for PeerClient
+     * @param config Network configuration
+     * @param coinbase Keypair for node identity
+     */
     public PeerClient(Config config, KeyPair coinbase) {
         this.config = config;
         this.ip = config.getNodeSpec().getNodeIp();
         this.port = config.getNodeSpec().getNodePort();
         this.coinbase = coinbase;
         this.workerGroup = new NioEventLoopGroup(0, factory);
-        this.whilelist = new HashSet<>();
+        this.whitelist = new HashSet<>();
         initWhiteIPs();
     }
 
+    /**
+     * Get peer ID derived from coinbase key
+     */
     public String getPeerId() {
         return toBase58(toBytesAddress(coinbase));
     }
 
+    /**
+     * Connect to a remote node
+     * @param remoteNode Target node to connect to
+     * @param xdagChannelInitializer Channel initializer
+     * @return ChannelFuture for the connection
+     */
     public ChannelFuture connect(Node remoteNode, XdagChannelInitializer xdagChannelInitializer) {
         if (!isAcceptable(new InetSocketAddress(remoteNode.getIp(), remoteNode.getPort()))) {
             return null;
@@ -100,12 +113,18 @@ public class PeerClient {
         return b.connect();
     }
 
+    /**
+     * Gracefully shutdown the client
+     */
     public void close() {
         log.debug("Shutdown XdagClient");
         workerGroup.shutdownGracefully();
         workerGroup.terminationFuture().syncUninterruptibly();
     }
 
+    /**
+     * Get or create the local node instance
+     */
     public Node getNode() {
         if (node == null) {
             node = new Node(ip, port);
@@ -113,20 +132,32 @@ public class PeerClient {
         return node;
     }
 
+    /**
+     * Check if an address is acceptable based on whitelist
+     * @param address Address to check
+     * @return true if address is acceptable
+     */
     public boolean isAcceptable(InetSocketAddress address) {
-        if (!whilelist.isEmpty()) {
-            return whilelist.contains(address);
+        if (!whitelist.isEmpty()) {
+            return whitelist.contains(address);
         }
-
         return true;
     }
 
+    /**
+     * Initialize whitelist from config
+     */
     private void initWhiteIPs() {
-        whilelist.addAll(config.getNodeSpec().getWhiteIPList());
+        whitelist.addAll(config.getNodeSpec().getWhiteIPList());
     }
 
+    /**
+     * Add an IP to the whitelist
+     * @param host Host address
+     * @param port Port number
+     */
     public void addWhilteIP(String host, int port) {
-        whilelist.add(new InetSocketAddress(host, port));
+        whitelist.add(new InetSocketAddress(host, port));
     }
 
 }

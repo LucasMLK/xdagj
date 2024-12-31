@@ -98,13 +98,7 @@ public class NetTest {
         stats.totalnhosts = 11;
         stats.maintime = endtime;
 
-        NetDB netDB = new NetDB();
-        netDB.addNewIP("10.0.0.1", 8001);
-        netDB.addNewIP("10.0.0.2", 8001);
-        netDB.addNewIP("10.0.0.3", 8001);
-        netDB.addNewIP("10.0.0.4", 8001);
-
-        SumRequestMessage sumRequestMessage = new SumRequestMessage(starttime, endtime, stats, netDB);
+        SumRequestMessage sumRequestMessage = new SumRequestMessage(starttime, endtime, stats);
 
         String hexString = Bytes.wrap(sumRequestMessage.getBody()).toHexString();
 

@@ -165,10 +165,9 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
     }
 
     private void println(final String msg) {
-        try(PrintWriter writer = reader.getTerminal().writer()) {
-            writer.println(msg);
-            writer.flush();
-        }
+        PrintWriter writer = reader.getTerminal().writer();
+        writer.println(msg);
+        writer.flush();
     }
 
     private void processAccount(CommandInput input) {
@@ -501,7 +500,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         } while (StringUtils.isEmpty(line));
 
         if (isTelnet) {
-            return line.equals(kernel.getConfig().getAdminSpec().getTelnetPassword());
+            return line.equals(kernel.getConfig().getAdminSpec().getAdminTelnetPassword());
         }
 
         return true;

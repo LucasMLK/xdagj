@@ -27,12 +27,12 @@ package io.xdag.net;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.Kernel;
+import io.xdag.core.AbstractXdagLifecycle;
 import io.xdag.core.BlockWrapper;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
@@ -42,19 +42,18 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
-public class ChannelManager {
+public class ChannelManager extends AbstractXdagLifecycle {
 
     private final Kernel kernel;
     /**
      * Queue with new blocks from other peers
      */
     private final BlockingQueue<BlockWrapper> newForeignBlocks = new LinkedBlockingQueue<>();
-    // 广播区块
+    // Thread for block distribution
     private final Thread blockDistributeThread;
     private final Set<InetSocketAddress> addressSet = new HashSet<>();
     protected ConcurrentHashMap<InetSocketAddress, Channel> channels = new ConcurrentHashMap<>();
     protected ConcurrentHashMap<String, Channel> activeChannels = new ConcurrentHashMap<>();
-
     private static final int LRU_CACHE_SIZE = 1024;
 
     @Getter
@@ -68,35 +67,35 @@ public class ChannelManager {
         initWhiteIPs();
     }
 
-    public void start() {
+    @Override
+    protected void doStart() {
         blockDistributeThread.start();
     }
 
+    @Override
+    protected void doStop() {
+        log.debug("Channel Manager stop...");
+        if (blockDistributeThread != null) {
+            // Interrupt the thread
+            blockDistributeThread.interrupt();
+        }
+        // Close all connections
+        for (Channel channel : activeChannels.values()) {
+            channel.close();
+        }
+    }
+
     public boolean isAcceptable(InetSocketAddress address) {
-        //对于进来的连接，只判断ip，不判断port
+        // For incoming connections, only check IP, not port
         if (!addressSet.isEmpty()) {
             for (InetSocketAddress inetSocketAddress : addressSet) {
-                // 不连接自己
-                if (!isSelfAddress(address)&&inetSocketAddress.getAddress().equals(address.getAddress())) {
+                // Don't connect to self
+                if (!isSelfAddress(address) && inetSocketAddress.getAddress().equals(address.getAddress())) {
                     return true;
                 }
             }
         }
         return false;
-    }
-
-    public boolean isActiveIP(String ip) {
-        for (Channel c : activeChannels.values()) {
-            if (c.getRemoteIp().equals(ip)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    public boolean isActivePeer(String peerId) {
-        return activeChannels.containsKey(peerId);
     }
 
     public int size() {
@@ -118,30 +117,10 @@ public class ChannelManager {
         }
     }
 
-    public void closeBlacklistedChannels() {
-        for (Map.Entry<InetSocketAddress, Channel> entry : channels.entrySet()) {
-            Channel channel = entry.getValue();
-            if (!isAcceptable(channel.getRemoteAddress())) {
-                remove(channel);
-                channel.close();
-            }
-        }
-    }
-
     public void onChannelActive(Channel channel, Peer peer) {
         channel.setActive(peer);
         activeChannels.put(peer.getPeerId(), channel);
         log.debug("activeChannel size:{}", activeChannels.size());
-    }
-
-    public List<Peer> getActivePeers() {
-        List<Peer> list = new ArrayList<>();
-
-        for (Channel c : activeChannels.values()) {
-            list.add(c.getRemotePeer());
-        }
-
-        return list;
     }
 
     public Set<InetSocketAddress> getActiveAddresses() {
@@ -157,30 +136,6 @@ public class ChannelManager {
 
     public List<Channel> getActiveChannels() {
         return new ArrayList<>(activeChannels.values());
-    }
-
-    public List<Channel> getActiveChannels(List<String> peerIds) {
-        List<Channel> list = new ArrayList<>();
-
-        for (String peerId : peerIds) {
-            if (activeChannels.containsKey(peerId)) {
-                list.add(activeChannels.get(peerId));
-            }
-        }
-
-        return list;
-    }
-
-    public List<Channel> getIdleChannels() {
-        List<Channel> list = new ArrayList<>();
-
-        for (Channel c : activeChannels.values()) {
-            if (c.getMessageQueue().isIdle()) {
-                list.add(c);
-            }
-        }
-
-        return list;
     }
 
     /**
@@ -227,15 +182,4 @@ public class ChannelManager {
                 .getNodeSpec().getNodePort());
     }
 
-    public void stop() {
-        log.debug("Channel Manager stop...");
-        if (blockDistributeThread != null) {
-            // 中断
-            blockDistributeThread.interrupt();
-        }
-        // 关闭所有连接
-        for (Channel channel : activeChannels.values()) {
-            channel.close();
-        }
-    }
 }

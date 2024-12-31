@@ -30,13 +30,27 @@ import io.netty.channel.kqueue.KQueueServerSocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import org.apache.commons.lang3.SystemUtils;
 
+/**
+ * Utility class for Netty server configuration
+ */
 public final class NettyUtils {
 
+    /**
+     * Creates a ServerBootstrap with native transport optimized for the current OS
+     *
+     * @param bossGroup The EventLoopGroup that accepts incoming connections
+     * @param workerGroup The EventLoopGroup that handles the traffic of accepted connections
+     * @return Configured ServerBootstrap instance
+     */
     public static ServerBootstrap nativeEventLoopGroup(EventLoopGroup bossGroup, EventLoopGroup workerGroup) {
         ServerBootstrap bootstrap = new ServerBootstrap();
 
         bootstrap.group(bossGroup, workerGroup);
 
+        // Select the appropriate channel type based on OS:
+        // - Epoll for Linux (better performance)
+        // - KQueue for MacOS (better performance)
+        // - NIO as fallback for other operating systems
         if(SystemUtils.IS_OS_LINUX) {
             bootstrap.channel(EpollServerSocketChannel.class);
         } else if(SystemUtils.IS_OS_MAC) {

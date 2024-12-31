@@ -21,20 +21,39 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-
 package io.xdag.core;
 
 import java.math.BigInteger;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Top status of the block tree.
+ *
+ * @author ycx
+ */
 @Getter
 @Setter
 public class XdagTopStatus {
 
+    /**
+     * The top block hash.
+     */
     private byte[] top;
+
+    /**
+     * The top block difficulty.
+     */
     private BigInteger topDiff;
+
+    /**
+     * The pre-top block hash.
+     */
     private byte[] preTop;
+
+    /**
+     * The pre-top block difficulty.
+     */
     private BigInteger preTopDiff;
 
     public XdagTopStatus() {

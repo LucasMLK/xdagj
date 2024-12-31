@@ -23,7 +23,10 @@
  */
 package io.xdag.utils.exception;
 
-public class AddressFormatException extends IllegalArgumentException{
+/**
+ * Exception thrown when an address format is invalid
+ */
+public class AddressFormatException extends IllegalArgumentException {
     public AddressFormatException() {
         super();
     }
@@ -32,7 +35,9 @@ public class AddressFormatException extends IllegalArgumentException{
         super(message);
     }
 
-
+    /**
+     * Exception thrown when an invalid character is found in an address
+     */
     public static class InvalidCharacter extends AddressFormatException {
         public final char character;
         public final int position;
@@ -44,7 +49,9 @@ public class AddressFormatException extends IllegalArgumentException{
         }
     }
 
-
+    /**
+     * Exception thrown when address data length is invalid
+     */
     public static class InvalidDataLength extends AddressFormatException {
         public InvalidDataLength() {
             super();
@@ -55,7 +62,9 @@ public class AddressFormatException extends IllegalArgumentException{
         }
     }
 
-
+    /**
+     * Exception thrown when address checksum validation fails
+     */
     public static class InvalidChecksum extends AddressFormatException {
         public InvalidChecksum() {
             super("Checksum does not validate");
@@ -65,5 +74,4 @@ public class AddressFormatException extends IllegalArgumentException{
             super(message);
         }
     }
-
 }

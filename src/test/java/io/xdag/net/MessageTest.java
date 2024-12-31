@@ -259,7 +259,6 @@ public class MessageTest {
         System.out.println("starttime:" + message.getStarttime());
         System.out.println("endtime:" + message.getEndtime());
         System.out.println("status:" + message.getXdagStats());
-        System.out.println("netdb:" + message.getRemoteNetdb());
         if (message.getCode() == MessageCode.BLOCK_REQUEST) {
             System.out.println("request hash:" + message.getHash().toHexString());
         } else {

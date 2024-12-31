@@ -29,10 +29,19 @@ import io.xdag.db.BlockStore;
 import java.util.List;
 import org.bouncycastle.util.encoders.Hex;
 
+/**
+ * Utility class for file operations
+ */
 public class FileUtils {
 
     /**
-     * sum file name
+     * Generates a list of hierarchical file paths based on a timestamp
+     * 
+     * The method creates a directory structure by extracting bytes from the timestamp
+     * and converting them to hex strings. Each level represents 8 bits of the timestamp.
+     *
+     * @param time The timestamp to generate paths from
+     * @return A list of file paths, including intermediate paths
      */
     public static List<String> getFileName(long time) {
         List<String> files = Lists.newArrayList(BlockStore.SUM_FILE_NAME);

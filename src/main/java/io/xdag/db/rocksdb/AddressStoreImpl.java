@@ -30,98 +30,104 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.units.bigints.UInt64;
 
-
 @Slf4j
 public class AddressStoreImpl implements AddressStore {
-    private static final int AddressSize = 20;
-    private final KVSource<byte[], byte[]> AddressSource;
+    private static final int ADDRESS_SIZE = 20; // Corrected constant name to uppercase
+    private final KVSource<byte[], byte[]> addressSource; // Renamed for clarity
 
-
-    //<addressHash,balance>
+    // Constructor to initialize address source
     public AddressStoreImpl(KVSource<byte[], byte[]> addressSource) {
-        AddressSource = addressSource;
+        this.addressSource = addressSource;
     }
 
-    public void init() {
-        this.AddressSource.init();
-        if(AddressSource.get(new byte[]{ADDRESS_SIZE}) == null){
-            AddressSource.put(new byte[]{ADDRESS_SIZE}, BytesUtils.longToBytes(0,false));
+    public void start() {
+        this.addressSource.init();
+        if (addressSource.get(new byte[]{ADDRESS_SIZE}) == null) {
+            addressSource.put(new byte[]{ADDRESS_SIZE}, BytesUtils.longToBytes(0, false));
         }
-        if(AddressSource.get(new byte[]{AMOUNT_SUM}) == null){
-            AddressSource.put(new byte[]{AMOUNT_SUM},BytesUtils.longToBytes(0,false));
+        if (addressSource.get(new byte[]{AMOUNT_SUM}) == null) {
+            addressSource.put(new byte[]{AMOUNT_SUM}, BytesUtils.longToBytes(0, false));
         }
+    }
+
+    @Override
+    public void stop() {
+        addressSource.close();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return false;
     }
 
     public void reset() {
-        this.AddressSource.reset();
-        AddressSource.put(new byte[]{ADDRESS_SIZE}, BytesUtils.longToBytes(0,false));
-        AddressSource.put(new byte[]{AMOUNT_SUM},BytesUtils.longToBytes(0,false));
+        this.addressSource.reset();
+        addressSource.put(new byte[]{ADDRESS_SIZE}, BytesUtils.longToBytes(0, false));
+        addressSource.put(new byte[]{AMOUNT_SUM}, BytesUtils.longToBytes(0, false));
     }
 
-    public XAmount getBalanceByAddress(byte[] address){
-        byte[] data = AddressSource.get(BytesUtils.merge(ADDRESS,address));
-        if(data == null){
-            log.debug("This pubkey don't exist");
+    public XAmount getBalanceByAddress(byte[] address) {
+        byte[] data = addressSource.get(BytesUtils.merge(ADDRESS, address));
+        if (data == null) {
+            log.debug("This public key doesn't exist");
             return XAmount.ZERO;
         } else {
             return XAmount.ofXAmount(UInt64.fromBytes(Bytes.wrap(data)).toLong());
         }
     }
 
-    public boolean addressIsExist(byte[] address){
-        return AddressSource.get(BytesUtils.merge(ADDRESS,address)) != null;
+    public boolean addressIsExist(byte[] address) {
+        return addressSource.get(BytesUtils.merge(ADDRESS, address)) != null;
     }
 
-    public void addAddress(byte[] address){
-        AddressSource.put(BytesUtils.merge(ADDRESS,address), UInt64.ZERO.toBytes().toArray());
-        long currentSize = BytesUtils.bytesToLong(AddressSource.get(new byte[]{ADDRESS_SIZE}),0,false);
-        AddressSource.put(new byte[] {ADDRESS_SIZE},BytesUtils.longToBytes(currentSize + 1,false));
+    public void addAddress(byte[] address) {
+        addressSource.put(BytesUtils.merge(ADDRESS, address), UInt64.ZERO.toBytes().toArray());
+        long currentSize = BytesUtils.bytesToLong(addressSource.get(new byte[]{ADDRESS_SIZE}), 0, false);
+        addressSource.put(new byte[]{ADDRESS_SIZE}, BytesUtils.longToBytes(currentSize + 1, false));
     }
 
-    public XAmount getAllBalance(){
-        UInt64 u64v = UInt64.fromBytes(Bytes.wrap(AddressSource.get(new byte[]{AMOUNT_SUM})));
+    public XAmount getAllBalance() {
+        UInt64 u64v = UInt64.fromBytes(Bytes.wrap(addressSource.get(new byte[]{AMOUNT_SUM})));
         return XAmount.ofXAmount(u64v.toLong());
     }
 
     @Override
     public void saveAddressSize(byte[] addressSize) {
-        AddressSource.put(new byte[]{ADDRESS_SIZE},addressSize);
+        addressSource.put(new byte[]{ADDRESS_SIZE}, addressSize);
     }
 
     @Override
-    public void savaAmountSum(XAmount balanceSum) {
+    public void saveAmountSum(XAmount balanceSum) { // Fixed typo in method name
         UInt64 u64v = balanceSum.toXAmount();
-        AddressSource.put(new byte[]{AMOUNT_SUM}, u64v.toBytes().toArray());
+        addressSource.put(new byte[]{AMOUNT_SUM}, u64v.toBytes().toArray());
     }
 
-    public UInt64 getAddressSize(){
-        return UInt64.fromBytes(Bytes.wrap(AddressSource.get(new byte[]{ADDRESS_SIZE})));
+    public UInt64 getAddressSize() {
+        return UInt64.fromBytes(Bytes.wrap(addressSource.get(new byte[]{ADDRESS_SIZE})));
     }
 
-    public void updateAllBalance(XAmount balance){
+    public void updateAllBalance(XAmount balance) {
         UInt64 u64V = balance.toXAmount();
-        AddressSource.put(new byte[]{AMOUNT_SUM}, u64V.toBytes().toArray());
+        addressSource.put(new byte[]{AMOUNT_SUM}, u64V.toBytes().toArray());
     }
 
-
-    //TODO：计算上移到应用层
-    public void updateBalance(byte[] address, XAmount balance){
-        if(address.length != AddressSize){
-            log.debug("The Address type is wrong");
+    // TODO: Move calculation to application layer
+    public void updateBalance(byte[] address, XAmount balance) {
+        if (address.length != ADDRESS_SIZE) {
+            log.debug("The address type is wrong");
             return;
         }
-        if(AddressSource.get(BytesUtils.merge(ADDRESS,address)) == null){
-            log.debug("This address don't exist");
+        if (addressSource.get(BytesUtils.merge(ADDRESS, address)) == null) {
+            log.debug("This address doesn't exist");
             addAddress(address);
         }
         UInt64 u64V = balance.toXAmount();
-        AddressSource.put((BytesUtils.merge(ADDRESS,address)), u64V.toBytes().toArray());
+        addressSource.put(BytesUtils.merge(ADDRESS, address), u64V.toBytes().toArray());
     }
 
     @Override
     public void snapshotAddress(byte[] address, XAmount balance) {
         UInt64 u64V = balance.toXAmount();
-        AddressSource.put(address, u64V.toBytes().toArray());
+        addressSource.put(address, u64V.toBytes().toArray());
     }
-
 }

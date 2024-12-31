@@ -26,14 +26,31 @@ package io.xdag;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Enum representing different network types in XDAG
+ */
 public enum Network {
 
+    /**
+     * Main network for production use
+     */
     MAINNET((byte) 0, "mainnet"),
 
+    /**
+     * Test network for testing purposes
+     */
     TESTNET((byte) 1, "testnet"),
 
+    /**
+     * Development network for development purposes
+     */
     DEVNET((byte) 2, "devnet");
 
+    /**
+     * Constructor for Network enum
+     * @param id Network identifier byte
+     * @param label Network label string
+     */
     Network(byte id, String label) {
         this.id = id;
         this.label = label;
@@ -45,6 +62,7 @@ public enum Network {
     private static final Map<String, Network> labels = new HashMap<>();
     private static final Map<Byte, Network> ids = new HashMap<>();
 
+    // Initialize static maps
     static {
         for (Network net : Network.values()) {
             labels.put(net.label, net);
@@ -52,10 +70,18 @@ public enum Network {
         }
     }
 
+    /**
+     * Get network identifier
+     * @return Network id byte
+     */
     public byte id() {
         return id;
     }
 
+    /**
+     * Get network label
+     * @return Network label string
+     */
     public String label() {
         return label;
     }
@@ -65,10 +91,20 @@ public enum Network {
         return label;
     }
 
+    /**
+     * Get Network enum by network id
+     * @param networkId Network identifier byte
+     * @return Corresponding Network enum value
+     */
     public static Network of(byte networkId) {
         return ids.get(networkId);
     }
 
+    /**
+     * Get Network enum by network label
+     * @param label Network label string
+     * @return Corresponding Network enum value
+     */
     public static Network of(String label) {
         return labels.get(label);
     }

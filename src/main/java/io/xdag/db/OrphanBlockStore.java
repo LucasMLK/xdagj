@@ -23,21 +23,20 @@
  */
 package io.xdag.db;
 
+import io.xdag.core.XdagLifecycle;
 import io.xdag.core.Address;
 import io.xdag.core.Block;
 import java.util.List;
 
 import org.bouncycastle.util.encoders.Hex;
 
-public interface OrphanBlockStore {
+public interface OrphanBlockStore extends XdagLifecycle {
 
     byte ORPHAN_PREFEX = 0x00;
     /**
      * size key
      */
     byte[] ORPHAN_SIZE = Hex.decode("FFFFFFFFFFFFFFFF");
-
-    void init();
 
     void reset();
 

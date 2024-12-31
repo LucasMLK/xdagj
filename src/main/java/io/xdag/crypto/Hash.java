@@ -28,7 +28,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-import org.bouncycastle.crypto.digests.RIPEMD160Digest;
 import org.bouncycastle.crypto.digests.SHA512Digest;
 import org.bouncycastle.crypto.macs.HMac;
 import org.bouncycastle.crypto.params.KeyParameter;
@@ -39,17 +38,10 @@ import org.bouncycastle.crypto.params.KeyParameter;
 public class Hash {
 
     /**
-     * Sha-256 hash function.
+     * Get a new SHA-256 MessageDigest.
      *
-     * @param hexInput hex encoded input data with optional 0x prefix
-     * @return hash value as hex encoded string
+     * @return a new SHA-256 MessageDigest
      */
-    public static String sha256(String hexInput) {
-        Bytes32 result = sha256(Bytes.fromHexString(hexInput));
-        return result.toHexString();
-    }
-
-
     public static MessageDigest newDigest() {
         try {
             return MessageDigest.getInstance("SHA-256");
@@ -58,20 +50,56 @@ public class Hash {
         }
     }
 
+    /**
+     * Compute the SHA-256 hash of the given input.
+     *
+     * @param input the input data
+     * @return the SHA-256 hash of the given input
+     */
+    public static Bytes32 sha256(Bytes input) {
+        return org.hyperledger.besu.crypto.Hash.sha256(input);
+    }
+
+    /**
+     * Compute the double SHA-256 hash of the given input.
+     *
+     * @param input the input data
+     * @return the double SHA-256 hash of the given input
+     */
     public static Bytes32 hashTwice(Bytes input) {
         return sha256(sha256(input));
     }
 
+    /**
+     * Compute the double SHA-256 hash of the given input.
+     *
+     * @param input the input data
+     * @return the double SHA-256 hash of the given input
+     */
     public static byte[] hashTwice(byte[] input) {
         MessageDigest digest = newDigest();
         digest.update(input);
         return digest.digest(digest.digest());
     }
 
-    public static Bytes32 sha256(Bytes input) {
-        return org.hyperledger.besu.crypto.Hash.sha256(input);
+    /**
+     * Compute the SHA-256 hash of the given input.
+     *
+     * @param input the input data as a hex string
+     * @return the SHA-256 hash of the given input as a hex string
+     */
+    public static String sha256(String input) {
+        Bytes32 result = sha256(Bytes.fromHexString(input));
+        return result.toHexString();
     }
 
+    /**
+     * Compute the HMAC SHA-512 hash of the given input using the given key.
+     *
+     * @param key the key to use for the HMAC
+     * @param input the input data
+     * @return the HMAC SHA-512 hash of the given input
+     */
     public static byte[] hmacSha512(byte[] key, byte[] input) {
         HMac hMac = new HMac(new SHA512Digest());
         hMac.init(new KeyParameter(key));
@@ -81,14 +109,13 @@ public class Hash {
         return out;
     }
 
+    /**
+     * Compute the RIPEMD-160 hash of the given input.
+     *
+     * @param input the input data
+     * @return the RIPEMD-160 hash of the given input
+     */
     public static byte[] sha256hash160(Bytes input) {
-        Bytes32 sha256 = sha256(input);
-        RIPEMD160Digest digest = new RIPEMD160Digest();
-        digest.update(sha256.toArray(), 0, sha256.size());
-        byte[] out = new byte[20];
-        digest.doFinal(out, 0);
-        return out;
+        return org.hyperledger.besu.crypto.Hash.ripemd160(sha256(input)).toArray();
     }
-
 }
-

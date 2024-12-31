@@ -50,13 +50,14 @@ import org.apache.logging.log4j.LogManager;
 public class Launcher {
 
     /**
-     * Here we make sure that all shutdown hooks will be executed in the order of
-     * registration. This is necessary to be manually maintained because
-     * ${@link Runtime#addShutdownHook(Thread)} starts shutdown hooks concurrently
-     * in unspecified order.
+     * Maintains an ordered list of shutdown hooks to ensure proper shutdown sequence.
+     * This is necessary since Runtime.addShutdownHook() executes hooks concurrently in random order.
      */
     private static final List<Pair<String, Runnable>> shutdownHooks = Collections.synchronizedList(new ArrayList<>());
 
+    /**
+     * Environment variable name for wallet password
+     */
     private static final String ENV_XDAGJ_WALLET_PASSWORD = "XDAGJ_WALLET_PASSWORD";
 
     static {
@@ -67,6 +68,9 @@ public class Launcher {
     private String password = null;
     private Config config;
 
+    /**
+     * Constructor - initializes command line options
+     */
     public Launcher() {
         Option passwordOption = Option.builder()
                 .longOpt(XdagOption.PASSWORD.toString())
@@ -77,18 +81,18 @@ public class Launcher {
     }
 
     /**
-     * Registers a shutdown hook which will be executed in the order of
-     * registration.
+     * Registers a shutdown hook to be executed in registration order
+     * @param name Name of the shutdown hook for logging
+     * @param runnable The shutdown hook to execute
      */
     public static synchronized void registerShutdownHook(String name, Runnable runnable) {
         shutdownHooks.add(Pair.of(name, runnable));
     }
 
     /**
-     * Call registered shutdown hooks in the order of registration.
+     * Executes all registered shutdown hooks in order of registration
      */
     private static synchronized void shutdownHook() {
-        // shutdown hooks
         for (Pair<String, Runnable> r : shutdownHooks) {
             try {
                 log.info("Shutting down {}", r.getLeft());
@@ -101,15 +105,20 @@ public class Launcher {
     }
 
     /**
-     * Adds a supported option.
+     * Adds a supported command line option
+     * @param option The option to add
      */
     protected void addOption(Option option) {
         options.addOption(option);
     }
 
     /**
-     * Parses options from the given arguments.
-     * Priority: arguments => system property => console input
+     * Parses command line options with priority:
+     * 1. Command line arguments
+     * 2. System environment variables
+     * 3. Console input
+     * @param args Command line arguments
+     * @return Parsed command line
      */
     protected CommandLine parseOptions(String[] args) throws ParseException {
         CommandLineParser parser = new DefaultParser();
@@ -124,6 +133,11 @@ public class Launcher {
         return cmd;
     }
 
+    /**
+     * Builds configuration based on command line arguments
+     * @param args Command line arguments
+     * @return Appropriate network configuration
+     */
     protected Config buildConfig(String[] args) {
         Config config = null;
         for (String arg : args) {

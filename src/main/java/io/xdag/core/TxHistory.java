@@ -30,17 +30,34 @@ import static io.xdag.utils.BasicUtils.hash2Address;
 import static io.xdag.utils.BasicUtils.hash2byte;
 import static io.xdag.utils.WalletUtils.toBase58;
 
+/**
+ * Class representing transaction history records
+ */
 @Getter
 @Setter
 public class TxHistory {
 
-    Address address;
-    String hash;
-    long timestamp;
-    String remark;
+    // The address involved in the transaction
+    private Address address;
+    // Transaction hash
+    private String hash;
+    // Transaction timestamp
+    private long timestamp;
+    // Transaction remark/memo
+    private String remark;
 
-    public TxHistory(){}
+    /**
+     * Default constructor
+     */
+    public TxHistory() {}
 
+    /**
+     * Constructor with all fields
+     * @param address The address involved
+     * @param hash Transaction hash
+     * @param timestamp Transaction timestamp
+     * @param remark Transaction remark
+     */
     public TxHistory(Address address, String hash, long timestamp, String remark) {
         this.address = address;
         this.hash = hash;

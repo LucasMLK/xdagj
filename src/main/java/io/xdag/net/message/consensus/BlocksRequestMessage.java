@@ -24,13 +24,12 @@
 package io.xdag.net.message.consensus;
 
 import io.xdag.core.XdagStats;
-import io.xdag.net.NetDB;
 import io.xdag.net.message.MessageCode;
 import io.xdag.utils.XdagRandomUtils;
 
 public class BlocksRequestMessage extends XdagMessage {
-    public BlocksRequestMessage(long starttime, long endtime, XdagStats xdagStats, NetDB localNetdb) {
-        super(MessageCode.BLOCKS_REQUEST, null, starttime, endtime, XdagRandomUtils.nextLong(), xdagStats, localNetdb);
+    public BlocksRequestMessage(long starttime, long endtime, XdagStats xdagStats) {
+        super(MessageCode.BLOCKS_REQUEST, null, starttime, endtime, XdagRandomUtils.nextLong(), xdagStats);
     }
 
     public BlocksRequestMessage(byte[] body) {

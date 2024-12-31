@@ -37,21 +37,36 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.bouncycastle.util.Arrays;
 import org.xerial.snappy.Snappy;
 
+/**
+ * Class representing balance data for snapshot functionality
+ */
 @Data
 public class SnapshotBalanceData {
 
+    // Amount of balance
     protected long amount;
+    // Timestamp
     protected long time;
-    // we dont need storage_pos
+    // Storage position (deprecated but kept for compatibility)
     protected long storage_pos;
+    // Hash of the address
     protected byte[] hash;
-
+    // Flags for additional metadata
     protected int flags;
 
+    /**
+     * Default constructor
+     */
     public SnapshotBalanceData() {
-
     }
 
+    /**
+     * Constructor with all fields
+     * @param amount Balance amount
+     * @param time Timestamp
+     * @param hash Address hash
+     * @param flags Additional flags
+     */
     public SnapshotBalanceData(long amount, long time, byte[] hash, int flags) {
         this.amount = amount;
         this.time = time;
@@ -59,8 +74,14 @@ public class SnapshotBalanceData {
         this.flags = flags;
     }
 
+    /**
+     * Parse balance data from key-value pair
+     * @param key Key bytes
+     * @param value Value bytes
+     * @return Parsed SnapshotBalanceData object
+     */
     public static SnapshotBalanceData parse(Bytes key, Bytes value) {
-        // 未压缩
+        // For uncompressed data (32 bytes key)
         if (key.size() == 32) {
             long flags = value.getLong(0, ByteOrder.LITTLE_ENDIAN);
             long amount = value.getLong(8, ByteOrder.LITTLE_ENDIAN);
@@ -68,7 +89,7 @@ public class SnapshotBalanceData {
             Bytes32 hash = Bytes32.wrap(key.reverse());
             return new SnapshotBalanceData(amount, time, hash.toArray(), (int) flags);
         } else if (key.size() == 4) {
-            // 1. 解压缩
+            // For compressed data (4 bytes key)
             try {
                 Bytes uncompressed = Bytes.wrap(Snappy.uncompress(value.toArray()));
                 int flags = uncompressed.getInt(0, ByteOrder.LITTLE_ENDIAN);

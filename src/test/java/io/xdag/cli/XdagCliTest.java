@@ -24,8 +24,8 @@
 
 package io.xdag.cli;
 
-import static com.github.stefanbirkner.systemlambda.SystemLambda.catchSystemExit;
-import static com.github.stefanbirkner.systemlambda.SystemLambda.tapSystemOut;
+import static uk.org.webcompere.systemstubs.SystemStubs.catchSystemExit;
+import static uk.org.webcompere.systemstubs.SystemStubs.tapSystemOut;
 import static io.xdag.utils.WalletUtils.WALLET_PASSWORD_PROMPT;
 import static java.lang.System.setErr;
 import static java.lang.System.setOut;

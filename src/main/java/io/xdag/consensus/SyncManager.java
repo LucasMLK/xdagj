@@ -26,10 +26,7 @@ package io.xdag.consensus;
 
 import com.google.common.collect.Queues;
 import io.xdag.Kernel;
-import io.xdag.config.Config;
-import io.xdag.config.DevnetConfig;
-import io.xdag.config.MainnetConfig;
-import io.xdag.config.TestnetConfig;
+import io.xdag.config.*;
 import io.xdag.core.*;
 import io.xdag.db.TransactionHistoryStore;
 import io.xdag.net.Channel;
@@ -62,10 +59,10 @@ import static io.xdag.utils.XdagTime.msToXdagtimestamp;
 @Slf4j
 @Getter
 @Setter
-public class SyncManager {
-    // sycMap's MAX_SIZE
+public class SyncManager extends AbstractXdagLifecycle {
+    // Maximum size of syncMap
     public static final int MAX_SIZE = 500000;
-    // If syncMap.size() > MAX_SIZE remove number of keys;
+    // Number of keys to remove when syncMap exceeds MAX_SIZE
     public static final int DELETE_NUM = 5000;
 
     private static final ThreadFactory factory = new BasicThreadFactory.Builder()
@@ -80,21 +77,19 @@ public class SyncManager {
     private AtomicBoolean isUpdateXdagStats = new AtomicBoolean(false);
     private ChannelManager channelMgr;
 
-
-    // 监听是否需要自己启动
+    // Monitor whether to start itself
     private StateListener stateListener;
     /**
      * Queue with validated blocks to be added to the blockchain
      */
     private Queue<BlockWrapper> blockQueue = new ConcurrentLinkedQueue<>();
     /**
-     * Queue for the link block don't exist
+     * Queue for blocks with missing links
      */
     private ConcurrentHashMap<Bytes32, Queue<BlockWrapper>> syncMap = new ConcurrentHashMap<>();
-    /***
-     * Queue for poll oldest block
+    /**
+     * Queue for polling oldest blocks
      */
-//    private ConcurrentLinkedQueue<Bytes32> syncQueue = new ConcurrentLinkedQueue<>();
     private ConcurrentLinkedQueue<Bytes32> syncQueue = new ConcurrentLinkedQueue<>();
 
     private ScheduledExecutorService checkStateTask;
@@ -111,10 +106,20 @@ public class SyncManager {
         this.txHistoryStore = kernel.getTxHistoryStore();
     }
 
-    public void start() throws InterruptedException {
+    @Override
+    protected void doStart() {
         log.debug("Download receiveBlock run...");
         new Thread(this.stateListener, "xdag-stateListener").start();
         checkStateFuture = checkStateTask.scheduleAtFixedRate(this::checkState, 64, 5, TimeUnit.SECONDS);
+    }
+
+    @Override
+    protected void doStop() {
+        log.debug("sync manager stop");
+        if (this.stateListener.isRunning) {
+            this.stateListener.isRunning = false;
+        }
+        stopStateTask();
     }
 
     private void checkState() {
@@ -147,7 +152,7 @@ public class SyncManager {
     }
 
     /**
-     * 监听kernel状态 判断是否该自启
+     * Monitor kernel state to determine if it's time to start
      */
     public boolean isTimeToStart() {
         boolean res = false;
@@ -163,9 +168,9 @@ public class SyncManager {
     }
 
     /**
-     * Processing the queue adding blocks to the chain.
+     * Process blocks in queue and add them to the chain
      */
-    // todo:修改共识
+    // TODO: Modify consensus
     public ImportResult importBlock(BlockWrapper blockWrapper) {
         log.debug("importBlock:{}", blockWrapper.getBlock().getHashLow());
         ImportResult importResult = blockchain
@@ -215,10 +220,10 @@ public class SyncManager {
     }
 
     /**
-     * 同步缺失区块
+     * Synchronize missing blocks
      *
-     * @param blockWrapper 新区块
-     * @param hashLow      缺失的parent哈希
+     * @param blockWrapper New block
+     * @param hashLow Hash of missing parent block
      */
     public boolean syncPushBlock(BlockWrapper blockWrapper, Bytes32 hashLow) {
         if (syncMap.size() >= MAX_SIZE) {
@@ -247,7 +252,7 @@ public class SyncManager {
                                 b.setTime(now);
                                 r.set(true);
                             } else {
-                                // TODO should be consider timeout not received request block
+                                // TODO: Consider timeout for unreceived request block
                                 r.set(false);
                             }
                             return oldQ;
@@ -261,7 +266,7 @@ public class SyncManager {
     }
 
     /**
-     * 根据接收到的区块，将子区块释放
+     * Release child blocks based on received block
      */
     public void syncPopBlock(BlockWrapper blockWrapper) {
         Block block = blockWrapper.getBlock();
@@ -274,7 +279,7 @@ public class SyncManager {
                 ImportResult importResult = importBlock(bw);
                 switch (importResult) {
                     case EXIST, IN_MEM, IMPORTED_BEST, IMPORTED_NOT_BEST -> {
-                        // TODO import成功后都需要移除
+                        // TODO: Need to remove after successful import
                         syncPopBlock(bw);
                         queue.remove(bw);
                     }
@@ -299,10 +304,10 @@ public class SyncManager {
         }
     }
 
-    // TODO：目前默认是一直保持同步，不负责出块
+    // TODO: Currently stays in sync by default, not responsible for block generation
     public void makeSyncDone() {
         if (syncDone.compareAndSet(false, true)) {
-            // 关闭状态检测进程
+            // Stop state check process
             this.stateListener.isRunning = false;
             Config config = kernel.getConfig();
             if (config instanceof MainnetConfig) {
@@ -322,14 +327,14 @@ public class SyncManager {
             log.info("sync done, the last main block number = {}", blockchain.getXdagStats().nmain);
             kernel.getSync().setStatus(XdagSync.Status.SYNC_DONE);
             if (config.getEnableTxHistory() && txHistoryStore != null) {
-                // sync done, the remaining history is batch written.
+                // Sync done, batch write remaining history
                 txHistoryStore.batchSaveTxHistory(null);
             }
 
             if (config.getEnableGenerateBlock()) {
                 log.info("start pow at:{}",
                         FastDateFormat.getInstance("yyyy-MM-dd 'at' HH:mm:ss z").format(new Date()));
-                // check main chain
+                // Check main chain
 //                kernel.getMinerServer().start();
                 kernel.getPow().start();
             } else {
@@ -359,19 +364,11 @@ public class SyncManager {
                 || kernel.getXdagState() == CDSTP;
     }
 
-    public void stop() {
-        log.debug("sync manager stop");
-        if (this.stateListener.isRunning) {
-            this.stateListener.isRunning = false;
-        }
-        stopStateTask();
-    }
-
     private void stopStateTask() {
         if (checkStateFuture != null) {
             checkStateFuture.cancel(true);
         }
-        // 关闭线程池
+        // Shutdown thread pool
         checkStateTask.shutdownNow();
     }
 

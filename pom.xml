@@ -11,23 +11,22 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
-        <kotlin.version>1.8.21</kotlin.version>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <dist.phase>package</dist.phase>
         <dist.base>${project.basedir}/dist</dist.base>
 
-        <xdagj-native-randomx.version>0.1.8</xdagj-native-randomx.version>
-        <netty.version>4.1.115.Final</netty.version>
+        <xdagj-native-randomx.version>0.1.9</xdagj-native-randomx.version>
+        <netty.version>4.1.116.Final</netty.version>
         <tuweni.version>2.4.2</tuweni.version>
         <jackson.version>2.18.2</jackson.version>
         <kryo.version>5.5.0</kryo.version>
         <lombok.version>1.18.36</lombok.version>
         <caffeine.version>3.1.8</caffeine.version>
-        <jline.version>3.26.3</jline.version>
+        <jline.version>3.28.0</jline.version>
         <junit.version>4.13.2</junit.version>
         <mockito.version>5.14.2</mockito.version>
-        <system-lambda.version>1.2.1</system-lambda.version>
+        <system-stubs-jupiter.version>2.1.7</system-stubs-jupiter.version>
         <log4j.version>2.24.2</log4j.version>
         <commons-lang3.version>3.17.0</commons-lang3.version>
         <commons-rng.version>1.6</commons-rng.version>
@@ -37,22 +36,16 @@
         <commons-cli.version>1.9.0</commons-cli.version>
         <guava.version>33.3.1-jre</guava.version>
         <rocksdbjni.version>9.7.3</rocksdbjni.version>
-        <okhttp.version>4.12.0</okhttp.version>
-        <assertj-core.version>3.26.0</assertj-core.version>
         <crypto.version>23.1.3</crypto.version>
         <bcprov-jdk18on.version>1.79</bcprov-jdk18on.version>
         <bcpkix-jdk18on.version>1.79</bcpkix-jdk18on.version>
-        <vertx-core.version>4.5.11</vertx-core.version>
-        <jsonrpc4j.version>1.6</jsonrpc4j.version>
-        <jaxws-ri.version>4.0.2</jaxws-ri.version>
+        <jws-api.version>2.1.0</jws-api.version>
         <config.version>1.4.3</config.version>
-        <agrona.version>1.21.2</agrona.version>
         <snappy-java.version>1.1.10.7</snappy-java.version>
         <druid.version>1.2.24</druid.version>
         <mysql-connector.version>8.4.0</mysql-connector.version>
         <h2.version>2.3.232</h2.version>
         <gson.version>2.11.0</gson.version>
-        <jws-api.version>2.1.0</jws-api.version>
         <surefire.test.excludes>**/*RandomXSyncTest.java,**/*SyncTest.java,**/*SnapshotJTest.java</surefire.test.excludes>
     </properties>
 
@@ -232,7 +225,6 @@
                                         <exclude>META-INF/*.RSA</exclude>
                                         <exclude>about.html</exclude>
                                         <exclude>log4j2.xml</exclude>
-                                        <exclude>rpc_modules.conf</exclude>
                                         <exclude>druid.properties</exclude>
                                         <exclude>xdag-devnet.conf</exclude>
                                         <exclude>xdag-testnet.conf</exclude>
@@ -317,18 +309,64 @@
                         <phase>${dist.phase}</phase>
                         <configuration>
                             <target>
-                                <copy file="${project.basedir}/target/xdagj-${project.version}-shaded.jar" tofile="${dist.base}/linux/xdagj-${project.version}-shaded.jar"/>
-                                <copy file="src/main/resources/log4j2.xml" tofile="${dist.base}/linux/log4j2.xml"/>
-                                <copy file="src/main/resources/xdag-mainnet.conf" tofile="${dist.base}/linux/xdag-mainnet.conf"/>
-                                <copy file="src/main/resources/xdag-testnet.conf" tofile="${dist.base}/linux/xdag-testnet.conf"/>
-                                <copy file="src/main/resources/xdag-devnet.conf" tofile="${dist.base}/linux/xdag-devnet.conf"/>
-                                <copy file="src/main/resources/rpc_modules.conf" tofile="${dist.base}/linux/rpc_modules.conf"/>
-                                <copy file="src/main/resources/druid.properties" tofile="${dist.base}/linux/druid.properties"/>
-                                <copy file="${dist.base}/xdag.bat" tofile="${dist.base}/windows/xdag.bat"/>
-                                <copy file="${dist.base}/xdag.sh" tofile="${dist.base}/linux/xdag.sh"/>
+                                <!-- windows build -->
+                                <copy file="${project.basedir}/target/xdagj-${project.version}-shaded.jar"
+                                      tofile="${dist.base}/windows/xdagj-${project.version}-shaded.jar"/>
+                                <copy file="src/main/resources/log4j2.xml"
+                                      tofile="${dist.base}/windows/log4j2.xml"/>
+                                <copy file="src/main/resources/xdag-mainnet.conf"
+                                      tofile="${dist.base}/windows/xdag-mainnet.conf"/>
+                                <copy file="src/main/resources/xdag-testnet.conf"
+                                      tofile="${dist.base}/windows/xdag-testnet.conf"/>
+                                <copy file="src/main/resources/xdag-devnet.conf"
+                                      tofile="${dist.base}/windows/xdag-devnet.conf"/>
+                                <copy file="src/main/resources/druid.properties"
+                                      tofile="${dist.base}/windows/druid.properties"/>
+                                <copy file="${dist.base}/xdag.bat"
+                                      tofile="${dist.base}/windows/xdag.bat"/>
+                                <zip basedir="${dist.base}/windows/"
+                                     destfile="${dist.base}/xdagj-windows.zip"/>
+                                <delete dir="${dist.base}/windows/" includeemptydirs="true"/>
+
+                                <!-- linux build (executable jar) -->
+                                <copy file="${project.basedir}/target/xdagj-${project.version}-shaded.jar"
+                                      tofile="${dist.base}/linux/xdagj-${project.version}-shaded.jar"/>
+                                <copy file="src/main/resources/log4j2.xml"
+                                      tofile="${dist.base}/linux/log4j2.xml"/>
+                                <copy file="src/main/resources/xdag-mainnet.conf"
+                                      tofile="${dist.base}/linux/xdag-mainnet.conf"/>
+                                <copy file="src/main/resources/xdag-testnet.conf"
+                                      tofile="${dist.base}/linux/xdag-testnet.conf"/>
+                                <copy file="src/main/resources/xdag-devnet.conf"
+                                      tofile="${dist.base}/linux/xdag-devnet.conf"/>
+                                <copy file="src/main/resources/druid.properties"
+                                      tofile="${dist.base}/linux/druid.properties"/>
+                                <copy file="${dist.base}/xdag.sh"
+                                      tofile="${dist.base}/linux/xdag.sh"/>
                                 <chmod file="${dist.base}/linux/xdag.sh" perm="755"/>
-                                <zip basedir="${dist.base}/" destfile="${dist.base}/xdagj.zip"/>
-                                <delete dir="${dist.base}/" includeemptydirs="true"/>
+                                <zip basedir="${dist.base}/linux/"
+                                     destfile="${dist.base}/xdagj-linux.zip"/>
+                                <delete dir="${dist.base}/linux/" includeemptydirs="true"/>
+
+                                <!-- macos build -->
+                                <copy file="${project.basedir}/target/xdagj-${project.version}-shaded.jar"
+                                      tofile="${dist.base}/macos/xdagj-${project.version}-shaded.jar"/>
+                                <copy file="src/main/resources/log4j2.xml"
+                                      tofile="${dist.base}/macos/log4j2.xml"/>
+                                <copy file="src/main/resources/xdag-mainnet.conf"
+                                      tofile="${dist.base}/macos/xdag-mainnet.conf"/>
+                                <copy file="src/main/resources/xdag-testnet.conf"
+                                      tofile="${dist.base}/macos/xdag-testnet.conf"/>
+                                <copy file="src/main/resources/xdag-devnet.conf"
+                                      tofile="${dist.base}/macos/xdag-devnet.conf"/>
+                                <copy file="src/main/resources/druid.properties"
+                                      tofile="${dist.base}/macos/druid.properties"/>
+                                <copy file="${dist.base}/xdag.sh"
+                                      tofile="${dist.base}/macos/xdag.sh"/>
+                                <chmod file="${dist.base}/macos/xdag.sh" perm="755"/>
+                                <zip basedir="${dist.base}/macos/"
+                                     destfile="${dist.base}/xdagj-macos.zip"/>
+                                <delete dir="${dist.base}/macos/" includeemptydirs="true"/>
                             </target>
                         </configuration>
                         <goals>
@@ -359,6 +397,12 @@
             <groupId>io.xdag</groupId>
             <artifactId>xdagj-native-randomx</artifactId>
             <version>${xdagj-native-randomx.version}</version>
+            <exclusions>
+                <exclusion>
+                    <artifactId>slf4j-api</artifactId>
+                    <groupId>org.slf4j</groupId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Logging framework -->
@@ -366,11 +410,6 @@
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
             <version>${log4j.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.json</groupId>
-            <artifactId>json</artifactId>
-            <version>20231013</version>
         </dependency>
 
         <dependency>
@@ -484,18 +523,6 @@
         </dependency>
 
         <dependency>
-            <groupId>org.jetbrains.kotlin</groupId>
-            <artifactId>kotlin-stdlib</artifactId>
-            <version>${kotlin.version}</version>
-            <exclusions>
-                <exclusion>
-                    <artifactId>annotations</artifactId>
-                    <groupId>org.jetbrains</groupId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
             <version>${caffeine.version}</version>
@@ -511,30 +538,6 @@
             <groupId>org.jline</groupId>
             <artifactId>jline</artifactId>
             <version>${jline.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>com.squareup.okhttp3</groupId>
-            <artifactId>okhttp</artifactId>
-            <version>${okhttp.version}</version>
-            <exclusions>
-                <exclusion>
-                    <artifactId>annotations</artifactId>
-                    <groupId>org.jetbrains</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>kotlin-stdlib</artifactId>
-                    <groupId>org.jetbrains.kotlin</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>kotlin-stdlib-common</artifactId>
-                    <groupId>org.jetbrains.kotlin</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>kotlin-stdlib-jdk8</artifactId>
-                    <groupId>org.jetbrains.kotlin</groupId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <dependency>
@@ -558,29 +561,10 @@
         </dependency>
 
         <dependency>
-            <groupId>com.github.stefanbirkner</groupId>
-            <artifactId>system-lambda</artifactId>
-            <version>${system-lambda.version}</version>
+            <groupId>uk.org.webcompere</groupId>
+            <artifactId>system-stubs-jupiter</artifactId>
+            <version>${system-stubs-jupiter.version}</version>
             <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <groupId>junit</groupId>
-                    <artifactId>junit-dep</artifactId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
-            <groupId>org.assertj</groupId>
-            <artifactId>assertj-core</artifactId>
-            <version>${assertj-core.version}</version>
-            <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <artifactId>byte-buddy</artifactId>
-                    <groupId>net.bytebuddy</groupId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <dependency>
@@ -695,74 +679,6 @@
         </dependency>
 
         <dependency>
-            <groupId>io.vertx</groupId>
-            <artifactId>vertx-core</artifactId>
-            <version>${vertx-core.version}</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-common</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-buffer</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-transport</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-handler</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-handler-proxy</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-codec-http</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-codec-http2</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-resolver</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-resolver-dns</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-codec-haproxy</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-codec-haproxy</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-transport-native-epoll</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>io.netty</groupId>
-                    <artifactId>netty-transport-native-kqueue</artifactId>
-                </exclusion>
-                <exclusion>
-                    <groupId>com.fasterxml.jackson.core</groupId>
-                    <artifactId>jackson-core</artifactId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>jackson-databind</artifactId>
-                    <groupId>com.fasterxml.jackson.core</groupId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.version}</version>
@@ -781,62 +697,15 @@
         </dependency>
 
         <dependency>
-            <groupId>com.github.briandilley.jsonrpc4j</groupId>
-            <artifactId>jsonrpc4j</artifactId>
-            <version>${jsonrpc4j.version}</version>
-            <exclusions>
-                <exclusion>
-                    <artifactId>slf4j-api</artifactId>
-                    <groupId>org.slf4j</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>commons-codec</artifactId>
-                    <groupId>commons-codec</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>jackson-databind</artifactId>
-                    <groupId>com.fasterxml.jackson.core</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>jackson-core</artifactId>
-                    <groupId>com.fasterxml.jackson.core</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>jackson-annotations</artifactId>
-                    <groupId>com.fasterxml.jackson.core</groupId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
-            <groupId>com.sun.xml.ws</groupId>
-            <artifactId>jaxws-ri</artifactId>
-            <version>${jaxws-ri.version}</version>
-            <type>pom</type>
-            <exclusions>
-                <exclusion>
-                    <artifactId>jakarta.activation</artifactId>
-                    <groupId>com.sun.activation</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>angus-activation</artifactId>
-                    <groupId>org.eclipse.angus</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>angus-mail</artifactId>
-                    <groupId>org.eclipse.angus</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>jakarta.activation-api</artifactId>
-                    <groupId>jakarta.activation</groupId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
             <groupId>jakarta.jws</groupId>
             <artifactId>jakarta.jws-api</artifactId>
             <version>${jws-api.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>jakarta.ws.rs</groupId>
+            <artifactId>jakarta.ws.rs-api</artifactId>
+            <version>3.1.0</version>
         </dependency>
 
         <!--config-->
@@ -844,12 +713,6 @@
             <groupId>com.typesafe</groupId>
             <artifactId>config</artifactId>
             <version>${config.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.agrona</groupId>
-            <artifactId>agrona</artifactId>
-            <version>${agrona.version}</version>
         </dependency>
 
         <dependency>

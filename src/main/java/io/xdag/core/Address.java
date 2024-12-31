@@ -36,26 +36,35 @@ import org.apache.tuweni.units.bigints.UInt64;
 public class Address {
 
     /**
-     * 放入字段的数据 正常顺序
+     * Data to be placed in the field in normal order
      */
     protected MutableBytes32 data;
+    
     /**
-     * 输入or输出or不带amount的输出
+     * Field type: input/output/output without amount
      */
     @Getter
     @Setter
     protected XdagField.FieldType type;
+    
     /**
-     * 转账金额（输入or输出）
+     * Transfer amount (input or output)
      */
     protected XAmount amount = XAmount.ZERO;
+    
     /**
-     * 地址hash低192bit
+     * Lower 192 bits of address hash
      */
     protected MutableBytes32 addressHash;
 
+    /**
+     * Flag indicating if this is an address
+     */
     protected boolean isAddress;
 
+    /**
+     * Flag indicating if the address has been parsed
+     */
     protected boolean parsed = false;
 
     public Address(XdagField field, Boolean isAddress) {
@@ -66,9 +75,9 @@ public class Address {
     }
 
     /**
-     * 只用于ref 跟 maxdifflink
+     * Constructor used only for ref and maxdifflink
      */
-    public Address(Bytes32 hashLow,boolean isAddress) {
+    public Address(Bytes32 hashLow, boolean isAddress) {
         this.isAddress = isAddress;
         this.type = XdagField.FieldType.XDAG_FIELD_OUT;
         addressHash = MutableBytes32.create();
@@ -82,7 +91,7 @@ public class Address {
     }
 
     /**
-     * 只用于ref 跟 maxdifflink
+     * Constructor used only for ref and maxdifflink
      */
     public Address(Block block) {
         this.isAddress = false;
@@ -102,7 +111,6 @@ public class Address {
         this.type = type;
         parse();
     }
-
 
     public Address(Bytes32 hash, XdagField.FieldType type, XAmount amount, Boolean isAddress) {
         this.isAddress = isAddress;

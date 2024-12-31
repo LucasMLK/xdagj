@@ -28,22 +28,38 @@ import java.util.Arrays;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Class representing snapshot information
+ */
 @Getter
 @Setter
 public class SnapshotInfo {
 
-    protected boolean type; // true PUBKEY false BLOCK_DATA
-    protected byte[] data;// 区块数据 / pubkey
+    // Type of snapshot data: true for PUBKEY, false for BLOCK_DATA
+    protected boolean type;
+    // The actual data - either block data or public key
+    protected byte[] data;
 
+    /**
+     * Default constructor
+     */
     public SnapshotInfo() {
-
     }
 
+    /**
+     * Constructor with type and data
+     * @param type Type of data (true=PUBKEY, false=BLOCK_DATA)
+     * @param data The snapshot data
+     */
     public SnapshotInfo(boolean type, byte[] data) {
         this.type = type;
         this.data = data;
     }
 
+    /**
+     * Get the type of snapshot data
+     * @return true for PUBKEY, false for BLOCK_DATA
+     */
     public boolean getType() {
         return type;
     }

@@ -29,6 +29,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.Kernel;
 import io.xdag.config.Config;
+import io.xdag.core.AbstractXdagLifecycle;
 import io.xdag.net.PeerClient;
 import io.xdag.net.XdagChannelInitializer;
 import io.xdag.net.NetDBManager;
@@ -48,7 +49,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 
 @Slf4j
-public class NodeManager {
+public class NodeManager extends AbstractXdagLifecycle {
 
     private static final ThreadFactory factory = new BasicThreadFactory.Builder()
             .namingPattern("NodeManager-thread-%d")
@@ -72,9 +73,7 @@ public class NodeManager {
     private final ChannelManager channelMgr;
     private final NetDBManager netDBManager;
     private final Config config;
-    private volatile boolean isRunning;
     private ScheduledFuture<?> connectFuture;
-    private ScheduledFuture<?> fetchFuture;
 
     public NodeManager(Kernel kernel) {
         this.kernel = kernel;
@@ -88,29 +87,21 @@ public class NodeManager {
     /**
      * start the node manager
      */
-    public synchronized void start() {
-        if (!isRunning) {
-            // addNodes(getSeedNodes(config.getWhiteListDir()));
-            addNodes(getSeedNodes(netDBManager.getWhiteDB()));
+    @Override
+    protected synchronized void doStart() {
+        // addNodes(getSeedNodes(config.getWhiteListDir()));
+        addNodes(getSeedNodes(netDBManager.getWhiteDB()));
 
-            // every 0.5 seconds, delayed by 1 seconds (kernel boot up)
-            connectFuture = exec.scheduleAtFixedRate(this::doConnect, 1000, 500, TimeUnit.MILLISECONDS);
-            // every 100 seconds, delayed by 5 seconds (public IP lookup)
-            fetchFuture = exec.scheduleAtFixedRate(this::doFetch, 5, 100, TimeUnit.SECONDS);
-
-            isRunning = true;
-            log.debug("Node manager started");
-        }
+        // every 0.5 seconds, delayed by 1 seconds (kernel boot up)
+        connectFuture = exec.scheduleAtFixedRate(this::doConnect, 1000, 500, TimeUnit.MILLISECONDS);
+        log.debug("Node manager started");
     }
 
-    public synchronized void stop() {
-        if (isRunning) {
-            connectFuture.cancel(true);
-            fetchFuture.cancel(false);
-            isRunning = false;
-            exec.shutdown();
-            log.debug("Node manager stop...");
-        }
+    @Override
+    protected synchronized void doStop() {
+        connectFuture.cancel(true);
+        exec.shutdown();
+        log.debug("Node manager stop...");
     }
 
     public int queueSize() {
@@ -134,21 +125,6 @@ public class NodeManager {
         while (queueSize() > MAX_QUEUE_SIZE) {
             deque.removeLast();
         }
-    }
-
-
-    /**
-     * from net update seed nodes
-     */
-    protected void doFetch() {
-        log.debug("Do fetch node size:{}", deque.size());
-        if (config.getNodeSpec().enableRefresh()) {
-            netDBManager.refresh();
-        }
-        // 从白名单获得新节点
-        addNodes(getSeedNodes(netDBManager.getWhiteDB()));
-        // 从netdb获取新节点
-        addNodes(getSeedNodes(netDBManager.getNetDB()));
     }
 
     public Set<Node> getSeedNodes(NetDB netDB) {

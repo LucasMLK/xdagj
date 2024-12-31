@@ -31,6 +31,9 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * A TreeSet implementation for managing protocol capabilities
+ */
 public class CapabilityTreeSet {
 
     private final TreeSet<Capability> capabilities;
@@ -40,28 +43,30 @@ public class CapabilityTreeSet {
     }
 
     /**
-     * Creates an empty set.
+     * Creates an empty capability set
+     *
+     * @return An empty CapabilityTreeSet
      */
     public static CapabilityTreeSet emptyList() {
         return new CapabilityTreeSet(Collections.emptyList());
     }
 
     /**
-     * Converts an array of capability into capability set.
+     * Creates a capability set from an array of Capability objects
      *
-     * @param capabilities
-     *            the specified capabilities
+     * @param capabilities Array of capabilities to include
+     * @return A new CapabilityTreeSet containing the specified capabilities
      */
     public static CapabilityTreeSet of(Capability... capabilities) {
         return new CapabilityTreeSet(Stream.of(capabilities).filter(Objects::nonNull).collect(Collectors.toList()));
     }
 
     /**
-     * Converts an array of capability into capability set.
+     * Creates a capability set from an array of capability names
      *
-     * @param capabilities
-     *            the specified capabilities
-     * @ImplNode unknown capabilities are ignored
+     * @param capabilities Array of capability names
+     * @return A new CapabilityTreeSet containing the valid capabilities
+     * @note Invalid capability names are ignored
      */
     public static CapabilityTreeSet of(String... capabilities) {
         return new CapabilityTreeSet(
@@ -69,25 +74,28 @@ public class CapabilityTreeSet {
     }
 
     /**
-     * Checks whether the capability is supported by the ${@link CapabilityTreeSet}.
+     * Checks if a specific capability is supported
      *
-     * @param capability
-     *            the capability to be checked.
-     * @return true if the capability is supported, false if not
+     * @param capability The capability to check
+     * @return true if the capability is supported, false otherwise
      */
     public boolean isSupported(Capability capability) {
         return capabilities.contains(capability);
     }
 
     /**
-     * Returns the size of the capability set.
+     * Gets the number of capabilities in the set
+     *
+     * @return The size of the capability set
      */
     public int size() {
         return capabilities.size();
     }
 
     /**
-     * Converts the capability set to an array of String.
+     * Converts the capability set to an array of capability names
+     *
+     * @return Array of capability names as strings
      */
     public String[] toArray() {
         return capabilities.stream().map(Capability::name).toArray(String[]::new);

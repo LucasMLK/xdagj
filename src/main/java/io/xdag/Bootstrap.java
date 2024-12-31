@@ -26,8 +26,17 @@ package io.xdag;
 
 import io.xdag.cli.XdagCli;
 
+/**
+ * Bootstrap class that serves as the entry point for the XDAG application
+ */
 public class Bootstrap {
 
+    /**
+     * Main method that launches the XDAG CLI application
+     * 
+     * @param args Command line arguments passed to the application
+     * @throws Exception If any error occurs during application startup
+     */
     public static void main(String[] args) throws Exception {
         XdagCli.main(args);
     }

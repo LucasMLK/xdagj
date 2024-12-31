@@ -23,17 +23,16 @@
  */
 package io.xdag.db;
 
+import io.xdag.core.XdagLifecycle;
 import org.apache.tuweni.units.bigints.UInt64;
 
 import io.xdag.core.XAmount;
 
-public interface AddressStore {
+public interface AddressStore extends XdagLifecycle {
 
     byte ADDRESS_SIZE = (byte) 0x10;
     byte AMOUNT_SUM = (byte) 0x20;
     byte ADDRESS = (byte) 0x30;
-
-    void init();
 
     void reset();
 
@@ -47,7 +46,7 @@ public interface AddressStore {
 
     void saveAddressSize(byte[] addressSize);
 
-    void savaAmountSum(XAmount balanceSum);
+    void saveAmountSum(XAmount balanceSum);
 
     void updateAllBalance(XAmount balance);
 

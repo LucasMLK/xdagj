@@ -24,17 +24,42 @@
 
 package io.xdag.config.spec;
 
-import io.xdag.rpc.modules.ModuleDescription;
-import java.util.List;
-
+/**
+ * Interface for RPC configuration specifications
+ * Defines methods to access RPC server configuration parameters
+ */
 public interface RPCSpec {
 
-    List<ModuleDescription> getRpcModules();
+    /**
+     * Check if RPC http server is enabled
+     * @return Boolean indicating if RPC is enabled
+     */
+    boolean isRpcHttpEnabled();
 
-    boolean isRPCEnabled();
+    /**
+     * Get the host address for RPC http server
+     * @return String containing the RPC server host address
+     */
+    String getRpcHttpHost();
 
-    String getRPCHost();
+    /**
+     * Get the port number for RPC HTTP server
+     * @return Integer containing the RPC server HTTP port number
+     */
+    int getRpcHttpPort();
 
-    int getRPCPortByHttp();
+    boolean isRpcEnableHttps();
+
+    String getRpcHttpCorsOrigins();
+
+    int getRpcHttpMaxContentLength();
+
+    int getRpcHttpBossThreads();
+
+    int getRpcHttpWorkerThreads();
+
+    String getRpcHttpsCertFile();
+
+    String getRpcHttpsKeyFile();
 
 }

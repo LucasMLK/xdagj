@@ -24,13 +24,12 @@
 package io.xdag.net.message.consensus;
 
 import io.xdag.core.XdagStats;
-import io.xdag.net.NetDB;
 import io.xdag.net.message.MessageCode;
 import io.xdag.utils.XdagRandomUtils;
 
 public class SumRequestMessage extends XdagMessage {
-    public SumRequestMessage(long starttime, long endtime, XdagStats xdagStats, NetDB localNetdb) {
-        super(MessageCode.SUMS_REQUEST, SumReplyMessage.class, starttime, endtime, XdagRandomUtils.nextLong(), xdagStats, localNetdb);
+    public SumRequestMessage(long starttime, long endtime, XdagStats xdagStats) {
+        super(MessageCode.SUMS_REQUEST, SumReplyMessage.class, starttime, endtime, XdagRandomUtils.nextLong(), xdagStats);
     }
 
     public SumRequestMessage(byte[] body) {

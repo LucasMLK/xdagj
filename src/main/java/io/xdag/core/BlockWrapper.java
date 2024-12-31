@@ -28,21 +28,34 @@ import io.xdag.net.Peer;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Wrapper class for Block that includes additional metadata for block processing
+ */
 @Getter
 @Setter
 public class BlockWrapper implements Cloneable {
 
+    // The actual block
     private Block block;
+    // Time to live counter
     private int ttl;
     /**
-     * 记录区块接收节点
+     * The peer node from which this block was received
      */
     private Peer remotePeer;
-    // NO_PARENT waiting time
+    // Timestamp for tracking NO_PARENT waiting time
     private long time;
-
+    
+    // Flag indicating if this is an old block
     private boolean isOld;
 
+    /**
+     * Constructor with all fields
+     * @param block The block to wrap
+     * @param ttl Time to live value
+     * @param remotePeer The peer that sent this block
+     * @param isOld Whether this is an old block
+     */
     public BlockWrapper(Block block, int ttl, Peer remotePeer, boolean isOld) {
         this.block = block;
         this.ttl = ttl;
@@ -50,6 +63,11 @@ public class BlockWrapper implements Cloneable {
         this.isOld = isOld;
     }
 
+    /**
+     * Constructor with only block and ttl
+     * @param block The block to wrap
+     * @param ttl Time to live value
+     */
     public BlockWrapper(Block block, int ttl) {
         this.block = block;
         this.ttl = ttl;

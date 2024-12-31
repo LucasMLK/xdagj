@@ -45,7 +45,6 @@ import org.hyperledger.besu.crypto.SECPSignature;
 public class Sign {
 
     public static final String CURVE_NAME = "secp256k1";
-
     public static final X9ECParameters CURVE_PARAMS = CustomNamedCurves.getByName(CURVE_NAME);
     public static final ECDomainParameters CURVE =
             new ECDomainParameters(
@@ -58,7 +57,7 @@ public class Sign {
     static final BigInteger HALF_CURVE_ORDER = CURVE_PARAMS.getN().shiftRight(1);
 
     /**
-     * Decompress a compressed public key (x co-ord and low-bit of y-coord).
+     * Decompress a compressed public key (x coordinate and low-bit of y-coordinate).
      */
     public static ECPoint decompressKey(BigInteger xBN, boolean yBit) {
         X9IntegerConverter x9 = new X9IntegerConverter();
@@ -96,13 +95,20 @@ public class Sign {
         return new FixedPointCombMultiplier().multiply(CURVE.getG(), privKey);
     }
 
+    /**
+     * Returns the byte array representation of the public key derived from the private key.
+     *
+     * @param privKey  the private key to derive the public key from
+     * @param compressed indicates if the public key should be in compressed format
+     * @return byte array of the public key
+     */
     public static byte[] publicKeyBytesFromPrivate(BigInteger privKey, boolean compressed) {
         ECPoint point = publicPointFromPrivate(privKey);
         return point.getEncoded(compressed);
     }
 
     /**
-     * Returns public key point from the given curve.
+     * Returns public key from the given byte array representation of a point on the curve.
      *
      * @param bits representing the point on the curve
      * @return BigInteger encoded public key
@@ -111,8 +117,14 @@ public class Sign {
         return new BigInteger(1, Arrays.copyOfRange(bits, 1, bits.length)); // remove prefix
     }
 
+    /**
+     * Converts a signature to its canonical form.
+     *
+     * @param signature the signature to convert
+     * @return the canonical SECPSignature
+     */
     public static SECPSignature toCanonical(SECPSignature signature) {
-        if(signature.getS().compareTo(HALF_CURVE_ORDER)>0){
+        if(signature.getS().compareTo(HALF_CURVE_ORDER) > 0){
             return SECPSignature.create(signature.getR(), CURVE.getN().subtract(signature.getS()), (byte) 0, CURVE.getN());
         }
         return signature;

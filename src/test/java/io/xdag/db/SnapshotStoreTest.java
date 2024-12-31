@@ -152,7 +152,7 @@ public class SnapshotStoreTest {
         kernel.setRandomx(nativeRandomX);
         MockBlockchain blockchain = new MockBlockchain(kernel);
         kernel.setBlockchain(blockchain);
-        nativeRandomX.init();
+        nativeRandomX.start();
 
         backup = root2.newFolder();
         createBlockchain();

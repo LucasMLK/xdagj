@@ -29,13 +29,12 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
 
 import io.xdag.core.XdagStats;
-import io.xdag.net.NetDB;
 import io.xdag.net.message.MessageCode;
 
 public class BlockRequestMessage extends XdagMessage {
 
-    public BlockRequestMessage(MutableBytes hash, XdagStats xdagStats, NetDB localNetdb) {
-        super(MessageCode.BLOCK_REQUEST, null, 0, 0, Bytes32.wrap(hash), xdagStats, localNetdb);
+    public BlockRequestMessage(MutableBytes hash, XdagStats xdagStats) {
+        super(MessageCode.BLOCK_REQUEST, null, 0, 0, Bytes32.wrap(hash), xdagStats);
     }
 
     public BlockRequestMessage(byte[] body) {

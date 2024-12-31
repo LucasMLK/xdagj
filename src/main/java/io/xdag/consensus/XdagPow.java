@@ -24,8 +24,11 @@
 
 package io.xdag.consensus;
 
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.xdag.Kernel;
 import io.xdag.Wallet;
+import io.xdag.core.XdagLifecycle;
 import io.xdag.core.*;
 import io.xdag.crypto.Hash;
 import io.xdag.crypto.RandomX;
@@ -34,7 +37,7 @@ import io.xdag.listener.BlockMessage;
 import io.xdag.listener.Listener;
 import io.xdag.listener.PretopMessage;
 import io.xdag.net.ChannelManager;
-import io.xdag.net.websocket.ChannelSupervise;
+import io.xdag.pool.ChannelSupervise;
 import io.xdag.pool.PoolAwardManager;
 import io.xdag.utils.BytesUtils;
 import io.xdag.utils.XdagRandomUtils;
@@ -46,12 +49,11 @@ import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.Objects;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -61,7 +63,7 @@ import static io.xdag.utils.BytesUtils.compareTo;
 import static io.xdag.utils.BytesUtils.equalBytes;
 
 @Slf4j
-public class XdagPow implements PoW, Listener, Runnable {
+public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
 
 
     private final Kernel kernel;
@@ -70,7 +72,7 @@ public class XdagPow implements PoW, Listener, Runnable {
     protected Broadcaster broadcaster;
     @Getter
     protected GetShares sharesFromPools;
-    // 当前区块
+    // Current block
     protected AtomicReference<Block> generateBlock = new AtomicReference<>();
     protected AtomicReference<Bytes32> minShare = new AtomicReference<>();
     protected final AtomicReference<Bytes32> minHash = new AtomicReference<>();
@@ -100,7 +102,7 @@ public class XdagPow implements PoW, Listener, Runnable {
             .build());
 
     protected RandomX randomXUtils;
-    private boolean isRunning = false;
+    private final AtomicBoolean running = new AtomicBoolean(false);
 
 
     public XdagPow(Kernel kernel) {
@@ -118,8 +120,7 @@ public class XdagPow implements PoW, Listener, Runnable {
 
     @Override
     public void start() {
-        if (!this.isRunning) {
-            this.isRunning = true;
+        if (running.compareAndSet(false, true)) {
             getSharesExecutor.execute(this.sharesFromPools);
             mainExecutor.execute(this);
             kernel.getPoolAwardManager().start();
@@ -130,12 +131,10 @@ public class XdagPow implements PoW, Listener, Runnable {
 
     @Override
     public void stop() {
-        if (isRunning) {
-            isRunning = false;
+        if (running.compareAndSet(true, false)) {
             timer.isRunning = false;
             broadcaster.isRunning = false;
             sharesFromPools.isRunning = false;
-
         }
     }
 
@@ -219,7 +218,7 @@ public class XdagPow implements PoW, Listener, Runnable {
 
     @Override
     public boolean isRunning() {
-        return this.isRunning;
+        return running.get();
     }
 
     /**
@@ -228,7 +227,7 @@ public class XdagPow implements PoW, Listener, Runnable {
     @Override
     public void receiveNewShare(String share, String hash, long taskIndex) {
 
-        if (!this.isRunning) {
+        if (!running.get()) {
             return;
         }
         if (currentTask.get() == null) {
@@ -244,7 +243,7 @@ public class XdagPow implements PoW, Listener, Runnable {
 
     public void receiveNewPretop(Bytes pretop) {
         // make sure the PoW is running and the main block is generating
-        if (!this.isRunning || !isWorking) {
+        if (!running.get() || !isWorking) {
             return;
         }
 
@@ -338,17 +337,14 @@ public class XdagPow implements PoW, Listener, Runnable {
     }
 
     /**
-     * Created original task, now deprecated
+     * Create original task, now deprecated
      */
     private Task createTaskByNewBlock(Block block, long sendTime) {
         Task newTask = new Task();
 
         XdagField[] task = new XdagField[2];
         task[1] = block.getXdagBlock().getField(14);
-//        byte[] data = new byte[448];
         MutableBytes data = MutableBytes.create(448);
-
-//        System.arraycopy(block.getXdagBlock().getData(), 0, data, 0, 448);
         data.set(0, block.getXdagBlock().getData().slice(0, 448));
 
         XdagSha256Digest currentTaskDigest = new XdagSha256Digest();
@@ -374,7 +370,7 @@ public class XdagPow implements PoW, Listener, Runnable {
         timer.timeout(XdagTime.getEndOfEpoch(XdagTime.getCurrentTimestamp() + 64));
         // init pretop
         globalPretop = null;
-        while (this.isRunning) {
+        while (running.get()) {
             try {
                 Event ev = events.poll(10, TimeUnit.MILLISECONDS);
                 if (ev == null) {
@@ -543,18 +539,19 @@ public class XdagPow implements PoW, Listener, Runnable {
                 } catch (InterruptedException e) {
                     log.error(e.getMessage(), e);
                 }
+
                 if (shareInfo != null) {
                     try {
-                        JSONObject shareJson = new JSONObject(shareInfo);
-                        if (shareJson.getInt("msgType") == SHARE_FLAG) {
-                            receiveNewShare(shareJson.getJSONObject("msgContent").getString("share"),
-                                    shareJson.getJSONObject("msgContent").getString("hash"),
-                                    shareJson.getJSONObject("msgContent").getLong("taskIndex"));
+                        JsonObject shareJson = JsonParser.parseString(shareInfo).getAsJsonObject();
+                        if (shareJson.get("msgType").getAsInt() == SHARE_FLAG) {
+                            JsonObject msgContent = shareJson.getAsJsonObject("msgContent");
+                            receiveNewShare(msgContent.get("share").getAsString(),
+                                    msgContent.get("hash").getAsString(),
+                                    msgContent.get("taskIndex").getAsLong());
                         } else {
                             log.error("Share format error! Current share: {}", shareInfo);
                         }
-
-                    } catch (JSONException e) {
+                    } catch (Exception e) {
                         log.error("Share format error, current share: {}", shareInfo);
                     }
                 }
@@ -562,7 +559,7 @@ public class XdagPow implements PoW, Listener, Runnable {
         }
 
         public void getShareInfo(String share) {
-            // todo:Limit the number of shares submitted by each pool within each block production cycle
+            // TODO: Limit the number of shares submitted by each pool within each block production cycle
             if (!shareQueue.offer(share)) {
                 log.error("Failed to get ShareInfo from pools");
             }

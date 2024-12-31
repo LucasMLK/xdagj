@@ -26,8 +26,14 @@ package io.xdag.crypto;
 import io.xdag.utils.exception.AddressFormatException;
 import java.util.Arrays;
 
+/**
+ * A utility class for encoding and decoding strings using the base58 algorithm.
+ * It is used to encode addresses and other data.
+ *
+ * @author Jaret Zhao
+ */
 public class Base58 {
-    public static final char[] ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".toCharArray();
+    private static final char[] ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".toCharArray();
     private static final char ENCODED_ZERO = ALPHABET[0];
     private static final int[] INDEXES = new int[128];
     static {
@@ -37,7 +43,12 @@ public class Base58 {
         }
     }
 
-
+    /**
+     * Encode a byte array to a base58 string.
+     *
+     * @param input the byte array to encode
+     * @return a base58 string
+     */
     public static String encode(byte[] input) {
         if (input.length == 0) {
             return "";
@@ -68,18 +79,13 @@ public class Base58 {
         return new String(encoded, outputStart, encoded.length - outputStart);
     }
 
-
-    public static String encodeChecked(byte[] payload) {
-        // A stringified buffer is:
-        //20 data bytes + 4 bytes check code (a truncated hash)
-        byte[] addressBytes = new byte[payload.length + 4];
-        System.arraycopy(payload, 0, addressBytes, 0, payload.length);
-        byte[] checksum = Hash.hashTwice(payload);
-        System.arraycopy(checksum, 0, addressBytes, payload.length, 4);
-        return Base58.encode(addressBytes);
-    }
-
-
+    /**
+     * Decode a base58 string to a byte array.
+     *
+     * @param input the base58 string to decode
+     * @return a byte array
+     * @throws AddressFormatException if the input string is invalid
+     */
     public static byte[] decode(String input) throws AddressFormatException {
         if (input.isEmpty()) {
             return new byte[0];
@@ -116,7 +122,29 @@ public class Base58 {
         return Arrays.copyOfRange(decoded, outputStart - zeros, decoded.length);
     }
 
+    /**
+     * Encode a byte array to a base58 string with a checksum.
+     *
+     * @param payload the byte array to encode
+     * @return a base58 string with a checksum
+     */
+    public static String encodeChecked(byte[] payload) {
+        // A stringified buffer is:
+        //20 data bytes + 4 bytes check code (a truncated hash)
+        byte[] addressBytes = new byte[payload.length + 4];
+        System.arraycopy(payload, 0, addressBytes, 0, payload.length);
+        byte[] checksum = Hash.hashTwice(payload);
+        System.arraycopy(checksum, 0, addressBytes, payload.length, 4);
+        return Base58.encode(addressBytes);
+    }
 
+    /**
+     * Decode a base58 string with a checksum to a byte array.
+     *
+     * @param input the base58 string to decode
+     * @return a byte array
+     * @throws AddressFormatException if the input string is invalid
+     */
     public static byte[] decodeChecked(String input) throws AddressFormatException {
         byte[] decoded  = decode(input);
         if (decoded.length < 4)
@@ -129,6 +157,12 @@ public class Base58 {
         return data;
     }
 
+    /**
+     * Check whether a base58 string is valid.
+     *
+     * @param input the base58 string to check
+     * @return true if the string is valid, false otherwise
+     */
     public static boolean checkAddress(String input) {
         byte[] decoded;
         try {

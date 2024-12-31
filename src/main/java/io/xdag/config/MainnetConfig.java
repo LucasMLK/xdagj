@@ -31,12 +31,26 @@ import org.apache.tuweni.units.bigints.UInt64;
 import io.xdag.Network;
 import io.xdag.core.XAmount;
 
+/**
+ * Configuration class for the main network (mainnet)
+ * Extends AbstractConfig to provide mainnet-specific settings
+ */
 public class MainnetConfig extends AbstractConfig {
 
+    /**
+     * Constructor initializes mainnet configuration with specific parameters:
+     * - Network type: MAINNET
+     * - Version: MAINNET_VERSION
+     * - XDAG era: 0x16940000000L
+     * - Main start amount: 2^42 XDAG
+     * - Apollo fork height: 1017323
+     * - Apollo fork amount: 2^39 XDAG
+     * - Field header type: XDAG_FIELD_HEAD
+     * - Wallet file paths for mainnet
+     */
     public MainnetConfig() {
         super("mainnet", "xdag-mainnet", Network.MAINNET, Constants.MAINNET_VERSION);
         this.network = Network.MAINNET;
-        this.whitelistUrl = "https://raw.githubusercontent.com/XDagger/xdag/master/client/netdb-white.txt";
         this.xdagEra = 0x16940000000L;
         this.mainStartAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 42).toLong());
         this.apolloForkHeight = 1017323;

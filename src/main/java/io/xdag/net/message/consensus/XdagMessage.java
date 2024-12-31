@@ -29,7 +29,6 @@ import org.apache.tuweni.bytes.Bytes32;
 
 import io.xdag.utils.SimpleEncoder;
 import io.xdag.core.XdagStats;
-import io.xdag.net.NetDB;
 import io.xdag.net.message.Message;
 import io.xdag.net.message.MessageCode;
 import io.xdag.utils.BytesUtils;
@@ -52,39 +51,32 @@ public abstract class XdagMessage extends Message  {
 
     protected XdagStats xdagStats;
 
-    protected NetDB remoteNetdb;
-
-    protected NetDB localNetdb;
-
     public XdagMessage(MessageCode code, Class<?> responseMessageClass, byte[] body) {
         super(code, responseMessageClass);
         this.body = body;
         decode();
     }
 
-    public XdagMessage(MessageCode code, Class<?> responseMessageClass, long starttime, long endtime, long random, XdagStats xdagStats, NetDB localNetdb) {
+    public XdagMessage(MessageCode code, Class<?> responseMessageClass, long starttime, long endtime, long random, XdagStats xdagStats) {
         super(code, responseMessageClass);
 
         this.starttime = starttime;
         this.endtime = endtime;
         this.random = random;
         this.xdagStats = xdagStats;
-        this.localNetdb = localNetdb;
 
         this.hash = Bytes32.ZERO;
         SimpleEncoder enc = encode();
         this.body = enc.toBytes();
     }
 
-    public XdagMessage(MessageCode code, Class<?> responseMessageClass, long starttime, long endtime, Bytes32 hash, XdagStats xdagStats,
-            NetDB localNetdb) {
+    public XdagMessage(MessageCode code, Class<?> responseMessageClass, long starttime, long endtime, Bytes32 hash, XdagStats xdagStats) {
         super(code, responseMessageClass);
 
         this.starttime = starttime;
         this.endtime = endtime;
         this.hash = hash;
         this.xdagStats = xdagStats;
-        this.localNetdb = localNetdb;
 
         SimpleEncoder enc = encode();
         this.body = enc.toBytes();
@@ -104,8 +96,6 @@ public abstract class XdagMessage extends Message  {
         enc.writeLong(Math.max(xdagStats.totalnmain, xdagStats.nmain));
         enc.writeInt(xdagStats.totalnhosts);
         enc.writeLong(xdagStats.maintime);
-
-        enc.writeBytes(localNetdb.getEncoded());
         return enc;
     }
 
@@ -124,9 +114,6 @@ public abstract class XdagMessage extends Message  {
         long maintime = dec.readLong();
 
         xdagStats = new XdagStats(maxdifficulty, totalnblocks, totalnmains, totalnhosts, maintime);
-
-        byte[] netdb = dec.readBytes();
-        localNetdb = new NetDB(netdb);
         return dec;
     }
 

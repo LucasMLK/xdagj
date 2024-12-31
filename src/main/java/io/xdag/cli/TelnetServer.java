@@ -25,33 +25,62 @@
 package io.xdag.cli;
 
 import io.xdag.Kernel;
+import io.xdag.core.AbstractXdagLifecycle;
 import lombok.extern.slf4j.Slf4j;
 import org.jline.builtins.telnet.Telnet;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.TerminalBuilder;
 
+/**
+ * Telnet server implementation for remote CLI access
+ */
 @Slf4j
-public class TelnetServer {
+public class TelnetServer extends AbstractXdagLifecycle {
 
     private final Kernel kernel;
     private final String ip;
     private final int port;
+    private Terminal terminal;
+    private Shell xShell;
+    private Telnet telnetServer;
 
-    public TelnetServer(final String ip, final int port, final Kernel kernel) {
-        this.ip = ip;
-        this.port = port;
+    /**
+     * Constructor for TelnetServer
+     * @param kernel Kernel instance for XDAG operations
+     */
+    public TelnetServer(final Kernel kernel) {
+        this.ip = kernel.getConfig().getAdminSpec().getAdminTelnetIp();
+        this.port = kernel.getConfig().getAdminSpec().getAdminTelnetPort();
         this.kernel = kernel;
     }
 
-    public void start() {
+    /**
+     * Starts the telnet server
+     * Creates a terminal, initializes the shell and starts listening for connections
+     */
+    @Override
+    protected void doStart() {
         try {
-            Terminal terminal = TerminalBuilder.builder().build();
-            Shell xShell = new Shell();
+            terminal = TerminalBuilder.builder().build();
+            xShell = new Shell();
             xShell.setKernel(kernel);
-            Telnet telnetServer = new Telnet(terminal, xShell);
+            telnetServer = new Telnet(terminal, xShell);
             telnetServer.telnetd(new String[]{"-i" + ip, "-p" + port, "start"});
         } catch (Exception e) {
             log.error(e.getMessage(), e);
         }
     }
+
+    @Override
+    protected void doStop() {
+        if (telnetServer != null) {
+            try {
+                terminal.close();
+                telnetServer.telnetd(new String[]{"stop"});
+            } catch (Exception e) {
+                log.error(e.getMessage(), e);
+            }
+        }
+    }
+
 }

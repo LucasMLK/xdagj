@@ -27,13 +27,12 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
 
 import io.xdag.core.XdagStats;
-import io.xdag.net.NetDB;
 import io.xdag.net.message.MessageCode;
 
 public class SyncBlockRequestMessage extends XdagMessage {
 
-    public SyncBlockRequestMessage(MutableBytes hash, XdagStats xdagStats, NetDB localNetdb) {
-        super(MessageCode.SYNCBLOCK_REQUEST, SyncBlockMessage.class, 0, 0, Bytes32.wrap(hash), xdagStats, localNetdb);
+    public SyncBlockRequestMessage(MutableBytes hash, XdagStats xdagStats) {
+        super(MessageCode.SYNCBLOCK_REQUEST, SyncBlockMessage.class, 0, 0, Bytes32.wrap(hash), xdagStats);
     }
 
     public SyncBlockRequestMessage(byte[] body) {

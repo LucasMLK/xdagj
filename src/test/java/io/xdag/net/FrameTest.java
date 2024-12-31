@@ -23,7 +23,7 @@
  */
 package io.xdag.net;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
@@ -50,6 +50,12 @@ public class FrameTest {
         buf.readerIndex(0);
         Frame frame2 = Frame.readHeader(buf);
 
-        assertThat(frame2).isEqualToComparingFieldByFieldRecursively(frame);
+        assertEquals(frame.getVersion(), frame2.getVersion());
+        assertEquals(frame.getCompressType(), frame2.getCompressType());
+        assertEquals(frame.getPacketType(), frame2.getPacketType());
+        assertEquals(frame.getPacketId(), frame2.getPacketId());
+        assertEquals(frame.getPacketSize(), frame2.getPacketSize());
+        assertEquals(frame.getBodySize(), frame2.getBodySize());
+        assertEquals(frame.getBody(), frame2.getBody());
     }
 }

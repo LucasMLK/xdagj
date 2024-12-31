@@ -280,7 +280,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
             }
             System.out.println("amount in address: " + allBalance.toDecimal(9, XUnit.XDAG).toPlainString());
             //sava Address all Balance as AMOUNT_SUM
-            addressStore.savaAmountSum(allBalance);
+            addressStore.saveAmountSum(allBalance);
         }
     }
 

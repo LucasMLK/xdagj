@@ -26,28 +26,54 @@ package io.xdag.utils.exception;
 
 import java.io.Serial;
 
+/**
+ * Exception thrown when XDAG amount calculation results in overflow
+ */
 public class XdagOverFlowException extends RuntimeException {
 
     @Serial
     private static final long serialVersionUID = 1L;
 
+    /**
+     * Constructs a new XdagOverFlowException with default message
+     */
     public XdagOverFlowException() {
         super("amount overflow!");
     }
 
+    /**
+     * Constructs a new XdagOverFlowException with specified message, cause and flags
+     * @param message The error message
+     * @param cause The cause of the exception
+     * @param enableSuppression Whether suppression is enabled
+     * @param writableStackTrace Whether the stack trace should be writable
+     */
     public XdagOverFlowException(
             String message, Throwable cause, boolean enableSuppression, boolean writableStackTrace) {
         super(message, cause, enableSuppression, writableStackTrace);
     }
 
+    /**
+     * Constructs a new XdagOverFlowException with specified message and cause
+     * @param message The error message
+     * @param cause The cause of the exception
+     */
     public XdagOverFlowException(String message, Throwable cause) {
         super(message, cause);
     }
 
+    /**
+     * Constructs a new XdagOverFlowException with specified message
+     * @param message The error message
+     */
     public XdagOverFlowException(String message) {
         super(message);
     }
 
+    /**
+     * Constructs a new XdagOverFlowException with specified cause
+     * @param cause The cause of the exception
+     */
     public XdagOverFlowException(Throwable cause) {
         super(cause);
     }
