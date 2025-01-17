@@ -123,6 +123,14 @@ public interface XdagApi extends XdagLifecycle {
     String xdag_getBalance(String address);
 
     /**
+     * Get the transaction nonce of a specific address.
+     *
+     * @param address XDAG address
+     * @return Transaction nonce as string
+     */
+    String xdag_getTransactionNonce(String address);
+
+    /**
      * Get the total balance of the node.
      *
      * @return Total balance as string

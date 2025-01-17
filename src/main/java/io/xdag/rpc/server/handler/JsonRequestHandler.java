@@ -43,6 +43,7 @@ public class JsonRequestHandler implements JsonRpcRequestHandler {
             "xdag_blockNumber",
             "xdag_coinbase",
             "xdag_getBalance",
+            "xdag_getTransactionNonce",
             "xdag_getTotalBalance",
             "xdag_getStatus",
             "xdag_personal_sendTransaction",
@@ -107,6 +108,10 @@ public class JsonRequestHandler implements JsonRpcRequestHandler {
                 case "xdag_getBalance" -> {
                     validateParams(params, "Missing address parameter");
                     yield xdagApi.xdag_getBalance(params[0].toString());
+                }
+                case "xdag_getTransactionNonce" -> {
+                    validateParams(params, "Missing address parameter");
+                    yield xdagApi.xdag_getTransactionNonce(params[0].toString());
                 }
                 case "xdag_getTotalBalance" -> xdagApi.xdag_getTotalBalance();
                 case "xdag_getStatus" -> xdagApi.xdag_getStatus();

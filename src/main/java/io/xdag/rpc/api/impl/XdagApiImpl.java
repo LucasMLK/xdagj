@@ -190,6 +190,16 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     }
 
     @Override
+    public String xdag_getTransactionNonce(String address) {
+        UInt64 txNonce = UInt64.ZERO;
+        if (WalletUtils.checkAddress(address)) {
+            UInt64 txQuantity = kernel.getAddressStore().getTxQuantity(fromBase58(address));
+            txNonce = txNonce.add(txQuantity.add(UInt64.ONE));
+        }
+        return String.format("%s", txNonce.toLong());
+    }
+
+    @Override
     public String xdag_getTotalBalance() {
         return String.format("%s", kernel.getBlockchain().getXdagStats().getBalance().toDecimal(9, XUnit.XDAG).toPlainString());
     }
