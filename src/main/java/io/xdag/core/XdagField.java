@@ -97,7 +97,7 @@ public class XdagField implements Cloneable {
         // New transaction output type
         XDAG_FIELD_OUTPUT(0x0D),
         // Reserved field 5
-        XDAG_FIELD_RESERVE5(0x0E),
+        XDAG_FIELD_TRANSACTION_NONCE(0x0E),
         // Reserved field 6
         XDAG_FIELD_RESERVE6(0x0F);
 

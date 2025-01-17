@@ -238,7 +238,8 @@ public class ExtraBlockTest {
         public void checkOrphan() {
             long nblk = this.getXdagStats().nnoref / 11;
             while (nblk-- > 0) {
-                Block linkBlock = createNewBlock(null, null, false, kernel.getConfig().getNodeSpec().getNodeTag(), XAmount.ZERO);
+                Block linkBlock = createNewBlock(null, null, false,
+                        kernel.getConfig().getNodeSpec().getNodeTag(), XAmount.ZERO, null);
                 linkBlock.signOut(kernel.getWallet().getDefKey());
                 ImportResult result = this.tryToConnect(linkBlock);
                 assertTrue(result == IMPORTED_BEST || result == IMPORTED_NOT_BEST);

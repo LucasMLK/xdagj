@@ -254,28 +254,30 @@ public class SnapshotStoreImpl implements SnapshotStore {
                         addressStore.saveAddressSize(iter.value());
                     }
                 } else {
-                    byte[] address = iter.key();
-                    XAmount balance = XAmount.ofXAmount(UInt64.fromBytes(Bytes.wrap(iter.value())).toLong());
-                    for (KeyPair keyPair : keys) {
-                        byte[] publicKeyBytes = keyPair.getPublicKey().asEcPoint(Sign.CURVE).getEncoded(true);
-                        byte[] myAddress = Hash.sha256hash160(Bytes.wrap(publicKeyBytes));
-                        if (BytesUtils.compareTo(address, 1, 20, myAddress, 0, 20) == 0) {
-                            ourBalance = ourBalance.add(balance);
+                    byte[] address = iter.key(); // address = flag + accountAddress: 30(byte ADDRESS = (byte) 0x30) + fb3fb15072826ffa5f5b6c123029798a27cd0c64
+                    if (Hex.toHexString(address).startsWith("30")) {
+                        XAmount balance = XAmount.ofXAmount(UInt64.fromBytes(Bytes.wrap(iter.value())).toLong());
+                        for (KeyPair keyPair : keys) {
+                            byte[] publicKeyBytes = keyPair.getPublicKey().asEcPoint(Sign.CURVE).getEncoded(true);
+                            byte[] myAddress = Hash.sha256hash160(Bytes.wrap(publicKeyBytes));
+                            if (BytesUtils.compareTo(address, 1, 20, myAddress, 0, 20) == 0) {
+                                ourBalance = ourBalance.add(balance);
+                            }
                         }
-                    }
-                    allBalance = allBalance.add(balance); //calculate the address balance
-                    addressStore.snapshotAddress(address, balance);
-                    if (txHistoryStore != null) {
-                        XdagField.FieldType fieldType = XdagField.FieldType.XDAG_FIELD_SNAPSHOT;
-                        Address addr = new Address(BytesUtils.arrayToByte32(Arrays.copyOfRange(address, 1, 21)),
-                                fieldType, balance, true);
-                        TxHistory txHistory = new TxHistory();
-                        txHistory.setAddress(addr);
-                        txHistory.setHash(BasicUtils.hash2PubAddress(addr.getAddress()));
-                        txHistory.setRemark("snapshot");
-                        txHistory.setTimestamp(snapshotTime);
-                        txHistoryStore.saveTxHistory(txHistory);
-                    }
+                        allBalance = allBalance.add(balance); //calculate the address balance
+                        addressStore.snapshotAddress(address, balance);
+                        if (txHistoryStore != null) {
+                            XdagField.FieldType fieldType = XdagField.FieldType.XDAG_FIELD_SNAPSHOT;
+                            Address addr = new Address(BytesUtils.arrayToByte32(Arrays.copyOfRange(address, 1, 21)),
+                                    fieldType, balance, true);
+                            TxHistory txHistory = new TxHistory();
+                            txHistory.setAddress(addr);
+                            txHistory.setHash(BasicUtils.hash2PubAddress(addr.getAddress()));
+                            txHistory.setRemark("snapshot");
+                            txHistory.setTimestamp(snapshotTime);
+                            txHistoryStore.saveTxHistory(txHistory);
+                        }
+                    } // TODO: Restore the transaction quantity for each address from the snapshot.
                 }
             }
             System.out.println("amount in address: " + allBalance.toDecimal(9, XUnit.XDAG).toPlainString());

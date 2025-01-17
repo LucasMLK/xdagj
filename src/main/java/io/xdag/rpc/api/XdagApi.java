@@ -123,6 +123,14 @@ public interface XdagApi extends XdagLifecycle {
     String xdag_getBalance(String address);
 
     /**
+     * Get the transaction nonce of a specific address.
+     *
+     * @param address XDAG address
+     * @return Transaction nonce as string
+     */
+    String xdag_getTransactionNonce(String address);
+
+    /**
      * Get the total balance of the node.
      *
      * @return Total balance as string
@@ -144,6 +152,15 @@ public interface XdagApi extends XdagLifecycle {
      * @return Transaction process response
      */
     ProcessResponse xdag_personal_sendTransaction(TransactionRequest request, String passphrase);
+
+    /**
+     * Send a transaction with transaction nonce using the personal account.
+     *
+     * @param request Transaction request details
+     * @param passphrase Passphrase for account unlocking
+     * @return Transaction process response
+     */
+    ProcessResponse xdag_personal_sendSafeTransaction(TransactionRequest request, String passphrase);
 
     /**
      * Get the reward amount for a specific block.

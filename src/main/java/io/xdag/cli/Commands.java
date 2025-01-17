@@ -41,6 +41,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.time.FastDateFormat;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes32;
+import org.apache.tuweni.units.bigints.UInt64;
 import org.bouncycastle.util.encoders.Hex;
 import org.hyperledger.besu.crypto.KeyPair;
 
@@ -135,7 +136,7 @@ public class Commands {
     }
 
     /**
-     * List addresses and balances
+     * List addresses, balances and current transaction quantity
      * @param num Number of addresses to display
      */
     public String account(int num) {
@@ -158,10 +159,16 @@ public class Commands {
             if (num == 0) {
                 break;
             }
+
+            UInt64 txQuantity = kernel.getAddressStore().getTxQuantity(toBytesAddress(keyPair));
+
             str.append(toBase58(toBytesAddress(keyPair)))
                     .append(" ")
                     .append(kernel.getAddressStore().getBalanceByAddress(toBytesAddress(keyPair)).toDecimal(9, XUnit.XDAG).toPlainString())
                     .append(" XDAG")
+                    .append("  [Current Transaction Quantity: ")
+                    .append(txQuantity.toUInt64())
+                    .append("]")
                     .append("\n");
             num--;
         }
@@ -199,7 +206,25 @@ public class Commands {
                 Block block = kernel.getBlockStore().getBlockInfoByHash(Bytes32.wrap(key));
                 return String.format("Block balance: %s XDAG", block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString());
             }
+        }
+    }
 
+    public String txQuantity(String address) {
+        if (StringUtils.isEmpty(address)) {
+            UInt64 ourTxQuantity = UInt64.ZERO;
+            List<KeyPair> list = kernel.getWallet().getAccounts();
+            for (KeyPair key : list) {
+                ourTxQuantity = ourTxQuantity.add(kernel.getAddressStore().getTxQuantity(toBytesAddress(key)));
+            }
+            return String.format("Current Transaction Quantity: %s \n", ourTxQuantity.toLong());
+        } else {
+            UInt64 addressTxQuantity = UInt64.ZERO;
+            if (checkAddress(address)) {
+                addressTxQuantity = addressTxQuantity.add(kernel.getAddressStore().getTxQuantity(fromBase58(address)));
+                return String.format("Current Transaction Quantity: %s \n", addressTxQuantity.toLong());
+            } else {
+                return "The account address format is incorrect! \n";
+            }
         }
     }
 
@@ -223,9 +248,13 @@ public class Commands {
         // Collect input accounts
         Map<Address, KeyPair> ourAccounts = Maps.newHashMap();
         List<KeyPair> accounts = kernel.getWallet().getAccounts();
+        UInt64 txNonce = null;
+
         for (KeyPair account : accounts) {
             byte[] addr = toBytesAddress(account);
             XAmount addrBalance = kernel.getAddressStore().getBalanceByAddress(addr);
+            UInt64 currentTxQuantity = kernel.getAddressStore().getTxQuantity(addr);
+            txNonce = currentTxQuantity.add(UInt64.ONE);
 
             if (compareAmountTo(remain.get(), addrBalance) <= 0) {
                 ourAccounts.put(new Address(keyPair2Hash(account), XDAG_FIELD_INPUT, remain.get(), true), account);
@@ -245,22 +274,24 @@ public class Commands {
         }
 
         // Create and broadcast transaction blocks
-        List<BlockWrapper> txs = createTransactionBlock(ourAccounts, to, remark);
+        List<BlockWrapper> txs = createTransactionBlock(ourAccounts, to, remark, txNonce);
         for (BlockWrapper blockWrapper : txs) {
             ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(blockWrapper);
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
                 kernel.getChannelMgr().sendNewBlock(blockWrapper);
                 str.append(hash2Address(blockWrapper.getBlock().getHashLow())).append("\n");
+            } else if (result == ImportResult.INVALID_BLOCK) {
+                str.append(result.getErrorInfo());
             }
         }
 
-        return str.append("}, it will take several minutes to complete the transaction.").toString();
+        return str.append("}, it will take several minutes to complete the transaction. \n").toString();
     }
 
     /**
      * Create transaction blocks from inputs to recipient
      */
-    private List<BlockWrapper> createTransactionBlock(Map<Address, KeyPair> ourKeys, Bytes32 to, String remark) {
+    private List<BlockWrapper> createTransactionBlock(Map<Address, KeyPair> ourKeys, Bytes32 to, String remark, UInt64 txNonce) {
         // Check if remark exists
         int hasRemark = remark == null ? 0 : 1;
 
@@ -274,8 +305,14 @@ public class Commands {
         Set<KeyPair> keysPerBlock = Sets.newHashSet();
         keysPerBlock.add(kernel.getWallet().getDefKey());
 
-        // Base field count for block
-        int base = 1 + 1 + 2 + hasRemark;
+        int base;
+        if (txNonce != null) {
+            // base count a block <header + transaction nonce + send address + defKey signature>
+            base = 1 + 1 + 1 + 2 + hasRemark;
+        } else {
+            // base count a block <header + send address + defKey signature>
+            base = 1 + 1 + 2 + hasRemark;
+        }
         XAmount amount = XAmount.ZERO;
 
         while (!stack.isEmpty()) {
@@ -296,18 +333,22 @@ public class Commands {
                 stack.poll();
             } else {
                 // Create block and reset for next
-                res.add(createTransaction(to, amount, keys, remark));
+                res.add(createTransaction(to, amount, keys, remark, txNonce));
                 keys = new HashMap<>();
                 keysPerBlock = new HashSet<>();
                 keysPerBlock.add(kernel.getWallet().getDefKey());
-                base = 1 + 1 + 2 + hasRemark;
+                if (txNonce != null) {
+                    base = 1 + 1 + 1 + 2 + hasRemark;
+                } else {
+                    base = 1 + 1 + 2 + hasRemark;
+                }
                 amount = XAmount.ZERO;
             }
         }
         
         // Create final block if needed
         if (!keys.isEmpty()) {
-            res.add(createTransaction(to, amount, keys, remark));
+            res.add(createTransaction(to, amount, keys, remark, txNonce));
         }
         return res;
     }
@@ -315,9 +356,10 @@ public class Commands {
     /**
      * Create single transaction block
      */
-    private BlockWrapper createTransaction(Bytes32 to, XAmount amount, Map<Address, KeyPair> keys, String remark) {
+    private BlockWrapper createTransaction(Bytes32 to, XAmount amount, Map<Address, KeyPair> keys, String remark, UInt64 txNonce) {
         List<Address> tos = Lists.newArrayList(new Address(to, XDAG_FIELD_OUTPUT, amount, true));
-        Block block = kernel.getBlockchain().createNewBlock(new HashMap<>(keys), tos, false, remark, XAmount.of(100, XUnit.MILLI_XDAG));
+        Block block = kernel.getBlockchain().createNewBlock(new HashMap<>(keys), tos, false, remark,
+                XAmount.of(100, XUnit.MILLI_XDAG), txNonce);
 
         if (block == null) {
             return null;
@@ -737,7 +779,7 @@ public class Commands {
         });
 
         // Generate multiple transaction blocks
-        List<BlockWrapper> txs = createTransactionBlock(ourBlocks, to, remark);
+        List<BlockWrapper> txs = createTransactionBlock(ourBlocks, to, remark, null);
         for (BlockWrapper blockWrapper : txs) {
             ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(blockWrapper);
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
@@ -761,7 +803,7 @@ public class Commands {
         String remark = "Pay to " + kernel.getConfig().getNodeSpec().getNodeTag();
         
         // Generate transaction blocks to reward node
-        List<BlockWrapper> txs = createTransactionBlock(paymentsToNodesMap, to, remark);
+        List<BlockWrapper> txs = createTransactionBlock(paymentsToNodesMap, to, remark, null);
         for (BlockWrapper blockWrapper : txs) {
             ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(blockWrapper);
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {

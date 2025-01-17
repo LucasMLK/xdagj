@@ -183,7 +183,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
 
     public Block generateRandomXBlock(long sendTime) {
         taskIndex.incrementAndGet();
-        Block block = blockchain.createNewBlock(null, null, true, null, XAmount.ZERO);
+        Block block = blockchain.createNewBlock(null, null, true, null, XAmount.ZERO, null);
         block.signOut(wallet.getDefKey());
         // The first 20 bytes of the initial nonce are the node wallet address.
         minShare.set(Bytes32.wrap(BytesUtils.merge(hash2byte(keyPair2Hash(wallet.getDefKey())),
@@ -199,7 +199,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
 
     public Block generateBlock(long sendTime) {
         taskIndex.incrementAndGet();
-        Block block = blockchain.createNewBlock(null, null, true, null, XAmount.ZERO);
+        Block block = blockchain.createNewBlock(null, null, true, null, XAmount.ZERO, null);
         block.signOut(wallet.getDefKey());
         minShare.set(Bytes32.wrap(BytesUtils.merge(hash2byte(keyPair2Hash(wallet.getDefKey())),
                 XdagRandomUtils.nextNewBytes(12))));
