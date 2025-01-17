@@ -161,13 +161,16 @@ public class Commands {
             }
 
             UInt64 txQuantity = kernel.getAddressStore().getTxQuantity(toBytesAddress(keyPair));
+            UInt64 exeTxNonceNum = kernel.getAddressStore().getExecutedNonceNum(toBytesAddress(keyPair));
 
             str.append(toBase58(toBytesAddress(keyPair)))
                     .append(" ")
                     .append(kernel.getAddressStore().getBalanceByAddress(toBytesAddress(keyPair)).toDecimal(9, XUnit.XDAG).toPlainString())
                     .append(" XDAG")
-                    .append("  [Current Transaction Quantity: ")
+                    .append("  [Current TX Quantity: ")
                     .append(txQuantity.toUInt64())
+                    .append(", Confirmed TX Quantity: ")
+                    .append(exeTxNonceNum.toUInt64())
                     .append("]")
                     .append("\n");
             num--;
