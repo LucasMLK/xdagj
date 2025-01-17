@@ -322,11 +322,46 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         // 3. check from address if valid.
         Block block = new Block(new XdagBlock(Hex.decode(rawData)));
         ImportResult result;
+        List<Address> inputs = block.getInputs();
+        int inputSize = inputs.size();
+        for (Address input : inputs) {
+            if (input.getType() == XDAG_FIELD_IN && block.getTxNonceField() != null) {
+                result = ImportResult.INVALID_BLOCK;
+                return "INVALID_BLOCK " + result.getErrorInfo();
+            } else if (input.getType() == XDAG_FIELD_INPUT) {
+                byte[] addr = BytesUtils.byte32ToArray(input.getAddress());
+                UInt64 legalNonce = kernel.getAddressStore().getTxQuantity(addr).add(UInt64.ONE);
+                UInt64 blockNonce;
+                if (inputSize != 1) {
+                    result = ImportResult.INVALID_BLOCK;
+                    return "INVALID_BLOCK " + result.getErrorInfo();
+                }
+                if (block.getTxNonceField() == null) {
+                    result = ImportResult.INVALID_BLOCK;
+                    return "INVALID_BLOCK " + result.getErrorInfo();
+                }
+                blockNonce = block.getTxNonceField().getTransactionNonce();
+                if (blockNonce.compareTo(legalNonce) != 0) {
+                    result = ImportResult.INVALID_BLOCK;
+                    return "INVALID_BLOCK " + result.getErrorInfo();
+                }
+            }
+        }
         if (checkTransaction(block)) {
             result = kernel.getSyncMgr().importBlock(
                     new BlockWrapper(block, kernel.getConfig().getNodeSpec().getTTL()));
         } else {
             result = ImportResult.INVALID_BLOCK;
+        }
+        if(result == ImportResult.IMPORTED_NOT_BEST && block.getTxNonceField() != null) {
+            List<Address> in = block.getInputs();
+            UInt64 blockNonce = block.getTxNonceField().getTransactionNonce();
+            for (Address input : in) {
+                if (input.getType() == XDAG_FIELD_INPUT) {
+                    byte[] addr = BytesUtils.byte32ToArray(input.getAddress());
+                    kernel.getAddressStore().updateTxQuantity(addr, blockNonce);
+                }
+            }
         }
         return result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST ?
                 BasicUtils.hash2Address(block.getHash()) : "INVALID_BLOCK " + result.getErrorInfo();
@@ -712,6 +747,15 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(blockWrapper);
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
                 kernel.getChannelMgr().sendNewBlock(blockWrapper);
+                Block block = new Block(new XdagBlock(blockWrapper.getBlock().getXdagBlock().getData().toArray()));
+                List<Address> inputs = block.getInputs();
+                UInt64 blockNonce = block.getTxNonceField().getTransactionNonce();
+                for (Address input : inputs) {
+                    if (input.getType() == XDAG_FIELD_INPUT) {
+                        byte[] addr = BytesUtils.byte32ToArray(input.getAddress());
+                        kernel.getAddressStore().updateTxQuantity(addr, blockNonce);
+                    }
+                }
                 resInfo.add(BasicUtils.hash2Address(blockWrapper.getBlock().getHashLow()));
             } else if (result == ImportResult.INVALID_BLOCK) {
                 resInfo.add(result.getErrorInfo());
