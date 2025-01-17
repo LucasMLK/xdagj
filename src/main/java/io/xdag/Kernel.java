@@ -171,7 +171,8 @@ public class Kernel {
         // Create genesis block if first startup
         if (xdagStats.getOurLastBlockHash() == null) {
             firstAccount = Keys.toBytesAddress(wallet.getDefKey().getPublicKey());
-            firstBlock = new Block(config, XdagTime.getCurrentTimestamp(), null, null, false, null, null, -1, XAmount.ZERO);
+            firstBlock = new Block(config, XdagTime.getCurrentTimestamp(), null, null, false,
+                    null, null, -1, XAmount.ZERO, null);
             firstBlock.signOut(wallet.getDefKey());
             xdagStats.setOurLastBlockHash(firstBlock.getHashLow().toArray());
             if (xdagStats.getGlobalMiner() == null) {

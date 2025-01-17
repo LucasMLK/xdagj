@@ -33,6 +33,7 @@ public interface AddressStore extends XdagLifecycle {
     byte ADDRESS_SIZE = (byte) 0x10;
     byte AMOUNT_SUM = (byte) 0x20;
     byte ADDRESS = (byte) 0x30;
+    byte TRANSACTION_NONCE = (byte) 0x40;
 
     void reset();
 
@@ -56,4 +57,7 @@ public interface AddressStore extends XdagLifecycle {
 
     void snapshotAddress(byte[] address, XAmount balance);
 
+    UInt64 getTxQuantity(byte[] address);
+
+    void updateTxQuantity(byte[] address, UInt64 newTxQuantity);
 }

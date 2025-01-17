@@ -623,7 +623,8 @@ public class Wallet {
 
         long sendTime = XdagTime.getCurrentTimestamp();
 
-        return new Block(getConfig(), sendTime, all, null, false, keys, remark, defKeyIndex, XAmount.of(100, XUnit.MILLI_XDAG));
+        return new Block(getConfig(), sendTime, all, null, false, keys, remark,
+                defKeyIndex, XAmount.of(100, XUnit.MILLI_XDAG), null);
     }
 
 }

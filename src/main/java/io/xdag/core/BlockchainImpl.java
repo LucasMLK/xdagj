@@ -53,6 +53,7 @@ import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
 import org.apache.tuweni.bytes.MutableBytes32;
+import org.apache.tuweni.units.bigints.UInt64;
 import org.bouncycastle.math.ec.ECPoint;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.encoders.Hex;
@@ -960,7 +961,14 @@ public class BlockchainImpl implements Blockchain {
     }
 
     @Override
-    public Block createNewBlock(Map<Address, KeyPair> pairs, List<Address> to, boolean mining, String remark, XAmount fee) {
+    public Block createNewBlock(
+            Map<Address, KeyPair> pairs,
+            List<Address> to,
+            boolean mining,
+            String remark,
+            XAmount fee,
+            UInt64 txNonce
+    ) {
 
         int hasRemark = remark == null ? 0 : 1;
 
@@ -987,7 +995,12 @@ public class BlockchainImpl implements Blockchain {
         all.addAll(to);
 
         // TODO: Check if pairs have duplicates
-        int res = 1 + pairs.size() + to.size() + 3 * keys.size() + (defKeyIndex == -1 ? 2 : 0) + hasRemark;
+        int res;
+        if (txNonce != null) {
+            res = 1 + 1 + pairs.size() + to.size() + 3 * keys.size() + (defKeyIndex == -1 ? 2 : 0) + hasRemark;
+        } else {
+            res = 1 + pairs.size() + to.size() + 3 * keys.size() + (defKeyIndex == -1 ? 2 : 0) + hasRemark;
+        }
 
         // TODO: If block fields are insufficient
         if (res > 16) {
@@ -997,7 +1010,7 @@ public class BlockchainImpl implements Blockchain {
         sendTime[0] = XdagTime.getCurrentTimestamp();
         List<Address> refs = Lists.newArrayList();
 
-        return new Block(kernel.getConfig(), sendTime[0], all, refs, mining, keys, remark, defKeyIndex, fee);
+        return new Block(kernel.getConfig(), sendTime[0], all, refs, mining, keys, remark, defKeyIndex, fee, txNonce);
     }
 
     public Block createMainBlock() {
@@ -1030,7 +1043,7 @@ public class BlockchainImpl implements Blockchain {
             refs.addAll(orphans);
         }
         return new Block(kernel.getConfig(), sendTime[0], null, refs, true, null,
-                kernel.getConfig().getNodeSpec().getNodeTag(), -1, XAmount.ZERO);
+                kernel.getConfig().getNodeSpec().getNodeTag(), -1, XAmount.ZERO, null);
     }
 
     public Block createLinkBlock(String remark) {
@@ -1046,7 +1059,7 @@ public class BlockchainImpl implements Blockchain {
             refs.addAll(orphans);
         }
         return new Block(kernel.getConfig(), sendTime[1], null, refs, false, null,
-                remark, -1, XAmount.ZERO);
+                remark, -1, XAmount.ZERO, null);
     }
 
     /**
@@ -1577,7 +1590,8 @@ public class BlockchainImpl implements Blockchain {
             nblk = nblk / 61 + (b ? 1 : 0);
         }
         while (nblk-- > 0) {
-            Block linkBlock = createNewBlock(null, null, false, kernel.getConfig().getNodeSpec().getNodeTag(), XAmount.ZERO);
+            Block linkBlock = createNewBlock(null, null, false,
+                    kernel.getConfig().getNodeSpec().getNodeTag(), XAmount.ZERO, null);
             linkBlock.signOut(kernel.getWallet().getDefKey());
             ImportResult result = this.tryToConnect(linkBlock);
             if (result == IMPORTED_NOT_BEST || result == IMPORTED_BEST) {

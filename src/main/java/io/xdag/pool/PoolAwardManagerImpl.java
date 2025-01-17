@@ -253,7 +253,7 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
         Address input = new Address(hashLow, XDAG_FIELD_IN, sendAmount, false);
         KeyPair inputKey = wallet.getAccount(keyPos);
         inputMap.put(input, inputKey);
-        Block block = blockchain.createNewBlock(inputMap, receipt, false, TX_REMARK, MIN_GAS);
+        Block block = blockchain.createNewBlock(inputMap, receipt, false, TX_REMARK, MIN_GAS, null);
         if (inputKey.equals(wallet.getDefKey())) {
             block.signOut(inputKey);
         } else {
