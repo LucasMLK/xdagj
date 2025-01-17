@@ -299,7 +299,8 @@ public class BlockchainImpl implements Blockchain {
 
             // Validate block references
             List<Address> all = block.getLinks().stream().distinct().toList();
-            
+            int inputFieldCounter = 0;
+
             for (Address ref : all) {
                 if (ref != null && !ref.isAddress) {
                     if (ref.getType() == XDAG_FIELD_OUT && !ref.getAmount().isZero()) {
@@ -335,6 +336,16 @@ public class BlockchainImpl implements Blockchain {
                         }
                     }
                 } else {
+                    // Ensure that there is only one input.
+                    if (ref != null && ref.type == XDAG_FIELD_INPUT) {
+                        inputFieldCounter = inputFieldCounter + 1;
+                        if (inputFieldCounter > 1) {
+                            result = ImportResult.INVALID_BLOCK;
+                            result.setErrorInfo("The quantity of the input must be exactly one.");
+                            log.debug("The quantity of the input must be exactly one.");
+                            return result;
+                        }
+                    }
                     if (ref != null && ref.type == XDAG_FIELD_INPUT && !addressStore.addressIsExist(BytesUtils.byte32ToArray(ref.getAddress()))) {
                         result = ImportResult.INVALID_BLOCK;
                         result.setErrorInfo("Address isn't exist " + WalletUtils.toBase58(BytesUtils.byte32ToArray(ref.getAddress())));
