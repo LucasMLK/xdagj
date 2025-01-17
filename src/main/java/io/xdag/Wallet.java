@@ -69,6 +69,7 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt64;
 import org.bouncycastle.crypto.generators.BCrypt;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.hyperledger.besu.crypto.KeyPair;
@@ -485,7 +486,7 @@ public class Wallet {
      * @param remark Optional remark to include in transaction
      * @return List of transaction block wrappers
      */
-    public List<BlockWrapper> createTransactionBlock(Map<Address, KeyPair> ourKeys, Bytes32 to, String remark) {
+    public List<BlockWrapper> createTransactionBlock(Map<Address, KeyPair> ourKeys, Bytes32 to, String remark, UInt64 txNonce) {
         // Check if remark exists
         int hasRemark = remark == null ? 0 : 1;
 
@@ -501,8 +502,14 @@ public class Wallet {
         // Add default key
         keysPerBlock.add(getDefKey());
 
-        // Base count for block (header + send address + default key signature)
-        int base = 1 + 1 + 2 + hasRemark;
+        int base;
+        if (txNonce != null) {
+            // base count a block <header + transaction nonce + send address + defKey signature>
+            base = 1 + 1 + 1 + 2 + hasRemark;
+        } else {
+            // base count a block <header + send address + defKey signature>
+            base = 1 + 1 + 2 + hasRemark;
+        }
         XAmount amount = XAmount.ZERO;
 
         while (!stack.isEmpty()) {
@@ -522,17 +529,21 @@ public class Wallet {
                 stack.poll();
             } else {
                 // Create block with current keys
-                res.add(createTransaction(to, amount, keys, remark));
+                res.add(createTransaction(to, amount, keys, remark, txNonce));
                 // Reset for next block
                 keys = new HashMap<>();
                 keysPerBlock = new HashSet<>();
                 keysPerBlock.add(getDefKey());
-                base = 1 + 1 + 2 + hasRemark;
+                if (txNonce != null) {
+                    base = 1 + 1 + 1 + 2 + hasRemark;
+                } else {
+                    base = 1 + 1 + 2 + hasRemark;
+                }
                 amount = XAmount.ZERO;
             }
         }
         if (!keys.isEmpty()) {
-            res.add(createTransaction(to, amount, keys, remark));
+            res.add(createTransaction(to, amount, keys, remark, txNonce));
         }
 
         return res;
@@ -547,11 +558,11 @@ public class Wallet {
      * @param remark Optional remark
      * @return Transaction block wrapper
      */
-    private BlockWrapper createTransaction(Bytes32 to, XAmount amount, Map<Address, KeyPair> keys, String remark) {
+    private BlockWrapper createTransaction(Bytes32 to, XAmount amount, Map<Address, KeyPair> keys, String remark, UInt64 txNonce) {
 
         List<Address> tos = Lists.newArrayList(new Address(to, XDAG_FIELD_OUTPUT, amount,true));
 
-        Block block = createNewBlock(new HashMap<>(keys), tos, remark);
+        Block block = createNewBlock(new HashMap<>(keys), tos, remark, txNonce);
 
         if (block == null) {
             return null;
@@ -586,7 +597,7 @@ public class Wallet {
      * @return New transaction block
      */
     private Block createNewBlock(Map<Address, KeyPair> pairs, List<Address> to,
-            String remark) {
+            String remark, UInt64 txNonce) {
         int hasRemark = remark == null ? 0 : 1;
 
         int defKeyIndex = -1;
@@ -614,7 +625,12 @@ public class Wallet {
         all.addAll(to);
 
         // Calculate total fields needed
-        int res = 1 + pairs.size() + to.size() + 3 * keys.size() + (defKeyIndex == -1 ? 2 : 0) + hasRemark;
+        int res;
+        if (txNonce != null) {
+            res = 1 + 1 + pairs.size() + to.size() + 3 * keys.size() + (defKeyIndex == -1 ? 2 : 0) + hasRemark;
+        } else {
+            res = 1 + pairs.size() + to.size() + 3 * keys.size() + (defKeyIndex == -1 ? 2 : 0) + hasRemark;
+        }
 
         // Validate block size
         if (res > 16) {
@@ -624,7 +640,7 @@ public class Wallet {
         long sendTime = XdagTime.getCurrentTimestamp();
 
         return new Block(getConfig(), sendTime, all, null, false, keys, remark,
-                defKeyIndex, XAmount.of(100, XUnit.MILLI_XDAG), null);
+                defKeyIndex, XAmount.of(100, XUnit.MILLI_XDAG), txNonce);
     }
 
 }

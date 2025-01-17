@@ -154,6 +154,15 @@ public interface XdagApi extends XdagLifecycle {
     ProcessResponse xdag_personal_sendTransaction(TransactionRequest request, String passphrase);
 
     /**
+     * Send a transaction with transaction nonce using the personal account.
+     *
+     * @param request Transaction request details
+     * @param passphrase Passphrase for account unlocking
+     * @return Transaction process response
+     */
+    ProcessResponse xdag_personal_sendSafeTransaction(TransactionRequest request, String passphrase);
+
+    /**
      * Get the reward amount for a specific block.
      *
      * @param bnOrId Block number or ID
