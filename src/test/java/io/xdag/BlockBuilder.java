@@ -48,7 +48,7 @@ public class BlockBuilder {
     }
 
     public static Block generateAddressBlockWithAmount(Config config, KeyPair key, long xdagTime, XAmount balance) {
-        Block b = new Block(config, xdagTime, null, null, false, null, null, -1, XAmount.ZERO);
+        Block b = new Block(config, xdagTime, null, null, false, null, null, -1, XAmount.ZERO, null);
         b.signOut(key);
         b.getInfo().setAmount(balance);
         return b;
@@ -60,7 +60,7 @@ public class BlockBuilder {
     }
 
     public static Block generateExtraBlock(Config config, KeyPair key, long xdagTime, String remark, List<Address> pendings) {
-        Block b = new Block(config, xdagTime, null, pendings, true, null, remark, -1,XAmount.ZERO);
+        Block b = new Block(config, xdagTime, null, pendings, true, null, remark, -1,XAmount.ZERO, null);
         Bytes32 random = Hash.sha256(Bytes.wrap(Hex.decode("1234")));
         b.signOut(key);
         b.setNonce(random);
@@ -70,7 +70,7 @@ public class BlockBuilder {
     // TODO:set nonce means this block is a mining block, the mining param need to set true
     public static Block generateExtraBlockGivenRandom(Config config, KeyPair key, long xdagTime,
             List<Address> pendings, String randomS) {
-        Block b = new Block(config, xdagTime, null, pendings, true, null, null, -1, XAmount.ZERO);
+        Block b = new Block(config, xdagTime, null, pendings, true, null, null, -1, XAmount.ZERO, null);
         Bytes32 random = Hash.sha256(Bytes.wrap(Hex.decode(randomS)));
         b.signOut(key);
         b.setNonce(random);
@@ -84,7 +84,7 @@ public class BlockBuilder {
         refs.add(new Address(from.getAddress(), XDAG_FIELD_IN, amount,false)); // key1
         refs.add(new Address(to.getAddress(), XDAG_FIELD_OUTPUT, amount,true));
         keys.add(key);
-        Block b = new Block(config, xdagTime, refs, null, false, keys, null, 0,XAmount.of(100,XUnit.MILLI_XDAG)); // orphan
+        Block b = new Block(config, xdagTime, refs, null, false, keys, null, 0,XAmount.of(100,XUnit.MILLI_XDAG), null); // orphan
         b.signOut(key);
         return b;
     }
@@ -97,7 +97,7 @@ public class BlockBuilder {
         refs.add(new Address(to.getAddress(), XDAG_FIELD_OUTPUT, amount1,true));
         refs.add(new Address(to1.getAddress(), XDAG_FIELD_OUTPUT, amount2,true));
         keys.add(key);
-        Block b = new Block(config, xdagTime, refs, null, false, keys, null, 0,XAmount.of(100,XUnit.MILLI_XDAG)); // orphan
+        Block b = new Block(config, xdagTime, refs, null, false, keys, null, 0,XAmount.of(100,XUnit.MILLI_XDAG), null); // orphan
         b.signOut(key);
         return b;
     }
@@ -109,7 +109,7 @@ public class BlockBuilder {
         refs.add(new Address(from.getAddress(), XDAG_FIELD_INPUT, amount,true)); // key1
         refs.add(new Address(to.getAddress(), XDAG_FIELD_OUTPUT, amount,true));
         keys.add(key);
-        Block b = new Block(config, xdagTime, refs, null, false, keys, null, 0, XAmount.of(100, XUnit.MILLI_XDAG)); // orphan
+        Block b = new Block(config, xdagTime, refs, null, false, keys, null, 0, XAmount.of(100, XUnit.MILLI_XDAG), null); // orphan
         b.signOut(key);
         return b;
     }
@@ -121,7 +121,7 @@ public class BlockBuilder {
         refs.add(new Address(from.getAddress(), XDAG_FIELD_INPUT, amount,true)); // key1
         refs.add(new Address(to.getAddress(), XDAG_FIELD_OUTPUT, amount,true));
         keys.add(key);
-        Block b = new Block(config, xdagTime, refs, null, false, keys, null, 0, VariableFee); // orphan
+        Block b = new Block(config, xdagTime, refs, null, false, keys, null, 0, VariableFee, null); // orphan
         b.signOut(key);
         return b;
     }
@@ -133,7 +133,7 @@ public class BlockBuilder {
         refs.add(new Address(from.getAddress(), XDAG_FIELD_INPUT, amount,true)); // key1
         refs.add(new Address(to.getAddress(), XDAG_FIELD_OUTPUT, amount,true));
         keys.add(key);
-        Block b = new Block(config, xdagTime, refs, null, false, keys, null, 0, XAmount.ZERO); // orphan
+        Block b = new Block(config, xdagTime, refs, null, false, keys, null, 0, XAmount.ZERO, null); // orphan
         b.signOut(key);
         return b;
     }
@@ -146,7 +146,7 @@ public class BlockBuilder {
         refs.add(new Address(to1.getAddress(), XDAG_FIELD_OUTPUT, amount1,true));
         refs.add(new Address(to2.getAddress(), XDAG_FIELD_OUTPUT, amount2,true));
         keys.add(key);
-        Block b = new Block(config, xdagTime, refs, null, false, keys, null, 0, XAmount.ZERO); // orphan
+        Block b = new Block(config, xdagTime, refs, null, false, keys, null, 0, XAmount.ZERO, null); // orphan
         b.signOut(key);
         return b;
     }
