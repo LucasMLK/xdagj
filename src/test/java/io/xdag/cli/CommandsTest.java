@@ -131,6 +131,8 @@ public class CommandsTest {
         Mockito.when(addressStore.getBalanceByAddress(Keys.toBytesAddress(keyPair_2))).thenReturn(XAmount.of(8888, XUnit.XDAG));
         Mockito.when(addressStore.getTxQuantity(Keys.toBytesAddress(keyPair_1))).thenReturn(UInt64.ZERO);
         Mockito.when(addressStore.getTxQuantity(Keys.toBytesAddress(keyPair_2))).thenReturn(UInt64.ZERO);
+        Mockito.when(addressStore.getExecutedNonceNum(Keys.toBytesAddress(keyPair_1))).thenReturn(UInt64.ZERO);
+        Mockito.when(addressStore.getExecutedNonceNum(Keys.toBytesAddress(keyPair_2))).thenReturn(UInt64.ZERO);
 
         commands = new Commands(kernel);
     }
@@ -150,8 +152,8 @@ public class CommandsTest {
     public void testAccount() {
         String str = commands.account(2);
         assertEquals("""
-                PbwjuQP3y9F3ZnbbWUvue4zpgkQv3DHas 9999.000000000 XDAG  [Current Transaction Quantity: 0]
-                35KpNArHncGduckwbaW27tAfwzN4rNtX2 8888.000000000 XDAG  [Current Transaction Quantity: 0]
+                PbwjuQP3y9F3ZnbbWUvue4zpgkQv3DHas 9999.000000000 XDAG  [Current TX Quantity: 0, Confirmed TX Quantity: 0]
+                35KpNArHncGduckwbaW27tAfwzN4rNtX2 8888.000000000 XDAG  [Current TX Quantity: 0, Confirmed TX Quantity: 0]
                 """, str);
     }
 
