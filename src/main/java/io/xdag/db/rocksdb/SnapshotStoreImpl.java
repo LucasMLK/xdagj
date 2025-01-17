@@ -278,6 +278,11 @@ public class SnapshotStoreImpl implements SnapshotStore {
                             txHistoryStore.saveTxHistory(txHistory);
                         }
                     } // TODO: Restore the transaction quantity for each address from the snapshot.
+                    else if (Hex.toHexString(address).startsWith("50")) {
+                        UInt64 exeTxNonceNum = UInt64.fromBytes(Bytes.wrap(iter.value())).toUInt64();
+                        addressStore.snapshotTxQuantity(address, exeTxNonceNum);
+                        addressStore.snapshotExeTxNonceNum(address, exeTxNonceNum);
+                    }
                 }
             }
             System.out.println("amount in address: " + allBalance.toDecimal(9, XUnit.XDAG).toPlainString());

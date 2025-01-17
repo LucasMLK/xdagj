@@ -137,6 +137,11 @@ public class AddressStoreImpl implements AddressStore {
     }
 
     @Override
+    public void snapshotExeTxNonceNum(byte[] address, UInt64 exeTxNonceNum) {
+        addressSource.put(address, exeTxNonceNum.toBytes().toArray());
+    }
+
+    @Override
     public UInt64 getTxQuantity(byte[] address) {
         byte[] key = BytesUtils.merge(CURRENT_TRANSACTION_QUANTITY, address);
         byte[] txQuantity = addressSource.get(key);
