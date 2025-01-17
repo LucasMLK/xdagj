@@ -279,6 +279,15 @@ public class Commands {
             ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(blockWrapper);
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
                 kernel.getChannelMgr().sendNewBlock(blockWrapper);
+                Block block = new Block(new XdagBlock(blockWrapper.getBlock().getXdagBlock().getData().toArray()));
+                List<Address> inputs = block.getInputs();
+                UInt64 blockNonce = block.getTxNonceField().getTransactionNonce();
+                for (Address input : inputs) {
+                    if (input.getType() == XDAG_FIELD_INPUT) {
+                        byte[] addr = BytesUtils.byte32ToArray(input.getAddress());
+                        kernel.getAddressStore().updateTxQuantity(addr, blockNonce);
+                    }
+                }
                 str.append(hash2Address(blockWrapper.getBlock().getHashLow())).append("\n");
             } else if (result == ImportResult.INVALID_BLOCK) {
                 str.append(result.getErrorInfo());

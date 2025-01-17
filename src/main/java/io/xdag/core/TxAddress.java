@@ -74,4 +74,14 @@ public class TxAddress {
         }
         return this.txNonceData;
     }
+
+    public UInt64 getTransactionNonce() {
+        parse();
+        return this.txNonce;
+    }
+
+    @Override
+    public String toString() {
+        return "txNonce [" + addressNonce.toString() + "]";
+    }
 }
