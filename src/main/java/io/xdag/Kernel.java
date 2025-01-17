@@ -229,7 +229,10 @@ public class Kernel {
         // Initialize mining
         pow = new XdagPow(this);
 
-        //getWsServer().start();
+        if (webSocketServer == null) {
+            webSocketServer = new WebSocketServer(this, config.getPoolWhiteIPList(), config.getWebsocketServerPort());
+        }
+        webSocketServer.start();
 
         // Start RPC
         api = new XdagApiImpl(this);
