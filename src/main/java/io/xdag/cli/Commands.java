@@ -136,7 +136,7 @@ public class Commands {
     }
 
     /**
-     * List addresses and balances
+     * List addresses, balances and current transaction quantity
      * @param num Number of addresses to display
      */
     public String account(int num) {
@@ -159,10 +159,16 @@ public class Commands {
             if (num == 0) {
                 break;
             }
+
+            UInt64 txQuantity = kernel.getAddressStore().getTxQuantity(toBytesAddress(keyPair));
+
             str.append(toBase58(toBytesAddress(keyPair)))
                     .append(" ")
                     .append(kernel.getAddressStore().getBalanceByAddress(toBytesAddress(keyPair)).toDecimal(9, XUnit.XDAG).toPlainString())
                     .append(" XDAG")
+                    .append("  [Current Transaction Quantity: ")
+                    .append(txQuantity.toUInt64())
+                    .append("]")
                     .append("\n");
             num--;
         }
@@ -200,7 +206,25 @@ public class Commands {
                 Block block = kernel.getBlockStore().getBlockInfoByHash(Bytes32.wrap(key));
                 return String.format("Block balance: %s XDAG", block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString());
             }
+        }
+    }
 
+    public String txQuantity(String address) {
+        if (StringUtils.isEmpty(address)) {
+            UInt64 ourTxNonce = UInt64.ZERO;
+            List<KeyPair> list = kernel.getWallet().getAccounts();
+            for (KeyPair key : list) {
+                ourTxNonce = ourTxNonce.add(kernel.getAddressStore().getTxQuantity(toBytesAddress(key)));
+            }
+            return String.format("Current Transaction Quantity: %s \n", ourTxNonce.toLong());
+        } else {
+            UInt64 addressTxNonce = UInt64.ZERO;
+            if (checkAddress(address)) {
+                addressTxNonce = addressTxNonce.add(kernel.getAddressStore().getTxQuantity(fromBase58(address)));
+                return String.format("Current Transaction Quantity: %s \n", addressTxNonce.toLong());
+            } else {
+                return "The account address format is incorrect! \n";
+            }
         }
     }
 
