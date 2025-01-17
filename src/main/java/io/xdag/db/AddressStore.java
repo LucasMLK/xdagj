@@ -57,6 +57,8 @@ public interface AddressStore extends XdagLifecycle {
 
     void snapshotAddress(byte[] address, XAmount balance);
 
+    void snapshotTxQuantity(byte[] address, UInt64 txQuantity);
+
     UInt64 getTxQuantity(byte[] address);
 
     void updateTxQuantity(byte[] address, UInt64 newTxQuantity);
