@@ -33,7 +33,7 @@ public interface AddressStore extends XdagLifecycle {
     byte ADDRESS_SIZE = (byte) 0x10;
     byte AMOUNT_SUM = (byte) 0x20;
     byte ADDRESS = (byte) 0x30;
-    byte TRANSACTION_NONCE = (byte) 0x40;
+    byte CURRENT_TRANSACTION_QUANTITY = (byte) 0x40;
 
     void reset();
 

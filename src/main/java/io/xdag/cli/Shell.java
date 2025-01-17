@@ -213,8 +213,8 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
 
     private void processTxQuantity(CommandInput input) {
         final String[] usage = {
-                "nonce -  print current nonce of the address [ADDRESS] or current nonce of our address \n",
-                "Usage: nonce [ADDRESS]",
+                "txQuantity -  print current transaction quantity of the address [ADDRESS] or current nonce of our address \n",
+                "Usage: txQuantity [ADDRESS](optional)",
                 "  -? --help                    Show help",
         };
         try {

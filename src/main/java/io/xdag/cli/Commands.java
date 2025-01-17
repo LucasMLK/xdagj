@@ -211,17 +211,17 @@ public class Commands {
 
     public String txQuantity(String address) {
         if (StringUtils.isEmpty(address)) {
-            UInt64 ourTxNonce = UInt64.ZERO;
+            UInt64 ourTxQuantity = UInt64.ZERO;
             List<KeyPair> list = kernel.getWallet().getAccounts();
             for (KeyPair key : list) {
-                ourTxNonce = ourTxNonce.add(kernel.getAddressStore().getTxQuantity(toBytesAddress(key)));
+                ourTxQuantity = ourTxQuantity.add(kernel.getAddressStore().getTxQuantity(toBytesAddress(key)));
             }
-            return String.format("Current Transaction Quantity: %s \n", ourTxNonce.toLong());
+            return String.format("Current Transaction Quantity: %s \n", ourTxQuantity.toLong());
         } else {
-            UInt64 addressTxNonce = UInt64.ZERO;
+            UInt64 addressTxQuantity = UInt64.ZERO;
             if (checkAddress(address)) {
-                addressTxNonce = addressTxNonce.add(kernel.getAddressStore().getTxQuantity(fromBase58(address)));
-                return String.format("Current Transaction Quantity: %s \n", addressTxNonce.toLong());
+                addressTxQuantity = addressTxQuantity.add(kernel.getAddressStore().getTxQuantity(fromBase58(address)));
+                return String.format("Current Transaction Quantity: %s \n", addressTxQuantity.toLong());
             } else {
                 return "The account address format is incorrect! \n";
             }

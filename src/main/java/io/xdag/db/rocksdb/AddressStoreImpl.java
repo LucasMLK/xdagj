@@ -138,19 +138,19 @@ public class AddressStoreImpl implements AddressStore {
 
     @Override
     public UInt64 getTxQuantity(byte[] address) {
-        byte[] key = BytesUtils.merge(TRANSACTION_NONCE, address);
-        byte[] transactionNonce = addressSource.get(key);
+        byte[] key = BytesUtils.merge(CURRENT_TRANSACTION_QUANTITY, address);
+        byte[] txQuantity = addressSource.get(key);
 
-        if (transactionNonce == null) {
+        if (txQuantity == null) {
             return UInt64.ZERO;
         } else {
-            return UInt64.fromBytes(Bytes.wrap(transactionNonce));
+            return UInt64.fromBytes(Bytes.wrap(txQuantity));
         }
     }
 
     @Override
-    public void updateTxQuantity(byte[] address, UInt64 updatedNonce) {
-        byte[] key = BytesUtils.merge(TRANSACTION_NONCE, address);
-        addressSource.put(key,updatedNonce.toBytes().toArray());
+    public void updateTxQuantity(byte[] address, UInt64 newTxQuantity) {
+        byte[] key = BytesUtils.merge(CURRENT_TRANSACTION_QUANTITY, address);
+        addressSource.put(key,newTxQuantity.toBytes().toArray());
     }
 }
