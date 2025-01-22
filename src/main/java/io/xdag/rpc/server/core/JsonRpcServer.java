@@ -44,12 +44,14 @@ import io.xdag.rpc.server.handler.CorsHandler;
 import io.xdag.rpc.server.handler.JsonRequestHandler;
 import io.xdag.rpc.server.handler.JsonRpcHandler;
 import io.xdag.rpc.server.handler.JsonRpcRequestHandler;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.File;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 public class JsonRpcServer {
     private final RPCSpec rpcSpec;
     private final XdagApi xdagApi;
@@ -111,7 +113,7 @@ public class JsonRpcServer {
                             p.addLast(new JsonRpcHandler(rpcSpec, handlers));
                         }
                     });
-
+            log.info("---------HTTP Host:{}, HTTP Port:{}",rpcSpec.getRpcHttpHost(), rpcSpec.getRpcHttpPort());
             channel = b.bind(InetAddress.getByName(rpcSpec.getRpcHttpHost()), rpcSpec.getRpcHttpPort()).sync().channel();
         } catch (Exception e) {
             stop();
