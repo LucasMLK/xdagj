@@ -67,11 +67,22 @@ public abstract class HandshakeMessage extends Message {
     protected final SECPSignature signature;
 
     protected SECPPublicKey publicKey;
+    protected boolean isGenerateBlock;
 
-    public HandshakeMessage(MessageCode code, Class<?> responseMessageClass,
-            Network network, short networkVersion, String peerId, int port,
-            String clientId, String[] capabilities, long latestBlockNumber,
-            byte[] secret, KeyPair coinbase) {
+    public HandshakeMessage(
+            MessageCode code,
+            Class<?> responseMessageClass,
+            Network network,
+            short networkVersion,
+            String peerId,
+            int port,
+            String clientId,
+            String[] capabilities,
+            long latestBlockNumber,
+            byte[] secret,
+            KeyPair coinbase,
+            boolean isGenerateBlock
+    ) {
         super(code, responseMessageClass);
 
         this.network = network;
@@ -84,6 +95,7 @@ public abstract class HandshakeMessage extends Message {
         this.secret = secret;
         this.timestamp = System.currentTimeMillis();
         this.publicKey = coinbase.getPublicKey();
+        this.isGenerateBlock = isGenerateBlock;
 
         SimpleEncoder enc = encodeBasicInfo();
         Bytes32 hash = Hash.sha256(Bytes.wrap(enc.toBytes()));
@@ -111,6 +123,7 @@ public abstract class HandshakeMessage extends Message {
         this.latestBlockNumber = dec.readLong();
         this.secret = dec.readBytes();
         this.timestamp = dec.readLong();
+        this.isGenerateBlock = dec.readBoolean();
         this.signature = Sign.SECP256K1.decodeSignature(Bytes.wrap(dec.readBytes()));
         this.body = body;
     }
@@ -130,6 +143,7 @@ public abstract class HandshakeMessage extends Message {
         enc.writeLong(latestBlockNumber);
         enc.writeBytes(secret);
         enc.writeLong(timestamp);
+        enc.writeBoolean(isGenerateBlock);
 
         return enc;
     }
@@ -161,6 +175,7 @@ public abstract class HandshakeMessage extends Message {
      * Constructs a Peer object from the handshake info.
      */
     public Peer getPeer(String ip) {
-        return new Peer(network, networkVersion, peerId, ip, port, clientId, capabilities, latestBlockNumber);
+        return new Peer(network, networkVersion, peerId, ip, port, clientId,
+                capabilities, latestBlockNumber, isGenerateBlock);
     }
 }

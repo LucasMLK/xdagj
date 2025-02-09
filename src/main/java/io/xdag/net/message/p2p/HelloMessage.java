@@ -33,11 +33,20 @@ import io.xdag.utils.BytesUtils;
 
 public class HelloMessage extends HandshakeMessage {
 
-    public HelloMessage(Network network, short networkVersion, String peerId, int port,
-            String clientId, String[] capabilities, long latestBlockNumber,
-            byte[] secret, KeyPair coinbase) {
+    public HelloMessage(
+            Network network,
+            short networkVersion,
+            String peerId,
+            int port,
+            String clientId,
+            String[] capabilities,
+            long latestBlockNumber,
+            byte[] secret,
+            KeyPair coinbase,
+            boolean isGenerateBlock
+    ) {
         super(MessageCode.HANDSHAKE_HELLO, WorldMessage.class, network, networkVersion, peerId, port, clientId,
-                capabilities, latestBlockNumber, secret, coinbase);
+                capabilities, latestBlockNumber, secret, coinbase, isGenerateBlock);
     }
 
     public HelloMessage(byte[] encoded) {
