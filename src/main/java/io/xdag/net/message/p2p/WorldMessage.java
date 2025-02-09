@@ -25,19 +25,30 @@ package io.xdag.net.message.p2p;
 
 import java.util.Arrays;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.hyperledger.besu.crypto.KeyPair;
 
 import io.xdag.Network;
 import io.xdag.net.message.MessageCode;
 
+@Slf4j
 public class WorldMessage extends HandshakeMessage {
 
-    public WorldMessage(Network network, short networkVersion, String peerId, int port,
-            String clientId, String[] capabilities, long latestBlockNumber,
-            byte[] secret, KeyPair coinbase) {
+    public WorldMessage(
+            Network network,
+            short networkVersion,
+            String peerId,
+            int port,
+            String clientId,
+            String[] capabilities,
+            long latestBlockNumber,
+            byte[] secret,
+            KeyPair coinbase,
+            boolean isGenerateBlock
+    ) {
         super(MessageCode.HANDSHAKE_WORLD, null, network, networkVersion, peerId, port, clientId,
-                capabilities, latestBlockNumber, secret, coinbase);
+                capabilities, latestBlockNumber, secret, coinbase, isGenerateBlock);
     }
 
     public WorldMessage(byte[] encoded) {
@@ -56,6 +67,7 @@ public class WorldMessage extends HandshakeMessage {
                 ", latestBlockNumber=" + latestBlockNumber +
                 ", secret=" + Bytes.wrap(secret).toHexString() +
                 ", timestamp=" + timestamp +
+                ", isGenerateBlock=" + isGenerateBlock +
                 '}';
     }
 }
