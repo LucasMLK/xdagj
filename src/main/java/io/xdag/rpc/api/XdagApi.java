@@ -192,4 +192,6 @@ public interface XdagApi extends XdagLifecycle {
      * @return Network type as string
      */
     String xdag_netType();
+
+    Object xdag_syncing();
 }

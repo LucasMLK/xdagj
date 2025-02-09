@@ -28,6 +28,10 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import io.xdag.Kernel;
 import io.xdag.Wallet;
+import io.xdag.config.Config;
+import io.xdag.config.DevnetConfig;
+import io.xdag.config.MainnetConfig;
+import io.xdag.config.TestnetConfig;
 import io.xdag.config.spec.RPCSpec;
 import io.xdag.core.*;
 import io.xdag.net.Channel;
@@ -812,5 +816,48 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         }
         return true;
     }
+    @Override
+    public Object xdag_syncing(){
+        long currentBlock = this.blockchain.getXdagStats().nmain;
+        long highestBlock = Math.max(this.blockchain.getXdagStats().totalnmain, currentBlock);
+        SyncingResult s = new SyncingResult();
+        s.isSyncDone = false;
+
+        Config config = kernel.getConfig();
+        if (config instanceof MainnetConfig) {
+            if (kernel.getXdagState() != XdagState.SYNC) {
+                return s;
+            }
+        } else if (config instanceof TestnetConfig) {
+            if (kernel.getXdagState() != XdagState.STST) {
+                return s;
+            }
+        } else if (config instanceof DevnetConfig) {
+            if (kernel.getXdagState() != XdagState.SDST) {
+                return s;
+            }
+        }
+
+        try {
+            s.currentBlock = Long.toString(currentBlock);
+            s.highestBlock = Long.toString(highestBlock);
+            s.isSyncDone = true;
+
+            return s;
+        } finally {
+            log.debug("xdag_syncing():current {}, highest {}, isSyncDone {}", s.currentBlock, s.highestBlock,
+                    s.isSyncDone);
+        }
+
+    }
+
+    static class SyncingResult {
+
+        public String currentBlock;
+        public String highestBlock;
+        public boolean isSyncDone;
+
+    }
+
 
 }

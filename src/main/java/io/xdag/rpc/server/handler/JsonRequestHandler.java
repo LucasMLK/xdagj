@@ -51,7 +51,8 @@ public class JsonRequestHandler implements JsonRpcRequestHandler {
             "xdag_sendRawTransaction",
             "xdag_netConnectionList",
             "xdag_netType",
-            "xdag_getRewardByNumber"
+            "xdag_getRewardByNumber",
+            "xdag_syncing"
     );
 
     private final XdagApi xdagApi;
@@ -144,6 +145,7 @@ public class JsonRequestHandler implements JsonRpcRequestHandler {
                     validateTransactionRequest(txRequest, true);
                     yield xdagApi.xdag_personal_sendSafeTransaction(txRequest, params[1].toString());
                 }
+                case "xdag_syncing" -> xdagApi.xdag_syncing();
                 default -> throw JsonRpcException.methodNotFound(method);
             };
         } catch (JsonRpcException e) {
