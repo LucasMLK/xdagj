@@ -45,10 +45,11 @@ public class WorldMessage extends HandshakeMessage {
             long latestBlockNumber,
             byte[] secret,
             KeyPair coinbase,
-            boolean isGenerateBlock
+            boolean isGenerateBlock,
+            String nodeTag
     ) {
         super(MessageCode.HANDSHAKE_WORLD, null, network, networkVersion, peerId, port, clientId,
-                capabilities, latestBlockNumber, secret, coinbase, isGenerateBlock);
+                capabilities, latestBlockNumber, secret, coinbase, isGenerateBlock, nodeTag);
     }
 
     public WorldMessage(byte[] encoded) {
@@ -68,6 +69,7 @@ public class WorldMessage extends HandshakeMessage {
                 ", secret=" + Bytes.wrap(secret).toHexString() +
                 ", timestamp=" + timestamp +
                 ", isGenerateBlock=" + isGenerateBlock +
+                ", nodeTag=" + nodeTag +
                 '}';
     }
 }

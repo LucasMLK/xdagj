@@ -64,6 +64,8 @@ public class Peer {
 
     private final boolean isGenerateBlock;
 
+    private final String nodeTag;
+
     /**
      * Creates a new Peer instance
      *
@@ -85,7 +87,8 @@ public class Peer {
             String clientId,
             String[] capabilities,
             long latestBlockNumber,
-            boolean isGenerateBlock
+            boolean isGenerateBlock,
+            String nodeTag
     ) {
         this.network = network;
         this.ip = ip;
@@ -96,6 +99,7 @@ public class Peer {
         this.capabilities = capabilities;
         this.latestBlockNumber = latestBlockNumber;
         this.isGenerateBlock = isGenerateBlock;
+        this.nodeTag = nodeTag;
     }
 
     /**
@@ -103,6 +107,7 @@ public class Peer {
      */
     @Override
     public String toString() {
-        return getPeerId() + "@" + ip + ":" + port + ", GenerateBlock: " + this.isGenerateBlock;
+        return getPeerId() + "@" + ip + ":" + port + ", NodeTag = " + this.nodeTag + ", GenerateBlock = " +
+                this.isGenerateBlock;
     }
 }

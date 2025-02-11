@@ -174,7 +174,6 @@ public class CommandsTest {
     public void testXfer() {
         XAmount xAmount = XAmount.of(100, XUnit.XDAG);
         String str = commands.xfer(xAmount.toDecimal(2, XUnit.XDAG).doubleValue(), BasicUtils.pubAddress2Hash("PbwjuQP3y9F3ZnbbWUvue4zpgkQv3DHas"), null);
-        System.out.println(str);
         assertEquals("""
                 Transaction :{\s
                 }, it will take several minutes to complete the transaction.\s

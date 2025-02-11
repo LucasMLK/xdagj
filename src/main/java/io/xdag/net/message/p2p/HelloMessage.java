@@ -43,10 +43,11 @@ public class HelloMessage extends HandshakeMessage {
             long latestBlockNumber,
             byte[] secret,
             KeyPair coinbase,
-            boolean isGenerateBlock
+            boolean isGenerateBlock,
+            String nodeTag
     ) {
         super(MessageCode.HANDSHAKE_HELLO, WorldMessage.class, network, networkVersion, peerId, port, clientId,
-                capabilities, latestBlockNumber, secret, coinbase, isGenerateBlock);
+                capabilities, latestBlockNumber, secret, coinbase, isGenerateBlock, nodeTag);
     }
 
     public HelloMessage(byte[] encoded) {
@@ -65,6 +66,8 @@ public class HelloMessage extends HandshakeMessage {
                 ", latestBlockNumber=" + latestBlockNumber +
                 ", secret=" + BytesUtils.toHexString(secret) +
                 ", timestamp=" + timestamp +
+                ", generateBlock=" + isGenerateBlock +
+                ", nodeTag=" + nodeTag +
                 '}';
     }
 }

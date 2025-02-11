@@ -67,7 +67,8 @@ public abstract class HandshakeMessage extends Message {
     protected final SECPSignature signature;
 
     protected SECPPublicKey publicKey;
-    protected boolean isGenerateBlock;
+    protected final boolean isGenerateBlock;
+    protected final String nodeTag;
 
     public HandshakeMessage(
             MessageCode code,
@@ -81,7 +82,8 @@ public abstract class HandshakeMessage extends Message {
             long latestBlockNumber,
             byte[] secret,
             KeyPair coinbase,
-            boolean isGenerateBlock
+            boolean isGenerateBlock,
+            String nodeTag
     ) {
         super(code, responseMessageClass);
 
@@ -96,6 +98,7 @@ public abstract class HandshakeMessage extends Message {
         this.timestamp = System.currentTimeMillis();
         this.publicKey = coinbase.getPublicKey();
         this.isGenerateBlock = isGenerateBlock;
+        this.nodeTag = nodeTag;
 
         SimpleEncoder enc = encodeBasicInfo();
         Bytes32 hash = Hash.sha256(Bytes.wrap(enc.toBytes()));
@@ -124,6 +127,7 @@ public abstract class HandshakeMessage extends Message {
         this.secret = dec.readBytes();
         this.timestamp = dec.readLong();
         this.isGenerateBlock = dec.readBoolean();
+        this.nodeTag = dec.readString();
         this.signature = Sign.SECP256K1.decodeSignature(Bytes.wrap(dec.readBytes()));
         this.body = body;
     }
@@ -144,6 +148,7 @@ public abstract class HandshakeMessage extends Message {
         enc.writeBytes(secret);
         enc.writeLong(timestamp);
         enc.writeBoolean(isGenerateBlock);
+        enc.writeString(nodeTag);
 
         return enc;
     }
@@ -175,7 +180,7 @@ public abstract class HandshakeMessage extends Message {
      * Constructs a Peer object from the handshake info.
      */
     public Peer getPeer(String ip) {
-        return new Peer(network, networkVersion, peerId, ip, port, clientId,
-                capabilities, latestBlockNumber, isGenerateBlock);
+        return new Peer(network, networkVersion, peerId, ip, port, clientId, capabilities, latestBlockNumber,
+                isGenerateBlock, nodeTag);
     }
 }
