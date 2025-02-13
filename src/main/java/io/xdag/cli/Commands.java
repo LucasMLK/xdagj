@@ -215,16 +215,20 @@ public class Commands {
     public String txQuantity(String address) {
         if (StringUtils.isEmpty(address)) {
             UInt64 ourTxQuantity = UInt64.ZERO;
+            UInt64 exeTxQuantit = UInt64.ZERO;
             List<KeyPair> list = kernel.getWallet().getAccounts();
             for (KeyPair key : list) {
                 ourTxQuantity = ourTxQuantity.add(kernel.getAddressStore().getTxQuantity(toBytesAddress(key)));
+                exeTxQuantit = exeTxQuantit.add(kernel.getAddressStore().getExecutedNonceNum(toBytesAddress(key)));
             }
-            return String.format("Current Transaction Quantity: %s \n", ourTxQuantity.toLong());
+            return String.format("Current Transaction Quantity: %s, executed Transaction Quantity: %s \n", ourTxQuantity.toLong(), exeTxQuantit.toLong());
         } else {
             UInt64 addressTxQuantity = UInt64.ZERO;
+            UInt64 addressExeTxQuantity = UInt64.ZERO;
             if (checkAddress(address)) {
                 addressTxQuantity = addressTxQuantity.add(kernel.getAddressStore().getTxQuantity(fromBase58(address)));
-                return String.format("Current Transaction Quantity: %s \n", addressTxQuantity.toLong());
+                addressExeTxQuantity = addressExeTxQuantity.add(kernel.getAddressStore().getExecutedNonceNum(fromBase58(address)));
+                return String.format("Current Transaction Quantity: %s, executed Transaction Quantity: %s \n", addressTxQuantity.toLong(), addressExeTxQuantity.toLong());
             } else {
                 return "The account address format is incorrect! \n";
             }
