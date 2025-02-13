@@ -39,6 +39,8 @@ import java.util.List;
  */
 public interface XdagApi extends XdagLifecycle {
 
+    String xdag_protocolVersion();
+
     /**
      * Get block information by its hash.
      *
@@ -99,6 +101,8 @@ public interface XdagApi extends XdagLifecycle {
      * @return Block information response
      */
     BlockResponse xdag_getBlockByNumber(String bnOrId, int page, int pageSize);
+
+    List<BlockResponse> xdag_getBlocksByNumber(String bnOrId);
 
     /**
      * Get the current block number of the XDAG blockchain.

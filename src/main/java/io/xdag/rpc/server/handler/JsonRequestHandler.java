@@ -52,7 +52,9 @@ public class JsonRequestHandler implements JsonRpcRequestHandler {
             "xdag_netConnectionList",
             "xdag_netType",
             "xdag_getRewardByNumber",
-            "xdag_syncing"
+            "xdag_syncing",
+            "xdag_protocolVersion",
+            "xdag_getBlocksByNumber"
     );
 
     private final XdagApi xdagApi;
@@ -146,6 +148,11 @@ public class JsonRequestHandler implements JsonRpcRequestHandler {
                     yield xdagApi.xdag_personal_sendSafeTransaction(txRequest, params[1].toString());
                 }
                 case "xdag_syncing" -> xdagApi.xdag_syncing();
+                case "xdag_protocolVersion" -> xdagApi.xdag_protocolVersion();
+                case "xdag_getBlocksByNumber" -> {
+                    validateParams(params, "Missing block number parameter");
+                    yield xdagApi.xdag_getBlocksByNumber(params[0].toString());
+                }
                 default -> throw JsonRpcException.methodNotFound(method);
             };
         } catch (JsonRpcException e) {

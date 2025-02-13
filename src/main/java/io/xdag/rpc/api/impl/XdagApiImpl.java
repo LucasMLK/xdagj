@@ -64,8 +64,7 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static io.xdag.cli.Commands.getStateByFlags;
-import static io.xdag.config.Constants.BI_APPLIED;
-import static io.xdag.config.Constants.MIN_GAS;
+import static io.xdag.config.Constants.*;
 import static io.xdag.core.BlockState.MAIN;
 import static io.xdag.core.BlockType.*;
 import static io.xdag.core.XdagField.FieldType.*;
@@ -132,6 +131,11 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     }
 
     @Override
+    public String xdag_protocolVersion() {
+        return CLIENT_VERSION;
+    }
+
+    @Override
     public BlockResponse xdag_getBlockByHash(String hash, int page) {
         return getBlockDTOByHash(hash, page);
     }
@@ -159,6 +163,20 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     @Override
     public BlockResponse xdag_getBlockByNumber(String bnOrId, int page, int pageSize) {
         return getBlockByNumber(bnOrId, page, pageSize);
+    }
+
+    @Override
+    public List<BlockResponse> xdag_getBlocksByNumber(String bnOrId) {
+        int number = bnOrId == null ? 20 : Integer.parseInt(bnOrId);// default 20
+        List<Block> blocks = blockchain.listMainBlocks(number);
+        List<BlockResponse> resultDTOS = Lists.newArrayList();
+        for (Block block : blocks){
+            BlockResponse dto = transferBlockToBriefBlockResultDTO(blockchain.getBlockByHash(block.getHash(), false));
+            if(dto != null){
+                resultDTOS.add(dto);
+            }
+        }
+        return resultDTOS;
     }
 
     @Override
@@ -617,6 +635,26 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         }
         totalPage = 1;
         return BlockResultDTOBuilder.build();
+    }
+
+    private BlockResponse transferBlockToBriefBlockResultDTO(Block block) {
+        if (null == block) {
+            return null;
+        }
+        BlockResponse.BlockResponseBuilder BlockResponseBuilder = BlockResponse.builder();
+        BlockResponseBuilder.address(hash2Address(block.getHash()))
+                .hash(block.getHash().toUnprefixedHexString())
+                .balance(String.format("%s", block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
+                .blockTime(xdagTimestampToMs(block.getTimestamp()))
+                .timeStamp(block.getTimestamp())
+                .flags(Integer.toHexString(block.getInfo().getFlags()))
+                .diff(toQuantityJsonHex(block.getInfo().getDifficulty()))
+                .remark(block.getInfo().getRemark() == null ? "" : new String(block.getInfo().getRemark(),
+                        StandardCharsets.UTF_8).trim())
+                .state(getStateByFlags(block.getInfo().getFlags()))
+                .type(getType(block))
+                .height(block.getInfo().getHeight());
+        return BlockResponseBuilder.build();
     }
 
     private String getType(Block block) {
