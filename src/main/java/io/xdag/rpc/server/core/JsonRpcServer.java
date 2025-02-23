@@ -72,17 +72,17 @@ public class JsonRpcServer {
             handlers.add(new JsonRequestHandler(xdagApi));
 
             // Create SSL context (if HTTPS is enabled)
-            final SslContext sslCtx;
-            if (rpcSpec.isRpcEnableHttps()) {
-                File certFile = new File(rpcSpec.getRpcHttpsCertFile());
-                File keyFile = new File(rpcSpec.getRpcHttpsKeyFile());
-                if (!certFile.exists() || !keyFile.exists()) {
-                    throw new RuntimeException("SSL certificate or key file not found");
-                }
-                sslCtx = SslContextBuilder.forServer(certFile, keyFile).build();
-            } else {
-                sslCtx = null;
-            }
+//            final SslContext sslCtx;
+//            if (rpcSpec.isRpcEnableHttps()) {
+//                File certFile = new File(rpcSpec.getRpcHttpsCertFile());
+//                File keyFile = new File(rpcSpec.getRpcHttpsKeyFile());
+//                if (!certFile.exists() || !keyFile.exists()) {
+//                    throw new RuntimeException("SSL certificate or key file not found");
+//                }
+//                sslCtx = SslContextBuilder.forServer(certFile, keyFile).build();
+//            } else {
+//                sslCtx = null;
+//            }
 
             // Create event loop groups
             bossGroup = new NioEventLoopGroup(rpcSpec.getRpcHttpBossThreads());
@@ -99,9 +99,9 @@ public class JsonRpcServer {
                             ChannelPipeline p = ch.pipeline();
                             
                             // SSL
-                            if (sslCtx != null) {
-                                p.addLast(sslCtx.newHandler(ch.alloc()));
-                            }
+//                            if (sslCtx != null) {
+//                                p.addLast(sslCtx.newHandler(ch.alloc()));
+//                            }
 
                             // HTTP codec
                             p.addLast(new HttpServerCodec());

@@ -32,14 +32,12 @@ import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.config.MainnetConfig;
 import io.xdag.config.TestnetConfig;
+import io.xdag.config.spec.NodeSpec;
 import io.xdag.config.spec.RPCSpec;
 import io.xdag.core.*;
 import io.xdag.net.Channel;
 import io.xdag.rpc.model.request.TransactionRequest;
-import io.xdag.rpc.model.response.BlockResponse;
-import io.xdag.rpc.model.response.NetConnResponse;
-import io.xdag.rpc.model.response.ProcessResponse;
-import io.xdag.rpc.model.response.XdagStatusResponse;
+import io.xdag.rpc.model.response.*;
 import io.xdag.rpc.server.core.JsonRpcServer;
 import io.xdag.rpc.api.XdagApi;
 import io.xdag.utils.BasicUtils;
@@ -128,6 +126,29 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         } finally {
             log.info("JSON-RPC server stopped");
         }
+    }
+
+    @Override
+    public BlockResponse xdag_getTransactionByHash(String hash, int page) {
+        return getBlockDTOByHash(hash, page);
+    }
+
+    @Override
+    public String xdag_getBalanceByNumber(String bnOrId) {
+        Block block = blockchain.getBlockByHeight(Long.parseLong(bnOrId));
+        if (null == block) {
+            return null;
+        }
+        return String.format("%s", block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString());
+    }
+
+    @Override
+    public ConfigResponse xdag_poolConfig() {
+        NodeSpec nodeSpec = kernel.getConfig().getNodeSpec();
+        ConfigResponse.ConfigResponseBuilder configResponseBuilder = ConfigResponse.builder();
+        configResponseBuilder.nodeIp(nodeSpec.getNodeIp());
+        configResponseBuilder.nodePort(nodeSpec.getNodePort());
+        return configResponseBuilder.build();
     }
 
     @Override
