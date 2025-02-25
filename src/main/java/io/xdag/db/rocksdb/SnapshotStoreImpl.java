@@ -59,6 +59,7 @@ import java.util.List;
 
 import static io.xdag.config.Constants.BI_OURS;
 import static io.xdag.db.AddressStore.ADDRESS_SIZE;
+import static io.xdag.db.AddressStore.CURRENT_TRANSACTION_QUANTITY;
 import static io.xdag.db.BlockStore.*;
 import static io.xdag.utils.BasicUtils.compareAmountTo;
 
@@ -280,7 +281,8 @@ public class SnapshotStoreImpl implements SnapshotStore {
                     } // TODO: Restore the transaction quantity for each address from the snapshot.
                     else if (Hex.toHexString(address).startsWith("50")) {
                         UInt64 exeTxNonceNum = UInt64.fromBytes(Bytes.wrap(iter.value())).toUInt64();
-                        addressStore.snapshotTxQuantity(address, exeTxNonceNum);
+                        byte[] TxQuantityKey = BytesUtils.merge(CURRENT_TRANSACTION_QUANTITY, BytesUtils.byte32ToArray(BytesUtils.arrayToByte32(Arrays.copyOfRange(address, 1, 21))));
+                        addressStore.snapshotTxQuantity(TxQuantityKey, exeTxNonceNum);
                         addressStore.snapshotExeTxNonceNum(address, exeTxNonceNum);
                     }
                 }
