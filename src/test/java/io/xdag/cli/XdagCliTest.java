@@ -113,7 +113,7 @@ public class XdagCliTest {
         setOut(new PrintStream(captureOutputStream, true, Charset.defaultCharset()));
         XdagCli xdagCLI = spy(new XdagCli());
         xdagCLI.start(new String[]{"--version"});
-        assertEquals(Constants.CLIENT_VERSION + "\r\n", tapSystemOut(xdagCLI::printVersion));
+        assertEquals(Constants.CLIENT_VERSION + System.lineSeparator(), tapSystemOut(xdagCLI::printVersion));
     }
 
     @Test
