@@ -171,7 +171,8 @@ public class Kernel {
         // Create genesis block if first startup
         if (xdagStats.getOurLastBlockHash() == null) {
             firstAccount = Keys.toBytesAddress(wallet.getDefKey().getPublicKey());
-            firstBlock = new Block(config, XdagTime.getCurrentTimestamp(), null, null, false, null, null, -1, XAmount.ZERO);
+            firstBlock = new Block(config, XdagTime.getCurrentTimestamp(), null, null, false,
+                    null, null, -1, XAmount.ZERO, null);
             firstBlock.signOut(wallet.getDefKey());
             xdagStats.setOurLastBlockHash(firstBlock.getHashLow().toArray());
             if (xdagStats.getGlobalMiner() == null) {
@@ -229,7 +230,10 @@ public class Kernel {
         // Initialize mining
         pow = new XdagPow(this);
 
-        //getWsServer().start();
+        if (webSocketServer == null) {
+            webSocketServer = new WebSocketServer(this, config.getPoolWhiteIPList(), config.getWebsocketServerPort());
+        }
+        webSocketServer.start();
 
         // Start RPC
         api = new XdagApiImpl(this);

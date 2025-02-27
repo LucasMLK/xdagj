@@ -103,7 +103,8 @@ public class XdagCliTest {
                     --password <password>             wallet password
                     --version                         show version
                 """;
-        assertEquals(helpStr, tapSystemOut(xdagCLI::printHelp));
+        assertEquals(helpStr.replaceAll("\\R", ""),
+                tapSystemOut(xdagCLI::printHelp).replaceAll("\\R", ""));
     }
 
     @Test
@@ -112,7 +113,7 @@ public class XdagCliTest {
         setOut(new PrintStream(captureOutputStream, true, Charset.defaultCharset()));
         XdagCli xdagCLI = spy(new XdagCli());
         xdagCLI.start(new String[]{"--version"});
-        assertEquals(Constants.CLIENT_VERSION + "\n", tapSystemOut(xdagCLI::printVersion));
+        assertEquals(Constants.CLIENT_VERSION + System.lineSeparator(), tapSystemOut(xdagCLI::printVersion));
     }
 
     @Test

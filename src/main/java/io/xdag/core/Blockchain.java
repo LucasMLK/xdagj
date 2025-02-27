@@ -27,6 +27,7 @@ package io.xdag.core;
 import io.xdag.listener.Listener;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt64;
 import org.hyperledger.besu.crypto.KeyPair;
 
 import java.util.List;
@@ -41,7 +42,13 @@ public interface Blockchain {
     ImportResult tryToConnect(Block block);
 
     // Create a new block with given parameters
-    Block createNewBlock(Map<Address, KeyPair> pairs, List<Address> to, boolean mining, String remark, XAmount fee);
+    Block createNewBlock(
+            Map<Address, KeyPair> pairs,
+            List<Address> to,
+            boolean mining,
+            String remark,
+            XAmount fee,
+            UInt64 txNonce);
 
     // Get block by its hash
     Block getBlockByHash(Bytes32 hash, boolean isRaw);

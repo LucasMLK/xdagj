@@ -53,6 +53,7 @@ import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
 import org.apache.tuweni.bytes.MutableBytes32;
+import org.apache.tuweni.units.bigints.UInt64;
 import org.bouncycastle.math.ec.ECPoint;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.encoders.Hex;
@@ -72,8 +73,7 @@ import static io.xdag.core.ImportResult.IMPORTED_BEST;
 import static io.xdag.core.ImportResult.IMPORTED_NOT_BEST;
 import static io.xdag.core.XdagField.FieldType.*;
 import static io.xdag.utils.BasicUtils.*;
-import static io.xdag.utils.BytesUtils.equalBytes;
-import static io.xdag.utils.BytesUtils.long2UnsignedLong;
+import static io.xdag.utils.BytesUtils.*;
 import static io.xdag.utils.WalletUtils.checkAddress;
 import static io.xdag.utils.WalletUtils.toBase58;
 
@@ -298,7 +298,8 @@ public class BlockchainImpl implements Blockchain {
 
             // Validate block references
             List<Address> all = block.getLinks().stream().distinct().toList();
-            
+            int inputFieldCounter = 0;
+
             for (Address ref : all) {
                 if (ref != null && !ref.isAddress) {
                     if (ref.getType() == XDAG_FIELD_OUT && !ref.getAmount().isZero()) {
@@ -334,6 +335,16 @@ public class BlockchainImpl implements Blockchain {
                         }
                     }
                 } else {
+                    // Ensure that there is only one input.
+                    if (ref != null && ref.type == XDAG_FIELD_INPUT) {
+                        inputFieldCounter = inputFieldCounter + 1;
+                        if (inputFieldCounter > 1) {
+                            result = ImportResult.INVALID_BLOCK;
+                            result.setErrorInfo("The quantity of the input must be exactly one.");
+                            log.debug("The quantity of the input must be exactly one.");
+                            return result;
+                        }
+                    }
                     if (ref != null && ref.type == XDAG_FIELD_INPUT && !addressStore.addressIsExist(BytesUtils.byte32ToArray(ref.getAddress()))) {
                         result = ImportResult.INVALID_BLOCK;
                         result.setErrorInfo("Address isn't exist " + WalletUtils.toBase58(BytesUtils.byte32ToArray(ref.getAddress())));
@@ -782,15 +793,38 @@ public class BlockchainImpl implements Blockchain {
                 sumIn = sumIn.add(link.getAmount());
             } else if (link.getType() == XDAG_FIELD_INPUT) {
                 XAmount balance = addressStore.getBalanceByAddress(hash2byte(link.getAddress()));
+                UInt64 executedNonce = addressStore.getExecutedNonceNum(BytesUtils.byte32ToArray(link.getAddress()));
+                UInt64 blockNonce = block.getTxNonceField().getTransactionNonce();
+
+                if (blockNonce.compareTo(executedNonce.add(UInt64.ONE)) > 0) {
+                    addressStore.updateTxQuantity(BytesUtils.byte32ToArray(link.getAddress()), executedNonce);
+                    log.debug("The current situation belongs to a nonce fault, and nonce is rolled back to the current number of executed nonce {}",executedNonce.toLong());
+                    return XAmount.ZERO;
+                }
+
+                if(blockNonce.compareTo(executedNonce) <= 0) {
+                    if (blockNonce.compareTo(executedNonce) == 0) {
+                        log.debug("The sending transaction speed is too fast, resulting in multiple transactions corresponding to the same nonce, " +
+                                "and another faster transaction of the nonce has already been executed. Please avoid sending transactions continuously so quickly, " +
+                                "which may cause transaction execution failure");
+                    } else {
+                        log.debug("The current network computing power fluctuates greatly, it is recommended to wait for a period of time before sending transactions");
+                    }
+
+                    return XAmount.ZERO.subtract(XAmount.ONE);
+                }
+
                 if (compareAmountTo(balance, link.amount) < 0) {
                     log.debug("This input ref doesn't have enough amount,hash:{},amount:{},need:{}",
                             Hex.toHexString(hash2byte(link.getAddress())), balance,
                             link.getAmount());
+                    processNonceAfterTransactionExecution(link);
                     return XAmount.ZERO;
                 }
                 // Verify in advance that Address amount is not negative
                 if (compareAmountTo(sumIn.add(link.getAmount()), sumIn) < 0) {
                     log.debug("This input ref's:{} amount less than 0", linkAddress.toHexString());
+                    processNonceAfterTransactionExecution(link);
                     return XAmount.ZERO;
                 }
                 sumIn = sumIn.add(link.getAmount());
@@ -798,6 +832,19 @@ public class BlockchainImpl implements Blockchain {
                 // Verify in advance that Address amount is not negative
                 if (compareAmountTo(sumOut.add(link.getAmount()), sumOut) < 0) {
                     log.debug("This output ref's:{} amount less than 0", linkAddress.toHexString());
+                    for(Address checkINlink : links){
+                        if (checkINlink.getType() == XDAG_FIELD_INPUT){
+                            byte[] address = BytesUtils.byte32ToArray(checkINlink.getAddress());
+                            UInt64 currentExeNonce = addressStore.getExecutedNonceNum(address);
+                            UInt64 nonceInTx = block.getTxNonceField().getTransactionNonce();
+                            if (nonceInTx.compareTo(currentExeNonce.add(UInt64.ONE)) == 0) {
+                                log.debug("The amount given by account {} to the transferring party is negative, resulting in the failure of the {} - th transaction execution of this account",
+                                        hash2PubAddress(checkINlink.getAddress()),nonceInTx.intValue()
+                                );
+                                processNonceAfterTransactionExecution(checkINlink);
+                            }
+                        }
+                    }
                     return XAmount.ZERO;
                 }
                 sumOut = sumOut.add(link.getAmount());
@@ -807,6 +854,7 @@ public class BlockchainImpl implements Blockchain {
                 compareAmountTo(block.getInfo().getAmount().add(sumIn), sumIn) < 0
         ) {
             log.debug("block:{} exec fail!", blockHashLow.toHexString());
+            processNonceAfterTransactionExecution(block.getInputs().get(0));
             return XAmount.ZERO;
         }
 
@@ -826,6 +874,7 @@ public class BlockchainImpl implements Blockchain {
             } else {
                 if (link.getType() == XDAG_FIELD_INPUT) {
                     subtractAmount(BasicUtils.hash2byte(linkAddress), link.getAmount(), block);
+                    processNonceAfterTransactionExecution(link);
                 } else if (link.getType() == XDAG_FIELD_OUTPUT) {
                     addAmount(BasicUtils.hash2byte(linkAddress), link.getAmount().subtract(block.getFee()), block);
                     gas = gas.add(block.getFee()); // Mark the output for Fee
@@ -871,6 +920,8 @@ public class BlockchainImpl implements Blockchain {
                     if (link.getType() == XDAG_FIELD_INPUT) {
                         addAmount(BasicUtils.hash2byte(link.getAddress()), link.getAmount(), block);
                         sum = sum.subtract(link.getAmount());
+                        byte[] address = byte32ToArray(link.getAddress());
+                        addressStore.updateExcutedNonceNum(address, false);
                     } else {
                         // When add amount in 'Apply' subtract fee, so unApply also subtract fee
                         subtractAmount(BasicUtils.hash2byte(link.getAddress()), link.getAmount().subtract(block.getFee()), block);
@@ -880,6 +931,22 @@ public class BlockchainImpl implements Blockchain {
 
             }
             updateBlockFlag(block, BI_APPLIED, false);
+        } else {
+            //When rolling back, the unaccepted transactions in the main block need to be processed, which is the number of confirmed transactions sent corresponding to their account addresses, nonce, needs to be reduced by one
+            for(Address link : links) {
+                if (link.isAddress && link.getType() == XDAG_FIELD_INPUT){
+                    byte[] address = byte32ToArray(link.getAddress());
+                    UInt64 blockNonce = block.getTxNonceField().getTransactionNonce();
+                    UInt64 exeNonce = addressStore.getExecutedNonceNum(address);
+                    if (blockNonce.compareTo(exeNonce) == 0) {
+                        addressStore.updateExcutedNonceNum(address, false);
+                        log.debug("The transaction processed quantity of account {} is reduced by one, and the number of transactions processed now is nonce = {}",
+                                toBase58(BytesUtils.byte32ToArray(link.getAddress())), addressStore.getExecutedNonceNum(address).intValue()
+                        );
+                    }
+
+                }
+            }
         }
         updateBlockFlag(block, BI_MAIN_REF, false);
         updateBlockRef(block, null);
@@ -959,8 +1026,26 @@ public class BlockchainImpl implements Blockchain {
         }
     }
 
+    public void processNonceAfterTransactionExecution(Address link) {
+        if (link.getType() != XDAG_FIELD_INPUT) {
+            return;
+        }
+        byte[] address = BytesUtils.byte32ToArray(link.getAddress());
+        addressStore.updateExcutedNonceNum(address, true);
+        UInt64 currentTxNonce = addressStore.getTxQuantity(address);
+        UInt64 currentExeNonce = addressStore.getExecutedNonceNum(address);
+        addressStore.updateTxQuantity(address, currentTxNonce, currentExeNonce);
+    }
+
     @Override
-    public Block createNewBlock(Map<Address, KeyPair> pairs, List<Address> to, boolean mining, String remark, XAmount fee) {
+    public Block createNewBlock(
+            Map<Address, KeyPair> pairs,
+            List<Address> to,
+            boolean mining,
+            String remark,
+            XAmount fee,
+            UInt64 txNonce
+    ) {
 
         int hasRemark = remark == null ? 0 : 1;
 
@@ -987,7 +1072,12 @@ public class BlockchainImpl implements Blockchain {
         all.addAll(to);
 
         // TODO: Check if pairs have duplicates
-        int res = 1 + pairs.size() + to.size() + 3 * keys.size() + (defKeyIndex == -1 ? 2 : 0) + hasRemark;
+        int res;
+        if (txNonce != null) {
+            res = 1 + 1 + pairs.size() + to.size() + 3 * keys.size() + (defKeyIndex == -1 ? 2 : 0) + hasRemark;
+        } else {
+            res = 1 + pairs.size() + to.size() + 3 * keys.size() + (defKeyIndex == -1 ? 2 : 0) + hasRemark;
+        }
 
         // TODO: If block fields are insufficient
         if (res > 16) {
@@ -997,7 +1087,7 @@ public class BlockchainImpl implements Blockchain {
         sendTime[0] = XdagTime.getCurrentTimestamp();
         List<Address> refs = Lists.newArrayList();
 
-        return new Block(kernel.getConfig(), sendTime[0], all, refs, mining, keys, remark, defKeyIndex, fee);
+        return new Block(kernel.getConfig(), sendTime[0], all, refs, mining, keys, remark, defKeyIndex, fee, txNonce);
     }
 
     public Block createMainBlock() {
@@ -1030,7 +1120,7 @@ public class BlockchainImpl implements Blockchain {
             refs.addAll(orphans);
         }
         return new Block(kernel.getConfig(), sendTime[0], null, refs, true, null,
-                kernel.getConfig().getNodeSpec().getNodeTag(), -1, XAmount.ZERO);
+                kernel.getConfig().getNodeSpec().getNodeTag(), -1, XAmount.ZERO, null);
     }
 
     public Block createLinkBlock(String remark) {
@@ -1046,7 +1136,7 @@ public class BlockchainImpl implements Blockchain {
             refs.addAll(orphans);
         }
         return new Block(kernel.getConfig(), sendTime[1], null, refs, false, null,
-                remark, -1, XAmount.ZERO);
+                remark, -1, XAmount.ZERO, null);
     }
 
     /**
@@ -1577,7 +1667,8 @@ public class BlockchainImpl implements Blockchain {
             nblk = nblk / 61 + (b ? 1 : 0);
         }
         while (nblk-- > 0) {
-            Block linkBlock = createNewBlock(null, null, false, kernel.getConfig().getNodeSpec().getNodeTag(), XAmount.ZERO);
+            Block linkBlock = createNewBlock(null, null, false,
+                    kernel.getConfig().getNodeSpec().getNodeTag(), XAmount.ZERO, null);
             linkBlock.signOut(kernel.getWallet().getDefKey());
             ImportResult result = this.tryToConnect(linkBlock);
             if (result == IMPORTED_NOT_BEST || result == IMPORTED_BEST) {

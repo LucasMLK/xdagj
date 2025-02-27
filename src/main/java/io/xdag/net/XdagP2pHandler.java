@@ -223,10 +223,10 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
         this.timestamp = msg.getTimestamp();
 
         // send the HELLO message
-        this.msgQueue.sendMessage(new HelloMessage(nodeSpec.getNetwork(), nodeSpec.getNetworkVersion(), client.getPeerId(),
-                client.getPort(), config.getClientId(), config.getClientCapabilities().toArray(),
-                chain.getLatestMainBlockNumber(),
-                secret, client.getCoinbase()));
+        this.msgQueue.sendMessage(new HelloMessage(nodeSpec.getNetwork(), nodeSpec.getNetworkVersion(),
+                client.getPeerId(), client.getPort(), config.getClientId(), config.getClientCapabilities().toArray(),
+                chain.getLatestMainBlockNumber(), secret, client.getCoinbase(), config.getEnableGenerateBlock(),
+                config.getNodeTag()));
     }
 
     protected void onHandshakeHello(HelloMessage msg) {
@@ -248,12 +248,11 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
             msgQueue.disconnect(ReasonCode.INVALID_HANDSHAKE);
             return;
         }
-
         // send the WORLD message
-        this.msgQueue.sendMessage(new WorldMessage(nodeSpec.getNetwork(), nodeSpec.getNetworkVersion(), client.getPeerId(),
-                client.getPort(), config.getClientId(), config.getClientCapabilities().toArray(),
-                chain.getLatestMainBlockNumber(),
-                secret, client.getCoinbase()));
+        this.msgQueue.sendMessage(new WorldMessage(nodeSpec.getNetwork(), nodeSpec.getNetworkVersion(),
+                client.getPeerId(), client.getPort(), config.getClientId(), config.getClientCapabilities().toArray(),
+                chain.getLatestMainBlockNumber(), secret, client.getCoinbase(), config.getEnableGenerateBlock(),
+                config.getNodeTag()));
 
         // handshake done
         onHandshakeDone(peer);

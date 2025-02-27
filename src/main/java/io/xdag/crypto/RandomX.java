@@ -220,8 +220,35 @@ public class RandomX extends AbstractXdagLifecycle {
     public void randomXPoolUpdateSeed(long memIndex) {
         RandomXMemory rx_memory = globalMemory[(int) (memIndex) & 1];
         // TODO: changeKey should re-initialize dataset
-        rx_memory.getPoolTemplate().changeKey(rx_memory.seed);
-        rx_memory.getBlockTemplate().changeKey(rx_memory.seed);
+        if (rx_memory.getPoolTemplate() == null) {
+            RandomXCache cache = new RandomXCache(flagSet);
+            cache.init(rx_memory.seed);
+            RandomXTemplate template = RandomXTemplate.builder()
+                    .cache(cache)
+                    .miningMode(config.getRandomxSpec().getRandomxFlag())
+                    .flags(flagSet)
+                    .build();
+            template.init();
+            rx_memory.setPoolTemplate(template);
+            rx_memory.getPoolTemplate().changeKey(rx_memory.seed);
+        } else {
+            rx_memory.getPoolTemplate().changeKey(rx_memory.seed);
+        }
+
+        if (rx_memory.getBlockTemplate() == null) {
+            RandomXCache cache = new RandomXCache(flagSet);
+            cache.init(rx_memory.seed);
+            RandomXTemplate template = RandomXTemplate.builder()
+                    .cache(cache)
+                    .miningMode(config.getRandomxSpec().getRandomxFlag())
+                    .flags(flagSet)
+                    .build();
+            template.init();
+            rx_memory.setBlockTemplate(template);
+            rx_memory.getBlockTemplate().changeKey(rx_memory.seed);
+        } else {
+            rx_memory.getBlockTemplate().changeKey(rx_memory.seed);
+        }
     }
 
     public void randomXLoadingSnapshot(byte[] preseed, long forkTime) {

@@ -129,6 +129,10 @@ public class CommandsTest {
         Mockito.when(wallet.getAccounts()).thenReturn(accounts);
         Mockito.when(addressStore.getBalanceByAddress(Keys.toBytesAddress(keyPair_1))).thenReturn(XAmount.of(9999, XUnit.XDAG));
         Mockito.when(addressStore.getBalanceByAddress(Keys.toBytesAddress(keyPair_2))).thenReturn(XAmount.of(8888, XUnit.XDAG));
+        Mockito.when(addressStore.getTxQuantity(Keys.toBytesAddress(keyPair_1))).thenReturn(UInt64.ZERO);
+        Mockito.when(addressStore.getTxQuantity(Keys.toBytesAddress(keyPair_2))).thenReturn(UInt64.ZERO);
+        Mockito.when(addressStore.getExecutedNonceNum(Keys.toBytesAddress(keyPair_1))).thenReturn(UInt64.ZERO);
+        Mockito.when(addressStore.getExecutedNonceNum(Keys.toBytesAddress(keyPair_2))).thenReturn(UInt64.ZERO);
 
         commands = new Commands(kernel);
     }
@@ -148,8 +152,8 @@ public class CommandsTest {
     public void testAccount() {
         String str = commands.account(2);
         assertEquals("""
-                PbwjuQP3y9F3ZnbbWUvue4zpgkQv3DHas 9999.000000000 XDAG
-                35KpNArHncGduckwbaW27tAfwzN4rNtX2 8888.000000000 XDAG
+                PbwjuQP3y9F3ZnbbWUvue4zpgkQv3DHas 9999.000000000 XDAG  [Current TX Quantity: 0, Confirmed TX Quantity: 0]
+                35KpNArHncGduckwbaW27tAfwzN4rNtX2 8888.000000000 XDAG  [Current TX Quantity: 0, Confirmed TX Quantity: 0]
                 """, str);
     }
 
@@ -170,9 +174,10 @@ public class CommandsTest {
     public void testXfer() {
         XAmount xAmount = XAmount.of(100, XUnit.XDAG);
         String str = commands.xfer(xAmount.toDecimal(2, XUnit.XDAG).doubleValue(), BasicUtils.pubAddress2Hash("PbwjuQP3y9F3ZnbbWUvue4zpgkQv3DHas"), null);
-        System.out.println(str);
-        assertEquals("Transaction :{ \n"
-                + "}, it will take several minutes to complete the transaction.", str);
+        assertEquals("""
+                Transaction :{\s
+                }, it will take several minutes to complete the transaction.\s
+                """, str);
     }
 
     @Test
@@ -330,7 +335,7 @@ public class CommandsTest {
                  direction  address                                    amount                 time
                                 
                  snapshot: PbwjuQP3y9F3ZnbbWUvue4zpgkQv3DHas           9999.000000000   %s
-                """, st), str);
+                """, st).replace("\r\n", "\n"), str.replace("\r\n", "\n"));
     }
 
     @Test

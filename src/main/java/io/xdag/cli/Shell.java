@@ -88,6 +88,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         commandExecute.put("terminate", new CommandMethods(this::processTerminate, this::defaultCompleter));
         commandExecute.put("address", new CommandMethods(this::processAddress, this::defaultCompleter));
         commandExecute.put("oldbalance", new CommandMethods(this::processOldBalance, this::defaultCompleter));
+        commandExecute.put("txQuantity", new CommandMethods(this::processTxQuantity, this::defaultCompleter));
         registerCommands(commandExecute);
     }
 
@@ -210,6 +211,23 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         }
     }
 
+    private void processTxQuantity(CommandInput input) {
+        final String[] usage = {
+                "txQuantity -  print current transaction quantity of the address [ADDRESS] or current nonce of our address \n",
+                "Usage: txQuantity [ADDRESS](optional)",
+                "  -? --help                    Show help",
+        };
+        try {
+            Options opt = parseOptions(usage, input.args());
+            if (opt.isSet("help")) {
+                throw new Options.HelpException(opt.usage());
+            }
+            List<String> argv = opt.args();
+            println(commands.txQuantity(!argv.isEmpty() ? argv.get(0) : null));
+        } catch (Exception error) {
+            saveException(error);
+        }
+    }
 
     private void processBlock(CommandInput input) {
         final String[] usage = {
