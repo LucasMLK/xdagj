@@ -29,7 +29,6 @@ import io.xdag.cli.Commands;
 import io.xdag.config.Config;
 import io.xdag.core.*;
 import io.xdag.utils.BasicUtils;
-import io.xdag.utils.WalletUtils;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
@@ -50,6 +49,8 @@ import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_OUTPUT;
 import static io.xdag.pool.PoolAwardManagerImpl.BlockRewardHistorySender.awardMessageHistoryQueue;
 import static io.xdag.utils.BasicUtils.*;
 import static io.xdag.utils.BytesUtils.compareTo;
+import static io.xdag.utils.WalletUtils.checkAddress;
+import static io.xdag.utils.WalletUtils.toBase58;
 
 @Slf4j
 public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolAwardManager, Runnable {
@@ -172,7 +173,8 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
             log.debug("Can't find the block");
             return -2;
         }
-        if (compareTo(block.getNonce().slice(0, 20).toArray(), 0,
+        // nonce = share(12 bytes) + pool wallet address(20 bytes)
+        if (compareTo(block.getNonce().slice(12, 20).toArray(), 0,
                 20, block.getCoinBase().getAddress().slice(8, 20).toArray(), 0, 20) == 0) {
             log.debug("This block is not produced by mining and belongs to the node, block hash:{}",
                     hashlow.toHexString());
@@ -192,7 +194,16 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
             log.debug("no main block,can't pay");
             return -5;
         }
-        Bytes32 poolWalletAddress = BasicUtils.hexPubAddress2Hashlow(String.valueOf(block.getNonce().slice(0, 20)));
+
+        Bytes32 poolWalletAddress = BasicUtils.hexPubAddress2Hashlow(String.valueOf(block.getNonce().slice(12, 20)));
+        if (!checkAddress(toBase58(block.getNonce().slice(12, 20).toArray()))) {
+            log.error("mining pool wallet address format error");
+            return -6;
+        }
+        if (allAmount.multiply(div(fundRation, 100, 6)).lessThanOrEqual(MIN_GAS)) {
+            log.error("The community reward ratio is set too small, and the rewards are refused to be distributed.");
+            return -7;
+        }
         log.debug("=========== At this time {} starts to distribute rewards to pools===========", time);
         TransactionInfoSender transactionInfoSender = new TransactionInfoSender();
         transactionInfoSender.setPreHash(preHash);
@@ -279,7 +290,7 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
             log.error("Failed to add transaction history");
         }
         log.debug("The reward for block {} has been distributed to pool address {}", hashLow,
-                WalletUtils.toBase58(receipt.get(1).getAddress().slice(8, 20).toArray()));
+                toBase58(receipt.get(1).getAddress().slice(8, 20).toArray()));
     }
 
 
