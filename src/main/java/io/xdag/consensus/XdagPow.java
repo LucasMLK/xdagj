@@ -40,7 +40,6 @@ import io.xdag.net.ChannelManager;
 import io.xdag.pool.ChannelSupervise;
 import io.xdag.pool.PoolAwardManager;
 import io.xdag.utils.BytesUtils;
-import io.xdag.utils.XdagRandomUtils;
 import io.xdag.utils.XdagSha256Digest;
 import io.xdag.utils.XdagTime;
 import lombok.Getter;
@@ -59,8 +58,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static io.xdag.utils.BasicUtils.hash2byte;
 import static io.xdag.utils.BasicUtils.keyPair2Hash;
-import static io.xdag.utils.BytesUtils.compareTo;
-import static io.xdag.utils.BytesUtils.equalBytes;
+import static io.xdag.utils.BytesUtils.*;
+import static io.xdag.utils.XdagRandomUtils.*;
+
 
 @Slf4j
 public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
@@ -185,10 +185,9 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
         taskIndex.incrementAndGet();
         Block block = blockchain.createNewBlock(null, null, true, null, XAmount.ZERO, null);
         block.signOut(wallet.getDefKey());
-        // The first 20 bytes of the initial nonce are the node wallet address.
-        minShare.set(Bytes32.wrap(BytesUtils.merge(hash2byte(keyPair2Hash(wallet.getDefKey())),
-                XdagRandomUtils.nextNewBytes(12))));
-
+        // The last 20 bytes of the initial nonce are the node wallet address.
+        minShare.set(Bytes32.wrap(BytesUtils.merge(generateRandomBytes(12),
+                hash2byte(keyPair2Hash(wallet.getDefKey())))));
         block.setNonce(minShare.get());
         minHash.set(Bytes32.fromHexString("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
         currentTask.set(createTaskByRandomXBlock(block, sendTime));
@@ -201,8 +200,9 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
         taskIndex.incrementAndGet();
         Block block = blockchain.createNewBlock(null, null, true, null, XAmount.ZERO, null);
         block.signOut(wallet.getDefKey());
-        minShare.set(Bytes32.wrap(BytesUtils.merge(hash2byte(keyPair2Hash(wallet.getDefKey())),
-                XdagRandomUtils.nextNewBytes(12))));
+        // The last 20 bytes of the initial nonce are the node wallet address.
+        minShare.set(Bytes32.wrap(BytesUtils.merge(generateRandomBytes(12),
+                hash2byte(keyPair2Hash(wallet.getDefKey())))));
         block.setNonce(minShare.get());
         // initial nonce
         minHash.set(block.recalcHash());
