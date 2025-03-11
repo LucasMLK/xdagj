@@ -367,26 +367,30 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         ImportResult result;
         List<Address> inputs = block.getInputs();
         int inputSize = inputs.size();
+        if (inputSize == 0) {
+            result = ImportResult.INVALID_BLOCK;
+            return "THE TX NEEDS INPUT " + result.getErrorInfo();
+        }
         for (Address input : inputs) {
             if (input.getType() == XDAG_FIELD_IN && block.getTxNonceField() != null) {
                 result = ImportResult.INVALID_BLOCK;
-                return "INVALID_BLOCK " + result.getErrorInfo();
+                return "NO NONCE IS REQUIRED FOR MAIN BLOCK TRANSFER " + result.getErrorInfo();
             } else if (input.getType() == XDAG_FIELD_INPUT) {
                 byte[] addr = BytesUtils.byte32ToArray(input.getAddress());
                 UInt64 legalNonce = kernel.getAddressStore().getTxQuantity(addr).add(UInt64.ONE);
                 UInt64 blockNonce;
                 if (inputSize != 1) {
                     result = ImportResult.INVALID_BLOCK;
-                    return "INVALID_BLOCK " + result.getErrorInfo();
+                    return "ACCOUNT TRANSFER IS LIMITED TO ONE INPUT ONLY " + result.getErrorInfo();
                 }
                 if (block.getTxNonceField() == null) {
                     result = ImportResult.INVALID_BLOCK;
-                    return "INVALID_BLOCK " + result.getErrorInfo();
+                    return "PLEASE ENSURE THAT THE WALLET HAS BEEN UPDATED TO THE LATEST VERSION. NONCE IS REQUIRED FOR TRANSFERS " + result.getErrorInfo();
                 }
                 blockNonce = block.getTxNonceField().getTransactionNonce();
                 if (blockNonce.compareTo(legalNonce) != 0) {
                     result = ImportResult.INVALID_BLOCK;
-                    return "INVALID_BLOCK " + result.getErrorInfo();
+                    return "PLEASE FILL IN THE CORRECT NONCE " + result.getErrorInfo();
                 }
             }
         }
