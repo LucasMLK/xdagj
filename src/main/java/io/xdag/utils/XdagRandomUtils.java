@@ -26,6 +26,8 @@ package io.xdag.utils;
 import org.apache.commons.rng.UniformRandomProvider;
 import org.apache.commons.rng.simple.RandomSource;
 
+import java.security.SecureRandom;
+
 /**
  * Utility class for generating random numbers and bytes using XO-RO-SHI-RO-128-PP algorithm
  */
@@ -98,4 +100,17 @@ public class XdagRandomUtils {
         rng.nextBytes(result);
         return result;
     }
+
+    /**
+     * Create and return a random byte array
+     * @param count Size of the byte array to create
+     * @return Random byte array
+     */
+    public static byte[] generateRandomBytes(int count) {
+        SecureRandom secureRandom = new SecureRandom();
+        byte[] randomBytes = new byte[count];
+        secureRandom.nextBytes(randomBytes);
+        return randomBytes;
+    }
+
 }

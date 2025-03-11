@@ -799,7 +799,7 @@ public class BlockchainImpl implements Blockchain {
                 if (blockNonce.compareTo(executedNonce.add(UInt64.ONE)) > 0) {
                     addressStore.updateTxQuantity(BytesUtils.byte32ToArray(link.getAddress()), executedNonce);
                     log.debug("The current situation belongs to a nonce fault, and nonce is rolled back to the current number of executed nonce {}",executedNonce.toLong());
-                    return XAmount.ZERO;
+                    return XAmount.ZERO.subtract(XAmount.ONE);
                 }
 
                 if(blockNonce.compareTo(executedNonce) <= 0) {
@@ -854,7 +854,7 @@ public class BlockchainImpl implements Blockchain {
                 compareAmountTo(block.getInfo().getAmount().add(sumIn), sumIn) < 0
         ) {
             log.debug("block:{} exec fail!", blockHashLow.toHexString());
-            processNonceAfterTransactionExecution(block.getInputs().get(0));
+            if (block.getInputs() != null) processNonceAfterTransactionExecution(block.getInputs().get(0));
             return XAmount.ZERO;
         }
 
@@ -921,7 +921,9 @@ public class BlockchainImpl implements Blockchain {
                         addAmount(BasicUtils.hash2byte(link.getAddress()), link.getAmount(), block);
                         sum = sum.subtract(link.getAmount());
                         byte[] address = byte32ToArray(link.getAddress());
+                        UInt64 exeNonce = addressStore.getExecutedNonceNum(address);
                         addressStore.updateExcutedNonceNum(address, false);
+                        addressStore.updateTxQuantity(address, exeNonce.subtract(UInt64.ONE));
                     } else {
                         // When add amount in 'Apply' subtract fee, so unApply also subtract fee
                         subtractAmount(BasicUtils.hash2byte(link.getAddress()), link.getAmount().subtract(block.getFee()), block);
@@ -940,6 +942,7 @@ public class BlockchainImpl implements Blockchain {
                     UInt64 exeNonce = addressStore.getExecutedNonceNum(address);
                     if (blockNonce.compareTo(exeNonce) == 0) {
                         addressStore.updateExcutedNonceNum(address, false);
+                        addressStore.updateTxQuantity(address, exeNonce.subtract(UInt64.ONE));
                         log.debug("The transaction processed quantity of account {} is reduced by one, and the number of transactions processed now is nonce = {}",
                                 toBase58(BytesUtils.byte32ToArray(link.getAddress())), addressStore.getExecutedNonceNum(address).intValue()
                         );
