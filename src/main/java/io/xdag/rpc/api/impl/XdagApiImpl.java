@@ -385,7 +385,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                 }
                 if (block.getTxNonceField() == null) {
                     result = ImportResult.INVALID_BLOCK;
-                    return "PLEASE ENSURE THAT THE WALLET HAS BEEN UPDATED TO THE LATEST VERSION. NONCE IS REQUIRED FOR TRANSFERS " + result.getErrorInfo();
+                    return "PLEASE DOWNLOAD THE LATEST WALLET " + result.getErrorInfo();
                 }
                 blockNonce = block.getTxNonceField().getTransactionNonce();
                 if (blockNonce.compareTo(legalNonce) != 0) {
