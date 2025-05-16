@@ -37,6 +37,7 @@ import java.util.Set;
 
 import io.xdag.core.AbstractXdagLifecycle;
 import io.xdag.crypto.randomx.*;
+import lombok.Getter;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.bouncycastle.util.Arrays;
@@ -47,13 +48,13 @@ import io.xdag.config.MainnetConfig;
 import io.xdag.core.Block;
 import io.xdag.core.Blockchain;
 import io.xdag.utils.XdagTime;
-import lombok.Data;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
 
 @Slf4j
-@Data
+@Getter
+@Setter
 public class RandomX extends AbstractXdagLifecycle {
     protected final RandomXMemory[] globalMemory = new RandomXMemory[2];
     protected final Config config;
@@ -82,7 +83,7 @@ public class RandomX extends AbstractXdagLifecycle {
         }
         this.mineType = XDAG_RANDOMX;
 
-        flagSet = RandomXUtils.getFlagsSet();
+        flagSet = RandomXUtils.getRecommendedFlags();
         if (config.getRandomxSpec().getRandomxFlag()) {
             flagSet.add(RandomXFlag.LARGE_PAGES);
             flagSet.add(RandomXFlag.FULL_MEM);
