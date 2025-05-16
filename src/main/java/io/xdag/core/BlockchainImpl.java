@@ -368,6 +368,26 @@ public class BlockchainImpl implements Blockchain {
                     updateBlockFlag(block, BI_EXTRA, false);
                 }
             }
+
+            if (isAccountTx(block)) {
+                if(block.getTxNonceField() == null) {
+                    result = ImportResult.INVALID_BLOCK;
+                    result.setErrorInfo("Account transaction block must have nonce.");
+                    return result;
+                }
+            } else if (isTxBlock(block)) {
+                if(block.getTxNonceField() != null) {
+                    result = ImportResult.INVALID_BLOCK;
+                    result.setErrorInfo("The main block transaction block should not contain nonce.");
+                    return result;
+                }
+            } else {
+                if(block.getTxNonceField() != null) {
+                    result = ImportResult.INVALID_BLOCK;
+                    result.setErrorInfo("The main block or link block should not contain nonce.");
+                    return result;
+                }
+            }
             
             // Validate block inputs
             if (!canUseInput(block)) {
@@ -503,6 +523,32 @@ public class BlockchainImpl implements Blockchain {
             log.error(e.getMessage(), e);
             return ImportResult.ERROR;
         }
+    }
+
+    public boolean isAccountTx(Block block) {
+        List<Address> inputs = block.getInputs();
+        if ( inputs != null ) {
+            for (Address ref : inputs) {
+                if (ref.getType() == XDAG_FIELD_INPUT) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return false;
+    }
+
+    public boolean isTxBlock(Block block) {
+        List<Address> inputs = block.getInputs();
+        if ( inputs != null ) {
+            for (Address ref : inputs) {
+                if (ref.getType() == XDAG_FIELD_INPUT || ref.getType() == XDAG_FIELD_IN) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return false;
     }
 
     // Record transaction history
