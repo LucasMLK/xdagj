@@ -43,7 +43,7 @@ public class XdagRandomUtils {
      * @return Random integer value
      */
     public static int nextInt() {
-        return rng.nextInt();
+        return rng.nextInt() & Integer.MAX_VALUE;
     }
 
     /**
@@ -60,7 +60,7 @@ public class XdagRandomUtils {
      * @return Random long value
      */
     public static long nextLong() {
-        return rng.nextLong();
+        return rng.nextLong() & Integer.MAX_VALUE;
     }
 
     /**
