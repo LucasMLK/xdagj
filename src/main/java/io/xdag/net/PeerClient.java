@@ -32,7 +32,8 @@ import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.DefaultMessageSizeEstimator;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.xdag.config.Config;
 import io.xdag.net.node.Node;
@@ -79,7 +80,7 @@ public class PeerClient {
         this.ip = config.getNodeSpec().getNodeIp();
         this.port = config.getNodeSpec().getNodePort();
         this.coinbase = coinbase;
-        this.workerGroup = new NioEventLoopGroup(0, factory);
+        this.workerGroup = new MultiThreadIoEventLoopGroup(0, factory, NioIoHandler.newFactory());
         this.whitelist = new HashSet<>();
         initWhiteIPs();
     }

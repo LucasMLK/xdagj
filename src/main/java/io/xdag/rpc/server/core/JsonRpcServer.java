@@ -29,15 +29,14 @@ import io.netty.channel.ChannelInitializer;
 import io.netty.channel.ChannelOption;
 import io.netty.channel.ChannelPipeline;
 import io.netty.channel.EventLoopGroup;
-import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
 import io.xdag.config.spec.RPCSpec;
 import io.xdag.rpc.api.XdagApi;
 import io.xdag.rpc.server.handler.CorsHandler;
@@ -46,7 +45,6 @@ import io.xdag.rpc.server.handler.JsonRpcHandler;
 import io.xdag.rpc.server.handler.JsonRpcRequestHandler;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.File;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
@@ -85,8 +83,10 @@ public class JsonRpcServer {
 //            }
 
             // Create event loop groups
-            bossGroup = new NioEventLoopGroup(rpcSpec.getRpcHttpBossThreads());
-            workerGroup = new NioEventLoopGroup(rpcSpec.getRpcHttpWorkerThreads());
+            bossGroup = new MultiThreadIoEventLoopGroup(rpcSpec.getRpcHttpBossThreads(),
+                NioIoHandler.newFactory());
+            workerGroup = new MultiThreadIoEventLoopGroup(rpcSpec.getRpcHttpWorkerThreads(),
+                NioIoHandler.newFactory());
 
             ServerBootstrap b = new ServerBootstrap();
             b.group(bossGroup, workerGroup)
