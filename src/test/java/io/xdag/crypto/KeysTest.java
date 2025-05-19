@@ -58,16 +58,16 @@ public class KeysTest {
         assertNotNull(privateKey);
         assertNotNull(publicKey);
 
-        assertEquals(privateKey.getEncoded().length, (32));
-        assertEquals(publicKey.getEncoded().length, (64));
+        assertEquals((32), privateKey.getEncoded().length);
+        assertEquals((64), publicKey.getEncoded().length);
     }
 
     @Test
     public void testCreateEcKeyPair()
             throws InvalidAlgorithmParameterException, NoSuchAlgorithmException, NoSuchProviderException {
         KeyPair key = Keys.createEcKeyPair();
-        assertEquals(key.getPublicKey().getEncodedBytes().toUnsignedBigInteger().signum(), (1));
-        assertEquals(key.getPrivateKey().getEncodedBytes().toUnsignedBigInteger().signum(), (1));
+        assertEquals((1), key.getPublicKey().getEncodedBytes().toUnsignedBigInteger().signum());
+        assertEquals((1), key.getPrivateKey().getEncodedBytes().toUnsignedBigInteger().signum());
     }
 
     @Test

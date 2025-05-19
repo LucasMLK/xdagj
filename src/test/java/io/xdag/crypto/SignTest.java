@@ -53,13 +53,13 @@ public class SignTest {
 
     @Test
     public void testPublicKeyFromPrivateKey() {
-        assertEquals(Sign.publicKeyFromPrivate(SampleKeys.PRIVATE_KEY), (SampleKeys.PUBLIC_KEY));
+        assertEquals((SampleKeys.PUBLIC_KEY), Sign.publicKeyFromPrivate(SampleKeys.PRIVATE_KEY));
     }
 
     @Test
     public void testPublicKeyFromPrivatePoint() {
         ECPoint point = Sign.publicPointFromPrivate(SampleKeys.PRIVATE_KEY);
-        assertEquals(Sign.publicFromPoint(point.getEncoded(false)), (SampleKeys.PUBLIC_KEY));
+        assertEquals((SampleKeys.PUBLIC_KEY), Sign.publicFromPoint(point.getEncoded(false)));
     }
 
     @Test

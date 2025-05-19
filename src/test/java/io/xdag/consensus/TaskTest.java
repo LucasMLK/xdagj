@@ -140,7 +140,7 @@ public class TaskTest {
         assertEquals(jsonObject.getAsJsonObject("msgContent").getAsJsonObject("task").get("taskSeed").getAsString(),
                 taskSeed.toUnprefixedHexString());
         assertEquals(jsonObject.getAsJsonObject("msgContent").get("taskTime").getAsLong(), currentTime);
-        assertEquals(jsonObject.getAsJsonObject("msgContent").get("taskIndex").getAsInt(), 1);
+        assertEquals(1, jsonObject.getAsJsonObject("msgContent").get("taskIndex").getAsInt());
         assertNull(jsonObject.getAsJsonObject("msgContent").get("digest"));
         assertEquals(1, jsonObject.get("msgType").getAsInt());
     }
@@ -249,10 +249,10 @@ public class TaskTest {
                 "\"msgContent\":{\"share\":\"d5e79bae5fe5c7d7b7b8d4f4404c517b46fb1f7400000011a215bcbc071e0400\"," +
                 "\"hash\":\"f9ab3eb63317e36ae0c0eec512d47001b392e0330f46472ad9da6cf03b546f92\",\"taskIndex\":15}}\n";
         JsonObject shareJson = JsonParser.parseString(shareInfo).getAsJsonObject();
-        assertEquals(shareJson.get("msgType").getAsInt(), 2);
-        assertEquals(shareJson.getAsJsonObject("msgContent").get("share").getAsString(),
-                "d5e79bae5fe5c7d7b7b8d4f4404c517b46fb1f7400000011a215bcbc071e0400");
-        assertEquals(shareJson.getAsJsonObject("msgContent").get("taskIndex").getAsLong(), 15);
+        assertEquals(2, shareJson.get("msgType").getAsInt());
+        assertEquals("d5e79bae5fe5c7d7b7b8d4f4404c517b46fb1f7400000011a215bcbc071e0400",
+            shareJson.getAsJsonObject("msgContent").get("share").getAsString());
+        assertEquals(15, shareJson.getAsJsonObject("msgContent").get("taskIndex").getAsLong());
 
     }
 }

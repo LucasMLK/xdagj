@@ -128,7 +128,7 @@ public class RandomXSyncTest {
 
         // 1. add address block
         result = kernel.getBlockchain().tryToConnect(addressBlock);
-        assertSame(result, IMPORTED_BEST);
+        assertSame(IMPORTED_BEST, result);
         assertArrayEquals(addressBlock.getHashLow().toArray(), xdagTopStatus.getTop());
         List<Block> extraBlockList = Lists.newLinkedList();
         Bytes32 ref = addressBlock.getHashLow();
@@ -146,7 +146,7 @@ public class RandomXSyncTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, key, xdagTime, pending);
             result = kernel.getBlockchain().tryToConnect(extraBlock);
-            assertSame(result, IMPORTED_BEST);
+            assertSame(IMPORTED_BEST, result);
             assertArrayEquals(extraBlock.getHashLow().toArray(), xdagTopStatus.getTop());
             Block storedExtraBlock = kernel.getBlockchain().getBlockByHash(Bytes32.wrap(xdagTopStatus.getTop()), false);
             assertArrayEquals(extraBlock.getHashLow().toArray(), storedExtraBlock.getHashLow().toArray());

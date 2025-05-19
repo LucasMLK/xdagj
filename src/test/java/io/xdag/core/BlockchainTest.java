@@ -159,10 +159,14 @@ public class BlockchainTest {
         Block block = new Block(new XdagBlock(Hex.decode(TransactionBlockRawData)));
         for (Address link : block.getLinks()) {
             //测试地址
-            if (link.getType() == XDAG_FIELD_INPUT){assertEquals(WalletUtils.toBase58(link.getAddress().slice(8, 20).toArray()), "AavSCZUxXbySZXjXcb3mwr5CzwabQXP2A");}
-            if (link.getType() == XDAG_FIELD_OUTPUT){assertEquals(WalletUtils.toBase58(link.getAddress().slice(8, 20).toArray()), "8FfenZ1xewHGa3Ydx9zhppgou1hgesX97");}
+            if (link.getType() == XDAG_FIELD_INPUT){assertEquals(
+                "AavSCZUxXbySZXjXcb3mwr5CzwabQXP2A",
+                WalletUtils.toBase58(link.getAddress().slice(8, 20).toArray()));}
+            if (link.getType() == XDAG_FIELD_OUTPUT){assertEquals(
+                "8FfenZ1xewHGa3Ydx9zhppgou1hgesX97",
+                WalletUtils.toBase58(link.getAddress().slice(8, 20).toArray()));}
         }
-        assertEquals(kernel.getConfig().getNodeSpec().getRejectAddress(), ""); //默认为空
+        assertEquals("", kernel.getConfig().getNodeSpec().getRejectAddress()); //默认为空
     }
 
     @Test
@@ -182,7 +186,7 @@ public class BlockchainTest {
         // 1. add address block
         result = blockchain.tryToConnect(addressBlock);
         assertChainStatus(1, 0, 0, 1, blockchain);
-        assertSame(result, IMPORTED_BEST);
+        assertSame(IMPORTED_BEST, result);
         assertArrayEquals(addressBlock.getHashLow().toArray(), stats.getTop());
         List<Block> extraBlockList = Lists.newLinkedList();
         Bytes32 ref = addressBlock.getHashLow();
@@ -196,7 +200,7 @@ public class BlockchainTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, key, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
-            assertSame(result, IMPORTED_BEST);
+            assertSame(IMPORTED_BEST, result);
             assertChainStatus(i + 1, i > 1 ? i - 1 : 0, 1, i < 2 ? 1 : 0, blockchain);
             assertArrayEquals(extraBlock.getHashLow().toArray(), stats.getTop());
             Block storedExtraBlock = blockchain.getBlockByHash(Bytes32.wrap(stats.getTop()), false);
@@ -225,7 +229,7 @@ public class BlockchainTest {
         blockchain.getAddressStore().updateBalance(Keys.toBytesAddress(poolKey), XAmount.of(1000, XUnit.XDAG));
         ImportResult result = blockchain.tryToConnect(addressBlock);
         // import address block, result must be IMPORTED_BEST
-        assertSame(result, IMPORTED_BEST);
+        assertSame(IMPORTED_BEST, result);
         List<Address> pending = Lists.newArrayList();
         List<Block> extraBlockList = Lists.newLinkedList();
         Bytes32 ref = addressBlock.getHashLow();
@@ -241,7 +245,7 @@ public class BlockchainTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, poolKey, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
-            assertSame(result, IMPORTED_BEST);
+            assertSame(IMPORTED_BEST, result);
             assertChainStatus(i + 1, i - 1, 1, i < 2 ? 1 : 0, blockchain);
             ref = extraBlock.getHashLow();
             extraBlockList.add(extraBlock);
@@ -396,7 +400,7 @@ public class BlockchainTest {
         blockchain.getAddressStore().updateBalance(Keys.toBytesAddress(poolKey), XAmount.of(1000, XUnit.XDAG));
         ImportResult result = blockchain.tryToConnect(addressBlock);
         // import address block, result must be IMPORTED_BEST
-        assertSame(result, IMPORTED_BEST);
+        assertSame(IMPORTED_BEST, result);
         List<Address> pending = Lists.newArrayList();
         List<Block> extraBlockList = Lists.newLinkedList();
         Bytes32 ref = addressBlock.getHashLow();  //这个是链的创世区块
@@ -412,7 +416,7 @@ public class BlockchainTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, poolKey, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
-            assertSame(result, IMPORTED_BEST);
+            assertSame(IMPORTED_BEST, result);
             assertChainStatus(i + 1, i - 1, 1, i < 2 ? 1 : 0, blockchain);
             ref = extraBlock.getHashLow();   //更新ref为当前区块
             extraBlockList.add(extraBlock);
@@ -546,7 +550,7 @@ public class BlockchainTest {
         blockchain.getAddressStore().updateBalance(Keys.toBytesAddress(poolKey), XAmount.of(1000, XUnit.XDAG));
         ImportResult result = blockchain.tryToConnect(addressBlock);
         // import address block, result must be IMPORTED_BEST
-        assertSame(result, IMPORTED_BEST);
+        assertSame(IMPORTED_BEST, result);
         List<Address> pending = Lists.newArrayList();
         List<Block> extraBlockList = Lists.newLinkedList();
         Bytes32 ref = addressBlock.getHashLow();
@@ -562,7 +566,7 @@ public class BlockchainTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, poolKey, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
-            assertSame(result, IMPORTED_BEST);
+            assertSame(IMPORTED_BEST, result);
             assertChainStatus(i + 1, i - 1, 1, i < 2 ? 1 : 0, blockchain);
             ref = extraBlock.getHashLow();
             extraBlockList.add(extraBlock);
@@ -618,81 +622,14 @@ public class BlockchainTest {
         XAmount mainBlockFee = kernel.getBlockStore().getBlockInfoByHash(extraBlockList.get(10).getHashLow()).getFee();
         assertEquals("10.0",mainBlockFee.toDecimal(1, XUnit.XDAG).toString());
 
-//        blockchain.unSetMain(extraBlockList.get(10));//test rollback
-//
-//        XAmount RollBackPoolBalance = blockchain.getAddressStore().getBalanceByAddress(Keys.toBytesAddress(poolKey));
-//        XAmount RollBackAddressBalance = kernel.getAddressStore().getBalanceByAddress(Keys.toBytesAddress(addrKey));
-//        XAmount RollBackMainBlockLinkTxBalance = blockchain.getBlockByHash(extraBlockList.get(10).getHash(), false).getInfo().getAmount();
-//        assertEquals("1000.00", RollBackPoolBalance.toDecimal(2, XUnit.XDAG).toString());//rollback 900 + 100 = 1000
-//        assertEquals("0.00", RollBackAddressBalance.toDecimal(2, XUnit.XDAG).toString());//rollback 99.9 -99.9 = 0
-//        assertEquals("0.0" , RollBackMainBlockLinkTxBalance.toDecimal(1, XUnit.XDAG).toString());//A mainBlock reward back 1024 - 1024 = 0.
-//
-//
-//        //TODO:test wallet create txBlock with fee = 0,
-//        List<Block> txList = Lists.newLinkedList();
-//        for (int i = 1; i <= 10; i++) {
-//            Block txBlock_0;
-//            if (i == 1){//TODO:test give miners reward with a TX block :one input several output
-//                txBlock_0 = generateMinerRewardTxBlock(config, poolKey, xdagTime - i, from, to,to1, XAmount.of(20,XUnit.XDAG),XAmount.of(10,XUnit.XDAG), XAmount.of(10,XUnit.XDAG));
-//            }else {
-//                txBlock_0 = generateWalletTransactionBlock(config, poolKey, xdagTime - i, from, to, XAmount.of(1,XUnit.XDAG));}
-//
-//            assertEquals(XAmount.ZERO, txBlock_0.getFee());//fee is zero.
-//            // 4. local check
-//            assertTrue(blockchain.canUseInput(txBlock_0));
-//            assertTrue(blockchain.checkMineAndAdd(txBlock_0));
-//            // 5. remote check
-//            assertTrue(blockchain.canUseInput(new Block(txBlock_0.getXdagBlock())));
-//            assertTrue(blockchain.checkMineAndAdd(txBlock_0));
-//
-//            result = blockchain.tryToConnect(txBlock_0);
-//            // import transaction block, result may be IMPORTED_NOT_BEST or IMPORTED_BEST
-//            assertTrue(result == IMPORTED_NOT_BEST || result == IMPORTED_BEST);
-//            txList.add(txBlock_0);
-//        }
-//        pending.clear();
-//        for (Block tx : txList) {
-//            pending.add(new Address(tx.getHashLow(), false));
-//        }
-//        ref = extraBlockList.get(extraBlockList.size() - 1).getHashLow();
-//        // 4. confirm transaction block with 16 mainblocks
-//        for (int i = 1; i <= 16; i++) {
-//            generateTime += 64000L;
-//            pending.add(new Address(ref, XDAG_FIELD_OUT,false));
-//            pending.add(new Address(keyPair2Hash(wallet.getDefKey()),
-//                    XdagField.FieldType.XDAG_FIELD_COINBASE,
-//                    true));
-//            long time = XdagTime.msToXdagtimestamp(generateTime);
-//            xdagTime = XdagTime.getEndOfEpoch(time);
-//            Block extraBlock = generateExtraBlock(config, poolKey, xdagTime, pending);
-//            blockchain.tryToConnect(extraBlock);
-//            ref = extraBlock.getHashLow();
-//            extraBlockList.add(extraBlock);
-//            pending.clear();
-//        }
-//        XAmount poolBalance_0 = blockchain.getAddressStore().getBalanceByAddress(Keys.toBytesAddress(poolKey));
-//        XAmount addressBalance_0 = kernel.getAddressStore().getBalanceByAddress(Keys.toBytesAddress(addrKey));
-//        XAmount addressBalance_1 = kernel.getAddressStore().getBalanceByAddress(Keys.toBytesAddress(addrKey1));
-//        XAmount mainBlockLinkTxBalance_0 = blockchain.getBlockByHash(extraBlockList.get(26).getHash(), false).getInfo().getAmount();
-//        assertEquals("971.00", poolBalance_0.toDecimal(2, XUnit.XDAG).toString());//1000 - 20 - 1*9  = 971.00
-//        assertEquals("18.00", addressBalance_0.toDecimal(2, XUnit.XDAG).toString());//0  + (10-0.1) + (1 - 0.1) * 9  = 18   (ps:0.1 is fee)
-//        assertEquals("9.90", addressBalance_1.toDecimal(2, XUnit.XDAG).toString());//0 + 10 - 0.1 = 9.90
-//        assertEquals("1025.1" , mainBlockLinkTxBalance_0.toDecimal(1, XUnit.XDAG).toString());//A mainBlock link a TX get 1024 + 0.1*11 reward.
-//        XAmount mainBlockFee_1 = kernel.getBlockStore().getBlockInfoByHash(extraBlockList.get(26).getHashLow()).getFee();
-//        assertEquals("1.1",mainBlockFee_1.toDecimal(1, XUnit.XDAG).toString());
-//
-//        //TODO:test rollback
-//        blockchain.unSetMain(extraBlockList.get(26));
-//
-//        XAmount RollBackPoolBalance_1 = blockchain.getAddressStore().getBalanceByAddress(Keys.toBytesAddress(poolKey));
-//        XAmount RollBackAddressBalance_0 = kernel.getAddressStore().getBalanceByAddress(Keys.toBytesAddress(addrKey));
-//        XAmount RollBackAddressBalance_1 = kernel.getAddressStore().getBalanceByAddress(Keys.toBytesAddress(addrKey1));
-//        XAmount RollBackMainBlockLinkTxBalance_1 = blockchain.getBlockByHash(extraBlockList.get(26).getHash(), false).getInfo().getAmount();
-//        assertEquals("1000.00", RollBackPoolBalance_1.toDecimal(2, XUnit.XDAG).toString());//1000
-//        assertEquals("0.00", RollBackAddressBalance_0.toDecimal(2, XUnit.XDAG).toString());//rollback is zero
-//        assertEquals("0.00", RollBackAddressBalance_1.toDecimal(2, XUnit.XDAG).toString());
-//        assertEquals("0.0" , RollBackMainBlockLinkTxBalance_1.toDecimal(1, XUnit.XDAG).toString());//  rollback is zero
+        blockchain.unSetMain(extraBlockList.get(10));//test rollback
 
+        XAmount RollBackPoolBalance = blockchain.getAddressStore().getBalanceByAddress(Keys.toBytesAddress(poolKey));
+        XAmount RollBackAddressBalance = kernel.getAddressStore().getBalanceByAddress(Keys.toBytesAddress(addrKey));
+        XAmount RollBackMainBlockLinkTxBalance = blockchain.getBlockByHash(extraBlockList.get(10).getHash(), false).getInfo().getAmount();
+        assertEquals("1000.00", RollBackPoolBalance.toDecimal(2, XUnit.XDAG).toString());//rollback 900 + 100 = 1000
+        assertEquals("0.00", RollBackAddressBalance.toDecimal(2, XUnit.XDAG).toString());//rollback 99.9 -99.9 = 0
+        assertEquals("0.0" , RollBackMainBlockLinkTxBalance.toDecimal(1, XUnit.XDAG).toString());//A mainBlock reward back 1024 - 1024 = 0.
     }
 
     @Test
@@ -708,7 +645,7 @@ public class BlockchainTest {
         blockchain.getAddressStore().updateBalance(Keys.toBytesAddress(poolKey), XAmount.of(1000, XUnit.XDAG));
         ImportResult result = blockchain.tryToConnect(addressBlock);
         // import address block, result must be IMPORTED_BEST
-        assertSame(result, IMPORTED_BEST);
+        assertSame(IMPORTED_BEST, result);
         List<Address> pending = Lists.newArrayList();
         List<Block> extraBlockList = Lists.newLinkedList();
 
@@ -748,7 +685,7 @@ public class BlockchainTest {
             xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, poolKey, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
-            assertSame(result, IMPORTED_BEST);
+            assertSame(IMPORTED_BEST, result);
             ref = extraBlock.getHashLow();
             extraBlockList.add(extraBlock);
         }
@@ -819,7 +756,7 @@ public class BlockchainTest {
         blockchain.getAddressStore().updateBalance(Keys.toBytesAddress(poolKey), XAmount.of(1000, XUnit.XDAG));
         ImportResult result = blockchain.tryToConnect(addressBlock);
         // import address block, result must be IMPORTED_BEST
-        assertSame(result, IMPORTED_BEST);
+        assertSame(IMPORTED_BEST, result);
         List<Address> pending = Lists.newArrayList();
         List<Block> extraBlockList = Lists.newLinkedList();
         Bytes32 ref = addressBlock.getHashLow();
@@ -835,7 +772,7 @@ public class BlockchainTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, poolKey, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
-            assertSame(result, IMPORTED_BEST);
+            assertSame(IMPORTED_BEST, result);
             assertChainStatus(i + 1, i - 1, 1, i < 2 ? 1 : 0, blockchain);
             ref = extraBlock.getHashLow();
             extraBlockList.add(extraBlock);
@@ -871,7 +808,7 @@ public class BlockchainTest {
         MockBlockchain blockchain = new MockBlockchain(kernel);
         ImportResult result = blockchain.tryToConnect(addressBlock);
         // import address block, result must be IMPORTED_BEST
-        assertSame(result, IMPORTED_BEST);
+        assertSame(IMPORTED_BEST, result);
         List<Address> pending = Lists.newArrayList();
         List<Block> extraBlockList = Lists.newLinkedList();
         Bytes32 ref = addressBlock.getHashLow();
@@ -887,7 +824,7 @@ public class BlockchainTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, poolKey, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
-            assertSame(result, IMPORTED_BEST);
+            assertSame(IMPORTED_BEST, result);
             assertChainStatus(i + 1, i - 1, 1, i < 2 ? 1 : 0, blockchain);
             ref = extraBlock.getHashLow();
             extraBlockList.add(extraBlock);
@@ -1026,7 +963,7 @@ public class BlockchainTest {
         MockBlockchain blockchain = new MockBlockchain(kernel);
         ImportResult result = blockchain.tryToConnect(addressBlock);
         // import address block, result must be IMPORTED_BEST
-        assertSame(result, IMPORTED_BEST);
+        assertSame(IMPORTED_BEST, result);
         List<Address> pending = Lists.newArrayList();
         Bytes32 ref = addressBlock.getHashLow();
 
@@ -1044,7 +981,7 @@ public class BlockchainTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, poolKey, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
-            assertSame(result, IMPORTED_BEST);
+            assertSame(IMPORTED_BEST, result);
             assertChainStatus(i + 1, i - 1, 1, i < 2 ? 1 : 0, blockchain);
             ref = extraBlock.getHashLow();
             if (i == 16) {
@@ -1087,7 +1024,7 @@ public class BlockchainTest {
 
         ImportResult result = blockchain.tryToConnect(addressBlock);
         // import address block, result must be IMPORTED_BEST
-        assertSame(result, IMPORTED_BEST);
+        assertSame(IMPORTED_BEST, result);
         List<Address> pending = Lists.newArrayList();
         Bytes32 ref = addressBlock.getHashLow();
 
@@ -1103,7 +1040,7 @@ public class BlockchainTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, poolKey, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
-            assertSame(result, IMPORTED_BEST);
+            assertSame(IMPORTED_BEST, result);
             assertChainStatus(i + 1, i - 1, 1, i < 2 ? 1 : 0, blockchain);
             ref = extraBlock.getHashLow();
         }
@@ -1140,11 +1077,9 @@ public class BlockchainTest {
 
 
     static class MockBlockchain extends BlockchainImpl {
-
         public MockBlockchain(Kernel kernel) {
             super(kernel);
         }
-
 
         @Override
         public void startCheckMain(long period) {

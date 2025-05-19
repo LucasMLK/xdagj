@@ -186,7 +186,7 @@ public class SyncTest {
 
         // 1. 加入地址块
         result = blockchain.tryToConnect(addressBlock);
-        assertSame(result, IMPORTED_BEST);
+        assertSame(IMPORTED_BEST, result);
         List<Block> extraBlockList = Lists.newLinkedList();
         Bytes32 ref = addressBlock.getHashLow();
 
@@ -199,7 +199,7 @@ public class SyncTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, key, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
-            assertSame(result, IMPORTED_BEST);
+            assertSame(IMPORTED_BEST, result);
             ref = extraBlock.getHashLow();
             extraBlockList.add(extraBlock);
         }
