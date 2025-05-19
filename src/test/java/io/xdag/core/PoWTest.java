@@ -221,7 +221,7 @@ public class PoWTest {
         assertNotNull(currentTask.get());
         assertNull(currentTask.get().getTask());
         assertNull(currentTask.get().getDigest());
-        assertEquals(currentTask.get().getTaskIndex(), 0);
+        assertEquals(0, currentTask.get().getTaskIndex());
         assertTrue(WalletUtils.checkAddress(hash2PubAddress(hexPubAddress2Hashlow(
                 "46a2a0fe035c413d92be9c79a11cfc3695780f66"))));
     }

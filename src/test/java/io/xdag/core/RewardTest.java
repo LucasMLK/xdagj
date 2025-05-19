@@ -129,7 +129,7 @@ public class RewardTest {
         MockBlockchain blockchain = new MockBlockchain(kernel);
         ImportResult result = blockchain.tryToConnect(addressBlock);
         // import address block, result must be IMPORTED_BEST
-        assertSame(result, IMPORTED_BEST);
+        assertSame(IMPORTED_BEST, result);
         List<Address> pending = Lists.newArrayList();
         List<Block> extraBlockList = Lists.newLinkedList();
         Bytes32 ref = addressBlock.getHashLow();
@@ -145,7 +145,7 @@ public class RewardTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, poolKey, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
-            assertSame(result, IMPORTED_BEST);
+            assertSame(IMPORTED_BEST, result);
             ref = extraBlock.getHashLow();
             if (i == 10) {
                 unwindRef = ref;
