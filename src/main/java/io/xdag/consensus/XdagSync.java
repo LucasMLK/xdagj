@@ -131,7 +131,7 @@ public class XdagSync extends AbstractXdagLifecycle {
             return;
         }
         SettableFuture<Bytes> sf = SettableFuture.create();
-        int index = XdagRandomUtils.nextInt() % any.size();
+        int index = XdagRandomUtils.nextInt(any.size());
         Channel xc = any.get(index);
         long lastTime = getLastTime();
 
@@ -178,7 +178,7 @@ public class XdagSync extends AbstractXdagLifecycle {
         }
 
         SettableFuture<Bytes> sf = SettableFuture.create();
-        int index = XdagRandomUtils.nextInt() % any.size();
+        int index = XdagRandomUtils.nextInt(any.size());
         Channel xc = any.get(index);
         if (dt > REQUEST_BLOCKS_MAX_TIME) {
             findGetBlocks(xc, t, dt, sf);

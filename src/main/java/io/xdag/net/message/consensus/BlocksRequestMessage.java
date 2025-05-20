@@ -29,7 +29,7 @@ import io.xdag.utils.XdagRandomUtils;
 
 public class BlocksRequestMessage extends XdagMessage {
     public BlocksRequestMessage(long starttime, long endtime, XdagStats xdagStats) {
-        super(MessageCode.BLOCKS_REQUEST, null, starttime, endtime, XdagRandomUtils.nextLong(), xdagStats);
+        super(MessageCode.BLOCKS_REQUEST, null, starttime, endtime, XdagRandomUtils.nextLong(Long.MAX_VALUE), xdagStats);
     }
 
     public BlocksRequestMessage(byte[] body) {

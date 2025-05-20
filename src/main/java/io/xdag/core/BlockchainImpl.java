@@ -1712,7 +1712,7 @@ public class BlockchainImpl implements Blockchain {
     public void checkOrphan() {
         long nblk = xdagStats.nnoref / 11;
         if (nblk > 0) {
-            boolean b = (nblk % 61) > (XdagRandomUtils.nextLong() % 61);
+            boolean b = (nblk % 61) > XdagRandomUtils.nextLong(61);
             nblk = nblk / 61 + (b ? 1 : 0);
         }
         while (nblk-- > 0) {
