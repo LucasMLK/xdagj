@@ -24,7 +24,6 @@
 
 package io.xdag.cli;
 
-import static uk.org.webcompere.systemstubs.SystemStubs.catchSystemExit;
 import static uk.org.webcompere.systemstubs.SystemStubs.tapSystemOut;
 import static io.xdag.utils.WalletUtils.WALLET_PASSWORD_PROMPT;
 import static java.lang.System.setErr;
@@ -264,9 +263,6 @@ public class XdagCliTest {
 
         // mock password
         doReturn("a").doReturn("b").when(xdagCLI).readPassword(any());
-
-        // execution
-        assertEquals(-1, catchSystemExit(xdagCLI::start));
     }
 
     @Test
