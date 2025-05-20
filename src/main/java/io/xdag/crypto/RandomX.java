@@ -63,16 +63,11 @@ public class RandomX extends AbstractXdagLifecycle {
     protected Set<RandomXFlag> flagSet;
     protected long randomXForkSeedHeight;
     protected long randomXForkLag;
-
     // Default to maximum value
     protected long randomXForkTime = Long.MAX_VALUE;
-
     protected long randomXPoolMemIndex;
     protected long randomXHashEpochIndex;
-
-    @Setter
     protected Blockchain blockchain;
-
     protected boolean isFullMem;
     protected boolean isLargePages;
 
