@@ -39,14 +39,6 @@ public class XdagRandomUtils {
     private final static UniformRandomProvider rng = RandomSource.XO_RO_SHI_RO_128_PP.create();
 
     /**
-     * Generate a random integer
-     * @return Random integer value
-     */
-    public static int nextInt() {
-        return rng.nextInt() & Integer.MAX_VALUE;
-    }
-
-    /**
      * Generate a random integer between 0 (inclusive) and n (exclusive)
      * @param n Upper bound (exclusive)
      * @return Random integer value in [0, n)
@@ -56,38 +48,12 @@ public class XdagRandomUtils {
     }
 
     /**
-     * Generate a random long value
-     * @return Random long value
-     */
-    public static long nextLong() {
-        return rng.nextLong() & Long.MAX_VALUE;
-    }
-
-    /**
      * Generate a random long between 0 (inclusive) and n (exclusive)
      * @param n Upper bound (exclusive)
      * @return Random long value in [0, n)
      */
     public static long nextLong(long n) {
         return rng.nextLong(n);
-    }
-
-    /**
-     * Fill the given byte array with random bytes
-     * @param bytes Byte array to fill with random values
-     */
-    public static void nextBytes(byte[] bytes) {
-        rng.nextBytes(bytes);
-    }
-
-    /**
-     * Fill a portion of the given byte array with random bytes
-     * @param bytes Byte array to fill
-     * @param start Starting position
-     * @param len Number of bytes to fill
-     */
-    public static void nextBytes(byte[] bytes, int start, int len) {
-        rng.nextBytes(bytes, start, len);
     }
 
     /**
