@@ -168,7 +168,7 @@ public class XdagSync extends AbstractXdagLifecycle {
     private void requestBlocks(long t, long dt) {
         // Stop sync if not in SYNCING state
         if (status != Status.SYNCING) {
-            stop();
+            log.info("Sync status is no longer SYNCING (current: {}), requestBlocks will exit.", status);
             return;
         }
 
