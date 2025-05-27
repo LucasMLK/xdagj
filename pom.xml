@@ -16,7 +16,7 @@
         <dist.phase>package</dist.phase>
         <dist.base>${project.basedir}/dist</dist.base>
 
-        <xdagj-native-randomx.version>0.2.3</xdagj-native-randomx.version>
+        <xdagj-native-randomx.version>0.2.4</xdagj-native-randomx.version>
         <netty.version>4.2.1.Final</netty.version>
         <tuweni.version>2.7.0</tuweni.version>
         <jackson.version>2.18.2</jackson.version>

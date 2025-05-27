@@ -16,10 +16,6 @@
                     <include>**/*</include>
                 </includes>
                 <excludes>
-                    <!-- Files from src/main/resources (or target/classes) to explicitly exclude from fat JAR -->
-                    <exclude>netdb-testnet.txt</exclude>
-                    <exclude>netdb-white-testnet.txt</exclude>
-                    <exclude>about.html</exclude>
                     <!-- Config files that go into dist zips, not inside the fat JAR -->
                     <exclude>log4j2.xml</exclude>
                     <exclude>druid.properties</exclude>
@@ -68,9 +64,6 @@
                         <exclude>xdag-devnet.conf</exclude>
                         <exclude>xdag-testnet.conf</exclude>
                         <exclude>xdag-mainnet.conf</exclude>
-                        <exclude>netdb-testnet.txt</exclude>
-                        <exclude>netdb-white-testnet.txt</exclude>
-                        <exclude>about.html</exclude>
                     </excludes>
                 </unpackOptions>
             </dependencySet>
