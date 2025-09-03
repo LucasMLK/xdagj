@@ -472,13 +472,7 @@ public class BlockStoreImpl implements BlockStore {
             log.error(e.getMessage(), e);
         }
         indexSource.put(BytesUtils.merge(HASH_BLOCK_INFO, blockInfo.getHashlow()), value);
-        // 如果区块是主块的话顺便保存对应的高度信息
-        // TODO: paulochen 如果回滚了，对应高度的键值对该怎么更新(直接让其height=0的区块覆盖)
-//        if (blockInfo.getHeight() > 0) {
         indexSource.put(BlockUtils.getHeight(blockInfo.getHeight()), blockInfo.getHashlow());
-//        } else {
-//            indexSource.get()
-//        }
     }
 
     public boolean hasBlock(Bytes32 hashlow) {

@@ -191,11 +191,11 @@ public class Kernel {
         } else {
             if (config.getSnapshotSpec().isSnapshotEnabled() && !blockStore.isSnapshotBoot()) {
                 System.out.println("pre seed:" + Bytes.wrap(blockchain.getPreSeed()).toHexString());
-                randomx.randomXLoadingSnapshot(blockchain.getPreSeed(), 0);
+                randomx.randomXLoadingSnapshot(blockchain.getPreSeed());
                 blockStore.setSnapshotBoot();
             } else if (config.getSnapshotSpec().isSnapshotEnabled() && blockStore.isSnapshotBoot()) {
                 System.out.println("pre seed:" + Bytes.wrap(blockchain.getPreSeed()).toHexString());
-                randomx.randomXLoadingForkTimeSnapshot(blockchain.getPreSeed(), 0);
+                randomx.randomXLoadingForkTimeSnapshot(blockchain.getPreSeed());
             } else {
                 randomx.randomXLoadingForkTime();
             }

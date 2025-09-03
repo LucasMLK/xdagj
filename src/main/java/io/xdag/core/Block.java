@@ -160,8 +160,6 @@ public class Block implements Cloneable {
             for (ECKeyPair key : keys) {
                 PublicKey publicKey = key.getPublicKey();
                 byte[] keydata = publicKey.toBytes().toArray();
-                //byte[] keydata = Sign.publicKeyBytesFromPrivate(key.getPrivateKey().getEncodedBytes().toUnsignedBigInteger(), true); //poor performance
-//                byte[] keydata = key.getCompressPubKeyBytes(); //good performance
                 boolean yBit = BytesUtils.toByte(BytesUtils.subArray(keydata, 0, 1)) == 0x03;
                 XdagField.FieldType type = yBit ? XDAG_FIELD_PUBLIC_KEY_1 : XDAG_FIELD_PUBLIC_KEY_0;
                 setType(type, lenghth++);
@@ -300,14 +298,6 @@ public class Block implements Cloneable {
                     Bytes key = xdagBlock.getField(i).getData();
                     boolean yBit = (field.getType().ordinal() == XDAG_FIELD_PUBLIC_KEY_1.ordinal());
                     PublicKey publicKey = PublicKey.fromXCoordinate(key, yBit);
-                    //TODO
-                    //FixME
-                    //ECPoint point = Sign.decompressKey(key.toUnsignedBigInteger(), yBit);
-                    // Parse to uncompressed public key without prefix
-//                    byte[] encodePub = publicKey.toBytes().toArray();
-//                    byte[] encodePub = point.getEncoded(false);
-//                    SECPPublicKey publicKey = SECPPublicKey.create(
-//                            new BigInteger(1, Arrays.copyOfRange(encodePub, 1, encodePub.length)), Sign.CURVE_NAME);
                     pubKeys.add(publicKey);
                 }
                 default -> {
@@ -422,7 +412,6 @@ public class Block implements Cloneable {
         for (Signature sig : this.getInsigs().keySet()) {
             digest = getSubRawData(this.getInsigs().get(sig) - 1);
             for (PublicKey publicKey : keys) {
-                // TODO: paulochen can this be replaced?
                 byte[] pubkeyBytes = publicKey.toBytes().toArray();
                 hash = HashUtils.doubleSha256(Bytes.wrap(digest, Bytes.wrap(pubkeyBytes)));
                 if (Signer.verify(hash, sig, publicKey)) {
@@ -432,7 +421,6 @@ public class Block implements Cloneable {
         }
         digest = getSubRawData(getOutsigIndex() - 2);
         for (PublicKey publicKey : keys) {
-            // TODO: paulochen can this be replaced?
             byte[] pubkeyBytes = publicKey.toBytes().toArray();
             hash = HashUtils.doubleSha256(Bytes.wrap(digest, Bytes.wrap(pubkeyBytes)));
             if (Signer.verify(hash, this.getOutsig(), publicKey)) {

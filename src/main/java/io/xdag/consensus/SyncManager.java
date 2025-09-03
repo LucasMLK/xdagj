@@ -38,7 +38,7 @@ import io.xdag.utils.XdagTime;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.Strings;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.commons.lang3.time.FastDateFormat;
 import org.apache.tuweni.bytes.Bytes32;
@@ -65,7 +65,7 @@ public class SyncManager extends AbstractXdagLifecycle {
     // Number of keys to remove when syncMap exceeds MAX_SIZE
     public static final int DELETE_NUM = 5000;
 
-    private static final ThreadFactory factory = new BasicThreadFactory.Builder()
+    private static final ThreadFactory factory = BasicThreadFactory.builder()
             .namingPattern("SyncManager-thread-%d")
             .daemon(true)
             .build();
@@ -183,7 +183,7 @@ public class SyncManager extends AbstractXdagLifecycle {
         if (!blockWrapper.isOld() && (importResult == IMPORTED_BEST || importResult == IMPORTED_NOT_BEST)) {
             Peer blockPeer = blockWrapper.getRemotePeer();
             Node node = kernel.getClient().getNode();
-            if (blockPeer == null || !StringUtils.equals(blockPeer.getIp(), node.getIp()) || blockPeer.getPort() != node.getPort()) {
+            if (blockPeer == null || !Strings.CS.equals(blockPeer.getIp(), node.getIp()) || blockPeer.getPort() != node.getPort()) {
                 if (blockWrapper.getTtl() > 0) {
                     distributeBlock(blockWrapper);
                 }
@@ -198,18 +198,7 @@ public class SyncManager extends AbstractXdagLifecycle {
         log.debug("validateAndAddNewBlock:{}, {}", blockWrapper.getBlock().getHashLow(), result);
         switch (result) {
             case EXIST, IMPORTED_BEST, IMPORTED_NOT_BEST, IN_MEM -> syncPopBlock(blockWrapper);
-            case NO_PARENT -> {
-                if (syncPushBlock(blockWrapper, result.getHashlow())) {
-                    log.debug("push block:{}, NO_PARENT {}", blockWrapper.getBlock().getHashLow(), result);
-                    List<Channel> channels = channelMgr.getActiveChannels();
-                    for (Channel channel : channels) {
-                        // if (channel.getRemotePeer().equals(blockWrapper.getRemotePeer())) {
-                        channel.getP2pHandler().sendGetBlock(result.getHashlow(), blockWrapper.isOld());
-                        //}
-                    }
-
-                }
-            }
+            case NO_PARENT -> doNoParent(blockWrapper, result);
             case INVALID_BLOCK -> {
 //                log.error("invalid block:{}", Hex.toHexString(blockWrapper.getBlock().getHashLow()));
             }
@@ -219,7 +208,18 @@ public class SyncManager extends AbstractXdagLifecycle {
         return result;
     }
 
-    /**
+  private void doNoParent(BlockWrapper blockWrapper, ImportResult result) {
+    if (syncPushBlock(blockWrapper, result.getHashlow())) {
+        logParent(blockWrapper, result);
+        List<Channel> channels = channelMgr.getActiveChannels();
+        for (Channel channel : channels) {
+            channel.getP2pHandler().sendGetBlock(result.getHashlow(), blockWrapper.isOld());
+        }
+
+    }
+  }
+
+  /**
      * Synchronize missing blocks
      *
      * @param blockWrapper New block
@@ -284,20 +284,7 @@ public class SyncManager extends AbstractXdagLifecycle {
                         syncPopBlock(bw);
                         queue.remove(bw);
                     }
-                    case NO_PARENT -> {
-                        if (syncPushBlock(bw, importResult.getHashlow())) {
-                            log.debug("push block:{}, NO_PARENT {}", bw.getBlock().getHashLow(),
-                                    importResult.getHashlow().toHexString());
-                            List<Channel> channels = channelMgr.getActiveChannels();
-                            for (Channel channel : channels) {
-//                            Peer remotePeer = channel.getRemotePeer();
-//                            Peer blockPeer = bw.getRemotePeer();
-                                // if (StringUtils.equals(remotePeer.getIp(), blockPeer.getIp()) && remotePeer.getPort() == blockPeer.getPort() ) {
-                                channel.getP2pHandler().sendGetBlock(importResult.getHashlow(), blockWrapper.isOld());
-                                //}
-                            }
-                        }
-                    }
+                    case NO_PARENT -> doNoParent(bw, importResult);
                     default -> {
                     }
                 }
@@ -305,7 +292,12 @@ public class SyncManager extends AbstractXdagLifecycle {
         }
     }
 
-    // TODO: Currently stays in sync by default, not responsible for block generation
+  private void logParent(BlockWrapper bw, ImportResult importResult) {
+    log.debug("push block:{}, NO_PARENT {}", bw.getBlock().getHashLow(),
+            importResult.getHashlow().toHexString());
+  }
+
+  // TODO: Currently stays in sync by default, not responsible for block generation
     public void makeSyncDone() {
         if (syncDone.compareAndSet(false, true)) {
             // Stop state check process

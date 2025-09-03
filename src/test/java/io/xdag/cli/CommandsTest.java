@@ -28,6 +28,8 @@ import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_SNAPSHOT;
 import static junit.framework.TestCase.assertEquals;
 
 import io.xdag.crypto.exception.AddressFormatException;
+import io.xdag.net.NetDB;
+import io.xdag.net.NetDBManager;
 import java.math.BigInteger;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.NoSuchAlgorithmException;
@@ -65,8 +67,6 @@ import io.xdag.core.XdagStats;
 import io.xdag.core.XdagTopStatus;
 import io.xdag.db.AddressStore;
 import io.xdag.db.BlockStore;
-import io.xdag.net.NetDBManager;
-import io.xdag.net.NetDB;
 import io.xdag.utils.BasicUtils;
 import io.xdag.utils.BytesUtils;
 import io.xdag.utils.XdagTime;
