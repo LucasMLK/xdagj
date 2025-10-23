@@ -859,7 +859,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         for (BlockWrapper blockWrapper : txs) {
             ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(blockWrapper);
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
-                kernel.getChannelMgr().sendNewBlock(blockWrapper);
+                kernel.broadcastBlockWrapper(blockWrapper);
                 Block block = new Block(new XdagBlock(blockWrapper.getBlock().getXdagBlock().getData().toArray()));
                 List<Address> inputs = block.getInputs();
                 UInt64 blockNonce = block.getTxNonceField().getTransactionNonce();

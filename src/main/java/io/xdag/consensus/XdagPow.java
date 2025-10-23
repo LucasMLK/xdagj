@@ -36,7 +36,6 @@ import io.xdag.crypto.hash.XdagSha256Digest;
 import io.xdag.listener.BlockMessage;
 import io.xdag.listener.Listener;
 import io.xdag.listener.PretopMessage;
-import io.xdag.net.ChannelManager;
 import io.xdag.pool.ChannelSupervise;
 import io.xdag.pool.PoolAwardManager;
 import io.xdag.utils.BytesUtils;
@@ -76,7 +75,6 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
     protected final AtomicReference<Bytes32> minHash = new AtomicReference<>();
     protected final Wallet wallet;
 
-    protected ChannelManager channelMgr;
     protected Blockchain blockchain;
     protected volatile Bytes32 globalPretop;
     protected PoolAwardManager poolAwardManager;
@@ -106,7 +104,6 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
     public XdagPow(Kernel kernel) {
         this.kernel = kernel;
         this.blockchain = kernel.getBlockchain();
-        this.channelMgr = kernel.getChannelMgr();
         this.timer = new Timer();
         this.broadcaster = new Broadcaster();
         this.randomXUtils = kernel.getRandomx();
@@ -509,7 +506,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
                     log.error(e.getMessage(), e);
                 }
                 if (bw != null) {
-                    channelMgr.sendNewBlock(bw);
+                    kernel.broadcastBlock(bw.getBlock(), bw.getTtl());
                 }
             }
         }
