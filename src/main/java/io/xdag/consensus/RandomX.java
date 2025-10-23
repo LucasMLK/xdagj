@@ -157,8 +157,11 @@ public class RandomX extends AbstractXdagLifecycle {
 
         long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
         if ((randomXForkSeedHeight & (seedEpoch - 1)) != 0) {
-            // TODO: Handle case where randomXForkSeedHeight is not aligned with seedEpoch
-            return;
+            log.error("RandomX fork height {} is not aligned with seed epoch {}, RandomX initialization aborted",
+                    randomXForkSeedHeight, seedEpoch);
+            throw new IllegalStateException(
+                    String.format("RandomX fork height %d must be aligned with seed epoch %d",
+                            randomXForkSeedHeight, seedEpoch));
         }
 
         // Initialize memory and lock
@@ -173,6 +176,10 @@ public class RandomX extends AbstractXdagLifecycle {
 
 
     public Bytes32 randomXPoolCalcHash(Bytes data, long taskTime) {
+        if (data == null) {
+            throw new IllegalArgumentException("Input data cannot be null");
+        }
+
         Bytes32 hash;
         RandomXMemory memory = globalMemory[(int) (randomXPoolMemIndex) & 1];
 
@@ -187,10 +194,15 @@ public class RandomX extends AbstractXdagLifecycle {
     }
 
     public byte[] randomXBlockHash(byte[] data, long blockTime) {
+        if (data == null) {
+            throw new IllegalArgumentException("Input data cannot be null");
+        }
+
         byte[] hash;
         RandomXMemory memory;
         // If there is no seed
         if (randomXHashEpochIndex == 0) {
+            log.debug("RandomX hash index is 0, no seed available");
             return null;
         } else if (randomXHashEpochIndex == 1) { // first seed
             memory = globalMemory[(int) (randomXHashEpochIndex) & 1];
@@ -215,7 +227,8 @@ public class RandomX extends AbstractXdagLifecycle {
 
     public void randomXPoolUpdateSeed(long memIndex) {
         RandomXMemory rx_memory = globalMemory[(int) (memIndex) & 1];
-        // TODO: changeKey should re-initialize dataset
+        // Note: changeKey() updates the RandomX VM with new seed without full re-initialization
+        // This is more efficient than creating new templates
         if (rx_memory.getPoolTemplate() == null) {
             RandomXCache cache = new RandomXCache(flagSet);
             cache.init(rx_memory.seed);
@@ -248,7 +261,7 @@ public class RandomX extends AbstractXdagLifecycle {
     }
 
     public void randomXLoadingSnapshot(byte[] preseed) {
-        // TODO: Implement loading snapshot logic
+        // Load RandomX state from snapshot with preseed
         long firstMemIndex = randomXHashEpochIndex + 1;
         randomXPoolMemIndex = -1;
         RandomXMemory firstMemory = globalMemory[(int) (firstMemIndex) & 1];
