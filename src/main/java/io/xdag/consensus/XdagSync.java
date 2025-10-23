@@ -32,8 +32,6 @@ import io.xdag.core.Block;
 import io.xdag.core.XdagState;
 import io.xdag.crypto.core.CryptoProvider;
 import io.xdag.db.BlockStore;
-import io.xdag.net.Channel;
-import io.xdag.net.ChannelManager;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -57,7 +55,6 @@ public class XdagSync extends AbstractXdagLifecycle {
             .daemon(true)
             .build();
 
-    private final ChannelManager channelMgr;
     private final BlockStore blockStore;
     private final ScheduledExecutorService sendTask;
     @Getter
@@ -77,7 +74,6 @@ public class XdagSync extends AbstractXdagLifecycle {
 
     public XdagSync(Kernel kernel) {
         this.kernel = kernel;
-        this.channelMgr = kernel.getChannelMgr();
         this.blockStore = kernel.getBlockStore();
         sendTask = new ScheduledThreadPoolExecutor(1, factory);
         sumsRequestMap = new ConcurrentHashMap<>();
@@ -126,13 +122,13 @@ public class XdagSync extends AbstractXdagLifecycle {
      * Use syncWindow to request blocks in segments
      */
     private void getBlocks() {
-        List<Channel> any = getAnyNode();
+        List<io.xdag.p2p.channel.Channel> any = getAnyNode();
         if (any == null || any.isEmpty()) {
             return;
         }
         SettableFuture<Bytes> sf = SettableFuture.create();
         int index = CryptoProvider.nextInt(0, any.size());
-        Channel xc = any.get(index);
+        io.xdag.p2p.channel.Channel xc = any.get(index);
         long lastTime = getLastTime();
 
         // Remove synchronized time periods
@@ -147,7 +143,7 @@ public class XdagSync extends AbstractXdagLifecycle {
                 break;
             }
             // Update channel if sync channel is removed/reset
-            if (!xc.isActive()){
+            if (!xc.isFinishHandshake()){
                 log.debug("sync channel need to update");
                 return;
             }
@@ -172,14 +168,14 @@ public class XdagSync extends AbstractXdagLifecycle {
             return;
         }
 
-        List<Channel> any = getAnyNode();
+        List<io.xdag.p2p.channel.Channel> any = getAnyNode();
         if (any == null || any.isEmpty()) {
             return;
         }
 
         SettableFuture<Bytes> sf = SettableFuture.create();
         int index = CryptoProvider.nextInt(0, any.size());
-        Channel xc = any.get(index);
+        io.xdag.p2p.channel.Channel xc = any.get(index);
         if (dt > REQUEST_BLOCKS_MAX_TIME) {
             findGetBlocks(xc, t, dt, sf);
         } else {
@@ -198,8 +194,8 @@ public class XdagSync extends AbstractXdagLifecycle {
      * Send request to get blocks from remote node
      * @param t request time
      */
-    private void sendGetBlocks(Channel xc, long t, SettableFuture<Bytes> sf) {
-        long randomSeq = xc.getP2pHandler().sendGetBlocks(t, t + REQUEST_BLOCKS_MAX_TIME);
+    private void sendGetBlocks(io.xdag.p2p.channel.Channel xc, long t, SettableFuture<Bytes> sf) {
+        long randomSeq = kernel.getP2pEventHandler().sendGetBlocks(xc, t, t + REQUEST_BLOCKS_MAX_TIME);
         blocksRequestMap.put(randomSeq, sf);
         try {
             sf.get(REQUEST_WAIT, TimeUnit.SECONDS);
@@ -212,13 +208,13 @@ public class XdagSync extends AbstractXdagLifecycle {
     /**
      * Recursively find time periods to request blocks
      */
-    private void findGetBlocks(Channel xc, long t, long dt, SettableFuture<Bytes> sf) {
+    private void findGetBlocks(io.xdag.p2p.channel.Channel xc, long t, long dt, SettableFuture<Bytes> sf) {
         MutableBytes lSums = MutableBytes.create(256);
         Bytes rSums;
         if (blockStore.loadSum(t, t + dt, lSums) <= 0) {
             return;
         }
-        long randomSeq = xc.getP2pHandler().sendGetSums(t, t + dt);
+        long randomSeq = kernel.getP2pEventHandler().sendGetSums(xc, t, t + dt);
         sumsRequestMap.put(randomSeq, sf);
         try {
             Bytes sums = sf.get(REQUEST_WAIT, TimeUnit.SECONDS);
@@ -272,8 +268,8 @@ public class XdagSync extends AbstractXdagLifecycle {
         return 0;
     }
 
-    public List<Channel> getAnyNode() {
-        return channelMgr.getActiveChannels();
+    public List<io.xdag.p2p.channel.Channel> getAnyNode() {
+        return kernel.getActiveP2pChannels();
     }
 
     public enum Status {

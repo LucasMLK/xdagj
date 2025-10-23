@@ -116,6 +116,19 @@ public class Kernel {
                 .filter(io.xdag.p2p.channel.Channel::isFinishHandshake)
                 .count();
     }
+
+    /**
+     * Get list of active P2P channels (for sync protocol)
+     */
+    public java.util.List<io.xdag.p2p.channel.Channel> getActiveP2pChannels() {
+        if (p2pService == null) {
+            return java.util.Collections.emptyList();
+        }
+        return p2pService.getChannelManager().getChannels().values().stream()
+                .filter(io.xdag.p2p.channel.Channel::isFinishHandshake)
+                .collect(java.util.stream.Collectors.toList());
+    }
+
     protected XdagSync sync;
     protected XdagPow pow;
     private SyncManager syncMgr;

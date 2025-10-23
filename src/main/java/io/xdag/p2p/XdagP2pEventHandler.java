@@ -351,4 +351,40 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
                     channel.getRemoteAddress(), e.getMessage(), e);
         }
     }
+
+    /**
+     * Send BLOCKS_REQUEST to request blocks in a time range
+     * @return random sequence number for tracking the response
+     */
+    public long sendGetBlocks(io.xdag.p2p.channel.Channel channel, long startTime, long endTime) {
+        try {
+            BlocksRequestMessage msg = new BlocksRequestMessage(startTime, endTime, blockchain.getXdagStats());
+            log.debug("Sending BLOCKS_REQUEST [{} - {}] to {}",
+                    startTime, endTime, channel.getRemoteAddress());
+            channel.send(Bytes.wrap(msg.getBody()));
+            return msg.getRandom();
+        } catch (Exception e) {
+            log.error("Error sending BLOCKS_REQUEST to {}: {}",
+                    channel.getRemoteAddress(), e.getMessage(), e);
+            return -1;
+        }
+    }
+
+    /**
+     * Send SUMS_REQUEST to request block sums in a time range
+     * @return random sequence number for tracking the response
+     */
+    public long sendGetSums(io.xdag.p2p.channel.Channel channel, long startTime, long endTime) {
+        try {
+            SumRequestMessage msg = new SumRequestMessage(startTime, endTime, blockchain.getXdagStats());
+            log.debug("Sending SUMS_REQUEST [{} - {}] to {}",
+                    startTime, endTime, channel.getRemoteAddress());
+            channel.send(Bytes.wrap(msg.getBody()));
+            return msg.getRandom();
+        } catch (Exception e) {
+            log.error("Error sending SUMS_REQUEST to {}: {}",
+                    channel.getRemoteAddress(), e.getMessage(), e);
+            return -1;
+        }
+    }
 }
