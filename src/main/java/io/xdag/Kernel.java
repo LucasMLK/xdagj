@@ -43,6 +43,9 @@ import io.xdag.db.rocksdb.*;
 import io.xdag.net.*;
 import io.xdag.net.message.MessageQueue;
 import io.xdag.net.node.NodeManager;
+import io.xdag.p2p.P2pConfigFactory;
+import io.xdag.p2p.XdagP2pEventHandler;
+import io.xdag.p2p.config.P2pConfig;
 import io.xdag.pool.WebSocketServer;
 import io.xdag.pool.PoolAwardManagerImpl;
 import io.xdag.rpc.api.XdagApi;
@@ -80,6 +83,10 @@ public class Kernel {
     protected NodeManager nodeMgr;
     protected NetDBManager netDBMgr;
     protected PeerServer p2p;
+
+    // New P2P service components (xdagj-p2p library)
+    protected io.xdag.p2p.P2pService p2pService;
+    protected XdagP2pEventHandler p2pEventHandler;
     protected XdagSync sync;
     protected XdagPow pow;
     private SyncManager syncMgr;
@@ -210,14 +217,25 @@ public class Kernel {
             xdagState = XdagState.WDST;
         }
 
-        // Initialize P2P networking
-        p2p = new PeerServer(this);
-        p2p.start();
-        client = new PeerClient(this.config, this.coinbase);
+        // Initialize P2P networking with xdagj-p2p library
+        log.info("Initializing P2P service...");
+        P2pConfig p2pConfig = P2pConfigFactory.createP2pConfig(config, coinbase);
 
-        // Initialize node management
-        nodeMgr = new NodeManager(this);
-        nodeMgr.start();
+        // Create event handler
+        p2pEventHandler = new XdagP2pEventHandler(this);
+
+        // Register event handler
+        try {
+            p2pConfig.addP2pEventHandle(p2pEventHandler);
+        } catch (Exception e) {
+            log.error("Failed to register P2P event handler", e);
+            throw new RuntimeException("Failed to initialize P2P service", e);
+        }
+
+        // Create and start P2P service
+        p2pService = new io.xdag.p2p.P2pService(p2pConfig);
+        p2pService.start();
+        log.info("P2P service started successfully");
 
         // Initialize synchronization
         sync = new XdagSync(this);
@@ -269,16 +287,30 @@ public class Kernel {
         syncMgr.stop();
         pow.stop();
 
-        // Stop networking layer
-        channelMgr.stop();
-        nodeMgr.stop();
+        // Stop P2P service
+        if (p2pService != null) {
+            log.info("Stopping P2P service...");
+            p2pService.stop();
+        }
+
+        // Stop networking layer (legacy, will be removed)
+        if (channelMgr != null) {
+            channelMgr.stop();
+        }
+        if (nodeMgr != null) {
+            nodeMgr.stop();
+        }
 
         // Close message queue timer
         MessageQueue.timer.shutdown();
 
-        // Close P2P networking
-        p2p.close();
-        client.close();
+        // Close P2P networking (legacy, will be removed)
+        if (p2p != null) {
+            p2p.close();
+        }
+        if (client != null) {
+            client.close();
+        }
 
         // Stop data layer
         blockchain.stopCheckMain();
