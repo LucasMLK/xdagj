@@ -18,6 +18,7 @@
 
         <xdagj-crypto.version>0.1.4</xdagj-crypto.version>
         <xdagj-native-randomx.version>0.2.6</xdagj-native-randomx.version>
+        <xdagj-p2p.version>0.1.3</xdagj-p2p.version>
         <netty.version>4.2.1.Final</netty.version>
         <jackson.version>2.18.2</jackson.version>
         <kryo.version>5.5.0</kryo.version>
@@ -288,6 +289,22 @@
             <exclusions>
                 <exclusion>
                     <artifactId>slf4j-api</artifactId>
+                    <groupId>org.slf4j</groupId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
+        <dependency>
+            <groupId>io.xdag</groupId>
+            <artifactId>xdagj-p2p</artifactId>
+            <version>${xdagj-p2p.version}</version>
+            <exclusions>
+                <exclusion>
+                    <artifactId>slf4j-api</artifactId>
+                    <groupId>org.slf4j</groupId>
+                </exclusion>
+                <exclusion>
+                    <artifactId>slf4j-simple</artifactId>
                     <groupId>org.slf4j</groupId>
                 </exclusion>
             </exclusions>
