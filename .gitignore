@@ -19,6 +19,7 @@ mainnet
 target
 logs
 dist
+
 #for macos
 .DS_Store
 src/c/
@@ -26,3 +27,10 @@ src/main/resources/native
 src/main/resources/xdag-mainnet.conf
 dependency-reduced-pom.xml
 pool
+
+# AI-generated docs (should not be in git)
+.claude/
+.cursor/
+CLAUDE.md
+REFACTORING*.md
+RANDOMX_TEST*.md
