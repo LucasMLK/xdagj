@@ -87,6 +87,35 @@ public class Kernel {
     // New P2P service components (xdagj-p2p library)
     protected io.xdag.p2p.P2pService p2pService;
     protected XdagP2pEventHandler p2pEventHandler;
+
+    /**
+     * Broadcast a new block to all connected peers via P2P service
+     */
+    public void broadcastBlock(Block block, int ttl) {
+        if (p2pService == null || p2pEventHandler == null) {
+            log.warn("P2P service not initialized, cannot broadcast block");
+            return;
+        }
+
+        // Broadcast to all channels via P2P service
+        for (io.xdag.p2p.channel.Channel channel : p2pService.getChannelManager().getChannels().values()) {
+            if (channel.isFinishHandshake()) {
+                p2pEventHandler.sendNewBlock(channel, block, ttl);
+            }
+        }
+    }
+
+    /**
+     * Get active P2P channels count
+     */
+    public int getActiveChannelsCount() {
+        if (p2pService == null) {
+            return 0;
+        }
+        return (int) p2pService.getChannelManager().getChannels().values().stream()
+                .filter(io.xdag.p2p.channel.Channel::isFinishHandshake)
+                .count();
+    }
     protected XdagSync sync;
     protected XdagPow pow;
     private SyncManager syncMgr;

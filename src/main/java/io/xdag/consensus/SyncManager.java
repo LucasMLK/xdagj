@@ -31,7 +31,6 @@ import io.xdag.core.*;
 import io.xdag.crypto.core.CryptoProvider;
 import io.xdag.db.TransactionHistoryStore;
 import io.xdag.net.Channel;
-import io.xdag.net.ChannelManager;
 import io.xdag.net.Peer;
 import io.xdag.net.node.Node;
 import io.xdag.utils.XdagTime;
@@ -75,7 +74,6 @@ public class SyncManager extends AbstractXdagLifecycle {
     private AtomicLong importIdleTime = new AtomicLong();
     private AtomicBoolean syncDone = new AtomicBoolean(false);
     private AtomicBoolean isUpdateXdagStats = new AtomicBoolean(false);
-    private ChannelManager channelMgr;
 
     // Monitor whether to start itself
     private StateListener stateListener;
@@ -100,7 +98,6 @@ public class SyncManager extends AbstractXdagLifecycle {
     public SyncManager(Kernel kernel) {
         this.kernel = kernel;
         this.blockchain = kernel.getBlockchain();
-        this.channelMgr = kernel.getChannelMgr();
         this.stateListener = new StateListener();
         checkStateTask = new ScheduledThreadPoolExecutor(1, factory);
         this.txHistoryStore = kernel.getTxHistoryStore();
@@ -211,11 +208,12 @@ public class SyncManager extends AbstractXdagLifecycle {
   private void doNoParent(BlockWrapper blockWrapper, ImportResult result) {
     if (syncPushBlock(blockWrapper, result.getHashlow())) {
         logParent(blockWrapper, result);
-        List<Channel> channels = channelMgr.getActiveChannels();
-        for (Channel channel : channels) {
-            channel.getP2pHandler().sendGetBlock(result.getHashlow(), blockWrapper.isOld());
-        }
 
+        // Use P2P service to request missing parent block
+        if (kernel.getP2pService() != null) {
+            // TODO: Send block request via P2P - need to add method to XdagP2pEventHandler
+            log.debug("Request missing parent block: {}", result.getHashlow().toHexString());
+        }
     }
   }
 
@@ -366,7 +364,8 @@ public class SyncManager extends AbstractXdagLifecycle {
     }
 
     public void distributeBlock(BlockWrapper blockWrapper) {
-        channelMgr.onNewForeignBlock(blockWrapper);
+        // Use Kernel's broadcast method with P2P service
+        kernel.broadcastBlock(blockWrapper.getBlock(), blockWrapper.getTtl());
     }
 
     private class StateListener implements Runnable {
