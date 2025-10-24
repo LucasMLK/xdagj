@@ -545,7 +545,7 @@ public class Commands {
         }
         for (TxHistory txHistory : kernel.getBlockchain().getBlockTxHistoryByAddress(block.getHashLow(), 1)) {
             Address address = txHistory.getAddress();
-            BlockInfo blockInfo = kernel.getBlockchain().getBlockByHash(address.getAddress(), false).getInfo();
+            LegacyBlockInfo blockInfo = kernel.getBlockchain().getBlockByHash(address.getAddress(), false).getInfo();
             if ((blockInfo.flags & BI_APPLIED) == 0) {
                 continue;
             }
@@ -724,7 +724,7 @@ public class Commands {
             Address address = txHistory.getAddress();
             Block block = kernel.getBlockchain().getBlockByHash(address.getAddress(), false);
             if (block != null) {
-                BlockInfo blockInfo = block.getInfo();
+                LegacyBlockInfo blockInfo = block.getInfo();
                 if ((blockInfo.flags & BI_APPLIED) == 0) {
                     continue;
                 }

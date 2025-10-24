@@ -532,7 +532,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             Block b = blockchain.getBlockByHash(txHistory.getAddress().getAddress(), false);
             BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
             if (b != null) {
-                BlockInfo blockInfo = b.getInfo();
+                LegacyBlockInfo blockInfo = b.getInfo();
                 if ((blockInfo.flags & BI_APPLIED) == 0) {
                     continue;
                 }
@@ -614,7 +614,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         }
         // 2. tx history info
         for (TxHistory txHistory : txHistories) {
-            BlockInfo blockInfo = blockchain.getBlockByHash(txHistory.getAddress().getAddress(), false).getInfo();
+            LegacyBlockInfo blockInfo = blockchain.getBlockByHash(txHistory.getAddress().getAddress(), false).getInfo();
             if ((blockInfo.flags & BI_APPLIED) == 0) {
                 continue;
             }

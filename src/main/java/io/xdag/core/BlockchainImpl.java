@@ -1570,7 +1570,7 @@ public class BlockchainImpl implements Blockchain {
 
     // TODO: When input is a block in snapshot, need to verify snapshot's public key or signature data
     private boolean verifySignatureFromSnapshot(Address in, List<PublicKey> publicKeys) {
-        BlockInfo blockInfo = blockStore.getBlockInfoByHash(in.getAddress()).getInfo();
+        LegacyBlockInfo blockInfo = blockStore.getBlockInfoByHash(in.getAddress()).getInfo();
         SnapshotInfo snapshotInfo = blockInfo.getSnapshotInfo();
         if (snapshotInfo.getType()) {
             // snapshotInfo.getData() contains 33-byte compressed public key format
@@ -1603,7 +1603,7 @@ public class BlockchainImpl implements Blockchain {
 
     }
 
-    private boolean verifySignature(MutableBytes subdata, Signature sig, List<PublicKey> publicKeys, BlockInfo blockInfo) {
+    private boolean verifySignature(MutableBytes subdata, Signature sig, List<PublicKey> publicKeys, LegacyBlockInfo blockInfo) {
         for (PublicKey publicKey : publicKeys) {
             byte[] publicKeyBytes = publicKey.toBytes().toArray();
             Bytes digest = Bytes.wrap(subdata, Bytes.wrap(publicKeyBytes));

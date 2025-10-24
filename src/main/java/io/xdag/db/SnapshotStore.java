@@ -23,7 +23,7 @@
  */
 package io.xdag.db;
 
-import io.xdag.core.BlockInfo;
+import io.xdag.core.LegacyBlockInfo;
 import io.xdag.core.PreBlockInfo;
 import io.xdag.core.XAmount;
 import io.xdag.crypto.keys.ECKeyPair;
@@ -43,9 +43,9 @@ public interface SnapshotStore {
 
     void saveAddress(BlockStore blockStore,AddressStore addressStore, TransactionHistoryStore txHistoryStore, List<ECKeyPair> keys,long snapshotTime);
 
-    void save(RocksIterator iter, BlockInfo blockInfo);
+    void save(RocksIterator iter, LegacyBlockInfo blockInfo);
 
-    void setBlockInfo(BlockInfo blockInfo, PreBlockInfo preBlockInfo);
+    void setBlockInfo(LegacyBlockInfo blockInfo, PreBlockInfo preBlockInfo);
 
     XAmount getOurBalance();
 

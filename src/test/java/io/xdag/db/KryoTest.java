@@ -31,7 +31,7 @@ import com.esotericsoftware.kryo.KryoException;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.util.DefaultInstantiatorStrategy;
-import io.xdag.core.BlockInfo;
+import io.xdag.core.LegacyBlockInfo;
 import io.xdag.core.SnapshotBalanceData;
 import io.xdag.db.execption.DeserializationException;
 import io.xdag.db.execption.SerializationException;
@@ -54,7 +54,7 @@ public class KryoTest {
         kryo.setInstantiatorStrategy(new DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
         kryo.register(BigInteger.class);
         kryo.register(byte[].class);
-        kryo.register(BlockInfo.class);
+        kryo.register(LegacyBlockInfo.class);
         kryo.register(long.class);
         kryo.register(int.class);
         kryo.register(SnapshotBalanceData.class);
@@ -67,7 +67,7 @@ public class KryoTest {
         String data = "000b0b06a3b82241967b51a190003821c85e4170076aaca3b2ca5157c4e32be33164847e5a4ab0b03abe6202b0cd2712210000000000000000b2ca5157c4e32be33164847e5a4ab0b03abe6202b0cd271200210000000000000000ed08bcea6ac58a3cc883ad35e862caf1e60fe8f77d0933ba210000000000000000b8cb3358f9fbca51916d3d7378b00190dc75b3e55703180f00feff97d8f85bf0d482808080808080";
         byte[] input = Hex.decode(data);
         try {
-            BlockInfo blockInfo = (BlockInfo) deserialize(input, BlockInfo.class);
+            LegacyBlockInfo blockInfo = (LegacyBlockInfo) deserialize(input, LegacyBlockInfo.class);
             assertEquals(expected, blockInfo.getDifficulty().toString());
         } catch (DeserializationException e) {
             e.printStackTrace();
@@ -76,11 +76,11 @@ public class KryoTest {
 
     @Test
     public void serialize() {
-        BlockInfo blockInfo = new BlockInfo();
+        LegacyBlockInfo blockInfo = new LegacyBlockInfo();
         blockInfo.setHeight(100);
         try {
             byte[] data = serialize(blockInfo);
-            BlockInfo blockInfo1 = (BlockInfo) deserialize(data, BlockInfo.class);
+            LegacyBlockInfo blockInfo1 = (LegacyBlockInfo) deserialize(data, LegacyBlockInfo.class);
             assertEquals(blockInfo, blockInfo1);
         } catch (SerializationException ignored) {
         } catch (DeserializationException e) {

@@ -56,7 +56,7 @@ import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.core.Address;
 import io.xdag.core.Block;
-import io.xdag.core.BlockInfo;
+import io.xdag.core.LegacyBlockInfo;
 import io.xdag.core.Blockchain;
 import io.xdag.core.TxHistory;
 import io.xdag.core.XAmount;
@@ -211,7 +211,7 @@ public class CommandsTest {
 
     @Test
     public void testPrintBlockInfo() {
-        BlockInfo blockInfo = new BlockInfo();
+        LegacyBlockInfo blockInfo = new LegacyBlockInfo();
         blockInfo.setDifficulty(BigInteger.ZERO);
 
         long time = XdagTime.xdagTimestampToMs(blockInfo.getTimestamp());

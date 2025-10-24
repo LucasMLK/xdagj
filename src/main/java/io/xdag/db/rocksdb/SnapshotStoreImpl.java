@@ -95,7 +95,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
         snapshotSource.reset();
     }
 
-    public void setBlockInfo(BlockInfo blockInfo, PreBlockInfo preBlockInfo) {
+    public void setBlockInfo(LegacyBlockInfo blockInfo, PreBlockInfo preBlockInfo) {
         blockInfo.setSnapshot(preBlockInfo.isSnapshot());
         blockInfo.setSnapshotInfo(preBlockInfo.getSnapshotInfo());
         blockInfo.setFee(XAmount.of(preBlockInfo.getFee()));
@@ -116,14 +116,14 @@ public class SnapshotStoreImpl implements SnapshotStore {
         try (RocksIterator iter = indexSource.getDb().newIterator()) {
             for (iter.seek(new byte[]{HASH_BLOCK_INFO}); iter.isValid() && iter.key()[0] < SUMS_BLOCK_INFO; iter.next()) {
                 PreBlockInfo preBlockInfo;
-                BlockInfo blockInfo = new BlockInfo();
+                LegacyBlockInfo blockInfo = new LegacyBlockInfo();
                 if (iter.value() != null) {
                     try {
                         if (b) {
                             preBlockInfo = (PreBlockInfo) deserialize(iter.value(), PreBlockInfo.class);
                             setBlockInfo(blockInfo, preBlockInfo);
                         } else {
-                            blockInfo = (BlockInfo) deserialize(iter.value(), BlockInfo.class);
+                            blockInfo = (LegacyBlockInfo) deserialize(iter.value(), LegacyBlockInfo.class);
                         }
                     } catch (DeserializationException e) {
 //                        log.error("hash low:{}", Hex.toHexString(blockInfo.getHashlow()));
@@ -167,10 +167,10 @@ public class SnapshotStoreImpl implements SnapshotStore {
         try (RocksIterator iter = snapshotSource.getDb().newIterator()) {
             for (iter.seekToFirst(); iter.isValid(); iter.next()) {
                 if (iter.key()[0] == HASH_BLOCK_INFO) {
-                    BlockInfo blockInfo = new BlockInfo();
+                    LegacyBlockInfo blockInfo = new LegacyBlockInfo();
                     if (iter.value() != null) {
                         try {
-                            blockInfo = (BlockInfo) deserialize(iter.value(), BlockInfo.class);
+                            blockInfo = (LegacyBlockInfo) deserialize(iter.value(), LegacyBlockInfo.class);
                         } catch (DeserializationException e) {
                             log.error("hash low:{}", Hex.toHexString(blockInfo.getHashlow()));
                             log.error("can't deserialize data:{}", Hex.toHexString(iter.value()));
@@ -295,7 +295,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
         }
     }
 
-    public void save(RocksIterator iter, BlockInfo blockInfo) {
+    public void save(RocksIterator iter, LegacyBlockInfo blockInfo) {
         byte[] value = null;
         try {
             value = serialize(blockInfo);
@@ -337,7 +337,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
         kryo.setInstantiatorStrategy(new DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
         kryo.register(BigInteger.class);
         kryo.register(byte[].class);
-        kryo.register(BlockInfo.class);
+        kryo.register(LegacyBlockInfo.class);
         kryo.register(XdagStats.class);
         kryo.register(XdagTopStatus.class);
         kryo.register(SnapshotInfo.class);

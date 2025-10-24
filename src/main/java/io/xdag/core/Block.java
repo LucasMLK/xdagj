@@ -63,7 +63,7 @@ public class Block implements Cloneable {
      */
     public boolean isSaved;
     private Address coinBase;
-    private BlockInfo info;
+    private LegacyBlockInfo info;
     private long transportHeader;
     /**
      * List of block links (inputs and outputs)
@@ -105,7 +105,7 @@ public class Block implements Cloneable {
             XAmount fee,
             UInt64 txNonce) {
         parsed = true;
-        info = new BlockInfo();
+        info = new LegacyBlockInfo();
         this.info.setTimestamp(timestamp);
         this.info.setFee(fee);
         int lenghth = 0;
@@ -200,11 +200,11 @@ public class Block implements Cloneable {
      */
     public Block(XdagBlock xdagBlock) {
         this.xdagBlock = xdagBlock;
-        this.info = new BlockInfo();
+        this.info = new LegacyBlockInfo();
         parse();
     }
 
-    public Block(BlockInfo blockInfo) {
+    public Block(LegacyBlockInfo blockInfo) {
         this.info = blockInfo;
         this.isSaved = true;
         this.parsed = true;
@@ -236,7 +236,7 @@ public class Block implements Cloneable {
             return;
         }
         if (this.info == null) {
-            this.info = new BlockInfo();
+            this.info = new LegacyBlockInfo();
         }
         this.info.setHash(calcHash());
         Bytes32 header = Bytes32.wrap(xdagBlock.getField(0).getData());

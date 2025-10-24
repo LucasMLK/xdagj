@@ -99,7 +99,7 @@ public class BlockStoreImpl implements BlockStore {
         kryo.setInstantiatorStrategy(new DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
         kryo.register(BigInteger.class);
         kryo.register(byte[].class);
-        kryo.register(BlockInfo.class);
+        kryo.register(LegacyBlockInfo.class);
         kryo.register(XdagStats.class);
         kryo.register(XdagTopStatus.class);
         kryo.register(SnapshotInfo.class);
@@ -464,7 +464,7 @@ public class BlockStoreImpl implements BlockStore {
         return 1;
     }
 
-    public void saveBlockInfo(BlockInfo blockInfo) {
+    public void saveBlockInfo(LegacyBlockInfo blockInfo) {
         byte[] value = null;
         try {
             value = serialize(blockInfo);
@@ -549,13 +549,13 @@ public class BlockStoreImpl implements BlockStore {
         if (!hasBlockInfo(hashlow)) {
             return null;
         }
-        BlockInfo blockInfo = null;
+        LegacyBlockInfo blockInfo = null;
         byte[] value = indexSource.get(BytesUtils.merge(HASH_BLOCK_INFO, hashlow.toArray()));
         if (value == null) {
             return null;
         } else {
             try {
-                blockInfo = (BlockInfo) deserialize(value, BlockInfo.class);
+                blockInfo = (LegacyBlockInfo) deserialize(value, LegacyBlockInfo.class);
             } catch (DeserializationException e) {
                 log.error("hash low:{}", hashlow.toHexString());
                 log.error("can't deserialize data:{}", Hex.toHexString(value));

@@ -57,7 +57,7 @@ public interface BlockStore extends XdagLifecycle {
 
     void saveBlock(Block block);
 
-    void saveBlockInfo(BlockInfo blockInfo);
+    void saveBlockInfo(LegacyBlockInfo blockInfo);
 
     void saveOurBlock(int index, byte[] hashlow);
 
