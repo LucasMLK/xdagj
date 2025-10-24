@@ -1261,7 +1261,8 @@ public class BlockchainImpl implements Blockchain {
         if (block == null) {
             return BigInteger.ZERO;
         }
-        if (block.getInfo().getDifficulty() != null) {
+        // Only return existing difficulty if it's both non-null AND non-zero
+        if (block.getInfo().getDifficulty() != null && !block.getInfo().getDifficulty().isZero()) {
             return block.getInfo().getDifficulty().toBigInteger();
         }
         //TX block would not set diff, fix a diff = 1;
@@ -1288,7 +1289,8 @@ public class BlockchainImpl implements Blockchain {
         if (block == null) {
             return BigInteger.ZERO;
         }
-        if (block.getInfo().getDifficulty() != null) {
+        // Only return existing difficulty if it's both non-null AND non-zero
+        if (block.getInfo().getDifficulty() != null && !block.getInfo().getDifficulty().isZero()) {
             return block.getInfo().getDifficulty().toBigInteger();
         }
 
