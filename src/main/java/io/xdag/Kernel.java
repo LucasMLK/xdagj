@@ -254,7 +254,7 @@ public class Kernel {
             firstBlock = new Block(config, XdagTime.getCurrentTimestamp(), null, null, false,
                     null, null, -1, XAmount.ZERO, null);
             firstBlock.signOut(wallet.getDefKey());
-            xdagStats.setOurLastBlockHash(firstBlock.getHashLow().toArray());
+            xdagStats.setOurLastBlockHash(firstBlock.getHash().toArray());
             if (xdagStats.getGlobalMiner() == null) {
                 xdagStats.setGlobalMiner(firstAccount.toArray());
             }

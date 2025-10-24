@@ -43,6 +43,7 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
 import org.apache.tuweni.bytes.MutableBytes32;
 import org.apache.tuweni.units.bigints.UInt64;
+import org.apache.tuweni.units.bigints.UInt256;
 
 import java.math.BigInteger;
 import java.nio.ByteOrder;
@@ -63,7 +64,10 @@ public class Block implements Cloneable {
      */
     public boolean isSaved;
     private Address coinBase;
-    private LegacyBlockInfo info;
+
+    // ========== Phase 2 Core Refactor: Use immutable BlockInfo ==========
+    private BlockInfo info;
+
     private long transportHeader;
     /**
      * List of block links (inputs and outputs)
@@ -105,22 +109,22 @@ public class Block implements Cloneable {
             XAmount fee,
             UInt64 txNonce) {
         parsed = true;
-        info = new LegacyBlockInfo();
-        this.info.setTimestamp(timestamp);
-        this.info.setFee(fee);
+
+        // Build type during construction
+        long typeValue = 0;
         int lenghth = 0;
 
-        setType(config.getXdagFieldHeader(), lenghth++);
+        typeValue |= ((long) config.getXdagFieldHeader().asByte()) << (lenghth++ << 2);
 
         if (txNonce != null) {
             txNonceField = new TxAddress(txNonce);
-            setType(XDAG_FIELD_TRANSACTION_NONCE, lenghth++);
+            typeValue |= ((long) XDAG_FIELD_TRANSACTION_NONCE.asByte()) << (lenghth++ << 2);
         }
 
         if (CollectionUtils.isNotEmpty(links)) {
             for (Address link : links) {
                 XdagField.FieldType type = link.getType();
-                setType(type, lenghth++);
+                typeValue |= ((long) type.asByte()) << (lenghth++ << 2);
                 if (type == XDAG_FIELD_OUT || type == XDAG_FIELD_OUTPUT) {
                     outputs.add(link);
                 } else if (type == XDAG_FIELD_IN || type == XDAG_FIELD_INPUT) {
@@ -135,7 +139,7 @@ public class Block implements Cloneable {
         if (CollectionUtils.isNotEmpty(pendings)) {
             for (Address pending : pendings) {
                 XdagField.FieldType type = pending.getType();
-                setType(type, lenghth++);
+                typeValue |= ((long) type.asByte()) << (lenghth++ << 2);
                 if (type == XDAG_FIELD_OUT || type == XDAG_FIELD_OUTPUT) {
                     outputs.add(pending);
                 } else if (type == XDAG_FIELD_IN || type == XDAG_FIELD_INPUT) {
@@ -147,13 +151,14 @@ public class Block implements Cloneable {
             }
         }
 
+        Bytes remarkBytes = null;
         if (StringUtils.isAsciiPrintable(remark)) {
-            setType(XDAG_FIELD_REMARK, lenghth++);
+            typeValue |= ((long) XDAG_FIELD_REMARK.asByte()) << (lenghth++ << 2);
             byte[] data = remark.getBytes(StandardCharsets.UTF_8);
             byte[] safeRemark = new byte[32];
             Arrays.fill(safeRemark, (byte) 0);
             System.arraycopy(data, 0, safeRemark, 0, Math.min(data.length, 32));
-            this.info.setRemark(safeRemark);
+            remarkBytes = Bytes.wrap(safeRemark);
         }
 
         if (CollectionUtils.isNotEmpty(keys)) {
@@ -162,28 +167,45 @@ public class Block implements Cloneable {
                 byte[] keydata = publicKey.toBytes().toArray();
                 boolean yBit = BytesUtils.toByte(BytesUtils.subArray(keydata, 0, 1)) == 0x03;
                 XdagField.FieldType type = yBit ? XDAG_FIELD_PUBLIC_KEY_1 : XDAG_FIELD_PUBLIC_KEY_0;
-                setType(type, lenghth++);
+                typeValue |= ((long) type.asByte()) << (lenghth++ << 2);
                 pubKeys.add(key.getPublicKey());
             }
             for (int i = 0; i < keys.size(); i++) {
                 if (i != defKeyIndex) {
-                    setType(XDAG_FIELD_SIGN_IN, lenghth++);
-                    setType(XDAG_FIELD_SIGN_IN, lenghth++);
+                    typeValue |= ((long) XDAG_FIELD_SIGN_IN.asByte()) << (lenghth++ << 2);
+                    typeValue |= ((long) XDAG_FIELD_SIGN_IN.asByte()) << (lenghth++ << 2);
                 } else {
-                    setType(XDAG_FIELD_SIGN_OUT, lenghth++);
-                    setType(XDAG_FIELD_SIGN_OUT, lenghth++);
+                    typeValue |= ((long) XDAG_FIELD_SIGN_OUT.asByte()) << (lenghth++ << 2);
+                    typeValue |= ((long) XDAG_FIELD_SIGN_OUT.asByte()) << (lenghth++ << 2);
                 }
             }
         }
 
         if (defKeyIndex < 0) {
-            setType(XDAG_FIELD_SIGN_OUT, lenghth++);
-            setType(XDAG_FIELD_SIGN_OUT, lenghth);
+            typeValue |= ((long) XDAG_FIELD_SIGN_OUT.asByte()) << (lenghth++ << 2);
+            typeValue |= ((long) XDAG_FIELD_SIGN_OUT.asByte()) << (lenghth << 2);
         }
 
         if (mining) {
-            setType(XDAG_FIELD_SIGN_IN, MAX_LINKS);
+            typeValue |= ((long) XDAG_FIELD_SIGN_IN.asByte()) << (MAX_LINKS << 2);
         }
+
+        // Create immutable BlockInfo
+        this.info = BlockInfo.builder()
+                .hash(null)  // Will be calculated later
+                .timestamp(timestamp)
+                .height(0)  // Will be set later
+                .type(typeValue)
+                .flags(0)  // Will be set later
+                .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
+                .ref(null)
+                .maxDiffLink(null)
+                .amount(XAmount.ZERO)
+                .fee(fee)
+                .remark(remarkBytes)
+                .isSnapshot(false)
+                .snapshotInfo(null)
+                .build();
     }
 
     /**
@@ -200,25 +222,24 @@ public class Block implements Cloneable {
      */
     public Block(XdagBlock xdagBlock) {
         this.xdagBlock = xdagBlock;
-        this.info = new LegacyBlockInfo();
+        // info will be created in parse() method
         parse();
     }
 
     public Block(LegacyBlockInfo blockInfo) {
-        this.info = blockInfo;
+        this.info = BlockInfo.fromLegacy(blockInfo);
         this.isSaved = true;
         this.parsed = true;
     }
 
     /**
      * Create Block from new immutable BlockInfo (Phase 2 core refactor)
-     * This constructor converts BlockInfo to LegacyBlockInfo internally
-     * until we complete the full migration
+     * This constructor directly uses the immutable BlockInfo
      *
      * @param blockInfo The new immutable BlockInfo
      */
     public Block(BlockInfo blockInfo) {
-        this.info = blockInfo.toLegacy();
+        this.info = blockInfo;
         this.isSaved = true;
         this.parsed = true;
     }
@@ -248,15 +269,16 @@ public class Block implements Cloneable {
         if (this.parsed) {
             return;
         }
-        if (this.info == null) {
-            this.info = new LegacyBlockInfo();
-        }
-        this.info.setHash(calcHash());
+
+        // Collect data in temporary variables
+        byte[] hash = calcHash();
         Bytes32 header = Bytes32.wrap(xdagBlock.getField(0).getData());
         this.transportHeader = header.getLong(0, ByteOrder.LITTLE_ENDIAN);
-        this.info.type = header.getLong(8, ByteOrder.LITTLE_ENDIAN);
-        this.info.setTimestamp(header.getLong(16, ByteOrder.LITTLE_ENDIAN));
-        this.info.setFee(XAmount.of(header.getLong(24, ByteOrder.LITTLE_ENDIAN), XUnit.NANO_XDAG));
+        long typeValue = header.getLong(8, ByteOrder.LITTLE_ENDIAN);
+        long timestamp = header.getLong(16, ByteOrder.LITTLE_ENDIAN);
+        XAmount fee = XAmount.of(header.getLong(24, ByteOrder.LITTLE_ENDIAN), XUnit.NANO_XDAG);
+        Bytes remarkBytes = null;
+
         for (int i = 1; i < XdagBlock.XDAG_BLOCK_FIELDS; i++) {
             XdagField field = xdagBlock.getField(i);
             if (field == null) {
@@ -268,7 +290,7 @@ public class Block implements Cloneable {
                 case XDAG_FIELD_INPUT -> inputs.add(new Address(field, true));
                 case XDAG_FIELD_OUT -> outputs.add(new Address(field, false));
                 case XDAG_FIELD_OUTPUT -> outputs.add(new Address(field, true));
-                case XDAG_FIELD_REMARK -> this.info.setRemark(field.getData().toArray());
+                case XDAG_FIELD_REMARK -> remarkBytes = field.getData();
                 case XDAG_FIELD_COINBASE -> {
                     this.coinBase = new Address(field, true);
                     outputs.add(new Address(field, true));
@@ -318,6 +340,27 @@ public class Block implements Cloneable {
                 //                    log.debug("no match xdagBlock field type:" + field.getType());
             }
         }
+
+        // Create immutable BlockInfo at the end
+        // Store full hash (32 bytes)
+        Bytes32 fullHash = Bytes32.wrap(hash);
+
+        this.info = BlockInfo.builder()
+                .hash(fullHash)
+                .timestamp(timestamp)
+                .height(0)  // Will be set later
+                .type(typeValue)
+                .flags(0)  // Will be set later
+                .difficulty(UInt256.ZERO)  // Will be set later
+                .ref(null)  // Will be set later
+                .maxDiffLink(null)  // Will be set later
+                .amount(XAmount.ZERO)  // Will be set later
+                .fee(fee)
+                .remark(remarkBytes)
+                .isSnapshot(false)
+                .snapshotInfo(null)
+                .build();
+
         this.parsed = true;
     }
 
@@ -362,7 +405,7 @@ public class Block implements Cloneable {
             encoder.writeField(link.getData().reverse().toArray());
         }
         if (info.getRemark() != null) {
-            encoder.write(info.getRemark());
+            encoder.write(info.getRemark().toArray());
         }
         for (PublicKey publicKey : pubKeys) {
             byte[] pubkeyBytes = publicKey.toBytes().toArray();
@@ -448,7 +491,7 @@ public class Block implements Cloneable {
      */
     public int getOutsigIndex() {
         int i = 1;
-        long temp = this.info.type;
+        long temp = this.info.getType();
         while (i < XdagBlock.XDAG_BLOCK_FIELDS && (temp & 0xf) != 5) {
             temp = temp >> 4;
             i++;
@@ -458,18 +501,21 @@ public class Block implements Cloneable {
 
     public Bytes32 getHash() {
         if (this.info.getHash() == null) {
-            this.info.setHash(calcHash());
+            byte[] hash = calcHash();
+            // Store full 32-byte hash
+            Bytes32 fullHash = Bytes32.wrap(hash);
+            // Update info with new hash
+            this.info = this.info.withHash(fullHash);
         }
-        return Bytes32.wrap(this.info.getHash());
+        return this.info.getHash();
     }
 
-    public MutableBytes32 getHashLow() {
-        if (info.getHashlow() == null) {
-            MutableBytes32 hashLow = MutableBytes32.create();
-            hashLow.set(8, getHash().slice(8, 24));
-            info.setHashlow(hashLow.toArray());
-        }
-        return MutableBytes32.wrap(info.getHashlow());
+    /**
+     * @deprecated Use {@link #getHash()} instead. This method now returns the same value as getHash().
+     */
+    @Deprecated
+    public Bytes32 getHashLow() {
+        return getHash();
     }
 
     public Signature getOutsig() {
@@ -478,7 +524,7 @@ public class Block implements Cloneable {
 
     @Override
     public String toString() {
-        return String.format("Block info:[Hash:{%s}][Time:{%s}]", getHashLow().toHexString(),
+        return String.format("Block info:[Hash:{%s}][Time:{%s}]", getHash().toHexString(),
                 Long.toHexString(getTimestamp()));
     }
 
@@ -492,12 +538,12 @@ public class Block implements Cloneable {
         }
 
         Block block = (Block) o;
-        return Objects.equals(getHashLow(), block.getHashLow());
+        return Objects.equals(getHash(), block.getHash());
     }
 
     @Override
     public int hashCode() {
-        return Bytes.of(this.getHashLow().toArray()).hashCode();
+        return Bytes.of(this.getHash().toArray()).hashCode();
     }
 
     public long getTimestamp() {
@@ -505,7 +551,7 @@ public class Block implements Cloneable {
     }
 
     public long getType() {
-        return this.info.type;
+        return this.info.getType();
     }
 
     public XAmount getFee() {
@@ -532,7 +578,9 @@ public class Block implements Cloneable {
 
     private void setType(XdagField.FieldType type, int n) {
         long typeByte = type.asByte();
-        this.info.type |= typeByte << (n << 2);
+        long newType = this.info.getType() | (typeByte << (n << 2));
+        // Update info with new type value
+        this.info = this.info.withType(newType);
     }
 
     public List<Address> getLinks() {
@@ -540,6 +588,16 @@ public class Block implements Cloneable {
         links.addAll(getInputs());
         links.addAll(getOutputs());
         return links;
+    }
+
+    // ========== Phase 2 Core Refactor: New accessors for BlockInfo ==========
+
+    /**
+     * Get new immutable BlockInfo (Phase 2 core refactor)
+     * Returns the BlockInfo directly
+     */
+    public BlockInfo getBlockInfo() {
+        return this.info;
     }
 
     @Override

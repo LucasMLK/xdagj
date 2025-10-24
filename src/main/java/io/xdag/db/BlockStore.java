@@ -38,13 +38,29 @@ public interface BlockStore extends XdagLifecycle {
     byte SETTING_STATS = (byte) 0x10;
     byte TIME_HASH_INFO = (byte) 0x20;
     byte HASH_BLOCK_INFO = (byte) 0x30;
+
+    /**
+     * @deprecated Old sync protocol, will be removed in Phase 3
+     */
+    @Deprecated
     byte SUMS_BLOCK_INFO = (byte) 0x40;
+
     byte OURS_BLOCK_INFO = (byte) 0x50;
     byte SETTING_TOP_STATUS = (byte) 0x60;
     byte SNAPSHOT_BOOT = (byte) 0x70;
     byte BLOCK_HEIGHT = (byte) 0x80;
     byte SNAPSHOT_PRESEED = (byte) 0x90;
     byte TX_HISTORY = (byte) 0xa0;
+
+    // ========== Phase 2 Core Refactor: New Index Prefixes ==========
+    byte BLOCK_EPOCH_INDEX = (byte) 0xb0;      // epoch -> List<blockHash>
+    byte MAIN_BLOCKS_INDEX = (byte) 0xc0;      // height -> blockHash (main blocks only)
+    byte BLOCK_REFS_INDEX = (byte) 0xd0;       // blockHash -> List<referencingHashes>
+
+    /**
+     * @deprecated Old sync protocol file, will be removed in Phase 3
+     */
+    @Deprecated
     String SUM_FILE_NAME = "sums.dat";
 
     void reset();
@@ -59,7 +75,7 @@ public interface BlockStore extends XdagLifecycle {
 
     void saveBlockInfo(LegacyBlockInfo blockInfo);
 
-    void saveOurBlock(int index, byte[] hashlow);
+    void saveOurBlock(int index, byte[] hash);
 
     void saveTxHistoryToRocksdb(TxHistory txHistory,int id);
 
@@ -67,9 +83,9 @@ public interface BlockStore extends XdagLifecycle {
 
     void deleteAllTxHistoryFromRocksdb();
 
-    boolean hasBlock(Bytes32 hashlow);
+    boolean hasBlock(Bytes32 hash);
 
-    boolean hasBlockInfo(Bytes32 hashlow);
+    boolean hasBlockInfo(Bytes32 hash);
 
     List<Block> getBlocksUsedTime(long startTime, long endTime);
 
@@ -77,17 +93,17 @@ public interface BlockStore extends XdagLifecycle {
 
     Block getBlockByHeight(long height);
 
-    Block getBlockByHash(Bytes32 hashlow, boolean isRaw);
+    Block getBlockByHash(Bytes32 hash, boolean isRaw);
 
-    Block getBlockInfoByHash(Bytes32 hashlow);
+    Block getBlockInfoByHash(Bytes32 hash);
 
-    Block getRawBlockByHash(Bytes32 hashlow);
+    Block getRawBlockByHash(Bytes32 hash);
 
     Bytes getOurBlock(int index);
 
-    int getKeyIndexByHash(Bytes32 hashlow);
+    int getKeyIndexByHash(Bytes32 hash);
 
-    void removeOurBlock(byte[] hashlow);
+    void removeOurBlock(byte[] hash);
 
     void fetchOurBlocks(Function<Pair<Integer, Block>, Boolean> function);
 
@@ -101,15 +117,38 @@ public interface BlockStore extends XdagLifecycle {
 
     byte[] getPreSeed();
 
-    // sums.dat and sum.dat
+    // ========== Phase 2 Core Refactor: DEPRECATED - To be removed ==========
+    // These SUMS methods are part of the old sync protocol
+    // They will be replaced by the new Hybrid Sync protocol in Phase 3
+
+    /**
+     * @deprecated Old sync protocol, use new Hybrid Sync instead
+     */
+    @Deprecated
     void saveBlockSums(Block block);
 
+    /**
+     * @deprecated Old sync protocol, use new Hybrid Sync instead
+     */
+    @Deprecated
     MutableBytes getSums(String key);
 
+    /**
+     * @deprecated Old sync protocol, use new Hybrid Sync instead
+     */
+    @Deprecated
     void putSums(String key, Bytes sums);
 
+    /**
+     * @deprecated Old sync protocol, use new Hybrid Sync instead
+     */
+    @Deprecated
     void updateSum(String key, long sum, long size, long index);
 
+    /**
+     * @deprecated Old sync protocol, use new Hybrid Sync instead
+     */
+    @Deprecated
     int loadSum(long starttime, long endtime, MutableBytes sums);
 
     void saveXdagStatus(XdagStats status);
@@ -120,7 +159,6 @@ public interface BlockStore extends XdagLifecycle {
     /**
      * Save block info using new immutable BlockInfo
      * @param blockInfo The new BlockInfo (not LegacyBlockInfo)
-     * @deprecated Use this instead of saveBlockInfo(LegacyBlockInfo)
      */
     void saveBlockInfoV2(BlockInfo blockInfo);
 

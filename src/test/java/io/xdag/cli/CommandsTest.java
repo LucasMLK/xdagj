@@ -216,7 +216,8 @@ public class CommandsTest {
 
         long time = XdagTime.xdagTimestampToMs(blockInfo.getTimestamp());
         String st = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS", TimeZone.getDefault()).format(time);
-        mainblock.setInfo(blockInfo);
+        // Convert LegacyBlockInfo to BlockInfo before setting
+        mainblock.setInfo(io.xdag.core.BlockInfo.fromLegacy(blockInfo));
         String str = commands.printBlockInfo(mainblock, false);
         assertEquals(String.format("""
                       time: %s
@@ -245,7 +246,8 @@ public class CommandsTest {
         long mainblockTime = generateTime;
         for (int i = 1; i <= 2; i++) {
             Block block = BlockBuilder.generateExtraBlock(config, keyPair_1, mainblockTime, null);
-            block.getInfo().setHeight(i);
+            // BlockInfo is immutable, use withHeight() to create new instance
+            block.setInfo(block.getInfo().withHeight(i));
             blocks.add(block);
             mainblockTime += 64000L;
 
@@ -273,7 +275,8 @@ public class CommandsTest {
         long mainblockTime = generateTime;
         for (int i = 1; i <= 2; i++) {
             Block block = BlockBuilder.generateExtraBlock(config, keyPair_1, mainblockTime, null);
-            block.getInfo().setHeight(i);
+            // BlockInfo is immutable, use withHeight() to create new instance
+            block.setInfo(block.getInfo().withHeight(i));
             blocks.add(block);
             mainblockTime += 64000L;
         }

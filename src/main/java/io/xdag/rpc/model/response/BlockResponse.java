@@ -52,7 +52,7 @@ public class BlockResponse {
     @Builder
     public static class TxLink {
         private int direction; // 0 input 1 output 2 earning
-        private String hashlow;
+        private String hash;
         private String address;
         private String amount;
         private long time;
@@ -64,7 +64,7 @@ public class BlockResponse {
     public static class Link {
         private int direction; // 0 input 1 output 2 fee
         private String address;
-        private String hashlow;
+        private String hash;
         private String amount;
     }
 

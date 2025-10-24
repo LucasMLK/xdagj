@@ -284,7 +284,7 @@ public class RandomXTest {
         kernel.getBlockchain().tryToConnect(addressBlock);
 
         // when - Create blocks up to and past RANDOMX_TESTNET_FORK_HEIGHT (128)
-        Bytes32 ref = addressBlock.getHashLow();
+        Bytes32 ref = addressBlock.getHash();
         Block forkBlock = null;
         for (int i = 1; i <= RandomXConstants.RANDOMX_TESTNET_FORK_HEIGHT; i++) {
             generateTime += 64000L;
@@ -294,10 +294,10 @@ public class RandomXTest {
                 Collections.singletonList(new io.xdag.core.Address(ref,
                     io.xdag.core.XdagField.FieldType.XDAG_FIELD_OUT, false)));
 
-            // Set block height manually for testing
-            block.getInfo().setHeight(i);
+            // Set block height manually for testing using withHeight()
+            block.setInfo(block.getInfo().withHeight(i));
             kernel.getBlockchain().tryToConnect(block);
-            ref = block.getHashLow();
+            ref = block.getHash();
 
             // Call randomXSetForkTime
             randomX.randomXSetForkTime(block);

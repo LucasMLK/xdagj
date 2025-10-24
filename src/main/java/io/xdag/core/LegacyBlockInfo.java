@@ -58,9 +58,7 @@ public class LegacyBlockInfo {
     private XAmount fee = XAmount.ZERO;
     // Block remark/memo field
     private byte[] remark;
-    // Block full hash
-    private byte[] hash;
-    // Block truncated hash
+    // Legacy 24-byte truncated hash format (preserved for backward compatibility)
     private byte[] hashlow;
     // Block amount/value
     private XAmount amount = XAmount.ZERO;
@@ -75,7 +73,6 @@ public class LegacyBlockInfo {
     public String toString() {
         return "LegacyBlockInfo{" +
                 "height=" + height +
-                ", hash=" + Arrays.toString(hash) +
                 ", hashlow=" + Arrays.toString(hashlow) +
                 ", amount=" + amount.toString() +
                 ", type=" + type +
@@ -104,13 +101,13 @@ public class LegacyBlockInfo {
                 flags == blockInfo.flags &&
                 height == blockInfo.height &&
                 timestamp == blockInfo.timestamp &&
-                Arrays.equals(hash, blockInfo.hash);
+                Arrays.equals(hashlow, blockInfo.hashlow);
     }
 
     @Override
     public int hashCode() {
         int result = Objects.hash(type, flags, height, timestamp);
-        result = 31 * result + Arrays.hashCode(hash);
+        result = 31 * result + Arrays.hashCode(hashlow);
         return result;
     }
 }

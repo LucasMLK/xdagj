@@ -6,6 +6,7 @@ import lombok.Value;
 import lombok.With;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.bytes.MutableBytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 import java.io.Serializable;
@@ -27,10 +28,10 @@ public class BlockInfo implements Serializable {
     // ========== 基本标识 ==========
 
     /**
-     * 区块哈希（低24字节，唯一标识）
-     * 注意：完整 hash 可以从原始数据计算得出，不需要存储
+     * 区块哈希（完整32字节，唯一标识）
+     * 使用完整哈希以确保唯一性和清晰性
      */
-    Bytes32 hashLow;
+    Bytes32 hash;
 
     /**
      * 区块时间戳（秒）
@@ -164,16 +165,6 @@ public class BlockInfo implements Serializable {
         return timestamp / 64;
     }
 
-    /**
-     * 获取完整哈希（从 hashLow 重建）
-     * 注意：前8字节为0，后24字节是 hashLow
-     */
-    public Bytes32 getFullHash() {
-        // 如果需要完整 hash，应该从原始区块数据重新计算
-        // 这里只是占位方法
-        return hashLow;
-    }
-
     // ========== 构建器辅助方法 ==========
 
     public static class BlockInfoBuilder {
@@ -255,8 +246,25 @@ public class BlockInfo implements Serializable {
             diff = UInt256.fromBytes(paddedBytes);
         }
 
+        // Convert legacy hash format to full hash format
+        // Legacy hash format (24-byte truncated): [0,0,0,0,0,0,0,0, hash_24_bytes]
+        // We need to reconstruct the "full hash" by extracting bytes [8-31] from legacy hash
+        // and creating a 32-byte hash as [hash_24_bytes, 0,0,0,0,0,0,0,0]
+        // This allows toLegacy() to correctly compute back to the original legacy format
+        Bytes32 fullHash;
+        if (legacy.getHashlow() != null) {
+            // Extract the 24-byte hash data from legacy format[8-31]
+            Bytes hashData = Bytes.wrap(legacy.getHashlow()).slice(8, 24);
+            // Create full hash: put the 24 bytes at the beginning, pad with 8 zeros at the end
+            MutableBytes32 tempHash = MutableBytes32.create();
+            tempHash.set(0, hashData);
+            fullHash = Bytes32.wrap(tempHash);
+        } else {
+            fullHash = null;
+        }
+
         return BlockInfo.builder()
-                .hashLow(Bytes32.wrap(legacy.getHashlow()))
+                .hash(fullHash)
                 .timestamp(legacy.getTimestamp())
                 .height(legacy.getHeight())
                 .type(legacy.type)
@@ -277,7 +285,14 @@ public class BlockInfo implements Serializable {
      */
     public LegacyBlockInfo toLegacy() {
         LegacyBlockInfo legacy = new LegacyBlockInfo();
-        legacy.setHashlow(hashLow.toArray());
+        // Compute legacy 24-byte truncated hash format: 8 zero bytes + first 24 bytes of full hash
+        if (hash != null) {
+            MutableBytes32 legacyHash = MutableBytes32.create();
+            legacyHash.set(8, hash.slice(0, 24));
+            legacy.setHashlow(legacyHash.toArray());
+        } else {
+            legacy.setHashlow(null);
+        }
         legacy.setTimestamp(timestamp);
         legacy.setHeight(height);
         legacy.type = type;
@@ -296,9 +311,9 @@ public class BlockInfo implements Serializable {
     @Override
     public String toString() {
         return String.format(
-            "BlockInfo{height=%d, hashLow=%s, timestamp=%d, isMain=%b, amount=%s}",
+            "BlockInfo{height=%d, hash=%s, timestamp=%d, isMain=%b, amount=%s}",
             height,
-            hashLow.toHexString().substring(0, 16) + "...",
+            hash != null ? hash.toHexString().substring(0, 16) + "..." : "null",
             timestamp,
             isMainBlock(),
             amount

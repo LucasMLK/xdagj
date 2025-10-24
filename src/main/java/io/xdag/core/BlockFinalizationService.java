@@ -192,7 +192,7 @@ public class BlockFinalizationService {
                     for (Block block : batch) {
                         try {
                             // Check if block already finalized
-                            if (finalizedBlockStore.hasBlock(block.getHashLow())) {
+                            if (finalizedBlockStore.hasBlock(block.getHash())) {
                                 skippedCount++;
                                 continue;
                             }
@@ -210,7 +210,7 @@ public class BlockFinalizationService {
 
                         } catch (Exception e) {
                             log.error("Failed to finalize block {}: {}",
-                                    block.getHashLow(), e.getMessage(), e);
+                                    block.getHash(), e.getMessage(), e);
                         }
                     }
                 }

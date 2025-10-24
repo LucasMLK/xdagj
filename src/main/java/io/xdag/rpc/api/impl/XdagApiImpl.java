@@ -532,13 +532,13 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             Block b = blockchain.getBlockByHash(txHistory.getAddress().getAddress(), false);
             BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
             if (b != null) {
-                LegacyBlockInfo blockInfo = b.getInfo();
+                LegacyBlockInfo blockInfo = b.getInfo().toLegacy();
                 if ((blockInfo.flags & BI_APPLIED) == 0) {
                     continue;
                 }
 
                 txLinkBuilder.address(hash2Address(txHistory.getAddress().getAddress()))
-                        .hashlow(txHistory.getAddress().getAddress().toUnprefixedHexString())
+                        .hash(txHistory.getAddress().getAddress().toUnprefixedHexString())
                         .amount(String.format("%s", txHistory.getAddress().getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
                         .direction(txHistory.getAddress().getType().equals(XDAG_FIELD_INPUT) ? 0 :
                                 txHistory.getAddress().getType().equals(XDAG_FIELD_OUTPUT) ? 1 :
@@ -547,7 +547,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                         .remark(txHistory.getRemark());
             } else {
                 txLinkBuilder.address(Base58.encodeCheck(BytesUtils.byte32ToArray(txHistory.getAddress().getAddress())))
-                        .hashlow(txHistory.getAddress().getAddress().toUnprefixedHexString())
+                        .hash(txHistory.getAddress().getAddress().toUnprefixedHexString())
                         .amount(String.format("%s", txHistory.getAddress().getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
                         .direction(txHistory.getAddress().getType().equals(XDAG_FIELD_IN) ? 0 :
                                 txHistory.getAddress().getType().equals(XDAG_FIELD_OUT) ? 1 : 3)
@@ -593,19 +593,19 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
 
     private List<BlockResponse.TxLink> getTxLinks(Block block, int page, Object... parameters) {
-        List<TxHistory> txHistories = blockchain.getBlockTxHistoryByAddress(block.getHashLow(), page, parameters);
+        List<TxHistory> txHistories = blockchain.getBlockTxHistoryByAddress(block.getHash(), page, parameters);
         List<BlockResponse.TxLink> txLinks = Lists.newArrayList();
         // 1. earning info
         if (getStateByFlags(block.getInfo().getFlags()).equals(MAIN.getDesc()) && block.getInfo().getHeight() > kernel.getConfig().getSnapshotSpec().getSnapshotHeight()) {
             BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
             String remark = "";
-            if (block.getInfo().getRemark() != null && block.getInfo().getRemark().length != 0) {
-                remark = new String(block.getInfo().getRemark(), StandardCharsets.UTF_8).trim();
+            if (block.getInfo().getRemark() != null && block.getInfo().getRemark().size() != 0) {
+                remark = new String(block.getInfo().getRemark().toArray(), StandardCharsets.UTF_8).trim();
             }
-            XAmount earnFee = kernel.getBlockStore().getBlockInfoByHash(block.getHashLow()).getFee();
+            XAmount earnFee = kernel.getBlockStore().getBlockInfoByHash(block.getHash()).getFee();
             // if (block.getInfo().getAmount().equals(XAmount.ZERO)){ earnFee = XAmount.ZERO;} //when block amount is zero, fee also should make zero.
-            txLinkBuilder.address(hash2Address(block.getHashLow()))
-                    .hashlow(block.getHashLow().toUnprefixedHexString())
+            txLinkBuilder.address(hash2Address(block.getHash()))
+                    .hash(block.getHash().toUnprefixedHexString())
                     .amount(String.format("%s", blockchain.getReward(block.getInfo().getHeight()).add(earnFee).toDecimal(9, XUnit.XDAG).toPlainString()))
                     .direction(2)
                     .time(xdagTimestampToMs(block.getTimestamp()))
@@ -614,7 +614,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         }
         // 2. tx history info
         for (TxHistory txHistory : txHistories) {
-            LegacyBlockInfo blockInfo = blockchain.getBlockByHash(txHistory.getAddress().getAddress(), false).getInfo();
+            LegacyBlockInfo blockInfo = blockchain.getBlockByHash(txHistory.getAddress().getAddress(), false).getInfo().toLegacy();
             if ((blockInfo.flags & BI_APPLIED) == 0) {
                 continue;
             }
@@ -626,7 +626,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             }
             BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
             txLinkBuilder.address(hash2Address(txHistory.getAddress().getAddress()))
-                    .hashlow(txHistory.getAddress().getAddress().toUnprefixedHexString())
+                    .hash(txHistory.getAddress().getAddress().toUnprefixedHexString())
                     .amount(String.format("%s", Amount.toDecimal(9, XUnit.XDAG).toPlainString()))
                     .direction(txHistory.getAddress().getType().equals(XDAG_FIELD_IN) ? 0 :
                             txHistory.getAddress().getType().equals(XDAG_FIELD_OUT) ? 1 : 3)
@@ -646,10 +646,10 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         BlockResponse.Link.LinkBuilder fee = BlockResponse.Link.builder();
         fee.address(block.getInfo().getRef() == null ? "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                         : hash2Address(Bytes32.wrap(block.getInfo().getRef())))
-                .hashlow(block.getInfo().getRef() == null ? "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                .hash(block.getInfo().getRef() == null ? "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                         : Bytes32.wrap(block.getInfo().getRef()).toUnprefixedHexString())
                 .amount(block.getInfo().getRef() == null ? String.format("%.9f", amount2xdag(0)) :
-                        (getStateByFlags(block.getInfo().getFlags()).equals(MAIN.getDesc()) ? kernel.getBlockStore().getBlockInfoByHash(block.getHashLow()).getFee().toDecimal(9, XUnit.XDAG).toPlainString() :
+                        (getStateByFlags(block.getInfo().getFlags()).equals(MAIN.getDesc()) ? kernel.getBlockStore().getBlockInfoByHash(block.getHash()).getFee().toDecimal(9, XUnit.XDAG).toPlainString() :
                                 (block.getInputs().isEmpty() ? XAmount.ZERO.toDecimal(9, XUnit.XDAG).toPlainString() :
                                         MIN_GAS.multiply(block.getOutputs().size()).toDecimal(9, XUnit.XDAG).toPlainString())))// calculate the fee
                 .direction(2);
@@ -659,7 +659,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         for (Address input : inputs) {
             BlockResponse.Link.LinkBuilder linkBuilder = BlockResponse.Link.builder();
             linkBuilder.address(input.getIsAddress() ? Base58.encodeCheck(hash2byte(input.getAddress())) : hash2Address(input.getAddress()))
-                    .hashlow(input.getAddress().toUnprefixedHexString())
+                    .hash(input.getAddress().toUnprefixedHexString())
                     .amount(String.format("%s", input.getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
                     .direction(0);
             links.add(linkBuilder.build());
@@ -673,7 +673,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                 Amount = Amount.subtract(MIN_GAS);
             }
             linkBuilder.address(output.getIsAddress() ? Base58.encodeCheck(hash2byte(output.getAddress())) : hash2Address(output.getAddress()))
-                    .hashlow(output.getAddress().toUnprefixedHexString())
+                    .hash(output.getAddress().toUnprefixedHexString())
                     .amount(String.format("%s", Amount.toDecimal(9, XUnit.XDAG).toPlainString()))
                     .direction(1);
             links.add(linkBuilder.build());
@@ -693,8 +693,8 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                 .blockTime(xdagTimestampToMs(block.getTimestamp()))
                 .timeStamp(block.getTimestamp())
                 .flags(Integer.toHexString(block.getInfo().getFlags()))
-                .diff(toQuantityJsonHex(block.getInfo().getDifficulty()))
-                .remark(block.getInfo().getRemark() == null ? "" : new String(block.getInfo().getRemark(),
+                .diff(toQuantityJsonHex(block.getInfo().getDifficulty().toBigInteger()))
+                .remark(block.getInfo().getRemark() == null ? "" : new String(block.getInfo().getRemark().toArray(),
                         StandardCharsets.UTF_8).trim())
                 .state(getStateByFlags(block.getInfo().getFlags()))
                 .type(getType(block))
@@ -719,8 +719,8 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                 .blockTime(xdagTimestampToMs(block.getTimestamp()))
                 .timeStamp(block.getTimestamp())
                 .flags(Integer.toHexString(block.getInfo().getFlags()))
-                .diff(toQuantityJsonHex(block.getInfo().getDifficulty()))
-                .remark(block.getInfo().getRemark() == null ? "" : new String(block.getInfo().getRemark(),
+                .diff(toQuantityJsonHex(block.getInfo().getDifficulty().toBigInteger()))
+                .remark(block.getInfo().getRemark() == null ? "" : new String(block.getInfo().getRemark().toArray(),
                         StandardCharsets.UTF_8).trim())
                 .state(getStateByFlags(block.getInfo().getFlags()))
                 .type(getType(block))
@@ -869,7 +869,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                         kernel.getAddressStore().updateTxQuantity(addr.toArray(), blockNonce);
                     }
                 }
-                resInfo.add(BasicUtils.hash2Address(blockWrapper.getBlock().getHashLow()));
+                resInfo.add(BasicUtils.hash2Address(blockWrapper.getBlock().getHash()));
             } else if (result == ImportResult.INVALID_BLOCK) {
                 resInfo.add(result.getErrorInfo());
             }

@@ -44,6 +44,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
+import org.apache.tuweni.bytes.MutableBytes32;
 import org.apache.tuweni.units.bigints.UInt64;
 import org.bouncycastle.util.encoders.Hex;
 import org.objenesis.strategy.StdInstantiatorStrategy;
@@ -181,7 +182,7 @@ public class BlockStoreImpl implements BlockStore {
         byte[] isWalletAddress = new byte[]{(byte) (txHistory.getAddress().getIsAddress() ? 1 : 0)};
         byte[] key = BytesUtils.merge(TX_HISTORY, BytesUtils.merge(txHistory.getAddress().getAddress().toArray(),
                 BasicUtils.address2Hash(txHistory.getHash()).toArray(), BytesUtils.intToBytes(id, true)));
-        // key: 0xa0 + address hash + txHashLow + id
+        // key: 0xa0 + address hash + txHash + id
         byte[] value;
         value = BytesUtils.merge(txHistory.getAddress().getType().asByte(), BytesUtils.merge(isWalletAddress,
                 txHistory.getAddress().getAddress().toArray(),
@@ -190,7 +191,7 @@ public class BlockStoreImpl implements BlockStore {
                 BytesUtils.longToBytes(txHistory.getTimestamp(), true),
                 BytesUtils.longToBytes(remark.length, true),
                 remark));
-        // value: type  +  isWalletAddress +address hash +txHashLow+ amount + timestamp + remark_length + remark
+        // value: type  +  isWalletAddress +address hash +txHash+ amount + timestamp + remark_length + remark
         txHistorySource.put(key, value);
         log.info("MySQL write exception, transaction history stored in Rocksdb. {}", txHistory);
     }
@@ -203,13 +204,13 @@ public class BlockStoreImpl implements BlockStore {
             byte type = BytesUtils.subArray(txHistoryBytes, 0, 1)[0];
             boolean isAddress = BytesUtils.subArray(txHistoryBytes, 1, 1)[0] == 1;
             XdagField.FieldType fieldType = XdagField.FieldType.fromByte(type);
-            Bytes32 addresshashlow = Bytes32.wrap(BytesUtils.subArray(txHistoryBytes, 2, 32));
-            Bytes32 txhashlow = Bytes32.wrap(BytesUtils.subArray(txHistoryBytes, 34, 32));
-            String hash = BasicUtils.hash2Address(txhashlow);
+            Bytes32 addressHash = Bytes32.wrap(BytesUtils.subArray(txHistoryBytes, 2, 32));
+            Bytes32 txHash = Bytes32.wrap(BytesUtils.subArray(txHistoryBytes, 34, 32));
+            String hash = BasicUtils.hash2Address(txHash);
             XAmount amount =
                     XAmount.ofXAmount(Bytes.wrap(BytesUtils.subArray(txHistoryBytes, 66, 8)).reverse().toLong());
             long timestamp = BytesUtils.bytesToLong(BytesUtils.subArray(txHistoryBytes, 74, 8), 0, true);
-            Address address = new Address(addresshashlow, fieldType, amount, isAddress);
+            Address address = new Address(addressHash, fieldType, amount, isAddress);
             long remarkLength = BytesUtils.bytesToLong(BytesUtils.subArray(txHistoryBytes, 82, 8), 0, true);
             String remark = null;
             if (remarkLength != 0) {
@@ -275,24 +276,28 @@ public class BlockStoreImpl implements BlockStore {
     // 存储block的过程
     public void saveBlock(Block block) {
         long time = block.getTimestamp();
-        // Fix: time中只拿key的后缀（hashlow）就够了，值可以不存
-        timeSource.put(BlockUtils.getTimeKey(time, block.getHashLow()), new byte[]{0});
-        blockSource.put(block.getHashLow().toArray(), block.getXdagBlock().getData().toArray());
+
+        // Use full hash for all database keys (new architecture)
+        timeSource.put(BlockUtils.getTimeKey(time, block.getHash()), new byte[]{0});
+        blockSource.put(block.getHash().toArray(), block.getXdagBlock().getData().toArray());
         saveBlockSums(block);
-        saveBlockInfo(block.getInfo());
+
+        // Use new V2 method instead of legacy saveBlockInfo
+        saveBlockInfoV2(block.getInfo());
     }
 
-    public void saveOurBlock(int index, byte[] hashlow) {
-        indexSource.put(BlockUtils.getOurKey(index, hashlow), new byte[]{0});
+    public void saveOurBlock(int index, byte[] hash) {
+        // Use full hash (new architecture)
+        indexSource.put(BlockUtils.getOurKey(index, hash), new byte[]{0});
     }
 
     public Bytes getOurBlock(int index) {
-        AtomicReference<Bytes> blockHashLow = new AtomicReference<>(Bytes.of(0));
+        AtomicReference<Bytes> blockHash = new AtomicReference<>(Bytes.of(0));
         fetchOurBlocks(pair -> {
             int keyIndex = pair.getKey();
             if (keyIndex == index) {
-                if (pair.getValue() != null && pair.getValue().getHashLow() != null) {
-                    blockHashLow.set(pair.getValue().getHashLow());
+                if (pair.getValue() != null && pair.getValue().getHash() != null) {
+                    blockHash.set(pair.getValue().getHash());
                     return Boolean.TRUE;
                 } else {
                     return Boolean.FALSE;
@@ -300,14 +305,14 @@ public class BlockStoreImpl implements BlockStore {
             }
             return Boolean.FALSE;
         });
-        return blockHashLow.get();
+        return blockHash.get();
     }
 
-    public int getKeyIndexByHash(Bytes32 hashlow) {
+    public int getKeyIndexByHash(Bytes32 hash) {
         AtomicInteger keyIndex = new AtomicInteger(-1);
         fetchOurBlocks(pair -> {
             Block block = pair.getValue();
-            if (hashlow.equals(block.getHashLow())) {
+            if (hash.equals(block.getHash())) {
                 int index = pair.getKey();
                 keyIndex.set(index);
                 return Boolean.TRUE;
@@ -317,12 +322,13 @@ public class BlockStoreImpl implements BlockStore {
         return keyIndex.get();
     }
 
-    public void removeOurBlock(byte[] hashlow) {
+    public void removeOurBlock(byte[] hash) {
+        // Use full hash (new architecture)
         fetchOurBlocks(pair -> {
             Block block = pair.getValue();
-            if (equalBytes(hashlow, block.getHashLow().toArray())) {
+            if (equalBytes(hash, block.getHash().toArray())) {
                 int index = pair.getKey();
-                indexSource.delete(BlockUtils.getOurKey(index, hashlow));
+                indexSource.delete(BlockUtils.getOurKey(index, hash));
                 return Boolean.TRUE;
             }
             return Boolean.FALSE;
@@ -341,6 +347,15 @@ public class BlockStoreImpl implements BlockStore {
         });
     }
 
+    // ========== Phase 2 Core Refactor: DEPRECATED SUMS Methods ==========
+    // These methods are part of the old sync protocol
+    // They will be replaced by the new Hybrid Sync protocol in Phase 3
+
+    /**
+     * @deprecated Old sync protocol, use new Hybrid Sync instead
+     */
+    @Override
+    @Deprecated
     public void saveBlockSums(Block block) {
         long size = 512;
         long sum = block.getXdagBlock().getSum();
@@ -351,6 +366,11 @@ public class BlockStoreImpl implements BlockStore {
         }
     }
 
+    /**
+     * @deprecated Old sync protocol, use new Hybrid Sync instead
+     */
+    @Override
+    @Deprecated
     public MutableBytes getSums(String key) {
         byte[] value = indexSource.get(BytesUtils.merge(SUMS_BLOCK_INFO, key.getBytes(StandardCharsets.UTF_8)));
         if (value == null) {
@@ -366,6 +386,11 @@ public class BlockStoreImpl implements BlockStore {
         }
     }
 
+    /**
+     * @deprecated Old sync protocol, use new Hybrid Sync instead
+     */
+    @Override
+    @Deprecated
     public void putSums(String key, Bytes sums) {
         byte[] value = null;
         try {
@@ -376,6 +401,11 @@ public class BlockStoreImpl implements BlockStore {
         indexSource.put(BytesUtils.merge(SUMS_BLOCK_INFO, key.getBytes(StandardCharsets.UTF_8)), value);
     }
 
+    /**
+     * @deprecated Old sync protocol, use new Hybrid Sync instead
+     */
+    @Override
+    @Deprecated
     public void updateSum(String key, long sum, long size, long index) {
         MutableBytes sums = getSums(key);
         if (sums == null) {
@@ -404,6 +434,11 @@ public class BlockStoreImpl implements BlockStore {
         }
     }
 
+    /**
+     * @deprecated Old sync protocol, use new Hybrid Sync instead
+     */
+    @Override
+    @Deprecated
     public int loadSum(long starttime, long endtime, MutableBytes sums) {
         int level;
         String key;
@@ -464,6 +499,10 @@ public class BlockStoreImpl implements BlockStore {
         return 1;
     }
 
+    /**
+     * @deprecated Use saveBlockInfoV2 instead. This is kept only for legacy data migration.
+     */
+    @Deprecated
     public void saveBlockInfo(LegacyBlockInfo blockInfo) {
         byte[] value = null;
         try {
@@ -471,16 +510,25 @@ public class BlockStoreImpl implements BlockStore {
         } catch (SerializationException e) {
             log.error(e.getMessage(), e);
         }
-        indexSource.put(BytesUtils.merge(HASH_BLOCK_INFO, blockInfo.getHashlow()), value);
-        indexSource.put(BlockUtils.getHeight(blockInfo.getHeight()), blockInfo.getHashlow());
+
+        // Convert legacy hash format to full hash for storage key
+        // This method is deprecated and should not be used in new code
+        Bytes hashData = Bytes.wrap(blockInfo.getHashlow()).slice(8, 24);
+        MutableBytes32 fullHash = MutableBytes32.create();
+        fullHash.set(0, hashData);
+
+        indexSource.put(BytesUtils.merge(HASH_BLOCK_INFO, fullHash.toArray()), value);
+        indexSource.put(BlockUtils.getHeight(blockInfo.getHeight()), fullHash.toArray());
     }
 
-    public boolean hasBlock(Bytes32 hashlow) {
-        return blockSource.get(hashlow.toArray()) != null;
+    public boolean hasBlock(Bytes32 hash) {
+        // Use full hash directly (new architecture)
+        return blockSource.get(hash.toArray()) != null;
     }
 
-    public boolean hasBlockInfo(Bytes32 hashlow) {
-        return indexSource.get(BytesUtils.merge(HASH_BLOCK_INFO, hashlow.toArray())) != null;
+    public boolean hasBlockInfo(Bytes32 hash) {
+        // Use full hash directly (new architecture)
+        return indexSource.get(BytesUtils.merge(HASH_BLOCK_INFO, hash.toArray())) != null;
     }
 
     public List<Block> getBlocksUsedTime(long startTime, long endTime) {
@@ -514,55 +562,65 @@ public class BlockStoreImpl implements BlockStore {
 
     // ADD: 通过高度获取区块
     public Block getBlockByHeight(long height) {
-        byte[] hashlow = indexSource.get(BlockUtils.getHeight(height));
-        if (hashlow == null) {
+        byte[] hash = indexSource.get(BlockUtils.getHeight(height));
+        if (hash == null) {
             return null;
         }
-        return getBlockByHash(Bytes32.wrap(hashlow), false);
+        return getBlockByHash(Bytes32.wrap(hash), false);
     }
 
-    public Block getBlockByHash(Bytes32 hashlow, boolean isRaw) {
+    public Block getBlockByHash(Bytes32 hash, boolean isRaw) {
         if (isRaw) {
-            return getRawBlockByHash(hashlow);
+            return getRawBlockByHash(hash);
         }
-        return getBlockInfoByHash(hashlow);
+        return getBlockInfoByHash(hash);
     }
 
-    public Block getRawBlockByHash(Bytes32 hashlow) {
-        Block block = getBlockInfoByHash(hashlow);
+    public Block getRawBlockByHash(Bytes32 hash) {
+        Block block = getBlockInfoByHash(hash);
         if (block == null) {
             return null;
         }
-//        log.debug("Data:{}",Hex.toHexString(blockSource.get(hashlow)));
-        // 没有源数据
-        if (blockSource.get(hashlow.toArray()) == null) {
-//            log.error("No block origin data");
+
+        // Use full hash directly for blockSource lookup (new architecture)
+        byte[] blockData = blockSource.get(hash.toArray());
+
+        if (blockData == null) {
             return null;
         }
-        block.setXdagBlock(new XdagBlock(blockSource.get(hashlow.toArray())));
+
+        block.setXdagBlock(new XdagBlock(blockData));
         block.setParsed(false);
         block.parse();
         return block;
     }
 
-    public Block getBlockInfoByHash(Bytes32 hashlow) {
-        if (!hasBlockInfo(hashlow)) {
-            return null;
-        }
-        LegacyBlockInfo blockInfo = null;
-        byte[] value = indexSource.get(BytesUtils.merge(HASH_BLOCK_INFO, hashlow.toArray()));
+    public Block getBlockInfoByHash(Bytes32 hash) {
+        // Use full hash directly for database lookup (new architecture)
+        byte[] value = indexSource.get(BytesUtils.merge(HASH_BLOCK_INFO, hash.toArray()));
+
         if (value == null) {
             return null;
-        } else {
+        }
+
+        // Try CompactSerializer first (new format)
+        // If it fails, fallback to Kryo (old format)
+        try {
+            BlockInfo blockInfo = io.xdag.serialization.CompactSerializer.deserializeBlockInfo(value);
+            return new Block(blockInfo);
+        } catch (Exception e) {
+            // Fallback to Kryo deserialization (legacy format)
             try {
-                blockInfo = (LegacyBlockInfo) deserialize(value, LegacyBlockInfo.class);
-            } catch (DeserializationException e) {
-                log.error("hash low:{}", hashlow.toHexString());
-                log.error("can't deserialize data:{}", Hex.toHexString(value));
-                log.error(e.getMessage(), e);
+                LegacyBlockInfo blockInfo = (LegacyBlockInfo) deserialize(value, LegacyBlockInfo.class);
+                return new Block(blockInfo);
+            } catch (DeserializationException ex) {
+                log.error("hash: {}", hash.toHexString());
+                log.error("can't deserialize data with both CompactSerializer and Kryo: {}",
+                         Hex.toHexString(value));
+                log.error(ex.getMessage(), ex);
+                return null;
             }
         }
-        return new Block(blockInfo);
     }
 
     public boolean isSnapshotBoot() {
@@ -591,48 +649,163 @@ public class BlockStoreImpl implements BlockStore {
 
     @Override
     public void saveBlockInfoV2(BlockInfo blockInfo) {
-        // TODO Phase 2 core: Implement using CompactSerializer
-        // byte[] serialized = CompactSerializer.serialize(blockInfo);
-        // indexSource.put(BytesUtils.merge(HASH_BLOCK_INFO, blockInfo.getHashLow().toArray()), serialized);
-        // indexSource.put(BlockUtils.getHeight(blockInfo.getHeight()), blockInfo.getHashLow().toArray());
+        // Use CompactSerializer for new immutable BlockInfo
+        try {
+            byte[] serialized = io.xdag.serialization.CompactSerializer.serialize(blockInfo);
 
-        // Temporary: convert to legacy and use old method
-        saveBlockInfo(blockInfo.toLegacy());
+            // Use full hash as database key (new architecture)
+            byte[] fullHashKey = blockInfo.getHash().toArray();
+
+            indexSource.put(BytesUtils.merge(HASH_BLOCK_INFO, fullHashKey), serialized);
+            indexSource.put(BlockUtils.getHeight(blockInfo.getHeight()), fullHashKey);
+
+            // ========== Build New Indexes ==========
+
+            // 1. BLOCK_EPOCH_INDEX: epoch -> blockHash
+            long epoch = blockInfo.getEpoch();  // timestamp / 64
+            byte[] epochKey = BytesUtils.merge(BLOCK_EPOCH_INDEX, BytesUtils.longToBytes(epoch, true));
+            // Append blockHash to the epoch's block list
+            byte[] existingEpochData = indexSource.get(epochKey);
+            if (existingEpochData == null) {
+                // First block in this epoch
+                indexSource.put(epochKey, blockInfo.getHash().toArray());
+            } else {
+                // Append to existing list (simple concatenation)
+                byte[] newEpochData = BytesUtils.merge(existingEpochData, blockInfo.getHash().toArray());
+                indexSource.put(epochKey, newEpochData);
+            }
+
+            // 2. MAIN_BLOCKS_INDEX: height -> blockHash (only for main blocks)
+            if (blockInfo.isMainBlock()) {
+                byte[] mainBlockKey = BytesUtils.merge(MAIN_BLOCKS_INDEX,
+                                                       BytesUtils.longToBytes(blockInfo.getHeight(), true));
+                indexSource.put(mainBlockKey, blockInfo.getHash().toArray());
+                log.debug("Indexed main block at height {}", blockInfo.getHeight());
+            }
+
+            // 3. BLOCK_REFS_INDEX: Build reference index
+            // For each block that this block references, add this block to their reference list
+            buildBlockReferences(blockInfo);
+
+            log.debug("Saved BlockInfo using CompactSerializer: {} bytes (was ~300 with Kryo)",
+                     serialized.length);
+        } catch (Exception e) {
+            log.error("Failed to serialize BlockInfo using CompactSerializer, falling back to legacy", e);
+            // Fallback to legacy method
+            saveBlockInfo(blockInfo.toLegacy());
+        }
+    }
+
+    /**
+     * Build reverse reference index: for each block referenced by this block,
+     * add this block to their reference list
+     */
+    private void buildBlockReferences(BlockInfo blockInfo) {
+        Bytes32 thisBlockHash = blockInfo.getHash();
+
+        // Add reference for 'ref' field (if exists)
+        if (blockInfo.getRef() != null && !blockInfo.getRef().isZero()) {
+            addBlockReference(blockInfo.getRef(), thisBlockHash);
+        }
+
+        // Add reference for 'maxDiffLink' field (if exists)
+        if (blockInfo.getMaxDiffLink() != null && !blockInfo.getMaxDiffLink().isZero()) {
+            addBlockReference(blockInfo.getMaxDiffLink(), thisBlockHash);
+        }
+
+        // Note: Full implementation would need to read the block's XdagBlock
+        // and index ALL 15 links. For now, we index the most important ones.
+    }
+
+    /**
+     * Add a reference: referencedBlock <- referencingBlock
+     */
+    private void addBlockReference(Bytes32 referencedBlock, Bytes32 referencingBlock) {
+        byte[] refKey = BytesUtils.merge(BLOCK_REFS_INDEX, referencedBlock.toArray());
+        byte[] existingRefs = indexSource.get(refKey);
+
+        if (existingRefs == null) {
+            // First reference to this block
+            indexSource.put(refKey, referencingBlock.toArray());
+        } else {
+            // Append to existing reference list
+            byte[] newRefs = BytesUtils.merge(existingRefs, referencingBlock.toArray());
+            indexSource.put(refKey, newRefs);
+        }
     }
 
     @Override
     public List<Block> getMainBlocksByHeightRange(long fromHeight, long toHeight) {
-        // TODO Phase 2 core: Implement optimized range query for main blocks
-        // Should use BLOCK_HEIGHT index and filter for BI_MAIN flag
-        // For now, fallback to sequential queries
+        // Use MAIN_BLOCKS_INDEX for optimized query
         List<Block> result = Lists.newArrayList();
+
         for (long h = fromHeight; h <= toHeight; h++) {
-            Block block = getBlockByHeight(h);
-            if (block != null && block.getInfo() != null) {
-                // Check if it's a main block (BI_MAIN flag)
-                if ((block.getInfo().flags & io.xdag.config.Constants.BI_MAIN) != 0) {
+            byte[] mainBlockKey = BytesUtils.merge(MAIN_BLOCKS_INDEX,
+                                                   BytesUtils.longToBytes(h, true));
+            byte[] hash = indexSource.get(mainBlockKey);
+
+            if (hash != null) {
+                Block block = getBlockByHash(Bytes32.wrap(hash), false);
+                if (block != null) {
                     result.add(block);
                 }
             }
         }
+
+        log.debug("Retrieved {} main blocks from height {} to {}",
+                 result.size(), fromHeight, toHeight);
         return result;
     }
 
     @Override
     public List<Block> getBlocksByEpoch(long epoch) {
-        // TODO Phase 2 core: Implement using new BLOCK_EPOCH index
-        // For now, use time-based query as approximation
-        long startTime = epoch * 64;
-        long endTime = startTime + 64;
-        return getBlocksUsedTime(startTime, endTime);
+        // Use BLOCK_EPOCH_INDEX for fast epoch-based query
+        byte[] epochKey = BytesUtils.merge(BLOCK_EPOCH_INDEX, BytesUtils.longToBytes(epoch, true));
+        byte[] epochData = indexSource.get(epochKey);
+
+        List<Block> result = Lists.newArrayList();
+
+        if (epochData == null) {
+            log.debug("No blocks found in epoch {}", epoch);
+            return result;
+        }
+
+        // Parse block hashes from concatenated data (each hash is 32 bytes)
+        int numBlocks = epochData.length / 32;
+        for (int i = 0; i < numBlocks; i++) {
+            byte[] hashBytes = BytesUtils.subArray(epochData, i * 32, 32);
+            Bytes32 hash = Bytes32.wrap(hashBytes);
+            Block block = getBlockByHash(hash, false);
+            if (block != null) {
+                result.add(block);
+            }
+        }
+
+        log.debug("Retrieved {} blocks from epoch {}", result.size(), epoch);
+        return result;
     }
 
     @Override
     public List<Bytes32> getBlockReferences(Bytes32 blockHash) {
-        // TODO Phase 2 core: Implement using new BLOCK_REFS index
-        // This requires building the reference index during block save
-        // For now, return empty list
-        return Lists.newArrayList();
+        // Use BLOCK_REFS_INDEX to find all blocks that reference this block
+        byte[] refKey = BytesUtils.merge(BLOCK_REFS_INDEX, blockHash.toArray());
+        byte[] refsData = indexSource.get(refKey);
+
+        List<Bytes32> result = Lists.newArrayList();
+
+        if (refsData == null) {
+            return result;
+        }
+
+        // Parse reference hashes from concatenated data (each hash is 32 bytes)
+        int numRefs = refsData.length / 32;
+        for (int i = 0; i < numRefs; i++) {
+            byte[] refHashBytes = BytesUtils.subArray(refsData, i * 32, 32);
+            result.add(Bytes32.wrap(refHashBytes));
+        }
+
+        log.debug("Block {} is referenced by {} other blocks", blockHash.toHexString(), result.size());
+        return result;
     }
 
     @Override

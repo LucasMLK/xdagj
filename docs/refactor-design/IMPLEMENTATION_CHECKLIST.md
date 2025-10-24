@@ -116,7 +116,7 @@ Phase 4: 测试和部署    [    ] 0%  (1-2周)
   - [ ] 测试 fromLegacy/toLegacy 转换
   - [ ] 测试 isMainBlock(), getEpoch() 辅助方法
 - [ ] 验证所有字段满足需求
-  - [ ] hashLow, timestamp, height
+  - [ ] hash, timestamp, height
   - [ ] type, flags, difficulty
   - [ ] ref, maxDiffLink
   - [ ] amount, fee, remark

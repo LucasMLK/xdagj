@@ -42,7 +42,7 @@ public interface OrphanBlockStore extends XdagLifecycle {
 
     List<Address> getOrphan(long num, long[] sendTime);
 
-    void deleteByHash(byte[] hashlow);
+    void deleteByHash(byte[] hash);
 
     void addOrphan(Block block);
 

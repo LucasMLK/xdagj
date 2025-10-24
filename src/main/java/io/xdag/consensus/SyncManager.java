@@ -169,12 +169,12 @@ public class SyncManager extends AbstractXdagLifecycle {
      */
     // TODO: Modify consensus
     public ImportResult importBlock(BlockWrapper blockWrapper) {
-        log.debug("importBlock:{}", blockWrapper.getBlock().getHashLow());
+        log.debug("importBlock:{}", blockWrapper.getBlock().getHash());
         ImportResult importResult = blockchain
                 .tryToConnect(new Block(new XdagBlock(blockWrapper.getBlock().getXdagBlock().getData().toArray())));
 
         if (importResult == EXIST) {
-            log.debug("Block have exist:{}", blockWrapper.getBlock().getHashLow());
+            log.debug("Block have exist:{}", blockWrapper.getBlock().getHash());
         }
 
         if (!blockWrapper.isOld() && (importResult == IMPORTED_BEST || importResult == IMPORTED_NOT_BEST)) {
@@ -192,12 +192,12 @@ public class SyncManager extends AbstractXdagLifecycle {
     public synchronized ImportResult validateAndAddNewBlock(BlockWrapper blockWrapper) {
         blockWrapper.getBlock().parse();
         ImportResult result = importBlock(blockWrapper);
-        log.debug("validateAndAddNewBlock:{}, {}", blockWrapper.getBlock().getHashLow(), result);
+        log.debug("validateAndAddNewBlock:{}, {}", blockWrapper.getBlock().getHash(), result);
         switch (result) {
             case EXIST, IMPORTED_BEST, IMPORTED_NOT_BEST, IN_MEM -> syncPopBlock(blockWrapper);
             case NO_PARENT -> doNoParent(blockWrapper, result);
             case INVALID_BLOCK -> {
-//                log.error("invalid block:{}", Hex.toHexString(blockWrapper.getBlock().getHashLow()));
+//                log.error("invalid block:{}", Hex.toHexString(blockWrapper.getBlock().getHash()));
             }
             default -> {
             }
@@ -206,13 +206,13 @@ public class SyncManager extends AbstractXdagLifecycle {
     }
 
   private void doNoParent(BlockWrapper blockWrapper, ImportResult result) {
-    if (syncPushBlock(blockWrapper, result.getHashlow())) {
+    if (syncPushBlock(blockWrapper, result.getHash())) {
         logParent(blockWrapper, result);
 
         // Use P2P service to request missing parent block
         if (kernel.getP2pService() != null) {
             // TODO: Send block request via P2P - need to add method to XdagP2pEventHandler
-            log.debug("Request missing parent block: {}", result.getHashlow().toHexString());
+            log.debug("Request missing parent block: {}", result.getHash().toHexString());
         }
     }
   }
@@ -221,9 +221,9 @@ public class SyncManager extends AbstractXdagLifecycle {
      * Synchronize missing blocks
      *
      * @param blockWrapper New block
-     * @param hashLow Hash of missing parent block
+     * @param hash Hash of missing parent block
      */
-    public boolean syncPushBlock(BlockWrapper blockWrapper, Bytes32 hashLow) {
+    public boolean syncPushBlock(BlockWrapper blockWrapper, Bytes32 hash) {
         if (syncMap.size() >= MAX_SIZE) {
             for (int j = 0; j < DELETE_NUM; j++) {
                 List<Bytes32> keyList = new ArrayList<>(syncMap.keySet());
@@ -241,11 +241,11 @@ public class SyncManager extends AbstractXdagLifecycle {
         newQueue.add(blockWrapper);
         blockchain.getXdagStats().nwaitsync++;
 
-        syncMap.merge(hashLow, newQueue,
+        syncMap.merge(hash, newQueue,
                 (oldQ, newQ) -> {
                     blockchain.getXdagStats().nwaitsync--;
                     for (BlockWrapper b : oldQ) {
-                        if (b.getBlock().getHashLow().equals(blockWrapper.getBlock().getHashLow())) {
+                        if (b.getBlock().getHash().equals(blockWrapper.getBlock().getHash())) {
                             // after 64 sec must resend block request
                             if (now - b.getTime() > 64 * 1000) {
                                 b.setTime(now);
@@ -270,9 +270,9 @@ public class SyncManager extends AbstractXdagLifecycle {
     public void syncPopBlock(BlockWrapper blockWrapper) {
         Block block = blockWrapper.getBlock();
 
-        Queue<BlockWrapper> queue = syncMap.getOrDefault(block.getHashLow(), null);
+        Queue<BlockWrapper> queue = syncMap.getOrDefault(block.getHash(), null);
         if (queue != null) {
-            syncMap.remove(block.getHashLow());
+            syncMap.remove(block.getHash());
             blockchain.getXdagStats().nwaitsync--;
             queue.forEach(bw -> {
                 ImportResult importResult = importBlock(bw);
@@ -291,8 +291,8 @@ public class SyncManager extends AbstractXdagLifecycle {
     }
 
   private void logParent(BlockWrapper bw, ImportResult importResult) {
-    log.debug("push block:{}, NO_PARENT {}", bw.getBlock().getHashLow(),
-            importResult.getHashlow().toHexString());
+    log.debug("push block:{}, NO_PARENT {}", bw.getBlock().getHash(),
+            importResult.getHash().toHexString());
   }
 
   // TODO: Currently stays in sync by default, not responsible for block generation

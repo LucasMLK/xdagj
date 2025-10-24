@@ -129,15 +129,15 @@ public class SyncTest {
         long fourthTime = XdagTime.getEndOfEpoch(XdagTime.msToXdagtimestamp(generateTime + 64000L + 64000L));
 
         Block addressBlock = generateAddressBlock(config, key, generateTime);
-        pending.add(new Address(addressBlock.getHashLow(), XDAG_FIELD_OUT,false));
+        pending.add(new Address(addressBlock.getHash(), XDAG_FIELD_OUT,false));
 
         Block secondBlock = generateExtraBlock(config, key, secondTime, pending);
         pending.clear();
-        pending.add(new Address(secondBlock.getHashLow(), XDAG_FIELD_OUT,false));
+        pending.add(new Address(secondBlock.getHash(), XDAG_FIELD_OUT,false));
 
         Block thirdBlock = generateExtraBlock(config, key, thirdTime, pending);
         pending.clear();
-        pending.add(new Address(secondBlock.getHashLow(), XDAG_FIELD_OUT,false));
+        pending.add(new Address(secondBlock.getHash(), XDAG_FIELD_OUT,false));
 
         Block fourthBlock = generateExtraBlock(config, key, fourthTime, pending);
 
@@ -154,7 +154,7 @@ public class SyncTest {
         }
 
         generateTime = fourthTime;
-        MutableBytes32 ref = fourthBlock.getHashLow();
+        Bytes32 ref = fourthBlock.getHash();
 
         // 2. create 10 mainblocks
         for (int i = 1; i <= 10; i++) {
@@ -165,9 +165,9 @@ public class SyncTest {
             long xdagTime = XdagTime.getEndOfEpoch(generateTime);
             Block extraBlock = generateExtraBlock(config, key, xdagTime, pending);
             blockchain.tryToConnect(extraBlock);
-            ref = extraBlock.getHashLow();
+            ref = extraBlock.getHash();
         }
-        String res = getStateByFlags(blockchain.getBlockByHash(secondBlock.getHashLow(), false).getInfo().getFlags());
+        String res = getStateByFlags(blockchain.getBlockByHash(secondBlock.getHash(), false).getInfo().getFlags());
         return res;
     }
 
@@ -187,7 +187,7 @@ public class SyncTest {
         result = blockchain.tryToConnect(addressBlock);
         assertSame(IMPORTED_BEST, result);
         List<Block> extraBlockList = Lists.newLinkedList();
-        Bytes32 ref = addressBlock.getHashLow();
+        Bytes32 ref = addressBlock.getHash();
 
         // 2. create 100 mainblocks
         for (int i = 1; i <= 10; i++) {
@@ -199,7 +199,7 @@ public class SyncTest {
             Block extraBlock = generateExtraBlock(config, key, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
             assertSame(IMPORTED_BEST, result);
-            ref = extraBlock.getHashLow();
+            ref = extraBlock.getHash();
             extraBlockList.add(extraBlock);
         }
 
@@ -211,19 +211,19 @@ public class SyncTest {
         pending.add(new Address(ref, XDAG_FIELD_OUT,false));
         Block A = generateExtraBlock(config, key, firstTime, pending);
         pending.clear();
-        pending.add(new Address(A.getHashLow(), XDAG_FIELD_OUT,false));
+        pending.add(new Address(A.getHash(), XDAG_FIELD_OUT,false));
 
         long secondTime = XdagTime.getEndOfEpoch(tempTime) + 1;
         Block B = generateExtraBlock(config, key, secondTime, pending);
         pending.clear();
-        pending.add(new Address(B.getHashLow(), XDAG_FIELD_OUT,false));
+        pending.add(new Address(B.getHash(), XDAG_FIELD_OUT,false));
 
         generateTime += 64000L;
         tempTime = XdagTime.msToXdagtimestamp(generateTime);
         long thirdTime = XdagTime.getEndOfEpoch(tempTime);
         Block C = generateExtraBlock(config, key, thirdTime, pending);
         pending.clear();
-        pending.add(new Address(B.getHashLow(), XDAG_FIELD_OUT,false));
+        pending.add(new Address(B.getHash(), XDAG_FIELD_OUT,false));
 
         generateTime += 64000L;
         tempTime = XdagTime.msToXdagtimestamp(generateTime);
@@ -242,7 +242,7 @@ public class SyncTest {
             result = blockchain.tryToConnect(C);
         }
 
-        ref = D.getHashLow();
+        ref = D.getHash();
 
         // 2. create 10 mainblocks
         for (int i = 1; i <= 10; i++) {
@@ -253,7 +253,7 @@ public class SyncTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, key, xdagTime, pending);
             blockchain.tryToConnect(extraBlock);
-            ref = extraBlock.getHashLow();
+            ref = extraBlock.getHash();
         }
 
         generateTime += 64000L;
@@ -263,19 +263,19 @@ public class SyncTest {
         pending.add(new Address(ref, XDAG_FIELD_OUT,false));
         Block A2 = generateExtraBlock(config, key, firstTime, pending);
         pending.clear();
-        pending.add(new Address(A2.getHashLow(), XDAG_FIELD_OUT,false));
+        pending.add(new Address(A2.getHash(), XDAG_FIELD_OUT,false));
 
         secondTime = XdagTime.getEndOfEpoch(tempTime) + 1;
         Block B2 = generateExtraBlock(config, key, secondTime, pending);
         pending.clear();
-        pending.add(new Address(B2.getHashLow(), XDAG_FIELD_OUT,false));
+        pending.add(new Address(B2.getHash(), XDAG_FIELD_OUT,false));
 
         generateTime += 64000L;
         tempTime = XdagTime.msToXdagtimestamp(generateTime);
         thirdTime = XdagTime.getEndOfEpoch(tempTime);
         Block C2 = generateExtraBlockGivenRandom(config, key, thirdTime, pending, "1235");
         pending.clear();
-        pending.add(new Address(B2.getHashLow(), XDAG_FIELD_OUT,false));
+        pending.add(new Address(B2.getHash(), XDAG_FIELD_OUT,false));
 
         generateTime += 64000L;
         tempTime = XdagTime.msToXdagtimestamp(generateTime);
@@ -294,7 +294,7 @@ public class SyncTest {
             result = blockchain.tryToConnect(C2);
         }
 
-        ref = D2.getHashLow();
+        ref = D2.getHash();
 
         // 2. create 10 mainblocks
         for (int i = 1; i <= 10; i++) {
@@ -305,11 +305,11 @@ public class SyncTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, key, xdagTime, pending);
             blockchain.tryToConnect(extraBlock);
-            ref = extraBlock.getHashLow();
+            ref = extraBlock.getHash();
         }
 
-        String res1 = getStateByFlags(blockchain.getBlockByHash(B.getHashLow(), false).getInfo().getFlags());
-        String res2 = getStateByFlags(blockchain.getBlockByHash(B2.getHashLow(), false).getInfo().getFlags());
+        String res1 = getStateByFlags(blockchain.getBlockByHash(B.getHash(), false).getInfo().getFlags());
+        String res2 = getStateByFlags(blockchain.getBlockByHash(B2.getHash(), false).getInfo().getFlags());
         return new String[]{res1, res2};
     }
 

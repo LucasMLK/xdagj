@@ -323,8 +323,8 @@ Phase 2.3 (查询集成)
 // 在 finalizeOldBlocks() 中添加
 // 3. 从主 BlockStore 删除（可选，需要充分测试）
 if (config.isEnableBlockDeletion()) {
-    blockStore.deleteBlock(block.getHashLow());
-    log.debug("Deleted block {} from active BlockStore", block.getHashLow());
+    blockStore.deleteBlock(block.getHash());
+    log.debug("Deleted block {} from active BlockStore", block.getHash());
 }
 ```
 

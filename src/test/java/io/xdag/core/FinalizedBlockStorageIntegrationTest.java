@@ -120,7 +120,7 @@ public class FinalizedBlockStorageIntegrationTest {
         // Verify all blocks are saved
         for (Block block : testBlocks) {
             assertTrue("Block should exist in finalized store",
-                    finalizedStore.hasBlock(block.getHashLow()));
+                    finalizedStore.hasBlock(block.getHash()));
         }
 
         System.out.println("✓ All blocks saved successfully");
@@ -128,10 +128,10 @@ public class FinalizedBlockStorageIntegrationTest {
         // Step 2: Query blocks
         System.out.println("\nStep 2: Querying blocks...");
         for (Block block : testBlocks) {
-            Optional<Block> retrieved = finalizedStore.getBlockByHash(block.getHashLow());
+            Optional<Block> retrieved = finalizedStore.getBlockByHash(block.getHash());
             assertTrue("Block should be retrievable", retrieved.isPresent());
             assertEquals("Retrieved block should match original",
-                    block.getHashLow(), retrieved.get().getHashLow());
+                    block.getHash(), retrieved.get().getHash());
         }
 
         System.out.println("✓ All blocks retrieved successfully");
@@ -198,7 +198,7 @@ public class FinalizedBlockStorageIntegrationTest {
         System.out.println("\nCold access (populating cache)...");
         long coldStart = System.nanoTime();
         for (Block block : testBlocks) {
-            finalizedStore.getBlockByHash(block.getHashLow());
+            finalizedStore.getBlockByHash(block.getHash());
         }
         long coldEnd = System.nanoTime();
         double coldTimeMs = (coldEnd - coldStart) / 1_000_000.0;
@@ -207,7 +207,7 @@ public class FinalizedBlockStorageIntegrationTest {
         System.out.println("Hot access (from cache)...");
         long hotStart = System.nanoTime();
         for (Block block : testBlocks) {
-            finalizedStore.getBlockByHash(block.getHashLow());
+            finalizedStore.getBlockByHash(block.getHash());
         }
         long hotEnd = System.nanoTime();
         double hotTimeMs = (hotEnd - hotStart) / 1_000_000.0;
@@ -299,7 +299,7 @@ public class FinalizedBlockStorageIntegrationTest {
         // Verify all blocks exist
         for (Block block : batchBlocks) {
             assertTrue("Batch saved block should exist",
-                    finalizedStore.hasBlock(block.getHashLow()));
+                    finalizedStore.hasBlock(block.getHash()));
         }
     }
 
@@ -371,7 +371,7 @@ public class FinalizedBlockStorageIntegrationTest {
         // Verify old blocks are in finalized store
         for (Block block : oldBlocks) {
             assertTrue("Old block should be finalized",
-                    finalizedStore.hasBlock(block.getHashLow()));
+                    finalizedStore.hasBlock(block.getHash()));
         }
 
         System.out.println("✓ Finalization threshold simulation successful");
@@ -400,7 +400,7 @@ public class FinalizedBlockStorageIntegrationTest {
         BlockInfo info = BlockInfo.builder()
                 .timestamp(timestamp)
                 .height(height)
-                .hashLow(Bytes32.random())
+                .hash(Bytes32.random())
                 .flags(0)
                 .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
                 .amount(XAmount.ZERO)
@@ -420,7 +420,7 @@ public class FinalizedBlockStorageIntegrationTest {
                 .height(height)
                 .flags(Constants.BI_MAIN | Constants.BI_MAIN_CHAIN)
                 .timestamp(timestamp)
-                .hashLow(Bytes32.random())
+                .hash(Bytes32.random())
                 .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
                 .amount(XAmount.ZERO)
                 .fee(XAmount.ZERO)

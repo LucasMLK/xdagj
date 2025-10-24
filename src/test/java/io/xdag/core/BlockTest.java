@@ -71,7 +71,8 @@ public class BlockTest {
                   + "0000000000000000000000000000000000000000000000000000000000000000"
                   + "0000000000000000000000000000000000000000000000000000000000000000";
           Block first = new Block(new XdagBlock(Hex.decode(blockRawdata)));
-          first.getInfo().setFee(XAmount.of(100,XUnit.MILLI_XDAG));
+          // BlockInfo is immutable, use withFee() to create new instance
+          first.setInfo(first.getInfo().withFee(XAmount.of(100,XUnit.MILLI_XDAG)));
           //assertEquals(first.getXdagBlock().getData(), new XdagBlock(Hex.decode(blockRawdata).getData();//A 'block' create by rawdata, its xdagblock will not change.
      }
 
@@ -118,7 +119,7 @@ public class BlockTest {
 
      long time = XdagTime.getEndOfEpoch(XdagTime.getCurrentTimestamp();
      List<Address> pending = new ArrayList<>();
-     pending.add(new Address(first.getHashLow());
+     pending.add(new Address(first.getHash());
      Block txfirst = new Block(time, first.getFirstOutput(), null, pending, false, null, -1);
      ECKey ecKey1 = new ECKey();
      txfirst.signOut(ecKey1);
@@ -129,7 +130,7 @@ public class BlockTest {
 
      time = XdagTime.getEndOfEpoch(XdagTime.getCurrentTimestamp();
      pending = new ArrayList<>();
-     pending.add(new Address(first.getHashLow());
+     pending.add(new Address(first.getHash());
      Block txsecond = new Block(time, first.getFirstOutput(), null, pending, false, null, -1);
      ECKey ecKey2 = new ECKey();
      txsecond.signOut(ecKey2);
@@ -138,8 +139,8 @@ public class BlockTest {
      System.out.println(
      "=====================================main block use key2========================================");
      pending = new ArrayList<>();
-     pending.add(new Address(txfirst.getHashLow());
-     pending.add(new Address(txsecond.getHashLow());
+     pending.add(new Address(txfirst.getHash());
+     pending.add(new Address(txsecond.getHash());
      Block main = new Block(time, first.getFirstOutput(), null, pending, true, null, -1);
      main.signOut(ecKey2);
      byte[] minShare = new byte[32];
@@ -150,8 +151,8 @@ public class BlockTest {
      System.out.println(
      "=====================================transaction1 block use key1========================================");
      List<Address> links = new ArrayList<>();
-     links.add(new Address(txfirst.getHashLow(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key1
-     links.add(new Address(txsecond.getHashLow(), XDAG_FIELD_OUT, 10);
+     links.add(new Address(txfirst.getHash(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key1
+     links.add(new Address(txsecond.getHash(), XDAG_FIELD_OUT, 10);
      List<ECKey> keys = new ArrayList<>();
      keys.add(ecKey1);
      Block transaction1 = new Block(time, first.getFirstOutput(), links, null, false, keys, 0);
@@ -162,8 +163,8 @@ public class BlockTest {
      System.out.println(
      "=====================================transaction2 block use key3========================================");
      links = new ArrayList<>();
-     links.add(new Address(txfirst.getHashLow(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key1
-     links.add(new Address(txsecond.getHashLow(), XDAG_FIELD_OUT, 10);
+     links.add(new Address(txfirst.getHash(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key1
+     links.add(new Address(txsecond.getHash(), XDAG_FIELD_OUT, 10);
      keys = new ArrayList<>();
      keys.add(ecKey1);
      Block transaction2 = new Block(time, first.getFirstOutput(), links, null, false, keys, -1);
@@ -176,9 +177,9 @@ public class BlockTest {
      System.out.println(
      "=====================================transaction3 block use key3========================================");
      links = new ArrayList<>();
-     links.add(new Address(txfirst.getHashLow(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key1
-     links.add(new Address(txsecond.getHashLow(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key2
-     links.add(new Address(main.getHashLow(), XdagField.FieldType.XDAG_FIELD_IN, 20);
+     links.add(new Address(txfirst.getHash(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key1
+     links.add(new Address(txsecond.getHash(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key2
+     links.add(new Address(main.getHash(), XdagField.FieldType.XDAG_FIELD_IN, 20);
      keys = new ArrayList<>();
      keys.add(ecKey1);
      keys.add(ecKey2);
@@ -274,10 +275,10 @@ public class BlockTest {
      public void printBlockInfo(Block block) {
      System.out.println("timestamp:" + Long.toHexString(block.getTimestamp());
      printHash(block.getHash(), "blockhash:");
-     printHash(block.getHashLow(), "blockhashlow:");
+     printHash(block.getHash(), "block hash:");
      System.out.println("type:" + block.getType();
      if (block.getFirstOutput() != null)
-     printHash(block.getFirstOutput().getHashLow(), "firstoutput:");
+     printHash(block.getFirstOutput().getHash(), "firstoutput:");
      System.out.println("inputs:" + block.getInputs().size();
      printListAddress(block.getInputs();
      System.out.println("outputs:" + block.getOutputs().size();
@@ -318,7 +319,7 @@ public class BlockTest {
      public void printListAddress(List<Address> input) {
      for (Address address : input) {
      System.out.println("address data:" + Hex.toHexString(address.getData());
-     System.out.println("address hashlow:" + Hex.toHexString(address.getHashLow());
+     System.out.println("address hash:" + Hex.toHexString(address.getHash());
      System.out.println("address amount:" + address.getAmount();
      }
      }
@@ -368,7 +369,7 @@ public class BlockTest {
 
      long time = XdagTime.getEndOfEpoch(XdagTime.getCurrentTimestamp();
      List<Address> pending = new ArrayList<>();
-     pending.add(new Address(first.getHashLow());
+     pending.add(new Address(first.getHash());
      Block txfirst = new Block(time, first.getFirstOutput(), null, pending, false, null, -1);
      ECKey ecKey1 = new ECKey();
      txfirst.signOut(ecKey1);
@@ -379,7 +380,7 @@ public class BlockTest {
 
      time = XdagTime.getEndOfEpoch(XdagTime.getCurrentTimestamp();
      pending = new ArrayList<>();
-     pending.add(new Address(first.getHashLow());
+     pending.add(new Address(first.getHash());
      Block txsecond = new Block(time, first.getFirstOutput(), null, pending, false, null, -1);
      ECKey ecKey2 = new ECKey();
      txsecond.signOut(ecKey2);
@@ -388,8 +389,8 @@ public class BlockTest {
      System.out.println(
      "=====================================main block use key2========================================");
      pending = new ArrayList<>();
-     pending.add(new Address(txfirst.getHashLow());
-     pending.add(new Address(txsecond.getHashLow());
+     pending.add(new Address(txfirst.getHash());
+     pending.add(new Address(txsecond.getHash());
      Block main = new Block(time, first.getFirstOutput(), null, pending, true, null, -1);
      main.signOut(ecKey2);
      byte[] minShare = new byte[32];
@@ -400,8 +401,8 @@ public class BlockTest {
      System.out.println(
      "=====================================transaction1 block use key1========================================");
      List<Address> links = new ArrayList<>();
-     links.add(new Address(txfirst.getHashLow(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key1
-     links.add(new Address(txsecond.getHashLow(), XDAG_FIELD_OUT, 10);
+     links.add(new Address(txfirst.getHash(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key1
+     links.add(new Address(txsecond.getHash(), XDAG_FIELD_OUT, 10);
      List<ECKey> keys = new ArrayList<>();
      keys.add(ecKey1);
      Block transaction1 = new Block(time, first.getFirstOutput(), links, null, false, keys, 0);
@@ -412,8 +413,8 @@ public class BlockTest {
      System.out.println(
      "=====================================transaction2 block use key3========================================");
      links = new ArrayList<>();
-     links.add(new Address(txfirst.getHashLow(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key1
-     links.add(new Address(txsecond.getHashLow(), XDAG_FIELD_OUT, 10);
+     links.add(new Address(txfirst.getHash(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key1
+     links.add(new Address(txsecond.getHash(), XDAG_FIELD_OUT, 10);
      keys = new ArrayList<>();
      keys.add(ecKey1);
      Block transaction2 = new Block(time, first.getFirstOutput(), links, null, false, keys, -1);
@@ -426,9 +427,9 @@ public class BlockTest {
      System.out.println(
      "=====================================transaction3 block use key3========================================");
      links = new ArrayList<>();
-     links.add(new Address(txfirst.getHashLow(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key1
-     links.add(new Address(txsecond.getHashLow(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key2
-     links.add(new Address(main.getHashLow(), XdagField.FieldType.XDAG_FIELD_IN, 20);
+     links.add(new Address(txfirst.getHash(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key1
+     links.add(new Address(txsecond.getHash(), XdagField.FieldType.XDAG_FIELD_IN, 10); // key2
+     links.add(new Address(main.getHash(), XdagField.FieldType.XDAG_FIELD_IN, 20);
      keys = new ArrayList<>();
      keys.add(ecKey1);
      keys.add(ecKey2);
@@ -466,8 +467,8 @@ public class BlockTest {
 
      System.out.println(
      "=====================================get block from store raw========================================");
-     System.out.println("transaction1.hashlow:" + Hex.toHexString(transaction1.getHashLow());
-     Block transactionRaw = blockStore.getBlockByHash(transaction1.getHashLow(), true);
+     System.out.println("transaction1.hash:" + Hex.toHexString(transaction1.getHash());
+     Block transactionRaw = blockStore.getBlockByHash(transaction1.getHash(), true);
      printBlockInfo(transactionRaw);
      System.out.println(
      "=====================================verify block sig========================================");
@@ -477,7 +478,7 @@ public class BlockTest {
 
      System.out.println(
      "=====================================get block from store info========================================");
-     Block transactionInfo = blockStore.getBlockByHash(transaction1.getHashLow(), false);
+     Block transactionInfo = blockStore.getBlockByHash(transaction1.getHash(), false);
      System.out.println("diff:" + transactionInfo.getInfo().getDifficulty();
      System.out.println("time:" + Long.toHexString(transactionInfo.getTimestamp());
      System.out.println("ref:" + transactionInfo.getInfo().getRef();
@@ -535,11 +536,11 @@ public class BlockTest {
      accountStore.addFirstAccount(firstAccount, 0);
      accountStore.addNewAccount(secondAccount, 0);
 
-     Block fromaccountR = accountStore.getAccountBlockByHash(firstAccount.getHashLow(), true);
+     Block fromaccountR = accountStore.getAccountBlockByHash(firstAccount.getHash(), true);
      System.out.println(
      "=====================================First Account Raw========================================");
      printBlockInfo(fromaccountR);
-     Block fromaccount = accountStore.getAccountBlockByHash(firstAccount.getHashLow(), false);
+     Block fromaccount = accountStore.getAccountBlockByHash(firstAccount.getHash(), false);
 
      System.out.println(
      "=====================================get block from store info========================================");
@@ -567,8 +568,8 @@ public class BlockTest {
      System.out.println(
      "Send Amount:"
      + key.getAmount()
-     + " hashlow:"
-     + Hex.toHexString(key.getHashLow()
+     + " hash:"
+     + Hex.toHexString(key.getHash()
      + " type:"
      + key.getType();
      System.out.println(
@@ -576,7 +577,7 @@ public class BlockTest {
      System.out.println(ans.get(key);
      System.out.println(
      "=====================================Match block========================================");
-     Block block = blockStore.getBlockByHash(key.getHashLow(), true);
+     Block block = blockStore.getBlockByHash(key.getHash(), true);
 
      printBlockInfo(block);
      }

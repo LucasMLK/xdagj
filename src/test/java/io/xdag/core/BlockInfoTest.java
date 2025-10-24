@@ -48,14 +48,14 @@ public class BlockInfoTest {
     @Test
     public void testBuilder() {
         // 测试基本 Builder 构建
-        Bytes32 hashLow = Bytes32.random();
+        Bytes32 fullHash = Bytes32.random();
         long timestamp = 1234567890L;
         long height = 100L;
         XAmount amount = XAmount.of(1000, XUnit.MILLI_XDAG);
         UInt256 difficulty = UInt256.valueOf(12345);
 
         BlockInfo blockInfo = BlockInfo.builder()
-                .hashLow(hashLow)
+                .hash(fullHash)
                 .timestamp(timestamp)
                 .height(height)
                 .amount(amount)
@@ -64,7 +64,8 @@ public class BlockInfoTest {
                 .build();
 
         assertNotNull(blockInfo);
-        assertEquals(hashLow, blockInfo.getHashLow());
+        assertEquals(fullHash, blockInfo.getHash());  // Test full hash
+        assertNotNull(blockInfo.getHash());  // hash should be computed
         assertEquals(timestamp, blockInfo.getTimestamp());
         assertEquals(height, blockInfo.getHeight());
         assertEquals(amount, blockInfo.getAmount());
@@ -74,10 +75,10 @@ public class BlockInfoTest {
     @Test
     public void testBuilderWithHelpers() {
         // 测试 Builder 辅助方法
-        Bytes32 hashLow = Bytes32.random();
+        Bytes32 hash = Bytes32.random();
 
         BlockInfo blockInfo = BlockInfo.builder()
-                .hashLow(hashLow)
+                .hash(hash)
                 .timestamp(1000L)
                 .height(50L)
                 .mainBlock(true)          // 使用辅助方法
@@ -97,9 +98,9 @@ public class BlockInfoTest {
     @Test
     public void testImmutability() {
         // 测试不可变性：使用 with 方法创建新对象
-        Bytes32 hashLow = Bytes32.random();
+        Bytes32 hash = Bytes32.random();
         BlockInfo original = BlockInfo.builder()
-                .hashLow(hashLow)
+                .hash(hash)
                 .timestamp(1000L)
                 .height(10L)
                 .amount(XAmount.ZERO)
@@ -115,7 +116,7 @@ public class BlockInfoTest {
         // 验证新对象已修改
         assertEquals(20L, modified.getHeight());
         // 验证其他字段相同
-        assertEquals(original.getHashLow(), modified.getHashLow());
+        assertEquals(original.getHash(), modified.getHash());
         assertEquals(original.getTimestamp(), modified.getTimestamp());
     }
 
@@ -123,7 +124,7 @@ public class BlockInfoTest {
     public void testToBuilder() {
         // 测试 toBuilder() 方法
         BlockInfo original = BlockInfo.builder()
-                .hashLow(Bytes32.random())
+                .hash(Bytes32.random())
                 .timestamp(1000L)
                 .height(10L)
                 .amount(XAmount.ZERO)
@@ -149,7 +150,7 @@ public class BlockInfoTest {
     public void testFlagHelpers() {
         // 测试标志位辅助方法
         BlockInfo blockInfo = BlockInfo.builder()
-                .hashLow(Bytes32.random())
+                .hash(Bytes32.random())
                 .timestamp(1000L)
                 .height(10L)
                 .flags(Constants.BI_MAIN | Constants.BI_OURS | Constants.BI_APPLIED)
@@ -168,7 +169,7 @@ public class BlockInfoTest {
     public void testGetEpoch() {
         // 测试 getEpoch() 计算
         BlockInfo blockInfo = BlockInfo.builder()
-                .hashLow(Bytes32.random())
+                .hash(Bytes32.random())
                 .timestamp(640L)  // 640 / 64 = 10
                 .height(10L)
                 .difficulty(UInt256.ONE)
@@ -185,7 +186,7 @@ public class BlockInfoTest {
     public void testHasRemark() {
         // 测试 hasRemark() 方法
         BlockInfo withoutRemark = BlockInfo.builder()
-                .hashLow(Bytes32.random())
+                .hash(Bytes32.random())
                 .timestamp(1000L)
                 .height(10L)
                 .difficulty(UInt256.ONE)
@@ -205,8 +206,16 @@ public class BlockInfoTest {
     public void testFromLegacy() {
         // 测试从 LegacyBlockInfo 转换
         LegacyBlockInfo legacy = new LegacyBlockInfo();
-        byte[] hashlow = Bytes32.random().toArray();
-        legacy.setHashlow(hashlow);
+
+        // Create legacy hash in correct format: 8 zero bytes + 24 hash bytes
+        byte[] legacyHash = new byte[32];
+        // First 8 bytes are zeros (already initialized to 0)
+        // Set bytes [8-31] with deterministic values
+        for (int i = 8; i < 32; i++) {
+            legacyHash[i] = (byte) (i * 7); // Use deterministic values
+        }
+
+        legacy.setHashlow(legacyHash);
         legacy.setTimestamp(1234567890L);
         legacy.setHeight(100L);
         legacy.type = 0x1234567812345678L;
@@ -220,7 +229,21 @@ public class BlockInfoTest {
         BlockInfo blockInfo = BlockInfo.fromLegacy(legacy);
 
         assertNotNull(blockInfo);
-        assertArrayEquals(hashlow, blockInfo.getHashLow().toArray());
+        // Verify conversion from legacy hash format to full hash format
+        // legacy hash format: [8 zeros, 24 hash bytes]
+        // full hash format: [24 hash bytes, 8 zeros]
+        byte[] fullHash = blockInfo.getHash().toArray();
+
+        // Verify hash bytes [0-23] equal legacy hash bytes [8-31]
+        for (int i = 0; i < 24; i++) {
+            assertEquals("Hash byte " + i + " should equal legacy hash byte " + (i + 8),
+                    legacyHash[i + 8], fullHash[i]);
+        }
+
+        // Verify hash bytes [24-31] are all zeros
+        for (int i = 24; i < 32; i++) {
+            assertEquals("Hash byte " + i + " should be zero", 0, fullHash[i]);
+        }
         assertEquals(1234567890L, blockInfo.getTimestamp());
         assertEquals(100L, blockInfo.getHeight());
         assertEquals(0x1234567812345678L, blockInfo.getType());
@@ -236,12 +259,18 @@ public class BlockInfoTest {
     @Test
     public void testToLegacy() {
         // 测试转换为 LegacyBlockInfo
-        Bytes32 hashLow = Bytes32.random();
+        // Create a full hash (24 hash bytes at beginning, 8 zeros at end)
+        byte[] hashBytes = new byte[32];
+        for (int i = 0; i < 24; i++) {
+            hashBytes[i] = (byte) (i + 1);  // Use deterministic values
+        }
+        Bytes32 fullHash = Bytes32.wrap(hashBytes);
+
         XAmount amount = XAmount.of(2000, XUnit.MILLI_XDAG);
         XAmount fee = XAmount.of(10, XUnit.MILLI_XDAG);
 
         BlockInfo blockInfo = BlockInfo.builder()
-                .hashLow(hashLow)
+                .hash(fullHash)
                 .timestamp(9876543210L)
                 .height(500L)
                 .type(0xABCDEF0123456789L)
@@ -256,7 +285,21 @@ public class BlockInfoTest {
         LegacyBlockInfo legacy = blockInfo.toLegacy();
 
         assertNotNull(legacy);
-        assertArrayEquals(hashLow.toArray(), legacy.getHashlow());
+        // Verify conversion from full hash format to legacy hash format
+        // full hash format: [24 hash bytes, 8 zeros]
+        // legacy hash format: [8 zeros, 24 hash bytes]
+        byte[] convertedLegacyHash = legacy.getHashlow();
+
+        // Verify legacy hash bytes [0-7] are all zeros
+        for (int i = 0; i < 8; i++) {
+            assertEquals("Legacy hash byte " + i + " should be zero", 0, convertedLegacyHash[i]);
+        }
+
+        // Verify legacy hash bytes [8-31] equal fullHash bytes [0-23]
+        for (int i = 0; i < 24; i++) {
+            assertEquals("Legacy hash byte " + (i + 8) + " should equal hash byte " + i,
+                    hashBytes[i], convertedLegacyHash[i + 8]);
+        }
         assertEquals(9876543210L, legacy.getTimestamp());
         assertEquals(500L, legacy.getHeight());
         assertEquals(0xABCDEF0123456789L, legacy.type);
@@ -271,7 +314,16 @@ public class BlockInfoTest {
     public void testRoundTripConversion() {
         // 测试双向转换的一致性
         LegacyBlockInfo originalLegacy = new LegacyBlockInfo();
-        originalLegacy.setHashlow(Bytes32.random().toArray());
+
+        // Create legacy hash in correct format: 8 zero bytes + 24 hash bytes
+        byte[] legacyHash = new byte[32];
+        // First 8 bytes are zeros (already initialized to 0)
+        // Set bytes [8-31] with deterministic values
+        for (int i = 8; i < 32; i++) {
+            legacyHash[i] = (byte) (i * 11);  // Use different seed than testFromLegacy
+        }
+        originalLegacy.setHashlow(legacyHash);
+
         originalLegacy.setTimestamp(1111111111L);
         originalLegacy.setHeight(888L);
         originalLegacy.type = 0x0102030405060708L;
@@ -300,7 +352,7 @@ public class BlockInfoTest {
         // 测试 ref 字段
         Bytes32 ref = Bytes32.random();
         BlockInfo blockInfo = BlockInfo.builder()
-                .hashLow(Bytes32.random())
+                .hash(Bytes32.random())
                 .timestamp(1000L)
                 .height(10L)
                 .ref(ref)
@@ -316,7 +368,7 @@ public class BlockInfoTest {
         // 测试 maxDiffLink 字段
         Bytes32 maxDiffLink = Bytes32.random();
         BlockInfo blockInfo = BlockInfo.builder()
-                .hashLow(Bytes32.random())
+                .hash(Bytes32.random())
                 .timestamp(1000L)
                 .height(10L)
                 .maxDiffLink(maxDiffLink)
@@ -333,7 +385,7 @@ public class BlockInfoTest {
         SnapshotInfo snapshotInfo = new SnapshotInfo(true, new byte[32]);
 
         BlockInfo blockInfo = BlockInfo.builder()
-                .hashLow(Bytes32.random())
+                .hash(Bytes32.random())
                 .timestamp(1000L)
                 .height(10L)
                 .isSnapshot(true)
@@ -351,7 +403,7 @@ public class BlockInfoTest {
     public void testToString() {
         // 测试 toString() 方法
         BlockInfo blockInfo = BlockInfo.builder()
-                .hashLow(Bytes32.fromHexString("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"))
+                .hash(Bytes32.fromHexString("0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"))
                 .timestamp(1234567890L)
                 .height(999L)
                 .flags(Constants.BI_MAIN)
@@ -364,16 +416,16 @@ public class BlockInfoTest {
         assertNotNull(str);
         assertTrue(str.contains("height=999"));
         assertTrue(str.contains("isMain=true"));
-        assertTrue(str.contains("hashLow="));
+        assertTrue(str.contains("hash="));
     }
 
     @Test
     public void testEquality() {
         // 测试相等性（由 Lombok @Value 自动生成）
-        Bytes32 hashLow = Bytes32.random();
+        Bytes32 hash = Bytes32.random();
 
         BlockInfo blockInfo1 = BlockInfo.builder()
-                .hashLow(hashLow)
+                .hash(hash)
                 .timestamp(1000L)
                 .height(10L)
                 .flags(Constants.BI_MAIN)
@@ -382,7 +434,7 @@ public class BlockInfoTest {
                 .build();
 
         BlockInfo blockInfo2 = BlockInfo.builder()
-                .hashLow(hashLow)
+                .hash(hash)
                 .timestamp(1000L)
                 .height(10L)
                 .flags(Constants.BI_MAIN)
@@ -398,7 +450,7 @@ public class BlockInfoTest {
     public void testInequality() {
         // 测试不相等
         BlockInfo blockInfo1 = BlockInfo.builder()
-                .hashLow(Bytes32.random())
+                .hash(Bytes32.random())
                 .timestamp(1000L)
                 .height(10L)
                 .difficulty(UInt256.ONE)

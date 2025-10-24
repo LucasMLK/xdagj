@@ -355,7 +355,7 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
             return;
         }
 
-        log.debug("processNewBlock:{} from node {}", block.getHashLow(), channel.getRemoteAddress());
+        log.debug("processNewBlock:{} from node {}", block.getHash(), channel.getRemoteAddress());
         BlockWrapper bw = new BlockWrapper(block, msg.getTtl() - 1, channel.getRemotePeer(), false);
         syncMgr.validateAndAddNewBlock(bw);
     }
@@ -363,7 +363,7 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     protected void processSyncBlock(SyncBlockMessage msg) {
         Block block = msg.getBlock();
 
-        log.debug("processSyncBlock:{}  from node {}", block.getHashLow(), channel.getRemoteAddress());
+        log.debug("processSyncBlock:{}  from node {}", block.getHash(), channel.getRemoteAddress());
         BlockWrapper bw = new BlockWrapper(block, msg.getTtl() - 1, channel.getRemotePeer(), true);
         syncMgr.validateAndAddNewBlock(bw);
     }
@@ -453,7 +453,7 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
      * ********************** Xdag Message ************************
      */
     public void sendNewBlock(Block newBlock, int TTL) {
-        log.debug("send block:{} to node:{}", newBlock.getHashLow(), channel.getRemoteAddress());
+        log.debug("send block:{} to node:{}", newBlock.getHash(), channel.getRemoteAddress());
         NewBlockMessage msg = new NewBlockMessage(newBlock, TTL);
         sendMessage(msg);
     }

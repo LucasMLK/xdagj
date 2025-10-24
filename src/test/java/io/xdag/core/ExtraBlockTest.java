@@ -119,7 +119,7 @@ public class ExtraBlockTest {
         assertSame(IMPORTED_BEST, result);
         List<Address> pending = Lists.newArrayList();
         List<Block> extraBlockList = Lists.newLinkedList();
-        Bytes32 ref = addressBlock.getHashLow();
+        Bytes32 ref = addressBlock.getHash();
 
         // 2. create 20 mainblocks and 6 extra block
         for (int i = 1; i <= 20; i++) {
@@ -131,7 +131,7 @@ public class ExtraBlockTest {
             Block extraBlock = generateExtraBlock(config, poolKey, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
             assertSame(IMPORTED_BEST, result);
-            ref = extraBlock.getHashLow();
+            ref = extraBlock.getHash();
             extraBlockList.add(extraBlock);
         }
         generateTime += 64000L;
@@ -168,7 +168,7 @@ public class ExtraBlockTest {
         blockchain.checkOrphan();
         List<Address> pending = Lists.newArrayList();
         List<Block> extraBlockList = Lists.newLinkedList();
-        Bytes32 ref = addressBlock.getHashLow();
+        Bytes32 ref = addressBlock.getHash();
 
         // 2. create 20 mainblocks and 6 extra block
         for (int i = 1; i <= 20; i++) {
@@ -181,7 +181,7 @@ public class ExtraBlockTest {
             result = blockchain.tryToConnect(extraBlock);
             assertSame(IMPORTED_BEST, result);
             blockchain.checkOrphan();
-            ref = extraBlock.getHashLow();
+            ref = extraBlock.getHash();
             extraBlockList.add(extraBlock);
         }
         generateTime += 63000L;
@@ -217,12 +217,13 @@ public class ExtraBlockTest {
         public void processExtraBlock() {
             if (this.getMemOrphanPool().size() > expectedExtraBlocks) {
                 Block reuse = getMemOrphanPool().entrySet().iterator().next().getValue();
-                removeOrphan(reuse.getHashLow(), OrphanRemoveActions.ORPHAN_REMOVE_REUSE);
+                removeOrphan(reuse.getHash(), OrphanRemoveActions.ORPHAN_REMOVE_REUSE);
                 this.getXdagStats().nblocks--;
                 this.getXdagStats().totalnblocks = Math
                         .max(this.getXdagStats().nblocks, this.getXdagStats().totalnblocks);
 
-                if ((reuse.getInfo().flags & BI_OURS) != 0) {
+                // Use getFlags() instead of accessing flags directly
+                if ((reuse.getInfo().getFlags() & BI_OURS) != 0) {
                     removeOurBlock(reuse);
                 }
             }

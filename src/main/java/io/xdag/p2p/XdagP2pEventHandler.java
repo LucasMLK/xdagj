@@ -144,7 +144,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
             }
 
             log.debug("Received NEW_BLOCK: {} from {}",
-                    block.getHashLow(), channel.getRemoteAddress());
+                    block.getHash(), channel.getRemoteAddress());
 
             // Create peer adapter - get network info from kernel
             XdagPeerAdapter peer = new XdagPeerAdapter(
@@ -169,7 +169,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
             Block block = msg.getBlock();
 
             log.debug("Received SYNC_BLOCK: {} from {}",
-                    block.getHashLow(), channel.getRemoteAddress());
+                    block.getHash(), channel.getRemoteAddress());
 
             XdagPeerAdapter peer = new XdagPeerAdapter(
                 channel,
@@ -343,7 +343,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      */
     public void sendNewBlock(io.xdag.p2p.channel.Channel channel, Block block, int ttl) {
         try {
-            log.debug("Sending NEW_BLOCK: {} to {}", block.getHashLow(), channel.getRemoteAddress());
+            log.debug("Sending NEW_BLOCK: {} to {}", block.getHash(), channel.getRemoteAddress());
             NewBlockMessage msg = new NewBlockMessage(block, ttl);
             channel.send(Bytes.wrap(msg.getBody()));
         } catch (Exception e) {

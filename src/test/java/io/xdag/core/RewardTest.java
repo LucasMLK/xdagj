@@ -131,7 +131,7 @@ public class RewardTest {
         assertSame(IMPORTED_BEST, result);
         List<Address> pending = Lists.newArrayList();
         List<Block> extraBlockList = Lists.newLinkedList();
-        Bytes32 ref = addressBlock.getHashLow();
+        Bytes32 ref = addressBlock.getHash();
 
         Bytes32 unwindRef = Bytes32.ZERO;
         long unwindDate = 0;
@@ -145,7 +145,7 @@ public class RewardTest {
             Block extraBlock = generateExtraBlock(config, poolKey, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
             assertSame(IMPORTED_BEST, result);
-            ref = extraBlock.getHashLow();
+            ref = extraBlock.getHash();
             if (i == 10) {
                 unwindRef = ref;
                 unwindDate = generateTime;
@@ -169,7 +169,7 @@ public class RewardTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlockGivenRandom(config, poolKey, xdagTime, pending, "3456");
             blockchain.tryToConnect(extraBlock);
-            ref = extraBlock.getHashLow();
+            ref = extraBlock.getHash();
             extraBlockList.add(extraBlock);
         }
         assertEquals("0", blockchain.getBlockByHash(targetBlock, false).getInfo().getAmount().toString());

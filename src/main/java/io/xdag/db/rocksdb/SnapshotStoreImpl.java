@@ -99,10 +99,9 @@ public class SnapshotStoreImpl implements SnapshotStore {
         blockInfo.setSnapshot(preBlockInfo.isSnapshot());
         blockInfo.setSnapshotInfo(preBlockInfo.getSnapshotInfo());
         blockInfo.setFee(XAmount.of(preBlockInfo.getFee()));
-        blockInfo.setHash(preBlockInfo.getHash());
+        blockInfo.setHashlow(preBlockInfo.getHash());
         blockInfo.setDifficulty(preBlockInfo.getDifficulty());
         blockInfo.setAmount(preBlockInfo.getAmount());
-        blockInfo.setHashlow(preBlockInfo.getHashlow());
         blockInfo.setFlags(preBlockInfo.getFlags());
         blockInfo.setHeight(preBlockInfo.getHeight());
         blockInfo.setMaxDiffLink(preBlockInfo.getMaxDiffLink());
@@ -126,7 +125,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
                             blockInfo = (LegacyBlockInfo) deserialize(iter.value(), LegacyBlockInfo.class);
                         }
                     } catch (DeserializationException e) {
-//                        log.error("hash low:{}", Hex.toHexString(blockInfo.getHashlow()));
+//                        log.error("hash low:{}", Hex.toHexString(blockInfo.getHash()));
                         log.error("can't deserialize data:{}", Hex.toHexString(iter.value()));
                         log.error(e.getMessage(), e);
                     }
@@ -172,7 +171,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
                         try {
                             blockInfo = (LegacyBlockInfo) deserialize(iter.value(), LegacyBlockInfo.class);
                         } catch (DeserializationException e) {
-                            log.error("hash low:{}", Hex.toHexString(blockInfo.getHashlow()));
+                            log.error("hashlow (legacy format):{}", Hex.toHexString(blockInfo.getHashlow()));
                             log.error("can't deserialize data:{}", Hex.toHexString(iter.value()));
                             log.error(e.getMessage(), e);
                         }

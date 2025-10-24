@@ -95,7 +95,7 @@ public interface Blockchain {
     void registerListener(Listener listener);
 
     // Get transaction history for given address
-    List<TxHistory> getBlockTxHistoryByAddress(Bytes32 addressHashlow, int page, Object... parameters);
+    List<TxHistory> getBlockTxHistoryByAddress(Bytes32 addressHash, int page, Object... parameters);
 
     // Get extended XDAG network statistics
     XdagExtStats getXdagExtStats();

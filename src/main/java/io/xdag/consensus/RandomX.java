@@ -103,18 +103,18 @@ public class RandomX extends AbstractXdagLifecycle {
                         block.getTimestamp(), randomXForkTime);
             }
 
-            byte[] hashlow;
+            byte[] hash;
             if ((block.getInfo().getHeight() & seedEpoch) == 0) {
                 nextMemory.switchTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag + 1;
                 nextMemory.seedTime = block.getTimestamp();
                 nextMemory.seedHeight = block.getInfo().getHeight();
                 log.debug("Set switch time to {}", Long.toHexString(nextMemory.switchTime));
 
-                hashlow = blockchain.getBlockByHeight(block.getInfo().getHeight() - randomXForkLag).getInfo()
-                        .getHashlow();
-                if (nextMemory.seed == null || !equalBytes(nextMemory.seed, hashlow)) {
-                    nextMemory.seed = Arrays.reverse(hashlow);
-                    log.debug("Next Memory Seed:{}", Hex.toHexString(hashlow));
+                hash = blockchain.getBlockByHeight(block.getInfo().getHeight() - randomXForkLag).getInfo()
+                        .getHash().toArray();
+                if (nextMemory.seed == null || !equalBytes(nextMemory.seed, hash)) {
+                    nextMemory.seed = Arrays.reverse(hash);
+                    log.debug("Next Memory Seed:{}", Hex.toHexString(hash));
                     randomXPoolUpdateSeed(nextMemIndex);
                 }
                 randomXHashEpochIndex = nextMemIndex;
@@ -346,7 +346,7 @@ public class RandomX extends AbstractXdagLifecycle {
         long memoryIndex = randomXHashEpochIndex + 1;
         RandomXMemory memory = globalMemory[(int) (memoryIndex) & 1];
         memory.seed = Arrays
-                .reverse(blockchain.getBlockByHeight(preSeedHeight - randomXForkLag).getInfo().getHashlow());
+                .reverse(blockchain.getBlockByHeight(preSeedHeight - randomXForkLag).getInfo().getHash().toArray());
         memory.switchTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag + 1;
         memory.seedTime = block.getTimestamp();
         memory.seedHeight = block.getInfo().getHeight();
@@ -361,7 +361,7 @@ public class RandomX extends AbstractXdagLifecycle {
         long memoryIndex = randomXHashEpochIndex + 1;
         RandomXMemory memory = globalMemory[(int) (memoryIndex) & 1];
         memory.seed = Arrays
-                .reverse(blockchain.getBlockByHeight(seedHeight - randomXForkLag).getInfo().getHashlow());
+                .reverse(blockchain.getBlockByHeight(seedHeight - randomXForkLag).getInfo().getHash().toArray());
         memory.switchTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag + 1;
         memory.seedTime = block.getTimestamp();
         memory.seedHeight = block.getInfo().getHeight();

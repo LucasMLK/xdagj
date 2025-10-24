@@ -110,7 +110,7 @@ public class RefactoredStorageDemo {
                     BlockInfo info = infoOpt.get();
                     System.out.printf("  Height %d: hash=%s, time=%d%n",
                             h,
-                            info.getHashLow().toHexString().substring(0, 16) + "...",
+                            info.getHash().toHexString().substring(0, 16) + "...",
                             info.getTimestamp());
                 }
             }
@@ -154,7 +154,7 @@ public class RefactoredStorageDemo {
             System.out.println("-".repeat(80));
 
             Block sampleBlock = createDemoBlock(500, true);
-            BlockInfo sampleInfo = BlockInfo.fromLegacy(sampleBlock.getInfo());
+            BlockInfo sampleInfo = sampleBlock.getInfo();
 
             byte[] compactSerialized = CompactSerializer.serialize(sampleInfo);
             System.out.printf("  CompactSerializer size: %d bytes%n", compactSerialized.length);

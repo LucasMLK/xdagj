@@ -105,13 +105,13 @@ public class Commands {
                     hash2Address(block.getHash()),
                     block.getInfo().getHeight()));
         } else {
-            byte[] remark = block.getInfo().getRemark();
+            Bytes remark = block.getInfo().getRemark();
             sbd.append(String.format("%08d   %s   %s   %-8s  %-32s",
                     block.getInfo().getHeight(),
                     hash2Address(block.getHash()),
                     FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(time),
                     getStateByFlags(block.getInfo().getFlags()),
-                    new String(remark == null ? "".getBytes(StandardCharsets.UTF_8) : remark, StandardCharsets.UTF_8)));
+                    new String(remark == null ? "".getBytes(StandardCharsets.UTF_8) : remark.toArray(), StandardCharsets.UTF_8)));
         }
         return sbd.toString();
     }
@@ -296,7 +296,7 @@ public class Commands {
                         kernel.getAddressStore().updateTxQuantity(addr.toArray(), blockNonce);
                     }
                 }
-                str.append(hash2Address(blockWrapper.getBlock().getHashLow())).append("\n");
+                str.append(hash2Address(blockWrapper.getBlock().getHash())).append("\n");
             } else if (result == ImportResult.INVALID_BLOCK) {
                 str.append(result.getErrorInfo());
             }
@@ -476,11 +476,11 @@ public class Commands {
      */
     public String block(Bytes32 blockhash) {
         try {
-            MutableBytes32 hashLow = MutableBytes32.create();
-            hashLow.set(8, blockhash.slice(8, 24));
-            Block block = kernel.getBlockStore().getRawBlockByHash(hashLow);
+            MutableBytes32 hash = MutableBytes32.create();
+            hash.set(8, blockhash.slice(8, 24));
+            Block block = kernel.getBlockStore().getRawBlockByHash(hash);
             if (block == null) {
-                block = kernel.getBlockStore().getBlockInfoByHash(hashLow);
+                block = kernel.getBlockStore().getBlockInfoByHash(hash);
                 return printBlockInfo(block, false);
             } else {
                 return printBlockInfo(block, true);
@@ -495,8 +495,8 @@ public class Commands {
      * Get block info by address
      */
     public String block(String address) {
-        Bytes32 hashlow = address2Hash(address);
-        return block(hashlow);
+        Bytes32 hash = address2Hash(address);
+        return block(hash);
     }
 
     /**
@@ -553,19 +553,19 @@ public class Commands {
                 """;
         StringBuilder tx = new StringBuilder();
         if (getStateByFlags(block.getInfo().getFlags()).equals(MAIN.getDesc()) && block.getInfo().getHeight() > kernel.getConfig().getSnapshotSpec().getSnapshotHeight()) {
-            tx.append(String.format("    earn: %s           %s   %s%n", hash2Address(block.getHashLow()),
+            tx.append(String.format("    earn: %s           %s   %s%n", hash2Address(block.getHash()),
                             kernel.getBlockchain().getReward(block.getInfo().getHeight()).toDecimal(9, XUnit.XDAG).toPlainString(),
                             FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS")
                                     .format(XdagTime.xdagTimestampToMs(block.getTimestamp()))))
-                    .append(String.format("fee earn: %s           %s   %s%n", hash2Address(block.getHashLow()),
-                            kernel.getBlockStore().getBlockInfoByHash(block.getHashLow()).getFee().toDecimal(9, XUnit.XDAG).toPlainString(),
+                    .append(String.format("fee earn: %s           %s   %s%n", hash2Address(block.getHash()),
+                            kernel.getBlockStore().getBlockInfoByHash(block.getHash()).getFee().toDecimal(9, XUnit.XDAG).toPlainString(),
                             FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS")
                                     .format(XdagTime.xdagTimestampToMs(block.getTimestamp()))));
         }
-        for (TxHistory txHistory : kernel.getBlockchain().getBlockTxHistoryByAddress(block.getHashLow(), 1)) {
+        for (TxHistory txHistory : kernel.getBlockchain().getBlockTxHistoryByAddress(block.getHash(), 1)) {
             Address address = txHistory.getAddress();
-            LegacyBlockInfo blockInfo = kernel.getBlockchain().getBlockByHash(address.getAddress(), false).getInfo();
-            if ((blockInfo.flags & BI_APPLIED) == 0) {
+            BlockInfo blockInfo = kernel.getBlockchain().getBlockByHash(address.getAddress(), false).getInfo();
+            if ((blockInfo.getFlags() & BI_APPLIED) == 0) {
                 continue;
             }
             if (address.getType().equals(XDAG_FIELD_IN)) {
@@ -592,13 +592,13 @@ public class Commands {
                 Long.toHexString(block.getTimestamp()),
                 Integer.toHexString(block.getInfo().getFlags()),
                 getStateByFlags(block.getInfo().getFlags()),
-                Hex.toHexString(block.getInfo().getHash()),
-                block.getInfo().getRemark() == null ? StringUtils.EMPTY : new String(block.getInfo().getRemark(), StandardCharsets.UTF_8),
-                block.getInfo().getDifficulty().toString(16),
+                Hex.toHexString(block.getInfo().getHash().toArray()),
+                block.getInfo().getRemark() == null ? StringUtils.EMPTY : new String(block.getInfo().getRemark().toArray(), StandardCharsets.UTF_8),
+                block.getInfo().getDifficulty().toBigInteger().toString(16),
                 hash2Address(block.getHash()), block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
-                block.getInfo().getRef() == null ? "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" : hash2Address(Bytes32.wrap(block.getInfo().getRef())),
+                block.getInfo().getRef() == null ? "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" : hash2Address(block.getInfo().getRef()),
                 block.getInfo().getRef() == null ? XAmount.ZERO.toDecimal(9, XUnit.XDAG).toPlainString() :
-                        (getStateByFlags(block.getInfo().getFlags()).equals(MAIN.getDesc()) ? kernel.getBlockStore().getBlockInfoByHash(block.getHashLow()).getFee().toDecimal(9, XUnit.XDAG).toPlainString() :
+                        (getStateByFlags(block.getInfo().getFlags()).equals(MAIN.getDesc()) ? kernel.getBlockStore().getBlockInfoByHash(block.getHash()).getFee().toDecimal(9, XUnit.XDAG).toPlainString() :
                                 (block.getInputs().isEmpty() ? XAmount.ZERO.toDecimal(9, XUnit.XDAG).toPlainString() :
                                         MIN_GAS.multiply(block.getOutputs().size()).toDecimal(9, XUnit.XDAG).toPlainString()))
         )
@@ -743,8 +743,8 @@ public class Commands {
             Address address = txHistory.getAddress();
             Block block = kernel.getBlockchain().getBlockByHash(address.getAddress(), false);
             if (block != null) {
-                LegacyBlockInfo blockInfo = block.getInfo();
-                if ((blockInfo.flags & BI_APPLIED) == 0) {
+                BlockInfo blockInfo = block.getInfo();
+                if ((blockInfo.getFlags() & BI_APPLIED) == 0) {
                     continue;
                 }
                 if (address.getType().equals(XDAG_FIELD_INPUT)) {
@@ -757,7 +757,7 @@ public class Commands {
                             address.getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
                             FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS")
                                     .format(txHistory.getTimestamp())));
-                } else if (address.getType().equals(XDAG_FIELD_COINBASE) && (blockInfo.flags & BI_MAIN) != 0) {
+                } else if (address.getType().equals(XDAG_FIELD_COINBASE) && (blockInfo.getFlags() & BI_MAIN) != 0) {
                     tx.append(String.format(" coinbase: %s           %s   %s%n", hash2Address(address.getAddress()),
                             address.getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
                             FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS")
@@ -807,7 +807,7 @@ public class Commands {
 
             // Add block if it has positive balance
             if (compareAmountTo(XAmount.ZERO, block.getInfo().getAmount()) < 0) {
-                ourBlocks.put(new Address(block.getHashLow(), XDAG_FIELD_IN, block.getInfo().getAmount(), false),
+                ourBlocks.put(new Address(block.getHash(), XDAG_FIELD_IN, block.getInfo().getAmount(), false),
                         kernel.getWallet().getAccounts().get(index));
                 return false;
             }
@@ -820,7 +820,7 @@ public class Commands {
             ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(blockWrapper);
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
                 kernel.broadcastBlockWrapper(blockWrapper);
-                str.append(BasicUtils.hash2Address(blockWrapper.getBlock().getHashLow())).append("\n");
+                str.append(BasicUtils.hash2Address(blockWrapper.getBlock().getHash())).append("\n");
             }
         }
         return str.append("}, it will take several minutes to complete the transaction.").toString();
@@ -844,10 +844,10 @@ public class Commands {
             ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(blockWrapper);
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
                 kernel.broadcastBlockWrapper(blockWrapper);
-                str.append(BasicUtils.hash2Address(blockWrapper.getBlock().getHashLow()));
+                str.append(BasicUtils.hash2Address(blockWrapper.getBlock().getHash()));
             } else {
                 return new StringBuilder("This transaction block is invalid. Tx hash:")
-                        .append(BasicUtils.hash2Address(blockWrapper.getBlock().getHashLow()));
+                        .append(BasicUtils.hash2Address(blockWrapper.getBlock().getHash()));
             }
         }
         return str.append("}");

@@ -77,14 +77,14 @@ public class Address {
     /**
      * Constructor used only for ref and maxdifflink
      */
-    public Address(Bytes32 hashLow, boolean isAddress) {
+    public Address(Bytes32 hash, boolean isAddress) {
         this.isAddress = isAddress;
         this.type = XdagField.FieldType.XDAG_FIELD_OUT;
         addressHash = MutableBytes32.create();
         if(!isAddress){
-            this.addressHash = hashLow.mutableCopy();
+            this.addressHash = hash.mutableCopy();
         }else {
-            this.addressHash.set(8,hashLow.mutableCopy().slice(8,20));
+            this.addressHash.set(8,hash.mutableCopy().slice(8,20));
         }
         this.amount = XAmount.ZERO;
         parsed = true;
@@ -95,17 +95,17 @@ public class Address {
      */
     public Address(Block block) {
         this.isAddress = false;
-        this.addressHash = block.getHashLow().mutableCopy();
+        this.addressHash = block.getHash().mutableCopy();
         parsed = true;
     }
 
-    public Address(Bytes32 blockHashlow, XdagField.FieldType type, Boolean isAddress) {
+    public Address(Bytes32 blockHash, XdagField.FieldType type, Boolean isAddress) {
         this.isAddress = isAddress;
         if(!isAddress){
-            this.data = blockHashlow.mutableCopy();
+            this.data = blockHash.mutableCopy();
         }else {
             this.data = MutableBytes32.create();
-            data.set(8,blockHashlow.mutableCopy().slice(8,20));
+            data.set(8,blockHash.mutableCopy().slice(8,20));
         }
         this.type = type;
         parse();

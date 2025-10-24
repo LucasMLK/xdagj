@@ -56,8 +56,8 @@ public class CompactSerializer {
         ByteArrayOutputStream out = new ByteArrayOutputStream(200);
 
         // Fixed-size fields first (for alignment)
-        // hashLow: 32 bytes
-        out.write(blockInfo.getHashLow().toArray());
+        // hash: 32 bytes (full hash format)
+        out.write(blockInfo.getHash().toArray());
 
         // timestamp: 8 bytes (fixed)
         writeFixed64(out, blockInfo.getTimestamp());
@@ -126,8 +126,8 @@ public class CompactSerializer {
     public static BlockInfo deserializeBlockInfo(byte[] data) throws IOException {
         ByteReader reader = new ByteReader(data);
 
-        // hashLow: 32 bytes
-        Bytes32 hashLow = Bytes32.wrap(reader.readBytes(32));
+        // hash: 32 bytes (full hash format)
+        Bytes32 fullHash = Bytes32.wrap(reader.readBytes(32));
 
         // timestamp: 8 bytes
         long timestamp = reader.readFixed64();
@@ -179,7 +179,7 @@ public class CompactSerializer {
         }
 
         return BlockInfo.builder()
-                .hashLow(hashLow)
+                .hash(fullHash)  // Use full hash format, not hash
                 .timestamp(timestamp)
                 .height(height)
                 .type(type)

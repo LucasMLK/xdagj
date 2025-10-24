@@ -38,7 +38,7 @@
 
 #### BlockInfo.java (3.7KB)
 ```java
-- 字段: type, flags, height, difficulty, ref, maxDiffLink, fee, remark, hash, hashlow, amount, timestamp
+- 字段: type, flags, height, difficulty, ref, maxDiffLink, fee, remark, hash, hash, amount, timestamp
 - 使用: byte[] 类型
 - 序列化: Kryo
 ```
@@ -53,7 +53,7 @@
 @Builder
 @With
 public class BlockInfo implements Serializable {
-    Bytes32 hashLow;
+    Bytes32 hash;
     long timestamp;
     long height;
     long type;
@@ -95,9 +95,9 @@ public interface BlockStore extends XdagLifecycle {
     void saveBlock(Block block);
     void saveBlockInfo(BlockInfo blockInfo);
     Block getBlockByHeight(long height);
-    Block getBlockByHash(Bytes32 hashlow, boolean isRaw);
+    Block getBlockByHash(Bytes32 hash, boolean isRaw);
     List<Block> getBlocksUsedTime(long startTime, long endTime);
-    boolean hasBlock(Bytes32 hashlow);
+    boolean hasBlock(Bytes32 hash);
     // SUMS相关方法
     void saveBlockSums(Block block);
     MutableBytes getSums(String key);
@@ -344,7 +344,7 @@ public class CompactBlockInfoSerializer {
     public byte[] encode(BlockInfo info) {
         ByteBuffer buf = ByteBuffer.allocate(estimateSize(info));
         // 固定字段
-        buf.put(info.getHashLow().toArray());  // 32
+        buf.put(info.getHash().toArray());  // 32
         buf.putLong(info.getTimestamp());       // 8
         buf.putLong(info.getHeight());          // 8
         // ...
@@ -378,7 +378,7 @@ public class FinalityCalculator {
         for (long h = 0; h <= upToHeight; h++) {
             Block block = store.getBlockByHeight(h);
             if (block != null) {
-                store.markAsFinalized(block.getHashLow());
+                store.markAsFinalized(block.getHash());
             }
         }
     }

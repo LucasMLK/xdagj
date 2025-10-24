@@ -255,14 +255,14 @@ public class SnapshotStoreTest {
             Block extraBlock = generateExtraBlock(config, poolKey, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
             assertSame(IMPORTED_BEST, result);
-            ref = extraBlock.getHashLow();
+            ref = extraBlock.getHash();
             pending.clear();
             pending.add(new Address(ref, XDAG_FIELD_OUT,false));
             extraBlockList.add(extraBlock);
         }
 
         // 2. make one transaction(100 XDAG) block(from No.1 mainblock to one address)
-        Address from = new Address(extraBlockList.get(0).getHashLow(), XDAG_FIELD_IN,false);
+        Address from = new Address(extraBlockList.get(0).getHash(), XDAG_FIELD_IN,false);
         Address to = new Address(BasicUtils.keyPair2Hash(addrKey), XDAG_FIELD_OUT,true);
         long xdagTime = XdagTime.getEndOfEpoch(XdagTime.msToXdagtimestamp(generateTime));
         Block txBlock = generateOldTransactionBlock(config, poolKey, xdagTime - 1, from, to, XAmount.of(100, XUnit.XDAG));
@@ -280,8 +280,8 @@ public class SnapshotStoreTest {
         assertTrue(result == IMPORTED_NOT_BEST || result == IMPORTED_BEST);
 
         pending.clear();
-        pending.add(new Address(txBlock.getHashLow(),false));
-        ref = extraBlockList.get(extraBlockList.size() - 1).getHashLow();
+        pending.add(new Address(txBlock.getHash(),false));
+        ref = extraBlockList.get(extraBlockList.size() - 1).getHash();
 
         // 5. confirm transaction block with 16 mainblocks
         for (int i = 0; i <= 16; i++) {
@@ -292,7 +292,7 @@ public class SnapshotStoreTest {
             Block extraBlock = generateExtraBlock(config, poolKey, xdagTime, pending);
             result = blockchain.tryToConnect(extraBlock);
             assertSame(IMPORTED_BEST, result);
-            ref = extraBlock.getHashLow();
+            ref = extraBlock.getHash();
             extraBlockList.add(extraBlock);
             pending.clear();
         }
@@ -306,8 +306,8 @@ public class SnapshotStoreTest {
 
 
         address1 = from.getAddress();
-        address2 = extraBlockList.get(11).getHashLow();
-        address3 = extraBlockList.get(23).getHashLow();
+        address2 = MutableBytes32.wrap(extraBlockList.get(11).getHash().toArray());
+        address3 = MutableBytes32.wrap(extraBlockList.get(23).getHash().toArray());
 
         topStatus =blockchain.getXdagTopStatus();
         stats = blockchain.getXdagStats();

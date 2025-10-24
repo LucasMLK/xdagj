@@ -72,7 +72,7 @@ public class PoWTest {
      * <p>
      * long time = XdagTime.getEndOfEpoch(XdagTime.getCurrentTimestamp(); // extra
      * List<Address> pending = new ArrayList<>();
-     * pending.add(new Address(first.getHashLow());
+     * pending.add(new Address(first.getHash());
      * Block txfirst = new Block(time, first.getFirstOutput(), null, pending, false, null, -1);
      * ECKey ecKey1 = new ECKey();
      * txfirst.signOut(ecKey1);
@@ -81,7 +81,7 @@ public class PoWTest {
      * "=====================================second block use key2========================================");
      * time = XdagTime.getEndOfEpoch(XdagTime.getCurrentTimestamp(); // extra
      * pending = new ArrayList<>();
-     * pending.add(new Address(first.getHashLow());
+     * pending.add(new Address(first.getHash());
      * Block txsecond = new Block(time, first.getFirstOutput(), null, pending, false, null, -1);
      * ECKey ecKey2 = new ECKey();
      * txsecond.signOut(ecKey2);
@@ -90,9 +90,9 @@ public class PoWTest {
      * System.out.println(
      * "=====================================main block use key2========================================");
      * pending = new ArrayList<>();
-     * pending.add(new Address(txfirst.getHashLow());
-     * pending.add(new Address(txsecond.getHashLow());
-     * Block main = new Block(time, new Address(first.getHashLow(), null, pending, true, null, -1); // extra
+     * pending.add(new Address(txfirst.getHash());
+     * pending.add(new Address(txsecond.getHash());
+     * Block main = new Block(time, new Address(first.getHash(), null, pending, true, null, -1); // extra
      * main.signOut(ecKey2);
      * byte[] minShare = new byte[32];
      * new Random().nextBytes(minShare);
@@ -109,10 +109,10 @@ public class PoWTest {
      * public void printBlockInfo(Block block) {
      * System.out.println("timestamp:" + Long.toHexString(block.getTimestamp());
      * printHash(block.getHash(), "blockhash:");
-     * printHash(block.getHashLow(), "blockhashlow:");
+     * printHash(block.getHash(), "blockhash:");
      * System.out.println("type:" + block.getType();
      * if (block.getFirstOutput() != null)
-     * printHash(block.getFirstOutput().getHashLow(), "firstoutput:");
+     * printHash(block.getFirstOutput().getHash(), "firstoutput:");
      * System.out.println("inputs:" + block.getInputs().size();
      * printListAddress(block.getInputs();
      * System.out.println("outputs:" + block.getOutputs().size();
@@ -153,7 +153,7 @@ public class PoWTest {
      * public void printListAddress(List<Address> input) {
      * for (Address address : input) {
      * System.out.println("address data:" + Hex.toHexString(address.getData());
-     * System.out.println("address hashlow:" + Hex.toHexString(address.getHashLow());
+     * System.out.println("address hash:" + Hex.toHexString(address.getHash());
      * System.out.println("address amount:" + address.getAmount();
      * }
      * }
@@ -218,6 +218,6 @@ public class PoWTest {
         assertNull(currentTask.get().getTask());
         assertNull(currentTask.get().getDigest());
         assertEquals(0, currentTask.get().getTaskIndex());
-        assertTrue(WalletUtils.checkAddress(hash2PubAddress(hexPubAddress2Hashlow("46a2a0fe035c413d92be9c79a11cfc3695780f66"))));
+        assertTrue(WalletUtils.checkAddress(hash2PubAddress(hexPubAddress2Hash("46a2a0fe035c413d92be9c79a11cfc3695780f66"))));
     }
 }

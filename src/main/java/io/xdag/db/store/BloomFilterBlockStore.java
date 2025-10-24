@@ -119,14 +119,14 @@ public class BloomFilterBlockStore implements FinalizedBlockStore {
     public void saveBlock(Block block) {
         delegate.saveBlock(block);
         // Add to Bloom Filter
-        bloomFilter.put(block.getHashLow().toArray());
+        bloomFilter.put(block.getHash().toArray());
     }
 
     @Override
     public void saveBlockInfo(BlockInfo blockInfo) {
         delegate.saveBlockInfo(blockInfo);
         // Add to Bloom Filter
-        bloomFilter.put(blockInfo.getHashLow().toArray());
+        bloomFilter.put(blockInfo.getHash().toArray());
     }
 
     @Override
@@ -135,7 +135,7 @@ public class BloomFilterBlockStore implements FinalizedBlockStore {
 
         // Add all to Bloom Filter
         for (Block block : blocks) {
-            bloomFilter.put(block.getHashLow().toArray());
+            bloomFilter.put(block.getHash().toArray());
         }
 
         return saved;

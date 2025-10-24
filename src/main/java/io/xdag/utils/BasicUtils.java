@@ -109,15 +109,15 @@ public class BasicUtils {
     }
 
     /**
-     * Convert hex public address to hash low
+     * Convert hex public address to legacy 24-byte truncated hash format
      * @param hexPubAddress Hex string public address
-     * @return Hash low as MutableBytes32
+     * @return Legacy hash format as MutableBytes32
      */
-    public static MutableBytes32 hexPubAddress2Hashlow(String hexPubAddress){
+    public static MutableBytes32 hexPubAddress2Hash(String hexPubAddress){
         Bytes hash = Bytes.fromHexString(hexPubAddress);
-        MutableBytes32 hashLow = MutableBytes32.create();
-        hashLow.set(8, hash);
-        return hashLow;
+        MutableBytes32 legacyHash = MutableBytes32.create();
+        legacyHash.set(8, hash);
+        return legacyHash;
     }
 
     /**

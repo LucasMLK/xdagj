@@ -35,27 +35,27 @@ public final class BlockUtils {
     /**
      * Generates a key for time-based block lookup
      * @param timestamp Block timestamp
-     * @param hashlow Lower 32 bytes of block hash
+     * @param hash Block hash (32 bytes)
      * @return Generated key as byte array
      */
-    public static byte[] getTimeKey(long timestamp, Bytes32 hashlow) {
+    public static byte[] getTimeKey(long timestamp, Bytes32 hash) {
         long t = UnsignedLong.fromLongBits(timestamp >> 16).longValue();
         byte[] key = BytesUtils.merge(BlockStore.TIME_HASH_INFO, BytesUtils.longToBytes(t, false));
-        if (hashlow == null) {
+        if (hash == null) {
             return key;
         }
-        return BytesUtils.merge(key, hashlow.toArray());
+        return BytesUtils.merge(key, hash.toArray());
     }
 
     /**
      * Generates a key for our block lookup by index and hash
      * @param index Block index
-     * @param hashlow Lower bytes of block hash
+     * @param hash Block hash bytes
      * @return Generated key as byte array
      */
-    public static byte[] getOurKey(int index, byte[] hashlow) {
+    public static byte[] getOurKey(int index, byte[] hash) {
         byte[] key = BytesUtils.merge(BlockStore.OURS_BLOCK_INFO, BytesUtils.intToBytes(index, false));
-        key = BytesUtils.merge(key, hashlow);
+        key = BytesUtils.merge(key, hash);
         return key;
     }
 

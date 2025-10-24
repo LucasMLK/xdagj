@@ -46,7 +46,7 @@
 根据之前读取的文件内容，新 BlockInfo 已经包含:
 
 ✅ **字段完整**:
-- `Bytes32 hashLow` - 类型安全
+- `Bytes32 hash` - 类型安全
 - `long timestamp`
 - `long height`
 - `long type`

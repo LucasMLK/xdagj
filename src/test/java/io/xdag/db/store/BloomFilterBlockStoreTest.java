@@ -75,13 +75,13 @@ public class BloomFilterBlockStoreTest {
         Block block = createTestBlock(100, true);
 
         // Initially should not exist
-        assertFalse(bloomStore.hasBlock(block.getHashLow()));
+        assertFalse(bloomStore.hasBlock(block.getHash()));
 
         // Save block
         bloomStore.saveBlock(block);
 
         // Now should exist
-        assertTrue(bloomStore.hasBlock(block.getHashLow()));
+        assertTrue(bloomStore.hasBlock(block.getHash()));
     }
 
     @Test
@@ -97,7 +97,7 @@ public class BloomFilterBlockStoreTest {
         int notFoundCount = 0;
         for (int i = 1000; i < 2000; i++) {
             Block testBlock = createTestBlock(i, false);
-            if (!bloomStore.hasBlock(testBlock.getHashLow())) {
+            if (!bloomStore.hasBlock(testBlock.getHash())) {
                 notFoundCount++;
             }
         }
@@ -122,7 +122,7 @@ public class BloomFilterBlockStoreTest {
         // Query many non-existent blocks
         for (int i = 10000; i < 20000; i++) {
             Block testBlock = createTestBlock(i, false);
-            bloomStore.hasBlock(testBlock.getHashLow());
+            bloomStore.hasBlock(testBlock.getHash());
         }
 
         // False positive rate should be low (< 2%)
@@ -142,7 +142,7 @@ public class BloomFilterBlockStoreTest {
 
         // All blocks should be findable
         for (Block block : batch) {
-            assertTrue(bloomStore.hasBlock(block.getHashLow()));
+            assertTrue(bloomStore.hasBlock(block.getHash()));
         }
     }
 
@@ -172,10 +172,10 @@ public class BloomFilterBlockStoreTest {
 
         // Perform queries
         for (int i = 0; i < 50; i++) {
-            bloomStore.hasBlock(createTestBlock(i, false).getHashLow()); // Exists
+            bloomStore.hasBlock(createTestBlock(i, false).getHash()); // Exists
         }
         for (int i = 1000; i < 1050; i++) {
-            bloomStore.hasBlock(createTestBlock(i, false).getHashLow()); // Not exists
+            bloomStore.hasBlock(createTestBlock(i, false).getHash()); // Not exists
         }
 
         // Check statistics are tracked
@@ -195,7 +195,7 @@ public class BloomFilterBlockStoreTest {
         // Query many non-existent blocks (should be fast)
         long startTime = System.nanoTime();
         for (int i = 10000; i < 20000; i++) {
-            bloomStore.hasBlock(createTestBlock(i, false).getHashLow());
+            bloomStore.hasBlock(createTestBlock(i, false).getHash());
         }
         long bloomTime = System.nanoTime() - startTime;
 

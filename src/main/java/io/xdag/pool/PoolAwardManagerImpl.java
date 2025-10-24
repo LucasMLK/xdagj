@@ -155,20 +155,20 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
 
         // Obtain the block hash and corresponding share to be paid
         Bytes32 preHash = blockPreHashs.get(paidBlockIndex) == null ? null : blockPreHashs.get(paidBlockIndex);
-        Bytes32 hash = blockHashs.get(paidBlockIndex) == null ? null : blockHashs.get(paidBlockIndex);
+        Bytes32 blockHash = blockHashs.get(paidBlockIndex) == null ? null : blockHashs.get(paidBlockIndex);
         Bytes32 share = minShares.get(paidBlockIndex) == null ? null : minShares.get(paidBlockIndex);
-        if (hash == null || share == null || preHash == null) {
+        if (blockHash == null || share == null || preHash == null) {
             log.debug("Can not find the hash or nonce or preHash ,hash is null ?[{}],nonce is null ?[{}],preHash is " +
                             "null ?[{}]",
-                    hash == null,
+                    blockHash == null,
                     share == null, preHash == null);
             return -1;
         }
-        // Obtain the hashlow of this block for query
-        MutableBytes32 hashlow = MutableBytes32.create();
-        hashlow.set(8, Bytes.wrap(hash).slice(8, 24));
-        Block block = blockchain.getBlockByHash(hashlow, true);
-        log.debug("Hash low [{}]", hashlow.toHexString());
+        // Obtain the hash (legacy format) of this block for query
+        MutableBytes32 hash = MutableBytes32.create();
+        hash.set(8, Bytes.wrap(blockHash).slice(8, 24));
+        Block block = blockchain.getBlockByHash(hash, true);
+        log.debug("Hash (legacy format) [{}]", hash.toHexString());
         if (block == null) {
             log.debug("Can't find the block");
             return -2;
@@ -177,13 +177,13 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
         if (compareTo(block.getNonce().slice(12, 20).toArray(), 0,
                 20, block.getCoinBase().getAddress().slice(8, 20).toArray(), 0, 20) == 0) {
             log.debug("This block is not produced by mining and belongs to the node, block hash:{}",
-                    hashlow.toHexString());
+                    hash.toHexString());
             return -3;
         }
-        if (kernel.getBlockchain().getMemOurBlocks().get(hashlow) == null) {
-            keyPos = kernel.getBlockStore().getKeyIndexByHash(hashlow);
+        if (kernel.getBlockchain().getMemOurBlocks().get(hash) == null) {
+            keyPos = kernel.getBlockStore().getKeyIndexByHash(hash);
         } else {
-            keyPos = kernel.getBlockchain().getMemOurBlocks().get(hashlow);
+            keyPos = kernel.getBlockchain().getMemOurBlocks().get(hash);
         }
         if (keyPos < 0) {
             log.debug("keyPos < 0,keyPos = {}", keyPos);
@@ -195,7 +195,7 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
             return -5;
         }
 
-        Bytes32 poolWalletAddress = BasicUtils.hexPubAddress2Hashlow(String.valueOf(block.getNonce().slice(12, 20)));
+        Bytes32 poolWalletAddress = BasicUtils.hexPubAddress2Hash(String.valueOf(block.getNonce().slice(12, 20)));
         if (!checkAddress(Base58.encodeCheck(block.getNonce().slice(12, 20)))) {
             log.error("mining pool wallet address format error");
             return -6;
@@ -209,14 +209,14 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
         transactionInfoSender.setPreHash(preHash);
         transactionInfoSender.setShare(share);
       try {
-        doPayments(hashlow, allAmount, poolWalletAddress, keyPos, transactionInfoSender);
+        doPayments(hash, allAmount, poolWalletAddress, keyPos, transactionInfoSender);
       } catch (AddressFormatException e) {
         throw new RuntimeException(e);
       }
       return 0;
     }
 
-    public void doPayments(Bytes32 hashLow, XAmount allAmount, Bytes32 poolWalletAddress, int keyPos,
+    public void doPayments(Bytes32 hash, XAmount allAmount, Bytes32 poolWalletAddress, int keyPos,
                            TransactionInfoSender transactionInfoSender)
         throws AddressFormatException {
         if (paymentsToNodesMap.size() == 10) {
@@ -248,25 +248,25 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
             transactionInfoSender.setFee(MIN_GAS.toDecimal(9, XUnit.XDAG).toPlainString());
             transactionInfoSender.setDonate(fundAmount.toDecimal(9, XUnit.XDAG).toPlainString());
             log.debug("Start payment...");
-            transaction(hashLow, receipt, sendAmount, keyPos, transactionInfoSender);
-            paymentsToNodesMap.put(new Address(hashLow, XDAG_FIELD_IN, nodeAmount, false),
+            transaction(hash, receipt, sendAmount, keyPos, transactionInfoSender);
+            paymentsToNodesMap.put(new Address(hash, XDAG_FIELD_IN, nodeAmount, false),
                     wallet.getAccount(keyPos));
             log.info("The node's reward block was successfully placed,block hash:{},current Map size:{}",
-                    hashLow.toHexString(), paymentsToNodesMap.size());
+                    hash.toHexString(), paymentsToNodesMap.size());
         } else {
             log.debug("The balance of block {} is insufficient and rewards will not be distributed. Maybe this block " +
                             "has been rollback. send balance:{}",
-                    hashLow.toHexString(), sendAmount.toDecimal(9, XUnit.XDAG).toPlainString());
+                    hash.toHexString(), sendAmount.toDecimal(9, XUnit.XDAG).toPlainString());
         }
         receipt.clear();
     }
 
-    public void transaction(Bytes32 hashLow, ArrayList<Address> receipt, XAmount sendAmount, int keyPos,
+    public void transaction(Bytes32 hash, ArrayList<Address> receipt, XAmount sendAmount, int keyPos,
                             TransactionInfoSender transactionInfoSender) {
         log.debug("Total balance pending transfer: {}", sendAmount);
         log.debug("unlock keypos =[{}]", keyPos);
         Map<Address, ECKeyPair> inputMap = new HashMap<>();
-        Address input = new Address(hashLow, XDAG_FIELD_IN, sendAmount, false);
+        Address input = new Address(hash, XDAG_FIELD_IN, sendAmount, false);
         ECKeyPair inputKey = wallet.getAccount(keyPos);
         inputMap.put(input, inputKey);
         Block block = blockchain.createNewBlock(inputMap, receipt, false, TX_REMARK, MIN_GAS, null);
@@ -294,7 +294,7 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
         } else {
             log.error("Failed to add transaction history");
         }
-        log.debug("The reward for block {} has been distributed to pool address {}", hashLow,
+        log.debug("The reward for block {} has been distributed to pool address {}", hash,
                 Base58.encodeCheck(receipt.get(1).getAddress().slice(8, 20)));
     }
 

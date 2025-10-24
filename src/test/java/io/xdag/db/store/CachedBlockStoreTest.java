@@ -77,11 +77,11 @@ public class CachedBlockStoreTest {
         cachedStore.resetStatistics();
 
         // First access - cache hit (saved during saveBlock)
-        var info1 = cachedStore.getBlockInfoByHash(block.getHashLow());
+        var info1 = cachedStore.getBlockInfoByHash(block.getHash());
         assertTrue(info1.isPresent());
 
         // Second access - cache hit
-        var info2 = cachedStore.getBlockInfoByHash(block.getHashLow());
+        var info2 = cachedStore.getBlockInfoByHash(block.getHash());
         assertTrue(info2.isPresent());
 
         // Should have 100% cache hit rate
@@ -96,11 +96,11 @@ public class CachedBlockStoreTest {
         cachedStore.resetStatistics();
 
         // First access - cache hit (saved during saveBlock)
-        var block1 = cachedStore.getBlockByHash(block.getHashLow());
+        var block1 = cachedStore.getBlockByHash(block.getHash());
         assertTrue(block1.isPresent());
 
         // Second access - cache hit
-        var block2 = cachedStore.getBlockByHash(block.getHashLow());
+        var block2 = cachedStore.getBlockByHash(block.getHash());
         assertTrue(block2.isPresent());
 
         // Should have 100% cache hit rate
@@ -135,11 +135,11 @@ public class CachedBlockStoreTest {
         cachedStore.resetStatistics();
 
         // First access - cache miss
-        var info1 = cachedStore.getBlockInfoByHash(block.getHashLow());
+        var info1 = cachedStore.getBlockInfoByHash(block.getHash());
         assertTrue(info1.isPresent());
 
         // Second access - cache hit (cached after first access)
-        var info2 = cachedStore.getBlockInfoByHash(block.getHashLow());
+        var info2 = cachedStore.getBlockInfoByHash(block.getHash());
         assertTrue(info2.isPresent());
 
         // Should have 50% cache hit rate (1 miss, 1 hit)
@@ -158,7 +158,7 @@ public class CachedBlockStoreTest {
 
         // All blocks should be cached
         for (Block block : blocks) {
-            assertTrue(cachedStore.getBlockInfoByHash(block.getHashLow()).isPresent());
+            assertTrue(cachedStore.getBlockInfoByHash(block.getHash()).isPresent());
         }
 
         // Should have 100% cache hit rate
@@ -179,7 +179,7 @@ public class CachedBlockStoreTest {
         for (int repeat = 0; repeat < 10; repeat++) {
             for (int i = 0; i < 100; i++) {
                 Block block = createTestBlock(i, i % 10 == 0);
-                cachedStore.getBlockInfoByHash(block.getHashLow());
+                cachedStore.getBlockInfoByHash(block.getHash());
             }
         }
         long cachedTime = System.nanoTime() - startTime;
@@ -225,7 +225,7 @@ public class CachedBlockStoreTest {
 
         // Perform various queries
         for (int i = 0; i < 50; i++) {
-            cachedStore.getBlockInfoByHash(createTestBlock(i, false).getHashLow());
+            cachedStore.getBlockInfoByHash(createTestBlock(i, false).getHash());
         }
         for (int i = 0; i < 20; i += 5) {
             cachedStore.getMainBlockInfoByHeight(i);
@@ -244,10 +244,10 @@ public class CachedBlockStoreTest {
         cachedStore.saveBlock(block);
 
         // hasBlock should use cache
-        assertTrue(cachedStore.hasBlock(block.getHashLow()));
+        assertTrue(cachedStore.hasBlock(block.getHash()));
 
         // Non-existent block
-        assertFalse(cachedStore.hasBlock(createTestBlock(9999, false).getHashLow()));
+        assertFalse(cachedStore.hasBlock(createTestBlock(9999, false).getHash()));
     }
 
     @Test

@@ -36,12 +36,12 @@ public class BytesTest {
 
     @Test
     public void testSetMutableBytes32() {
-        MutableBytes32 hashlow = MutableBytes32.create();
+        MutableBytes32 legacyHash = MutableBytes32.create();
         Bytes32 hash = HashUtils.doubleSha256(Bytes.wrap("123".getBytes(StandardCharsets.UTF_8)));
-        assertEquals("0x0000000000000000000000000000000000000000000000000000000000000000", hashlow.toHexString());
+        assertEquals("0x0000000000000000000000000000000000000000000000000000000000000000", legacyHash.toHexString());
         assertEquals("0x5a77d1e9612d350b3734f6282259b7ff0a3f87d62cfef5f35e91a5604c0490a3", hash.toHexString());
-        hashlow.set(8, hash.slice(8, 24));
-        assertEquals("0x00000000000000003734f6282259b7ff0a3f87d62cfef5f35e91a5604c0490a3", hashlow.toHexString());
+        legacyHash.set(8, hash.slice(8, 24));
+        assertEquals("0x00000000000000003734f6282259b7ff0a3f87d62cfef5f35e91a5604c0490a3", legacyHash.toHexString());
     }
 
 }

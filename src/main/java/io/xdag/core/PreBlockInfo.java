@@ -50,10 +50,8 @@ public class PreBlockInfo {
     private long fee;
     // Block remark/memo field
     private byte[] remark;
-    // Block full hash
+    // Block hash
     private byte[] hash;
-    // Block truncated hash
-    private byte[] hashlow;
     // Block amount/value
     private XAmount amount;
     // Block timestamp

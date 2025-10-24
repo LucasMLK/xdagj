@@ -51,7 +51,8 @@ public class BlockBuilder {
     public static Block generateAddressBlockWithAmount(Config config, ECKeyPair key, long xdagTime, XAmount balance) {
         Block b = new Block(config, xdagTime, null, null, false, null, null, -1, XAmount.ZERO, null);
         b.signOut(key);
-        b.getInfo().setAmount(balance);
+        // BlockInfo is immutable, use withAmount() to create new instance
+        b.setInfo(b.getInfo().withAmount(balance));
         return b;
     }
 

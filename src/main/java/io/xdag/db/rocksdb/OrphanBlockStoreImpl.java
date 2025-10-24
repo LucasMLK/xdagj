@@ -101,15 +101,15 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
         }
     }
 
-    public void deleteByHash(byte[] hashlow) {
-        log.debug("deleteByhash");
-        orphanSource.delete(BytesUtils.merge(ORPHAN_PREFEX, hashlow));
+    public void deleteByHash(byte[] hash) {
+        log.debug("deleteByHash");
+        orphanSource.delete(BytesUtils.merge(ORPHAN_PREFEX, hash));
         long currentsize = BytesUtils.bytesToLong(orphanSource.get(ORPHAN_SIZE), 0, false);
         orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(currentsize - 1, false));
     }
 
     public void addOrphan(Block block) {
-        orphanSource.put(BytesUtils.merge(ORPHAN_PREFEX, block.getHashLow().toArray()),
+        orphanSource.put(BytesUtils.merge(ORPHAN_PREFEX, block.getHash().toArray()),
                 BytesUtils.longToBytes(block.getTimestamp(), true));
         long currentsize = BytesUtils.bytesToLong(orphanSource.get(ORPHAN_SIZE), 0, false);
         log.debug("orphan current size:{}", currentsize);

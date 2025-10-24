@@ -157,7 +157,7 @@ public class CachedBlockStore implements FinalizedBlockStore {
         result.ifPresent(block -> {
             blockCache.put(hash, block);
             // Also cache BlockInfo
-            blockInfoCache.put(hash, BlockInfo.fromLegacy(block.getInfo()));
+            blockInfoCache.put(hash, block.getInfo());
         });
 
         return result;
@@ -178,8 +178,8 @@ public class CachedBlockStore implements FinalizedBlockStore {
 
         // Cache result
         result.ifPresent(info -> {
-            heightCache.put(height, info.getHashLow());
-            blockInfoCache.put(info.getHashLow(), info);
+            heightCache.put(height, info.getHash());
+            blockInfoCache.put(info.getHash(), info);
         });
 
         return result;
@@ -200,10 +200,10 @@ public class CachedBlockStore implements FinalizedBlockStore {
 
         // Cache result
         result.ifPresent(block -> {
-            Bytes32 hash = block.getHashLow();
+            Bytes32 hash = block.getHash();
             heightCache.put(height, hash);
             blockCache.put(hash, block);
-            blockInfoCache.put(hash, BlockInfo.fromLegacy(block.getInfo()));
+            blockInfoCache.put(hash, block.getInfo());
         });
 
         return result;
@@ -214,10 +214,10 @@ public class CachedBlockStore implements FinalizedBlockStore {
         delegate.saveBlock(block);
 
         // Update cache
-        Bytes32 hash = block.getHashLow();
+        Bytes32 hash = block.getHash();
         blockCache.put(hash, block);
 
-        BlockInfo info = BlockInfo.fromLegacy(block.getInfo());
+        BlockInfo info = block.getInfo();
         blockInfoCache.put(hash, info);
 
         if (info.isMainBlock()) {
@@ -230,10 +230,10 @@ public class CachedBlockStore implements FinalizedBlockStore {
         delegate.saveBlockInfo(blockInfo);
 
         // Update cache
-        blockInfoCache.put(blockInfo.getHashLow(), blockInfo);
+        blockInfoCache.put(blockInfo.getHash(), blockInfo);
 
         if (blockInfo.isMainBlock()) {
-            heightCache.put(blockInfo.getHeight(), blockInfo.getHashLow());
+            heightCache.put(blockInfo.getHeight(), blockInfo.getHash());
         }
     }
 
@@ -243,10 +243,10 @@ public class CachedBlockStore implements FinalizedBlockStore {
 
         // Update cache for all saved blocks
         for (Block block : blocks) {
-            Bytes32 hash = block.getHashLow();
+            Bytes32 hash = block.getHash();
             blockCache.put(hash, block);
 
-            BlockInfo info = BlockInfo.fromLegacy(block.getInfo());
+            BlockInfo info = block.getInfo();
             blockInfoCache.put(hash, info);
 
             if (info.isMainBlock()) {

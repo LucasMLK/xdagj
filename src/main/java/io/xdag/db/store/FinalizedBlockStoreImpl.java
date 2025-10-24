@@ -163,10 +163,10 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
     @Override
     public void saveBlock(Block block) {
         try {
-            // Convert LegacyBlockInfo to BlockInfo
-            BlockInfo blockInfo = BlockInfo.fromLegacy(block.getInfo());
+            // Get BlockInfo directly (already new type)
+            BlockInfo blockInfo = block.getInfo();
 
-            byte[] hashKey = block.getHashLow().toArray();
+            byte[] hashKey = block.getHash().toArray();
 
             // Save complete block data
             db.put(blocksCF, hashKey, block.getXdagBlock().getData().toArray());
@@ -177,17 +177,17 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
 
             // Update main chain index if this is a main block
             if (blockInfo.isMainBlock()) {
-                updateMainChainIndex(blockInfo.getHeight(), block.getHashLow());
+                updateMainChainIndex(blockInfo.getHeight(), block.getHash());
                 totalMainBlockCount.incrementAndGet();
             }
 
             // Update epoch index
-            updateEpochIndex(blockInfo.getEpoch(), block.getHashLow());
+            updateEpochIndex(blockInfo.getEpoch(), block.getHash());
 
             totalBlockCount.incrementAndGet();
 
         } catch (RocksDBException | IOException e) {
-            log.error("Failed to save block: {}", block.getHashLow().toHexString(), e);
+            log.error("Failed to save block: {}", block.getHash().toHexString(), e);
             throw new RuntimeException("Failed to save block", e);
         }
     }
@@ -195,12 +195,12 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
     @Override
     public void saveBlockInfo(BlockInfo blockInfo) {
         try {
-            byte[] hashKey = blockInfo.getHashLow().toArray();
+            byte[] hashKey = blockInfo.getHash().toArray();
             byte[] serialized = CompactSerializer.serialize(blockInfo);
             db.put(blockInfoCF, hashKey, serialized);
 
         } catch (RocksDBException | IOException e) {
-            log.error("Failed to save BlockInfo: {}", blockInfo.getHashLow().toHexString(), e);
+            log.error("Failed to save BlockInfo: {}", blockInfo.getHash().toHexString(), e);
             throw new RuntimeException("Failed to save BlockInfo", e);
         }
     }
@@ -214,10 +214,10 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
 
             for (Block block : blocks) {
                 try {
-                    // Convert to BlockInfo
-                    BlockInfo blockInfo = BlockInfo.fromLegacy(block.getInfo());
+                    // Get BlockInfo directly (already new type)
+                    BlockInfo blockInfo = block.getInfo();
 
-                    byte[] hashKey = block.getHashLow().toArray();
+                    byte[] hashKey = block.getHash().toArray();
 
                     // Add block data to batch
                     batch.put(blocksCF, hashKey, block.getXdagBlock().getData().toArray());
@@ -233,12 +233,12 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
                     }
 
                     // Add epoch index
-                    updateEpochIndexBatch(batch, blockInfo.getEpoch(), block.getHashLow());
+                    updateEpochIndexBatch(batch, blockInfo.getEpoch(), block.getHash());
 
                     savedCount++;
 
                 } catch (IOException e) {
-                    log.error("Failed to serialize block in batch: {}", block.getHashLow().toHexString(), e);
+                    log.error("Failed to serialize block in batch: {}", block.getHash().toHexString(), e);
                 }
             }
 
@@ -249,7 +249,7 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
             totalBlockCount.addAndGet(savedCount);
 
             long mainBlockCount = blocks.stream()
-                    .map(b -> BlockInfo.fromLegacy(b.getInfo()))
+                    .map(Block::getInfo)
                     .filter(BlockInfo::isMainBlock)
                     .count();
             totalMainBlockCount.addAndGet(mainBlockCount);
@@ -291,11 +291,14 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
                 return Optional.empty();
             }
 
-            // Construct Block
-            Block block = new Block(infoOpt.get().toLegacy());
-            block.setXdagBlock(new io.xdag.core.XdagBlock(blockData));
-            block.setParsed(false);
-            block.parse();
+            // Construct Block with XdagBlock and parse it to populate links/signatures
+            Block block = new Block(new io.xdag.core.XdagBlock(blockData));
+
+            // After parsing, restore the persisted BlockInfo (which has height, flags, etc.)
+            // The parse() method created a new BlockInfo from XdagBlock data, but we need
+            // to use the persisted BlockInfo which contains the saved height and other metadata
+            block.setInfo(infoOpt.get());
+            block.setSaved(true);
 
             return Optional.of(block);
 
@@ -421,7 +424,7 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
                     }
                 }
 
-                prevHash = info.getHashLow();
+                prevHash = info.getHash();
             }
 
             return true;
@@ -569,11 +572,11 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
 
                     // Rebuild main chain index
                     if (info.isMainBlock()) {
-                        batch.put(mainChainCF, longToBytes(info.getHeight()), info.getHashLow().toArray());
+                        batch.put(mainChainCF, longToBytes(info.getHeight()), info.getHash().toArray());
                     }
 
                     // Rebuild epoch index
-                    updateEpochIndexBatch(batch, info.getEpoch(), info.getHashLow());
+                    updateEpochIndexBatch(batch, info.getEpoch(), info.getHash());
 
                     count++;
 

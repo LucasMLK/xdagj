@@ -74,10 +74,10 @@ public class WalletUtils {
     /**
      * Validates an address using its hash
      *
-     * @param hashlow Lower 32 bytes of address hash
+     * @param hash Block hash (32 bytes)
      * @return true if valid, false otherwise
      */
-    public static boolean checkAddress(Bytes32 hashlow) {
-        return hashlow.slice(28, 4).toInt() == 0;
+    public static boolean checkAddress(Bytes32 hash) {
+        return hash.slice(28, 4).toInt() == 0;
     }
 }

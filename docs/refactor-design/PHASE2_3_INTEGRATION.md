@@ -65,31 +65,31 @@ FinalizedBlockStoreImpl (RocksDB 持久化层)
 
 **已完成的修改**:
 
-1. **`getBlockByHash(Bytes32 hashlow, boolean isRaw)`** (BlockchainImpl.java:1405-1428)
+1. **`getBlockByHash(Bytes32 hash, boolean isRaw)`** (BlockchainImpl.java:1405-1428)
    - ✅ 已添加 FinalizedBlockStore 查询作为第三个查找位置
    - 查询顺序：memOrphanPool → blockStore → finalizedBlockStore
 
    ```java
    @Override
-   public Block getBlockByHash(Bytes32 hashlow, boolean isRaw) {
-       if (hashlow == null) {
+   public Block getBlockByHash(Bytes32 hash, boolean isRaw) {
+       if (hash == null) {
            return null;
        }
-       // Ensure that hashlow is hashlow
-       MutableBytes32 keyHashlow = MutableBytes32.create();
-       keyHashlow.set(8, Objects.requireNonNull(hashlow).slice(8, 24));
+       // Ensure that hash is hash
+       MutableBytes32 keyHash = MutableBytes32.create();
+       keyHash.set(8, Objects.requireNonNull(hash).slice(8, 24));
 
        // 1. Check memory pool first
-       Block b = memOrphanPool.get(Bytes32.wrap(keyHashlow));
+       Block b = memOrphanPool.get(Bytes32.wrap(keyHash));
 
        // 2. Check main block store
        if (b == null) {
-           b = blockStore.getBlockByHash(keyHashlow, isRaw);
+           b = blockStore.getBlockByHash(keyHash, isRaw);
        }
 
        // 3. Check finalized block store (Phase 2 refactor)
        if (b == null && kernel.getFinalizedBlockStore() != null) {
-           b = kernel.getFinalizedBlockStore().getBlockByHash(Bytes32.wrap(keyHashlow))
+           b = kernel.getFinalizedBlockStore().getBlockByHash(Bytes32.wrap(keyHash))
                    .orElse(null);
        }
 
@@ -97,25 +97,25 @@ FinalizedBlockStoreImpl (RocksDB 持久化层)
    }
    ```
 
-2. **`isExist(Bytes32 hashlow)`** (BlockchainImpl.java:1887-1905)
+2. **`isExist(Bytes32 hash)`** (BlockchainImpl.java:1887-1905)
    - ✅ 已添加 FinalizedBlockStore 存在性检查
    - 查询顺序：blockStore → snapshot → finalizedBlockStore
 
    ```java
-   public boolean isExist(Bytes32 hashlow) {
+   public boolean isExist(Bytes32 hash) {
        // 1. Check main block store
-       if (blockStore.hasBlock(hashlow)) {
+       if (blockStore.hasBlock(hash)) {
            return true;
        }
 
        // 2. Check snapshot
-       if (isExitInSnapshot(hashlow)) {
+       if (isExitInSnapshot(hash)) {
            return true;
        }
 
        // 3. Check finalized block store (Phase 2 refactor)
        if (kernel.getFinalizedBlockStore() != null &&
-           kernel.getFinalizedBlockStore().hasBlock(hashlow)) {
+           kernel.getFinalizedBlockStore().hasBlock(hash)) {
            return true;
        }
 
@@ -252,10 +252,10 @@ public void finalizeOldBlocks() {
         kernel.getFinalizedBlockStore().saveBlock(block);
 
         // 2. 从主 BlockStore 删除
-        blockStore.deleteBlock(block.getHashLow());
+        blockStore.deleteBlock(block.getHash());
 
         log.info("Finalized block: {} at height {}",
-                 block.getHashLow(), block.getInfo().getHeight());
+                 block.getHash(), block.getInfo().getHeight());
     }
 }
 ```

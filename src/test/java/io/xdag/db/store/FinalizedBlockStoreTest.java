@@ -24,7 +24,9 @@
 
 package io.xdag.db.store;
 
+import io.xdag.config.Config;
 import io.xdag.config.Constants;
+import io.xdag.config.DevnetConfig;
 import io.xdag.core.*;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
@@ -51,12 +53,15 @@ public class FinalizedBlockStoreTest {
 
     private FinalizedBlockStore store;
     private Path tempDir;
+    private Config config;
 
     @Before
     public void setUp() throws IOException {
         // Create temporary directory for test database
         tempDir = Files.createTempDirectory("finalized-block-store-test");
         store = new FinalizedBlockStoreImpl(tempDir.toString());
+        // Initialize config for block creation
+        config = new DevnetConfig();
     }
 
     @After
@@ -85,26 +90,27 @@ public class FinalizedBlockStoreTest {
         store.saveBlock(block);
 
         // Verify block exists
-        assertTrue(store.hasBlock(block.getHashLow()));
+        assertTrue(store.hasBlock(block.getHash()));
 
         // Get block back
-        Optional<Block> retrieved = store.getBlockByHash(block.getHashLow());
+        Optional<Block> retrieved = store.getBlockByHash(block.getHash());
         assertTrue(retrieved.isPresent());
-        assertEquals(block.getHashLow(), retrieved.get().getHashLow());
+        assertEquals(block.getHash(), retrieved.get().getHash());
     }
 
     @Test
     public void testSaveAndGetBlockInfo() {
         Block block = createTestBlock(200, true);
-        BlockInfo blockInfo = BlockInfo.fromLegacy(block.getInfo());
+        // Convert to BlockInfo using BlockInfo.fromLegacy()
+        BlockInfo blockInfo = BlockInfo.fromLegacy(block.getInfo().toLegacy());
 
         // Save block info
         store.saveBlockInfo(blockInfo);
 
         // Get block info back
-        Optional<BlockInfo> retrieved = store.getBlockInfoByHash(blockInfo.getHashLow());
+        Optional<BlockInfo> retrieved = store.getBlockInfoByHash(blockInfo.getHash());
         assertTrue(retrieved.isPresent());
-        assertEquals(blockInfo.getHashLow(), retrieved.get().getHashLow());
+        assertEquals(blockInfo.getHash(), retrieved.get().getHash());
         assertEquals(blockInfo.getHeight(), retrieved.get().getHeight());
         assertEquals(blockInfo.getTimestamp(), retrieved.get().getTimestamp());
     }
@@ -114,11 +120,11 @@ public class FinalizedBlockStoreTest {
         Block block = createTestBlock(300, false);
 
         // Should not exist initially
-        assertFalse(store.hasBlock(block.getHashLow()));
+        assertFalse(store.hasBlock(block.getHash()));
 
         // Save and check again
         store.saveBlock(block);
-        assertTrue(store.hasBlock(block.getHashLow()));
+        assertTrue(store.hasBlock(block.getHash()));
     }
 
     @Test
@@ -146,7 +152,7 @@ public class FinalizedBlockStoreTest {
 
         // Verify all blocks exist
         for (Block block : blocks) {
-            assertTrue(store.hasBlock(block.getHashLow()));
+            assertTrue(store.hasBlock(block.getHash()));
         }
     }
 
@@ -179,9 +185,9 @@ public class FinalizedBlockStoreTest {
         assertTrue(retrieved2.isPresent());
         assertTrue(retrieved3.isPresent());
 
-        assertEquals(block1.getHashLow(), retrieved1.get().getHashLow());
-        assertEquals(block2.getHashLow(), retrieved2.get().getHashLow());
-        assertEquals(block3.getHashLow(), retrieved3.get().getHashLow());
+        assertEquals(block1.getHash(), retrieved1.get().getHash());
+        assertEquals(block2.getHash(), retrieved2.get().getHash());
+        assertEquals(block3.getHash(), retrieved3.get().getHash());
     }
 
     @Test
@@ -191,7 +197,7 @@ public class FinalizedBlockStoreTest {
 
         Optional<BlockInfo> retrieved = store.getMainBlockInfoByHeight(500);
         assertTrue(retrieved.isPresent());
-        assertEquals(mainBlock.getHashLow(), retrieved.get().getHashLow());
+        assertEquals(mainBlock.getHash(), retrieved.get().getHash());
         assertTrue(retrieved.get().isMainBlock());
     }
 
@@ -209,7 +215,8 @@ public class FinalizedBlockStoreTest {
 
         // Verify order and heights
         for (int i = 0; i < 10; i++) {
-            assertEquals(1000L + i, BlockInfo.fromLegacy(blocks.get(i).getInfo()).getHeight());
+            // Directly get height from block's info
+            assertEquals(1000L + i, blocks.get(i).getInfo().getHeight());
         }
     }
 
@@ -251,8 +258,8 @@ public class FinalizedBlockStoreTest {
         for (int i = 0; i < 5; i++) {
             Block block = createTestBlock(3000 + i, true);
             if (prev != null) {
-                // Set maxDiffLink to point to previous block
-                block.getInfo().setMaxDiffLink(prev.getHashLow().toArray());
+                // Set maxDiffLink to point to previous block using withMaxDiffLink()
+                block.setInfo(block.getInfo().withMaxDiffLink(prev.getHash()));
             }
             store.saveBlock(block);
             prev = block;
@@ -281,9 +288,9 @@ public class FinalizedBlockStoreTest {
         List<Bytes32> hashes = store.getBlockHashesByEpoch(epoch);
         assertEquals(3, hashes.size());
 
-        assertTrue(hashes.contains(block1.getHashLow()));
-        assertTrue(hashes.contains(block2.getHashLow()));
-        assertTrue(hashes.contains(block3.getHashLow()));
+        assertTrue(hashes.contains(block1.getHash()));
+        assertTrue(hashes.contains(block2.getHash()));
+        assertTrue(hashes.contains(block3.getHash()));
     }
 
     @Test
@@ -444,7 +451,7 @@ public class FinalizedBlockStoreTest {
         store.compact();
 
         // Data should still be accessible
-        assertTrue(store.hasBlock(createTestBlock(10000, true).getHashLow()));
+        assertTrue(store.hasBlock(createTestBlock(10000, true).getHash()));
     }
 
     // ========== Helper Methods ==========
@@ -459,36 +466,35 @@ public class FinalizedBlockStoreTest {
 
     /**
      * Create a test block with specific timestamp
+     *
+     * This method creates a proper Block using the Block constructor that generates
+     * realistic XdagBlock data. The hash is then calculated naturally from the XdagBlock,
+     * ensuring consistency when the block is loaded/saved.
      */
     private Block createTestBlockWithTime(long timestamp, boolean isMainBlock) {
-        // Create LegacyBlockInfo
-        LegacyBlockInfo legacyInfo = new LegacyBlockInfo();
+        // Create a proper block using the Block constructor
+        // This generates proper XdagBlock data with correct structure
+        Block block = new Block(config, timestamp, null, null, false, null, null, -1, XAmount.of(1, XUnit.XDAG), null);
 
-        // Generate deterministic hash from timestamp
-        byte[] hashBytes = new byte[32];
-        for (int i = 0; i < 8; i++) {
-            hashBytes[i] = (byte) (timestamp >> (i * 8));
+        // Force XdagBlock generation and hash calculation by calling toBytes()
+        block.getXdagBlock();
+
+        // Calculate the hash by calling getHash() which triggers hash calculation
+        block.getHash();
+
+        // Calculate height from timestamp (epoch = timestamp / 64)
+        long height = timestamp / 64;
+
+        // Set height and main block flag in BlockInfo
+        BlockInfo info = block.getInfo()
+                .withHeight(height);
+
+        if (isMainBlock) {
+            int newFlags = info.getFlags() | Constants.BI_MAIN;
+            info = info.withFlags(newFlags);
         }
-        for (int i = 8; i < 32; i++) {
-            hashBytes[i] = (byte) ((timestamp * 31 + i) & 0xFF);
-        }
 
-        legacyInfo.setHashlow(hashBytes);
-        legacyInfo.setTimestamp(timestamp);
-        legacyInfo.setHeight(timestamp / 64); // height = epoch
-        legacyInfo.type = 0x01; // Basic type
-        legacyInfo.flags = isMainBlock ? Constants.BI_MAIN : 0;
-        legacyInfo.setDifficulty(java.math.BigInteger.valueOf(1000));
-        legacyInfo.setAmount(XAmount.of(100, XUnit.XDAG));
-        legacyInfo.setFee(XAmount.of(1, XUnit.XDAG));
-
-        // Create block
-        Block block = new Block(legacyInfo);
-
-        // Create minimal XdagBlock data (512 bytes)
-        byte[] blockData = new byte[512];
-        System.arraycopy(hashBytes, 0, blockData, 0, 32);
-        block.setXdagBlock(new XdagBlock(blockData));
+        block.setInfo(info);
 
         return block;
     }

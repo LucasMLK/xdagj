@@ -24,7 +24,7 @@
 
 package io.xdag.core;
 
-import org.apache.tuweni.bytes.MutableBytes32;
+import org.apache.tuweni.bytes.Bytes32;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -42,7 +42,7 @@ import lombok.Setter;
  */
 public enum ImportResult {
     ERROR,
-    EXIST, 
+    EXIST,
     NO_PARENT,
     INVALID_BLOCK,
     IN_MEM,
@@ -51,8 +51,8 @@ public enum ImportResult {
     IMPORTED_NOT_BEST,
     IMPORTED_BEST;
 
-    // Truncated hash of the block
-    private MutableBytes32 hashLow;
+    // Hash of the block
+    private Bytes32 hash;
 
     // Error message if import failed
     @Setter
@@ -60,19 +60,19 @@ public enum ImportResult {
     private String errorInfo;
 
     /**
-     * Get the truncated hash of the block
-     * @return The truncated hash as MutableBytes32
+     * Get the hash of the block
+     * @return The hash as Bytes32
      */
-    public MutableBytes32 getHashlow() {
-        return hashLow;
+    public Bytes32 getHash() {
+        return hash;
     }
 
     /**
-     * Set the truncated hash of the block
-     * @param hashLow The truncated hash to set
+     * Set the hash of the block
+     * @param hash The hash to set
      */
-    public void setHashlow(MutableBytes32 hashLow) {
-        this.hashLow = hashLow;
+    public void setHash(Bytes32 hash) {
+        this.hash = hash;
     }
 
 }

@@ -44,7 +44,7 @@ public class CompactSerializerTest {
     @Test
     public void testSerializeDeserializeBlockInfo() throws IOException {
         BlockInfo original = BlockInfo.builder()
-                .hashLow(Bytes32.random())
+                .hash(Bytes32.random())
                 .timestamp(1234567890L)
                 .height(100L)
                 .type(0x1234567812345678L)
@@ -82,7 +82,7 @@ public class CompactSerializerTest {
     @Test
     public void testBlockInfoWithNulls() throws IOException {
         BlockInfo original = BlockInfo.builder()
-                .hashLow(Bytes32.random())
+                .hash(Bytes32.random())
                 .timestamp(1000L)
                 .height(50L)
                 .type(0L)
@@ -106,7 +106,7 @@ public class CompactSerializerTest {
     @Test
     public void testBlockInfoSize() throws IOException {
         BlockInfo blockInfo = BlockInfo.builder()
-                .hashLow(Bytes32.random())
+                .hash(Bytes32.random())
                 .timestamp(System.currentTimeMillis())
                 .height(1000000L)
                 .type(1L)
@@ -284,7 +284,7 @@ public class CompactSerializerTest {
 
     private BlockInfo createRandomBlockInfo() {
         return BlockInfo.builder()
-                .hashLow(Bytes32.random())
+                .hash(Bytes32.random())
                 .timestamp(System.currentTimeMillis() + (long) (Math.random() * 1000000))
                 .height((long) (Math.random() * 1000000))
                 .type((long) (Math.random() * 1000))

@@ -229,7 +229,7 @@ public class MessageTest {
      *
      *         long time = XdagTime.getEndOfEpoch(XdagTime.getCurrentTimestamp();
      *         List<Address> pending = new ArrayList<>();
-     *         pending.add(new Address(first.getHashLow());
+     *         pending.add(new Address(first.getHash());
      *         Block txfirst = new Block(time, first.getFirstOutput(), null, pending, false, null, -1);
      *         ECKey ecKey1 = new ECKey();
      *         txfirst.signOut(ecKey1);

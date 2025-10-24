@@ -50,5 +50,25 @@ public enum DatabaseName {
 
     ADDRESS,
 
-    TXHISTORY
+    TXHISTORY,
+
+    // ========== Phase 2 Core Refactor: New Indexes ==========
+
+    /**
+     * Block epoch index: epoch -> List<blockHash>
+     * For fast DAG sync by epoch
+     */
+    BLOCK_EPOCH,
+
+    /**
+     * Main blocks index: height -> blockHash (only main blocks)
+     * For optimized chain sync
+     */
+    MAIN_BLOCKS,
+
+    /**
+     * Block references index: blockHash -> List<referencingHashes>
+     * For Solidification (finding blocks that reference a given block)
+     */
+    BLOCK_REFS
 }

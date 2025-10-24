@@ -82,15 +82,15 @@ public class RocksdbKVSourceTest {
         KVSource<byte[], byte[]> indexSource = factory.getDB(DatabaseName.TIME);
         indexSource.reset();
 
-        Bytes32 hashlow1 = HashUtils.doubleSha256(Bytes.wrap("1".getBytes(StandardCharsets.UTF_8)));
-        Bytes32 hashlow2 = HashUtils.doubleSha256(Bytes.wrap("2".getBytes(StandardCharsets.UTF_8)));
+        Bytes32 hash1 = HashUtils.doubleSha256(Bytes.wrap("1".getBytes(StandardCharsets.UTF_8)));
+        Bytes32 hash2 = HashUtils.doubleSha256(Bytes.wrap("2".getBytes(StandardCharsets.UTF_8)));
 
         long time1 = 1602226304712L;
         byte[] value1 = Hex.decode("1234");
         byte[] value2 = Hex.decode("2345");
 
-        byte[] key1 = BlockUtils.getTimeKey(time1, hashlow1);
-        byte[] key2 = BlockUtils.getTimeKey(time1, hashlow2);
+        byte[] key1 = BlockUtils.getTimeKey(time1, hash1);
+        byte[] key2 = BlockUtils.getTimeKey(time1, hash2);
 
         indexSource.put(key1, value1);
         indexSource.put(key2, value2);

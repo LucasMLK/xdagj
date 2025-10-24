@@ -90,7 +90,8 @@ public class RandomXSyncTest {
         long end = addBlocks(kernel1, 130);
         log.debug("Add block done");
         long nmain = kernel1.getBlockchain().getXdagStats().nmain;
-        String expected = kernel1.getBlockchain().getBlockByHeight(nmain - 1).getInfo().getDifficulty().toString(16);
+        // UInt256.toString() doesn't accept parameters, remove (16)
+        String expected = kernel1.getBlockchain().getBlockByHeight(nmain - 1).getInfo().getDifficulty().toString();
 
         // 第二个跟第三个同步第一个的数据
         CountDownLatch latch = new CountDownLatch(1);
@@ -99,7 +100,8 @@ public class RandomXSyncTest {
 
         latch.await();
 
-        String kernel2Diff = kernel2.getBlockchain().getBlockByHeight(nmain - 1).getInfo().getDifficulty().toString(16);
+        // UInt256.toString() doesn't accept parameters, remove (16)
+        String kernel2Diff = kernel2.getBlockchain().getBlockByHeight(nmain - 1).getInfo().getDifficulty().toString();
         assertEquals(expected, kernel2Diff);
     }
 
@@ -127,9 +129,9 @@ public class RandomXSyncTest {
         // 1. add address block
         result = kernel.getBlockchain().tryToConnect(addressBlock);
         assertSame(IMPORTED_BEST, result);
-        assertArrayEquals(addressBlock.getHashLow().toArray(), xdagTopStatus.getTop());
+        assertArrayEquals(addressBlock.getHash().toArray(), xdagTopStatus.getTop());
         List<Block> extraBlockList = Lists.newLinkedList();
-        Bytes32 ref = addressBlock.getHashLow();
+        Bytes32 ref = addressBlock.getHash();
         long endTime = 0;
 
         Bytes32 forkHash = Bytes32.ZERO;
@@ -145,10 +147,10 @@ public class RandomXSyncTest {
             Block extraBlock = generateExtraBlock(config, key, xdagTime, pending);
             result = kernel.getBlockchain().tryToConnect(extraBlock);
             assertSame(IMPORTED_BEST, result);
-            assertArrayEquals(extraBlock.getHashLow().toArray(), xdagTopStatus.getTop());
+            assertArrayEquals(extraBlock.getHash().toArray(), xdagTopStatus.getTop());
             Block storedExtraBlock = kernel.getBlockchain().getBlockByHash(Bytes32.wrap(xdagTopStatus.getTop()), false);
-            assertArrayEquals(extraBlock.getHashLow().toArray(), storedExtraBlock.getHashLow().toArray());
-            ref = extraBlock.getHashLow();
+            assertArrayEquals(extraBlock.getHash().toArray(), storedExtraBlock.getHash().toArray());
+            ref = extraBlock.getHash();
             if (i == number - forkHeight) {
                 forkHash = ref;
                 forkDate = generateTime;
@@ -168,7 +170,7 @@ public class RandomXSyncTest {
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlockGivenRandom(config, key, xdagTime, pending, "3456");
             kernel.getBlockchain().tryToConnect(extraBlock);
-            ref = extraBlock.getHashLow();
+            ref = extraBlock.getHash();
             extraBlockList.add(extraBlock);
             endTime = xdagTime;
         }
