@@ -114,4 +114,49 @@ public interface BlockStore extends XdagLifecycle {
 
     void saveXdagStatus(XdagStats status);
 
+    // ========== Phase 2 Core Refactor: New Methods ==========
+    // These methods use the new BlockInfo (immutable, type-safe)
+
+    /**
+     * Save block info using new immutable BlockInfo
+     * @param blockInfo The new BlockInfo (not LegacyBlockInfo)
+     * @deprecated Use this instead of saveBlockInfo(LegacyBlockInfo)
+     */
+    void saveBlockInfoV2(BlockInfo blockInfo);
+
+    /**
+     * Get main blocks by height range (optimized for chain sync)
+     * Only returns blocks with BI_MAIN flag set
+     *
+     * @param fromHeight Start height (inclusive)
+     * @param toHeight End height (inclusive)
+     * @return List of main blocks in the height range
+     */
+    List<Block> getMainBlocksByHeightRange(long fromHeight, long toHeight);
+
+    /**
+     * Get all blocks in a specific epoch (optimized for DAG sync)
+     *
+     * @param epoch The epoch number (timestamp / 64)
+     * @return List of all blocks in this epoch
+     */
+    List<Block> getBlocksByEpoch(long epoch);
+
+    /**
+     * Get block references (for Solidification)
+     * Returns all blocks that reference the given block
+     *
+     * @param blockHash The block hash to find references for
+     * @return List of hashes of blocks that reference this block
+     */
+    List<Bytes32> getBlockReferences(Bytes32 blockHash);
+
+    /**
+     * Batch get blocks by hashes (performance optimization)
+     *
+     * @param hashes List of block hashes to retrieve
+     * @return List of blocks (null entries for missing blocks)
+     */
+    List<Block> getBlocksByHashes(List<Bytes32> hashes);
+
 }

@@ -211,6 +211,19 @@ public class Block implements Cloneable {
     }
 
     /**
+     * Create Block from new immutable BlockInfo (Phase 2 core refactor)
+     * This constructor converts BlockInfo to LegacyBlockInfo internally
+     * until we complete the full migration
+     *
+     * @param blockInfo The new immutable BlockInfo
+     */
+    public Block(BlockInfo blockInfo) {
+        this.info = blockInfo.toLegacy();
+        this.isSaved = true;
+        this.parsed = true;
+    }
+
+    /**
      * Calculate block hash
      */
     private byte[] calcHash() {

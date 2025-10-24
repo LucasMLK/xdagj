@@ -587,5 +587,65 @@ public class BlockStoreImpl implements BlockStore {
         return indexSource.get(new byte[]{SNAPSHOT_PRESEED});
     }
 
+    // ========== Phase 2 Core Refactor: New Methods Implementation ==========
+
+    @Override
+    public void saveBlockInfoV2(BlockInfo blockInfo) {
+        // TODO Phase 2 core: Implement using CompactSerializer
+        // byte[] serialized = CompactSerializer.serialize(blockInfo);
+        // indexSource.put(BytesUtils.merge(HASH_BLOCK_INFO, blockInfo.getHashLow().toArray()), serialized);
+        // indexSource.put(BlockUtils.getHeight(blockInfo.getHeight()), blockInfo.getHashLow().toArray());
+
+        // Temporary: convert to legacy and use old method
+        saveBlockInfo(blockInfo.toLegacy());
+    }
+
+    @Override
+    public List<Block> getMainBlocksByHeightRange(long fromHeight, long toHeight) {
+        // TODO Phase 2 core: Implement optimized range query for main blocks
+        // Should use BLOCK_HEIGHT index and filter for BI_MAIN flag
+        // For now, fallback to sequential queries
+        List<Block> result = Lists.newArrayList();
+        for (long h = fromHeight; h <= toHeight; h++) {
+            Block block = getBlockByHeight(h);
+            if (block != null && block.getInfo() != null) {
+                // Check if it's a main block (BI_MAIN flag)
+                if ((block.getInfo().flags & io.xdag.config.Constants.BI_MAIN) != 0) {
+                    result.add(block);
+                }
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public List<Block> getBlocksByEpoch(long epoch) {
+        // TODO Phase 2 core: Implement using new BLOCK_EPOCH index
+        // For now, use time-based query as approximation
+        long startTime = epoch * 64;
+        long endTime = startTime + 64;
+        return getBlocksUsedTime(startTime, endTime);
+    }
+
+    @Override
+    public List<Bytes32> getBlockReferences(Bytes32 blockHash) {
+        // TODO Phase 2 core: Implement using new BLOCK_REFS index
+        // This requires building the reference index during block save
+        // For now, return empty list
+        return Lists.newArrayList();
+    }
+
+    @Override
+    public List<Block> getBlocksByHashes(List<Bytes32> hashes) {
+        // Simple implementation: query each hash individually
+        // TODO Phase 2 core: Optimize with batch query
+        List<Block> result = Lists.newArrayList();
+        for (Bytes32 hash : hashes) {
+            Block block = getBlockByHash(hash, false);
+            result.add(block); // null entries for missing blocks
+        }
+        return result;
+    }
+
 }
 
