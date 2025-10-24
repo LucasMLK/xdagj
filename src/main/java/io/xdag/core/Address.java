@@ -101,14 +101,19 @@ public class Address {
 
     public Address(Bytes32 blockHash, XdagField.FieldType type, Boolean isAddress) {
         this.isAddress = isAddress;
-        if(!isAddress){
-            this.data = blockHash.mutableCopy();
-        }else {
-            this.data = MutableBytes32.create();
-            data.set(8,blockHash.mutableCopy().slice(8,20));
-        }
         this.type = type;
-        parse();
+        this.addressHash = MutableBytes32.create();
+
+        // Set address/hash (keeping full 32 bytes in addressHash)
+        if(!isAddress){
+            this.addressHash = blockHash.mutableCopy();
+        }else {
+            this.addressHash.set(8, blockHash.slice(8, 20));
+        }
+
+        // Amount is ZERO for this constructor (used for block references without amount)
+        this.amount = XAmount.ZERO;
+        this.parsed = true;
     }
 
     public Address(Bytes32 hash, XdagField.FieldType type, XAmount amount, Boolean isAddress) {

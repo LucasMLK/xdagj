@@ -178,10 +178,13 @@ public class BlockchainTest {
 
         ImportResult result;
         log.debug("1. create 1 tx block");
-        Block addressBlock = generateAddressBlock(config, key, generateTime);
+        // Convert milliseconds to XDAG timestamp for address block
+        long addressBlockTime = XdagTime.msToXdagtimestamp(generateTime);
+        Block addressBlock = generateAddressBlock(config, key, addressBlockTime);
 
         // 1. add address block
         result = blockchain.tryToConnect(addressBlock);
+        System.out.println("Address block hash: " + addressBlock.getHash().toHexString());
         assertChainStatus(1, 0, 0, 1, blockchain);
         assertSame(IMPORTED_BEST, result);
         assertArrayEquals(addressBlock.getHash().toArray(), stats.getTop());
@@ -196,7 +199,12 @@ public class BlockchainTest {
             long time = XdagTime.msToXdagtimestamp(generateTime);
             long xdagTime = XdagTime.getEndOfEpoch(time);
             Block extraBlock = generateExtraBlock(config, key, xdagTime, pending);
+            System.out.println("=== Extra Block #" + i + " ===");
+            System.out.println("  Ref block (addressBlock) time: " + addressBlock.getTimestamp());
+            System.out.println("  Extra block time: " + extraBlock.getTimestamp());
+            System.out.println("  Time comparison: " + addressBlock.getTimestamp() + " < " + extraBlock.getTimestamp() + " ? " + (addressBlock.getTimestamp() < extraBlock.getTimestamp()));
             result = blockchain.tryToConnect(extraBlock);
+            System.out.println("  Result: " + result);
             assertSame(IMPORTED_BEST, result);
             assertChainStatus(i + 1, i > 1 ? i - 1 : 0, 1, i < 2 ? 1 : 0, blockchain);
             assertArrayEquals(extraBlock.getHash().toArray(), stats.getTop());

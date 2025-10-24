@@ -300,11 +300,12 @@ public class BlockchainImpl implements Blockchain {
 
             for (Address ref : all) {
                 if (ref != null && !ref.isAddress) {
+                    System.err.println("=== CHECKING REF: " + ref.getAddress().toHexString() + " ===");
                     if (ref.getType() == XDAG_FIELD_OUT && !ref.getAmount().isZero()) {
                         result = ImportResult.INVALID_BLOCK;
                         result.setHash(ref.getAddress());
                         result.setErrorInfo("Address's amount isn't zero");
-                        log.debug("Address's amount isn't zero");
+                        System.err.println("FAILED: Address's amount isn't zero");
                         return result;
                     }
                     Block refBlock = getBlockByHash(ref.getAddress(), false);
@@ -312,25 +313,28 @@ public class BlockchainImpl implements Blockchain {
                         result = ImportResult.NO_PARENT;
                         result.setHash(ref.getAddress());
                         result.setErrorInfo("Block have no parent for " + result.getHash().toHexString());
-                        log.debug("Block have no parent for {}", result.getHash().toHexString());
+                        System.err.println("FAILED: Block have no parent for " + result.getHash().toHexString());
                         return result;
                     } else {
+                        System.err.println("  refBlock found, timestamp: " + refBlock.getTimestamp());
                         // Ensure ref block's time is earlier than block's time
                         if (refBlock.getTimestamp() >= block.getTimestamp()) {
                             result = ImportResult.INVALID_BLOCK;
                             result.setHash(refBlock.getHash());
                             result.setErrorInfo("Ref block's time >= block's time");
-                            log.debug("Ref block's time >= block's time");
+                            System.err.println("FAILED: refBlock.time=" + refBlock.getTimestamp() + " >= block.time=" + block.getTimestamp());
                             return result;
                         }
+                        System.err.println("  OK: Timestamp check passed");
                         // Ensure TX block's amount is enough to subtract minGas, Amount must >= 0.1
                         if (ref.getType() == XDAG_FIELD_IN && ref.getAmount().subtract(MIN_GAS).isNegative()) {
                             result = ImportResult.INVALID_BLOCK;
                             result.setHash(ref.getAddress());
                             result.setErrorInfo("Ref block's balance < minGas");
-                            log.debug("Ref block's balance < minGas");
+                            System.err.println("FAILED: Ref block's balance < minGas");
                             return result;
                         }
+                        System.err.println("  OK: Amount/gas check passed");
                     }
                 } else {
                     // Ensure that there is only one input.
