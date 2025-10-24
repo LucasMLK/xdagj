@@ -48,7 +48,7 @@ import java.util.Optional;
  *
  * Reference: FINALIZED_BLOCK_STORAGE.md, HYBRID_SYNC_PROTOCOL.md
  */
-public interface FinalizedBlockStore {
+public interface FinalizedBlockStore extends AutoCloseable {
 
     // ========== Basic Operations ==========
 
