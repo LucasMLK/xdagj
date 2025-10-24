@@ -40,6 +40,7 @@ import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.db.*;
 import io.xdag.db.mysql.TransactionHistoryStoreImpl;
 import io.xdag.db.rocksdb.*;
+import io.xdag.db.store.*;
 import io.xdag.net.*;
 import io.xdag.net.message.MessageQueue;
 import io.xdag.net.node.NodeManager;
@@ -76,6 +77,13 @@ public class Kernel {
     protected TransactionHistoryStore txHistoryStore;
 
     protected SnapshotStore snapshotStore;
+
+    // Finalized block storage (Phase 2 refactor)
+    protected FinalizedBlockStore finalizedBlockStore;
+
+    // Block finalization service (Phase 3)
+    protected BlockFinalizationService blockFinalizationService;
+
     protected Blockchain blockchain;
     protected NetDB netDB;
     protected PeerClient client;
@@ -216,6 +224,19 @@ public class Kernel {
             log.info("Transaction History Store init.");
         }
 
+        // Initialize finalized block store (Phase 2 refactor)
+        try {
+            String finalizedStorePath = config.getRootDir() + "/finalized";
+            FinalizedBlockStore baseStore = new FinalizedBlockStoreImpl(finalizedStorePath);
+            finalizedBlockStore = new CachedBlockStore(
+                    new BloomFilterBlockStore(baseStore)
+            );
+            log.info("Finalized Block Store init at: {}", finalizedStorePath);
+        } catch (Exception e) {
+            log.error("Failed to initialize Finalized Block Store", e);
+            throw new RuntimeException("Failed to initialize storage layer", e);
+        }
+
         // Initialize network components
         netDB = new NetDB();
 
@@ -315,6 +336,13 @@ public class Kernel {
 
         blockchain.registerListener(pow);
 
+        // Start block finalization service (Phase 3)
+        if (finalizedBlockStore != null) {
+            blockFinalizationService = new BlockFinalizationService(this);
+            blockFinalizationService.start();
+            log.info("Block Finalization Service started");
+        }
+
         Launcher.registerShutdownHook("kernel", this::testStop);
     }
 
@@ -365,6 +393,18 @@ public class Kernel {
 
         // Stop data layer
         blockchain.stopCheckMain();
+
+        // Stop block finalization service (Phase 3)
+        if (blockFinalizationService != null) {
+            blockFinalizationService.stop();
+            log.info("Block Finalization Service stopped");
+        }
+
+        // Close finalized block store
+        if (finalizedBlockStore != null) {
+            log.info("Closing Finalized Block Store...");
+            finalizedBlockStore.close();
+        }
 
         // Close all databases
         for (DatabaseName name : DatabaseName.values()) {

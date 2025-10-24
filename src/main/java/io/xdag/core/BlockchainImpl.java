@@ -1410,10 +1410,20 @@ public class BlockchainImpl implements Blockchain {
         MutableBytes32 keyHashlow = MutableBytes32.create();
         keyHashlow.set(8, Objects.requireNonNull(hashlow).slice(8, 24));
 
+        // 1. Check memory pool first
         Block b = memOrphanPool.get(Bytes32.wrap(keyHashlow));
+
+        // 2. Check main block store
         if (b == null) {
             b = blockStore.getBlockByHash(keyHashlow, isRaw);
         }
+
+        // 3. Check finalized block store (Phase 2 refactor)
+        if (b == null && kernel.getFinalizedBlockStore() != null) {
+            b = kernel.getFinalizedBlockStore().getBlockByHash(Bytes32.wrap(keyHashlow))
+                    .orElse(null);
+        }
+
         return b;
     }
 
@@ -1875,7 +1885,23 @@ public class BlockchainImpl implements Blockchain {
      * Check if block already exists
      */
     public boolean isExist(Bytes32 hashlow) {
-        return blockStore.hasBlock(hashlow) || isExitInSnapshot(hashlow);
+        // 1. Check main block store
+        if (blockStore.hasBlock(hashlow)) {
+            return true;
+        }
+
+        // 2. Check snapshot
+        if (isExitInSnapshot(hashlow)) {
+            return true;
+        }
+
+        // 3. Check finalized block store (Phase 2 refactor)
+        if (kernel.getFinalizedBlockStore() != null &&
+            kernel.getFinalizedBlockStore().hasBlock(hashlow)) {
+            return true;
+        }
+
+        return false;
     }
 
     public boolean isExistInMem(Bytes32 hashlow) {

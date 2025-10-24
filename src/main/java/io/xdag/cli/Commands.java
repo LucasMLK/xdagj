@@ -415,6 +415,24 @@ public class Commands {
         BigInteger netDiff = xdagStats.getMaxdifficulty() != null ? xdagStats.getMaxdifficulty() : BigInteger.ZERO;
         BigInteger maxDiff = netDiff.max(currentDiff);
 
+        // Get finalized store statistics (Phase 2 refactor)
+        String finalizedStats = "";
+        if (kernel.getFinalizedBlockStore() != null) {
+            long totalBlocks = kernel.getFinalizedBlockStore().getTotalBlockCount();
+            long totalMain = kernel.getFinalizedBlockStore().getTotalMainBlockCount();
+            long storageSize = kernel.getFinalizedBlockStore().getStorageSize();
+
+            finalizedStats = String.format("""
+
+                            Finalized Storage:
+                         finalized blocks: %d
+                           finalized main: %d
+                          storage size MB: %d""",
+                    totalBlocks,
+                    totalMain,
+                    storageSize / (1024 * 1024));
+        }
+
         return String.format("""
                         Statistics for ours and maximum known parameters:
                                     hosts: %d of %d
@@ -427,7 +445,7 @@ public class Commands {
                               XDAG supply: %s of %s
                           XDAG in address: %s
                         4 hr hashrate KHs: %.9f of %.9f
-                        Number of Address: %d""",
+                        Number of Address: %d%s""",
                 kernel.getNetDB().getSize(), kernel.getNetDBMgr().getWhiteDB().getSize(),
                 xdagStats.getNblocks(), Math.max(xdagStats.getTotalnblocks(), xdagStats.getNblocks()),
                 xdagStats.getNmain(), Math.max(xdagStats.getTotalnmain(), xdagStats.getNmain()),
@@ -441,7 +459,8 @@ public class Commands {
                 kernel.getAddressStore().getAllBalance().toDecimal(9, XUnit.XDAG).toPlainString(),
                 xdagHashRate(kernel.getBlockchain().getXdagExtStats().getHashRateOurs()),
                 xdagHashRate(kernel.getBlockchain().getXdagExtStats().getHashRateTotal()),
-                kernel.getAddressStore().getAddressSize().toLong()
+                kernel.getAddressStore().getAddressSize().toLong(),
+                finalizedStats
         );
     }
 
@@ -832,5 +851,33 @@ public class Commands {
             }
         }
         return str.append("}");
+    }
+
+    /**
+     * Get block finalization service statistics (Phase 3)
+     *
+     * @return Finalization statistics string
+     */
+    public String finalizeStats() {
+        if (kernel.getBlockFinalizationService() == null) {
+            return "Block Finalization Service is not running.";
+        }
+
+        return kernel.getBlockFinalizationService().getStatistics();
+    }
+
+    /**
+     * Manually trigger block finalization (Phase 3)
+     * For administrative or testing purposes
+     *
+     * @return Number of blocks finalized
+     */
+    public String manualFinalize() {
+        if (kernel.getBlockFinalizationService() == null) {
+            return "Block Finalization Service is not running.";
+        }
+
+        long count = kernel.getBlockFinalizationService().manualFinalize();
+        return String.format("Manual finalization completed. %d blocks finalized.", count);
     }
 }
