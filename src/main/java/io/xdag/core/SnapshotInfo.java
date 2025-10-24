@@ -71,4 +71,19 @@ public class SnapshotInfo {
                 ", data=" + Arrays.toString(data) +
                 '}';
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        SnapshotInfo that = (SnapshotInfo) o;
+        return type == that.type && Arrays.equals(data, that.data);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = (type ? 1 : 0);
+        result = 31 * result + Arrays.hashCode(data);
+        return result;
+    }
 }
