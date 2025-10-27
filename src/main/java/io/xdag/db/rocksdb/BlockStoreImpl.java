@@ -582,6 +582,9 @@ public class BlockStoreImpl implements BlockStore {
             return null;
         }
 
+        // Save the BlockInfo from database before parsing
+        BlockInfo savedInfo = block.getInfo();
+
         // Use full hash directly for blockSource lookup (new architecture)
         byte[] blockData = blockSource.get(hash.toArray());
 
@@ -592,6 +595,12 @@ public class BlockStoreImpl implements BlockStore {
         block.setXdagBlock(new XdagBlock(blockData));
         block.setParsed(false);
         block.parse();
+
+        // Restore the BlockInfo from database after parsing
+        // This ensures that database-saved flags (like BI_MAIN_CHAIN) are preserved
+        // even though parse() overwrites them with values from raw block data
+        block.setInfo(savedInfo);
+
         return block;
     }
 
