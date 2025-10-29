@@ -40,10 +40,30 @@ public interface Blockchain {
     // Try to connect a new block to the blockchain
     ImportResult tryToConnect(Block block);
 
-    // Create a new block with given parameters
+    /**
+     * Create a new block (v5.1 migration in progress)
+     *
+     * NOTE: This method signature is transitional during v5.1 migration.
+     * In v5.1 final design, block creation should work with Link-based references.
+     *
+     * Current parameters use Bytes32 (address hash) instead of Address objects.
+     *
+     * @param addressPairs Map of address hash to EC key pairs (for signing)
+     * @param toAddresses List of recipient address hashes
+     * @param mining Whether this is a mining block
+     * @param remark Optional remark text
+     * @param fee Transaction fee
+     * @param txNonce Transaction nonce for replay protection
+     * @return Created block
+     *
+     * TODO v5.1: Redesign this API to use:
+     *  - List<Bytes32> blockRefs (1-16 previous block references)
+     *  - List<Bytes32> txRefs (transaction references to include)
+     *  - Bytes32 coinbase (miner reward address)
+     */
     Block createNewBlock(
-            Map<Address, ECKeyPair> pairs,
-            List<Address> to,
+            Map<Bytes32, ECKeyPair> addressPairs,
+            List<Bytes32> toAddresses,
             boolean mining,
             String remark,
             XAmount fee,
