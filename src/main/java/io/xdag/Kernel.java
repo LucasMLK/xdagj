@@ -137,15 +137,6 @@ public class Kernel {
                 .collect(java.util.stream.Collectors.toList());
     }
 
-    /**
-     * Broadcast a BlockWrapper to all connected peers (compatibility method)
-     * @deprecated Use broadcastBlock(Block, int) instead
-     */
-    @Deprecated
-    public void broadcastBlockWrapper(BlockWrapper wrapper) {
-        broadcastBlock(wrapper.getBlock(), wrapper.getTtl());
-    }
-
     protected XdagSync sync;
     protected XdagPow pow;
     private SyncManager syncMgr;

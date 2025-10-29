@@ -296,8 +296,8 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
             kernel.getBlockchain().tryToConnect(newBlock);
             Bytes32 currentPreHash = Bytes32.wrap(currentTask.get().getTask()[0].getData());
             poolAwardManager.addAwardBlock(minShare.get(), currentPreHash, newBlock.getHash(), newBlock.getTimestamp());
-            BlockWrapper bw = new BlockWrapper(newBlock, kernel.getConfig().getNodeSpec().getTTL());
-            broadcaster.broadcast(bw);
+            // v5.1: Broadcast directly with block + ttl
+            broadcaster.broadcast(newBlock, kernel.getConfig().getNodeSpec().getTTL());
         }
         isWorking = true;
         // start generate main block
@@ -398,9 +398,9 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
     @Override
     public void onMessage(io.xdag.listener.Message msg) {
         if (msg instanceof BlockMessage message) {
-            BlockWrapper bw = new BlockWrapper(new Block(new XdagBlock(message.getData().toArray())),
-                    kernel.getConfig().getNodeSpec().getTTL());
-            broadcaster.broadcast(bw);
+            Block block = new Block(new XdagBlock(message.getData().toArray()));
+            // v5.1: Broadcast directly with block + ttl
+            broadcaster.broadcast(block, kernel.getConfig().getNodeSpec().getTTL());
         }
         if (msg instanceof PretopMessage message) {
             receiveNewPretop(message.getData());
@@ -491,30 +491,44 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
         }
     }
 
+    /**
+     * Broadcaster for v5.1 - Simplified block broadcasting
+     * Replaces BlockWrapper with simple Block + TTL tuple
+     */
     public class Broadcaster implements Runnable {
-        private final LinkedBlockingQueue<BlockWrapper> queue = new LinkedBlockingQueue<>();
+        // Simple tuple for block + TTL
+        private static class BroadcastTask {
+            final Block block;
+            final int ttl;
+            BroadcastTask(Block block, int ttl) {
+                this.block = block;
+                this.ttl = ttl;
+            }
+        }
+
+        private final LinkedBlockingQueue<BroadcastTask> queue = new LinkedBlockingQueue<>();
         private volatile boolean isRunning = false;
 
         @Override
         public void run() {
             isRunning = true;
             while (isRunning) {
-                BlockWrapper bw = null;
+                BroadcastTask task = null;
                 try {
-                    bw = queue.poll(50, TimeUnit.MILLISECONDS);
+                    task = queue.poll(50, TimeUnit.MILLISECONDS);
                 } catch (InterruptedException e) {
                     log.error(e.getMessage(), e);
                 }
-                if (bw != null) {
-                    kernel.broadcastBlock(bw.getBlock(), bw.getTtl());
+                if (task != null) {
+                    kernel.broadcastBlock(task.block, task.ttl);
                 }
             }
         }
 
-        public void broadcast(BlockWrapper bw) {
-            if (!queue.offer(bw)) {
-                log.error("Failed to add a message to the broadcast queue: block = {}", bw.getBlock()
-                        .getHash().toHexString());
+        public void broadcast(Block block, int ttl) {
+            if (!queue.offer(new BroadcastTask(block, ttl))) {
+                log.error("Failed to add a message to the broadcast queue: block = {}",
+                        block.getHash().toHexString());
             }
         }
     }
