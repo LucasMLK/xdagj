@@ -14,8 +14,8 @@
 | D2 | Reorg深度限制 | 32768 epochs (≈24天) | P0 | NETWORK_PARTITION_SOLUTION.md |
 | D3 | 固化存储格式 | 保持完整DAG结构 | P0 | FINALIZED_BLOCK_STORAGE.md |
 | D4 | 同步协议 | 混合同步（线性+DAG） | P0 | HYBRID_SYNC_PROTOCOL.md |
-| D5 | 数据结构 | 变长序列化 | P0 | NEW_DAG_DATA_STRUCTURE.md |
-| D6 | 引用数量限制 | 最多20个链接 | P1 | DAG_SYNC_PROTECTION.md |
+| D5 | 数据结构 | 变长序列化 | P0 | CORE_DATA_STRUCTURES.md |
+| D6 | 引用数量限制 | Block引用: 1-16个 | P1 | DAG_REFERENCE_RULES.md |
 | D7 | DAG遍历方式 | BFS + Visited Set | P1 | DAG_SYNC_PROTECTION.md |
 | D8 | 超时保护 | 15-30分钟 | P1 | DAG_SYNC_PROTECTION.md |
 | D9 | 主链索引结构 | RocksDB CF (height→hash) | P1 | HYBRID_SYNC_PROTOCOL.md |
@@ -470,52 +470,106 @@ public class Block {
 
 ## D6: 引用数量限制
 
-### 决策
+### 决策 (v5.1更新)
 ```java
-MAX_INPUTS = 16
-MAX_OUTPUTS = 16
-MAX_TOTAL_LINKS = 20
+MIN_BLOCK_LINKS = 1       // 至少引用1个prevMainBlock
+MAX_BLOCK_LINKS = 16      // 最多引用16个其他Blocks
+MAX_TX_LINKS = 无限制     // Transaction引用无限制（100万+）
 ```
 
 ### 问题背景
 - 防止恶意DAG攻击
-- 循环引用可能导致死循环
-- 过度引用可能导致资源耗尽
+- Block引用其他Blocks需要限制（防止复杂DAG）
+- Block引用Transactions不需要限制（轻量引用，只存hash）
+
+### v5.1关键洞察
+**Block只存Transaction的hash（33字节），不存完整Transaction！**
+- 48MB Block可以引用 1,485,000个Transactions
+- TPS = 1,485,000 / 64秒 = 23,200 TPS
+- 但引用其他Blocks需要限制，防止DAG爆炸
 
 ### 考虑的方案
 
 #### 方案A: 无限制
 **优点**: 最大灵活性
 **缺点**:
-- ❌ 可能被恶意利用
+- ❌ 可能被恶意利用（构造复杂DAG）
 - ❌ 循环引用风险
-- ❌ 资源耗尽风险
+- ❌ 验证成本爆炸
 **结论**: ❌ 拒绝
 
-#### 方案B: 严格限制（8个）
+#### 方案B: 严格限制（8个Block引用）
 **优点**: 最安全
 **缺点**: 可能限制合法用例
 **结论**: ⚠️ 太严格
 
-#### 方案C: 适度限制（20个）⭐
+#### 方案C: 适度限制（v5.1）⭐
+**Block引用限制**:
+- MIN_BLOCK_LINKS = 1 （至少引用prevMainBlock）
+- MAX_BLOCK_LINKS = 16（最多引用16个Blocks）
+
+**Transaction引用**:
+- 无限制（最多1,485,000个，由Block大小决定）
+
 **优点**:
 - ✅ 平衡安全和灵活
-- ✅ 覆盖99%合法用例
-- ✅ 防止恶意攻击
+- ✅ 16个Block引用足够所有场景
+- ✅ Transaction引用支持超高TPS
+- ✅ 防止恶意复杂DAG
 **结论**: ✅ **采纳**
 
 ### 验证逻辑
 
 ```java
 public boolean validateBlockReferences(Block block) {
-    int inputCount = block.getInputs().size();
-    int outputCount = block.getOutputs().size();
+    List<Link> links = block.getBody().getLinks();
 
-    if (inputCount > MAX_INPUTS) return false;
-    if (outputCount > MAX_OUTPUTS) return false;
-    if (inputCount + outputCount > MAX_TOTAL_LINKS) return false;
+    // 统计Block引用数量
+    long blockLinks = links.stream()
+        .filter(link -> link.getType() == LinkType.BLOCK)
+        .count();
+
+    // 验证Block引用限制
+    if (blockLinks < MIN_BLOCK_LINKS) {
+        log.warn("Block must reference at least one prevMainBlock");
+        return false;
+    }
+
+    if (blockLinks > MAX_BLOCK_LINKS) {
+        log.warn("Block references too many blocks: {}", blockLinks);
+        return false;
+    }
+
+    // Transaction引用无限制（由Block大小自然限制）
 
     return true;
+}
+```
+
+### 实际场景
+
+**主块**:
+```
+MainBlock {
+    links: [
+        Link(prevMainBlock, type=BLOCK),     // 1个Block引用
+        Link(tx1, type=TRANSACTION),          // 100万+ Transaction引用
+        Link(tx2, type=TRANSACTION),
+        ...
+    ]
+}
+```
+
+**候选块**:
+```
+CandidateBlock {
+    links: [
+        Link(prevMainBlock, type=BLOCK),     // 主引用
+        Link(orphan1, type=BLOCK),           // 可选孤块引用
+        Link(orphan2, type=BLOCK),           // 可选孤块引用
+        Link(tx1, type=TRANSACTION),          // Transaction引用
+        ...
+    ]
 }
 ```
 
