@@ -87,8 +87,23 @@ public class BlockV5 implements Serializable {
     public static final int MAX_BLOCK_SIZE = 48 * 1024 * 1024;
 
     /**
-     * Maximum links per block: ~1,485,000
+     * Minimum Block references per block: 1
+     * Every block must reference at least one previous main block (prevMainBlock)
+     * (from DESIGN_DECISIONS.md D6)
+     */
+    public static final int MIN_BLOCK_LINKS = 1;
+
+    /**
+     * Maximum Block references per block: 16
+     * Prevents malicious complex DAG attacks
+     * (from DESIGN_DECISIONS.md D6)
+     */
+    public static final int MAX_BLOCK_LINKS = 16;
+
+    /**
+     * Maximum total links per block: ~1,485,000
      * = 48MB / 33 bytes per link
+     * This includes both Block and Transaction links
      */
     public static final int MAX_LINKS_PER_BLOCK = 1_485_000;
 
@@ -288,9 +303,10 @@ public class BlockV5 implements Serializable {
      * Validate this block
      * Checks:
      * 1. Block size <= MAX_BLOCK_SIZE
-     * 2. Links count <= MAX_LINKS_PER_BLOCK
-     * 3. Header fields are valid (timestamp > 0, difficulty > 0, etc.)
-     * 4. PoW is valid (hash <= difficulty)
+     * 2. Total links count <= MAX_LINKS_PER_BLOCK
+     * 3. Block references: MIN_BLOCK_LINKS <= count <= MAX_BLOCK_LINKS
+     * 4. Header fields are valid (timestamp > 0, difficulty > 0, etc.)
+     * 5. PoW is valid (hash <= difficulty)
      *
      * @return true if valid
      */
@@ -298,6 +314,15 @@ public class BlockV5 implements Serializable {
         // Check size limits
         if (exceedsMaxSize() || exceedsMaxLinks()) {
             return false;
+        }
+
+        // Check Block reference limits (from DESIGN_DECISIONS.md D6)
+        int blockRefCount = getBlockRefCount();
+        if (blockRefCount < MIN_BLOCK_LINKS) {
+            return false;  // Must reference at least one prevMainBlock
+        }
+        if (blockRefCount > MAX_BLOCK_LINKS) {
+            return false;  // Too many Block references (prevents DAG attacks)
         }
 
         // Check header validity

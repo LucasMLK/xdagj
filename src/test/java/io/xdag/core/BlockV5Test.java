@@ -180,11 +180,58 @@ public class BlockV5Test {
             easyDifficulty,
             Bytes32.ZERO,
             Bytes32.random(),
-            List.of(Link.toTransaction(Bytes32.random()))
+            List.of(Link.toBlock(Bytes32.random()), Link.toTransaction(Bytes32.random()))
         );
 
         // Block should be valid (hash will almost certainly be <= max difficulty)
         assertTrue(block.isValid());
+    }
+
+    @Test
+    public void testBlockReferenceLimits() {
+        UInt256 easyDifficulty = UInt256.fromHexString(
+            "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+        );
+
+        // Test: No Block references (invalid, must have at least 1)
+        List<Link> noBlockLinks = List.of(
+            Link.toTransaction(Bytes32.random())
+        );
+        BlockV5 blockNoRefs = BlockV5.createWithNonce(
+            100, easyDifficulty, Bytes32.ZERO, Bytes32.random(), noBlockLinks
+        );
+        assertFalse(blockNoRefs.isValid());  // Should fail: blockRefCount < MIN_BLOCK_LINKS
+
+        // Test: Minimum valid (1 Block reference)
+        List<Link> oneBlockLink = List.of(
+            Link.toBlock(Bytes32.random()),
+            Link.toTransaction(Bytes32.random())
+        );
+        BlockV5 blockOneRef = BlockV5.createWithNonce(
+            100, easyDifficulty, Bytes32.ZERO, Bytes32.random(), oneBlockLink
+        );
+        assertTrue(blockOneRef.isValid());  // Should pass: blockRefCount = 1
+
+        // Test: Maximum valid (16 Block references)
+        List<Link> maxBlockLinks = new ArrayList<>();
+        for (int i = 0; i < BlockV5.MAX_BLOCK_LINKS; i++) {
+            maxBlockLinks.add(Link.toBlock(Bytes32.random()));
+        }
+        maxBlockLinks.add(Link.toTransaction(Bytes32.random()));
+        BlockV5 blockMaxRefs = BlockV5.createWithNonce(
+            100, easyDifficulty, Bytes32.ZERO, Bytes32.random(), maxBlockLinks
+        );
+        assertTrue(blockMaxRefs.isValid());  // Should pass: blockRefCount = 16
+
+        // Test: Too many Block references (17, invalid)
+        List<Link> tooManyBlockLinks = new ArrayList<>();
+        for (int i = 0; i < BlockV5.MAX_BLOCK_LINKS + 1; i++) {
+            tooManyBlockLinks.add(Link.toBlock(Bytes32.random()));
+        }
+        BlockV5 blockTooManyRefs = BlockV5.createWithNonce(
+            100, easyDifficulty, Bytes32.ZERO, Bytes32.random(), tooManyBlockLinks
+        );
+        assertFalse(blockTooManyRefs.isValid());  // Should fail: blockRefCount > MAX_BLOCK_LINKS
     }
 
     @Test
@@ -254,6 +301,8 @@ public class BlockV5Test {
     @Test
     public void testConstants() {
         assertEquals(48 * 1024 * 1024, BlockV5.MAX_BLOCK_SIZE);
+        assertEquals(1, BlockV5.MIN_BLOCK_LINKS);
+        assertEquals(16, BlockV5.MAX_BLOCK_LINKS);
         assertEquals(1_485_000, BlockV5.MAX_LINKS_PER_BLOCK);
         assertEquals(23_200, BlockV5.TARGET_TPS);
     }
