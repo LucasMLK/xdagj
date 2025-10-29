@@ -24,12 +24,18 @@
 package io.xdag.db;
 
 import io.xdag.core.XdagLifecycle;
-import io.xdag.core.Address;
 import io.xdag.core.Block;
 import java.util.List;
 
+import org.apache.tuweni.bytes.Bytes32;
 import org.bouncycastle.util.encoders.Hex;
 
+/**
+ * OrphanBlockStore interface for v5.1
+ *
+ * Manages orphan blocks (blocks without parent reference yet).
+ * Uses Bytes32 hash for block identification instead of Address.
+ */
 public interface OrphanBlockStore extends XdagLifecycle {
 
     byte ORPHAN_PREFEX = 0x00;
@@ -40,7 +46,14 @@ public interface OrphanBlockStore extends XdagLifecycle {
 
     void reset();
 
-    List<Address> getOrphan(long num, long[] sendTime);
+    /**
+     * Get orphan block hashes
+     *
+     * @param num maximum number of orphans to retrieve
+     * @param sendTime time filter [minTime, maxTime]
+     * @return list of orphan block hashes (Bytes32)
+     */
+    List<Bytes32> getOrphan(long num, long[] sendTime);
 
     void deleteByHash(byte[] hash);
 

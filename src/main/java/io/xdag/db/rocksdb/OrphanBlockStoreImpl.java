@@ -24,9 +24,7 @@
 
 package io.xdag.db.rocksdb;
 
-import io.xdag.core.Address;
 import io.xdag.core.Block;
-import io.xdag.core.XdagField;
 import io.xdag.db.OrphanBlockStore;
 import io.xdag.utils.BytesUtils;
 import java.util.Comparator;
@@ -38,6 +36,12 @@ import org.bouncycastle.util.encoders.Hex;
 
 import com.google.common.collect.Lists;
 
+/**
+ * OrphanBlockStore implementation for v5.1
+ *
+ * Stores orphan blocks with their timestamps.
+ * Returns Bytes32 hashes instead of Address objects.
+ */
 @Slf4j
 public class OrphanBlockStoreImpl implements OrphanBlockStore {
 
@@ -71,8 +75,14 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
         this.orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(0, false));
     }
 
-    public List<Address> getOrphan(long num, long[] sendtime) {
-        List<Address> res = Lists.newArrayList();
+    /**
+     * Get orphan block hashes (v5.1)
+     *
+     * Returns list of Bytes32 hashes instead of Address objects.
+     * Filters by timestamp and returns up to 'num' orphans.
+     */
+    public List<Bytes32> getOrphan(long num, long[] sendtime) {
+        List<Bytes32> res = Lists.newArrayList();
         if (orphanSource.get(ORPHAN_SIZE) == null || getOrphanSize() == 0) {
             return null;
         } else {
@@ -85,14 +95,15 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
                 if (addNum == 0) {
                     break;
                 }
-                // TODO:判断时间，这里出现过orphanSource获取key时为空的情况
+                // TODO: 判断时间，这里出现过orphanSource获取key时为空的情况
                 if (an.getValue() == null) {
                     continue;
                 }
                 long time =  BytesUtils.bytesToLong(an.getValue(), 0, true);
                 if (time <= sendtime[0]) {
                     addNum--;
-                    res.add(new Address(Bytes32.wrap(an.getKey(), 1), XdagField.FieldType.XDAG_FIELD_OUT,false));
+                    // v5.1: Return Bytes32 hash directly (skip prefix byte)
+                    res.add(Bytes32.wrap(an.getKey(), 1));
                     sendtime[1] = Math.max(sendtime[1],time);
                 }
             }
