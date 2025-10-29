@@ -26,7 +26,6 @@ package io.xdag.p2p;
 import io.xdag.Kernel;
 import io.xdag.consensus.SyncManager;
 import io.xdag.core.Block;
-import io.xdag.core.BlockWrapper;
 import io.xdag.core.Blockchain;
 import io.xdag.core.XdagStats;
 import io.xdag.net.message.MessageCode;
@@ -152,8 +151,10 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
                 kernel.getConfig().getNodeSpec().getNetwork(),
                 kernel.getConfig().getNodeSpec().getNetworkVersion()
             );
-            BlockWrapper bw = new BlockWrapper(block, msg.getTtl() - 1, peer, false);
-            syncManager.validateAndAddNewBlock(bw);
+            // v5.1: Use SyncBlock instead of BlockWrapper
+            SyncManager.SyncBlock syncBlock = new SyncManager.SyncBlock(
+                block, msg.getTtl() - 1, peer, false);
+            syncManager.validateAndAddNewBlock(syncBlock);
         } catch (Exception e) {
             log.error("Error handling NEW_BLOCK from {}: {}",
                     channel.getRemoteAddress(), e.getMessage(), e);
@@ -176,8 +177,10 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
                 kernel.getConfig().getNodeSpec().getNetwork(),
                 kernel.getConfig().getNodeSpec().getNetworkVersion()
             );
-            BlockWrapper bw = new BlockWrapper(block, msg.getTtl() - 1, peer, true);
-            syncManager.validateAndAddNewBlock(bw);
+            // v5.1: Use SyncBlock instead of BlockWrapper
+            SyncManager.SyncBlock syncBlock = new SyncManager.SyncBlock(
+                block, msg.getTtl() - 1, peer, true);
+            syncManager.validateAndAddNewBlock(syncBlock);
         } catch (Exception e) {
             log.error("Error handling SYNC_BLOCK from {}: {}",
                     channel.getRemoteAddress(), e.getMessage(), e);

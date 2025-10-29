@@ -49,7 +49,6 @@ import io.xdag.config.Config;
 import io.xdag.config.spec.NodeSpec;
 import io.xdag.consensus.SyncManager;
 import io.xdag.core.Block;
-import io.xdag.core.BlockWrapper;
 import io.xdag.core.Blockchain;
 import io.xdag.core.XdagStats;
 import io.xdag.net.message.Message;
@@ -356,16 +355,20 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
         }
 
         log.debug("processNewBlock:{} from node {}", block.getHash(), channel.getRemoteAddress());
-        BlockWrapper bw = new BlockWrapper(block, msg.getTtl() - 1, channel.getRemotePeer(), false);
-        syncMgr.validateAndAddNewBlock(bw);
+        // v5.1: Use SyncBlock instead of BlockWrapper
+        SyncManager.SyncBlock syncBlock = new SyncManager.SyncBlock(
+            block, msg.getTtl() - 1, channel.getRemotePeer(), false);
+        syncMgr.validateAndAddNewBlock(syncBlock);
     }
 
     protected void processSyncBlock(SyncBlockMessage msg) {
         Block block = msg.getBlock();
 
         log.debug("processSyncBlock:{}  from node {}", block.getHash(), channel.getRemoteAddress());
-        BlockWrapper bw = new BlockWrapper(block, msg.getTtl() - 1, channel.getRemotePeer(), true);
-        syncMgr.validateAndAddNewBlock(bw);
+        // v5.1: Use SyncBlock instead of BlockWrapper
+        SyncManager.SyncBlock syncBlock = new SyncManager.SyncBlock(
+            block, msg.getTtl() - 1, channel.getRemotePeer(), true);
+        syncMgr.validateAndAddNewBlock(syncBlock);
     }
 
     /**

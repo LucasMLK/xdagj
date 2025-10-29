@@ -55,6 +55,12 @@ import static io.xdag.core.ImportResult.*;
 import static io.xdag.core.XdagState.*;
 import static io.xdag.utils.XdagTime.msToXdagtimestamp;
 
+/**
+ * SyncManager for v5.1
+ *
+ * Manages block synchronization and validation.
+ * Uses SyncBlock (simple wrapper) instead of BlockWrapper.
+ */
 @Slf4j
 @Getter
 @Setter
@@ -63,6 +69,34 @@ public class SyncManager extends AbstractXdagLifecycle {
     public static final int MAX_SIZE = 500000;
     // Number of keys to remove when syncMap exceeds MAX_SIZE
     public static final int DELETE_NUM = 5000;
+
+    /**
+     * SyncBlock - Simple block wrapper for sync process (v5.1)
+     * Replaces BlockWrapper with minimal metadata needed for synchronization
+     */
+    @Getter
+    @Setter
+    public static class SyncBlock {
+        private Block block;
+        private int ttl;
+        private long time;
+        private Peer remotePeer;
+        private boolean old;
+
+        public SyncBlock(Block block, int ttl) {
+            this.block = block;
+            this.ttl = ttl;
+            this.time = System.currentTimeMillis();
+        }
+
+        public SyncBlock(Block block, int ttl, Peer remotePeer, boolean old) {
+            this.block = block;
+            this.ttl = ttl;
+            this.remotePeer = remotePeer;
+            this.old = old;
+            this.time = System.currentTimeMillis();
+        }
+    }
 
     private static final ThreadFactory factory = BasicThreadFactory.builder()
             .namingPattern("SyncManager-thread-%d")
@@ -80,11 +114,11 @@ public class SyncManager extends AbstractXdagLifecycle {
     /**
      * Queue with validated blocks to be added to the blockchain
      */
-    private Queue<BlockWrapper> blockQueue = new ConcurrentLinkedQueue<>();
+    private Queue<SyncBlock> blockQueue = new ConcurrentLinkedQueue<>();
     /**
      * Queue for blocks with missing links
      */
-    private ConcurrentHashMap<Bytes32, Queue<BlockWrapper>> syncMap = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<Bytes32, Queue<SyncBlock>> syncMap = new ConcurrentHashMap<>();
     /**
      * Queue for polling oldest blocks
      */
@@ -168,36 +202,36 @@ public class SyncManager extends AbstractXdagLifecycle {
      * Process blocks in queue and add them to the chain
      */
     // TODO: Modify consensus
-    public ImportResult importBlock(BlockWrapper blockWrapper) {
-        log.debug("importBlock:{}", blockWrapper.getBlock().getHash());
+    public ImportResult importBlock(SyncBlock syncBlock) {
+        log.debug("importBlock:{}", syncBlock.getBlock().getHash());
         ImportResult importResult = blockchain
-                .tryToConnect(new Block(new XdagBlock(blockWrapper.getBlock().getXdagBlock().getData().toArray())));
+                .tryToConnect(new Block(new XdagBlock(syncBlock.getBlock().getXdagBlock().getData().toArray())));
 
         if (importResult == EXIST) {
-            log.debug("Block have exist:{}", blockWrapper.getBlock().getHash());
+            log.debug("Block have exist:{}", syncBlock.getBlock().getHash());
         }
 
-        if (!blockWrapper.isOld() && (importResult == IMPORTED_BEST || importResult == IMPORTED_NOT_BEST)) {
-            Peer blockPeer = blockWrapper.getRemotePeer();
+        if (!syncBlock.isOld() && (importResult == IMPORTED_BEST || importResult == IMPORTED_NOT_BEST)) {
+            Peer blockPeer = syncBlock.getRemotePeer();
             Node node = kernel.getClient().getNode();
             if (blockPeer == null || !Strings.CS.equals(blockPeer.getIp(), node.getIp()) || blockPeer.getPort() != node.getPort()) {
-                if (blockWrapper.getTtl() > 0) {
-                    distributeBlock(blockWrapper);
+                if (syncBlock.getTtl() > 0) {
+                    distributeBlock(syncBlock);
                 }
             }
         }
         return importResult;
     }
 
-    public synchronized ImportResult validateAndAddNewBlock(BlockWrapper blockWrapper) {
-        blockWrapper.getBlock().parse();
-        ImportResult result = importBlock(blockWrapper);
-        log.debug("validateAndAddNewBlock:{}, {}", blockWrapper.getBlock().getHash(), result);
+    public synchronized ImportResult validateAndAddNewBlock(SyncBlock syncBlock) {
+        syncBlock.getBlock().parse();
+        ImportResult result = importBlock(syncBlock);
+        log.debug("validateAndAddNewBlock:{}, {}", syncBlock.getBlock().getHash(), result);
         switch (result) {
-            case EXIST, IMPORTED_BEST, IMPORTED_NOT_BEST, IN_MEM -> syncPopBlock(blockWrapper);
-            case NO_PARENT -> doNoParent(blockWrapper, result);
+            case EXIST, IMPORTED_BEST, IMPORTED_NOT_BEST, IN_MEM -> syncPopBlock(syncBlock);
+            case NO_PARENT -> doNoParent(syncBlock, result);
             case INVALID_BLOCK -> {
-//                log.error("invalid block:{}", Hex.toHexString(blockWrapper.getBlock().getHash()));
+//                log.error("invalid block:{}", Hex.toHexString(syncBlock.getBlock().getHash()));
             }
             default -> {
             }
@@ -205,9 +239,9 @@ public class SyncManager extends AbstractXdagLifecycle {
         return result;
     }
 
-  private void doNoParent(BlockWrapper blockWrapper, ImportResult result) {
-    if (syncPushBlock(blockWrapper, result.getHash())) {
-        logParent(blockWrapper, result);
+  private void doNoParent(SyncBlock syncBlock, ImportResult result) {
+    if (syncPushBlock(syncBlock, result.getHash())) {
+        logParent(syncBlock, result);
 
         // Use P2P service to request missing parent block
         if (kernel.getP2pService() != null) {
@@ -220,10 +254,10 @@ public class SyncManager extends AbstractXdagLifecycle {
   /**
      * Synchronize missing blocks
      *
-     * @param blockWrapper New block
+     * @param syncBlock New block
      * @param hash Hash of missing parent block
      */
-    public boolean syncPushBlock(BlockWrapper blockWrapper, Bytes32 hash) {
+    public boolean syncPushBlock(SyncBlock syncBlock, Bytes32 hash) {
         if (syncMap.size() >= MAX_SIZE) {
             for (int j = 0; j < DELETE_NUM; j++) {
                 List<Bytes32> keyList = new ArrayList<>(syncMap.keySet());
@@ -236,16 +270,16 @@ public class SyncManager extends AbstractXdagLifecycle {
         AtomicBoolean r = new AtomicBoolean(true);
         long now = System.currentTimeMillis();
 
-        Queue<BlockWrapper> newQueue = Queues.newConcurrentLinkedQueue();
-        blockWrapper.setTime(now);
-        newQueue.add(blockWrapper);
+        Queue<SyncBlock> newQueue = Queues.newConcurrentLinkedQueue();
+        syncBlock.setTime(now);
+        newQueue.add(syncBlock);
         blockchain.getXdagStats().nwaitsync++;
 
         syncMap.merge(hash, newQueue,
                 (oldQ, newQ) -> {
                     blockchain.getXdagStats().nwaitsync--;
-                    for (BlockWrapper b : oldQ) {
-                        if (b.getBlock().getHash().equals(blockWrapper.getBlock().getHash())) {
+                    for (SyncBlock b : oldQ) {
+                        if (b.getBlock().getHash().equals(syncBlock.getBlock().getHash())) {
                             // after 64 sec must resend block request
                             if (now - b.getTime() > 64 * 1000) {
                                 b.setTime(now);
@@ -257,7 +291,7 @@ public class SyncManager extends AbstractXdagLifecycle {
                             return oldQ;
                         }
                     }
-                    oldQ.add(blockWrapper);
+                    oldQ.add(syncBlock);
                     r.set(true);
                     return oldQ;
                 });
@@ -267,10 +301,10 @@ public class SyncManager extends AbstractXdagLifecycle {
     /**
      * Release child blocks based on received block
      */
-    public void syncPopBlock(BlockWrapper blockWrapper) {
-        Block block = blockWrapper.getBlock();
+    public void syncPopBlock(SyncBlock syncBlock) {
+        Block block = syncBlock.getBlock();
 
-        Queue<BlockWrapper> queue = syncMap.getOrDefault(block.getHash(), null);
+        Queue<SyncBlock> queue = syncMap.getOrDefault(block.getHash(), null);
         if (queue != null) {
             syncMap.remove(block.getHash());
             blockchain.getXdagStats().nwaitsync--;
@@ -290,7 +324,7 @@ public class SyncManager extends AbstractXdagLifecycle {
         }
     }
 
-  private void logParent(BlockWrapper bw, ImportResult importResult) {
+  private void logParent(SyncBlock bw, ImportResult importResult) {
     log.debug("push block:{}, NO_PARENT {}", bw.getBlock().getHash(),
             importResult.getHash().toHexString());
   }
@@ -363,9 +397,9 @@ public class SyncManager extends AbstractXdagLifecycle {
         checkStateTask.shutdownNow();
     }
 
-    public void distributeBlock(BlockWrapper blockWrapper) {
+    public void distributeBlock(SyncBlock syncBlock) {
         // Use Kernel's broadcast method with P2P service
-        kernel.broadcastBlock(blockWrapper.getBlock(), blockWrapper.getTtl());
+        kernel.broadcastBlock(syncBlock.getBlock(), syncBlock.getTtl());
     }
 
     private class StateListener implements Runnable {

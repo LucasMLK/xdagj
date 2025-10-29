@@ -28,7 +28,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.Kernel;
 import io.xdag.core.AbstractXdagLifecycle;
-import io.xdag.core.BlockWrapper;
+import io.xdag.core.Block;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -44,11 +44,24 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class ChannelManager extends AbstractXdagLifecycle {
 
+    /**
+     * Simple tuple for block + TTL (v5.1)
+     * Replaces BlockWrapper for network distribution
+     */
+    private static class BlockDistribution {
+        final Block block;
+        final int ttl;
+        BlockDistribution(Block block, int ttl) {
+            this.block = block;
+            this.ttl = ttl;
+        }
+    }
+
     private final Kernel kernel;
     /**
      * Queue with new blocks from other peers
      */
-    private final BlockingQueue<BlockWrapper> newForeignBlocks = new LinkedBlockingQueue<>();
+    private final BlockingQueue<BlockDistribution> newForeignBlocks = new LinkedBlockingQueue<>();
     // Thread for block distribution
     private final Thread blockDistributeThread;
     private final Set<InetSocketAddress> addressSet = new HashSet<>();
@@ -143,16 +156,16 @@ public class ChannelManager extends AbstractXdagLifecycle {
      */
     private void newBlocksDistributeLoop() {
         while (!Thread.currentThread().isInterrupted()) {
-            BlockWrapper wrapper = null;
+            BlockDistribution distribution = null;
             try {
-                wrapper = newForeignBlocks.take();
+                distribution = newForeignBlocks.take();
                 log.debug("no problem..");
-                sendNewBlock(wrapper);
+                sendNewBlock(distribution.block, distribution.ttl);
             } catch (InterruptedException e) {
                 break;
             } catch (Throwable e) {
-                if (wrapper != null) {
-                    log.error("Block dump: {}", wrapper.getBlock(),e);
+                if (distribution != null) {
+                    log.error("Block dump: {}", distribution.block, e);
                 } else {
                     log.error("Error broadcasting unknown block", e);
                 }
@@ -160,14 +173,14 @@ public class ChannelManager extends AbstractXdagLifecycle {
         }
     }
 
-    public void sendNewBlock(BlockWrapper blockWrapper) {
+    public void sendNewBlock(Block block, int ttl) {
         for (Channel channel : activeChannels.values()) {
-            channel.getP2pHandler().sendNewBlock(blockWrapper.getBlock(), blockWrapper.getTtl());
+            channel.getP2pHandler().sendNewBlock(block, ttl);
         }
     }
 
-    public void onNewForeignBlock(BlockWrapper blockWrapper) {
-        newForeignBlocks.add(blockWrapper);
+    public void onNewForeignBlock(Block block, int ttl) {
+        newForeignBlocks.add(new BlockDistribution(block, ttl));
     }
 
     private void initWhiteIPs() {
