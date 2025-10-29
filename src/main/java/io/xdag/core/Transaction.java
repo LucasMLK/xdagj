@@ -1,0 +1,382 @@
+/*
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2020-2030 The XdagJ Developers
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+
+package io.xdag.core;
+
+import io.xdag.crypto.hash.HashUtils;
+import io.xdag.crypto.keys.ECKeyPair;
+import io.xdag.crypto.keys.PublicKey;
+import io.xdag.crypto.keys.Signature;
+import io.xdag.crypto.keys.Signer;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.Value;
+import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.Bytes32;
+
+import java.io.Serializable;
+import java.nio.ByteBuffer;
+
+/**
+ * Independent Transaction class for XDAG v5.1
+ *
+ * Design principles:
+ * 1. Independent existence: separate broadcast and storage from Block
+ * 2. Account model: similar to Ethereum with from/to/nonce
+ * 3. EVM compatible: ECDSA signature (secp256k1) with v/r/s format
+ * 4. No timestamp: nonce is sufficient for ordering (like Ethereum)
+ * 5. No PoW required: validated through signature
+ * 6. Hash caching: lazy computation, calculated on first use
+ *
+ * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">v5.1 Design</a>
+ */
+@Value
+@Builder(toBuilder = true)
+public class Transaction implements Serializable {
+
+    // ========== Transaction Data (participates in hash calculation) ==========
+
+    /**
+     * Source account address (32 bytes)
+     */
+    Bytes32 from;
+
+    /**
+     * Target account address (32 bytes)
+     */
+    Bytes32 to;
+
+    /**
+     * Transfer amount
+     */
+    XAmount amount;
+
+    /**
+     * Account nonce (prevents replay attacks, ensures ordering)
+     * Incrementing nonce similar to Ethereum
+     */
+    long nonce;
+
+    /**
+     * Transaction fee
+     * Fee increases with data size: base_fee * (1 + data_length/256)
+     */
+    XAmount fee;
+
+    /**
+     * Transaction data (max 1KB)
+     * Used for smart contract calls, similar to Ethereum's data field
+     */
+    @Builder.Default
+    Bytes data = Bytes.EMPTY;
+
+    // ========== Signature (does not participate in hash calculation, EVM compatible) ==========
+
+    /**
+     * Recovery ID (for public key recovery from signature)
+     * Combined with r/s forms complete ECDSA signature
+     */
+    int v;
+
+    /**
+     * Signature r value (32 bytes)
+     * Part of ECDSA signature
+     */
+    Bytes32 r;
+
+    /**
+     * Signature s value (32 bytes)
+     * Part of ECDSA signature
+     */
+    Bytes32 s;
+
+    // ========== Hash Cache (does not participate in serialization) ==========
+
+    /**
+     * Transaction hash cache (lazy computation)
+     * Calculated on first call to getHash()
+     * Not serialized, recalculated when needed
+     */
+    @Getter(lazy = true)
+    Bytes32 hash = calculateHash();
+
+    // ========== Constants ==========
+
+    /**
+     * Maximum data length: 1KB (1024 bytes)
+     * Sufficient for most DeFi operations (reference: ETH average 200-500 bytes)
+     */
+    public static final int MAX_DATA_LENGTH = 1024;
+
+    /**
+     * Base data length for fee calculation: 256 bytes
+     */
+    public static final int BASE_DATA_LENGTH = 256;
+
+    // ========== Core Methods ==========
+
+    /**
+     * Calculate transaction hash
+     *
+     * Hash calculation: tx_hash = Keccak256(from + to + amount + nonce + fee + data)
+     * Signature (v/r/s) does NOT participate in hash calculation
+     *
+     * @return transaction hash (32 bytes)
+     */
+    private Bytes32 calculateHash() {
+        // Serialize transaction data for hashing
+        ByteBuffer buffer = ByteBuffer.allocate(
+                32 +  // from
+                32 +  // to
+                8 +   // amount
+                8 +   // nonce
+                8 +   // fee
+                2 +   // data length
+                data.size()  // data
+        );
+
+        buffer.put(from.toArray());
+        buffer.put(to.toArray());
+        buffer.putLong(amount.toXAmount().toLong());
+        buffer.putLong(nonce);
+        buffer.putLong(fee.toXAmount().toLong());
+        buffer.putShort((short) data.size());
+        buffer.put(data.toArray());
+
+        return HashUtils.keccak256(Bytes.wrap(buffer.array()));
+    }
+
+    /**
+     * Sign this transaction with private key
+     *
+     * Signature process:
+     * 1. Calculate transaction hash
+     * 2. Sign hash with private key: (v, r, s) = ECDSA_Sign(hash, private_key)
+     * 3. Return new Transaction with signature
+     *
+     * TODO: Implement proper signature extraction from xdagj-crypto Signature object
+     * Current xdagj-crypto library doesn't expose v, r, s getters
+     * Need to either:
+     * - Update xdagj-crypto library to expose these methods
+     * - Use encodedBytes() and parse manually
+     * - Store Signature object directly instead of v/r/s fields
+     *
+     * @param keyPair key pair containing private key
+     * @return new Transaction instance with signature
+     */
+    public Transaction sign(ECKeyPair keyPair) {
+        Bytes32 hash = getHash();
+        Signature signature = Signer.sign(hash, keyPair);
+
+        // TODO: Extract v, r, s from Signature object
+        // For now, use default values to allow compilation
+        // This needs to be implemented based on xdagj-crypto API
+        Bytes encodedSig = signature.encodedBytes();
+
+        // Signature is typically 64 bytes (r + s, 32 bytes each)
+        // v (recovery id) may need to be extracted differently
+        byte[] sigBytes = encodedSig.toArray();
+        Bytes32 rValue = Bytes32.wrap(sigBytes, 0);  // First 32 bytes
+        Bytes32 sValue = Bytes32.wrap(sigBytes, 32); // Next 32 bytes
+        int vValue = 0; // TODO: Determine proper recovery id
+
+        return this.toBuilder()
+                .v(vValue)
+                .r(rValue)
+                .s(sValue)
+                .build();
+    }
+
+    /**
+     * Verify transaction signature
+     *
+     * Verification process:
+     * 1. Recover public key from signature: recovered = ECRecover(hash, v, r, s)
+     * 2. Check if recovered public key matches from address
+     *
+     * @return true if signature is valid
+     */
+    public boolean verifySignature() {
+        try {
+            Bytes32 hash = getHash();
+            Signature signature = Signature.create(
+                    r.toUnsignedBigInteger(),
+                    s.toUnsignedBigInteger(),
+                    (byte) v
+            );
+
+            PublicKey recoveredKey = Signer.recoverPublicKey(hash, signature);
+            if (recoveredKey == null) {
+                return false;
+            }
+
+            // Compare recovered address with from address
+            // Address derivation: address = Keccak256(public_key)
+            Bytes32 recoveredAddress = HashUtils.keccak256(recoveredKey.toBytes());
+            return recoveredAddress.equals(from);
+
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Calculate total fee including data fee
+     *
+     * Formula: total_fee = fee + base_fee * (data_length / BASE_DATA_LENGTH)
+     *
+     * @param baseFee base transaction fee
+     * @return total fee
+     */
+    public XAmount calculateTotalFee(XAmount baseFee) {
+        if (data.size() <= BASE_DATA_LENGTH) {
+            return fee;
+        }
+
+        double multiplier = 1.0 + ((double) (data.size() - BASE_DATA_LENGTH) / BASE_DATA_LENGTH);
+        return fee.add(baseFee.multiply(multiplier - 1.0));
+    }
+
+    /**
+     * Check if transaction has data
+     *
+     * @return true if data is not empty
+     */
+    public boolean hasData() {
+        return !data.isEmpty();
+    }
+
+    /**
+     * Validate transaction basic rules
+     *
+     * Checks:
+     * 1. data size <= MAX_DATA_LENGTH
+     * 2. amount >= 0
+     * 3. fee >= 0
+     * 4. nonce >= 0
+     * 5. from and to are not null
+     *
+     * @return true if valid
+     */
+    public boolean isValid() {
+        if (data.size() > MAX_DATA_LENGTH) {
+            return false;
+        }
+        if (amount.compareTo(XAmount.ZERO) < 0) {
+            return false;
+        }
+        if (fee.compareTo(XAmount.ZERO) < 0) {
+            return false;
+        }
+        if (nonce < 0) {
+            return false;
+        }
+        if (from == null || to == null) {
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Get transaction size in bytes (for storage and transmission)
+     *
+     * @return size in bytes
+     */
+    public int getSize() {
+        return 32 +  // from
+               32 +  // to
+               8 +   // amount
+               8 +   // nonce
+               8 +   // fee
+               2 +   // data length
+               data.size() +  // data
+               1 +   // v
+               32 +  // r
+               32;   // s
+    }
+
+    @Override
+    public String toString() {
+        return String.format(
+            "Transaction[hash=%s, from=%s, to=%s, amount=%s, nonce=%d, fee=%s, dataSize=%d]",
+            getHash().toHexString().substring(0, 16) + "...",
+            from.toHexString().substring(0, 16) + "...",
+            to.toHexString().substring(0, 16) + "...",
+            amount.toDecimal(9, XUnit.XDAG).toPlainString(),
+            nonce,
+            fee.toDecimal(9, XUnit.XDAG).toPlainString(),
+            data.size()
+        );
+    }
+
+    // ========== Factory Methods ==========
+
+    /**
+     * Create a simple transfer transaction (no data)
+     *
+     * @param from source address
+     * @param to target address
+     * @param amount transfer amount
+     * @param nonce account nonce
+     * @param fee transaction fee
+     * @return unsigned transaction
+     */
+    public static Transaction createTransfer(Bytes32 from, Bytes32 to, XAmount amount, long nonce, XAmount fee) {
+        return Transaction.builder()
+                .from(from)
+                .to(to)
+                .amount(amount)
+                .nonce(nonce)
+                .fee(fee)
+                .data(Bytes.EMPTY)
+                .build();
+    }
+
+    /**
+     * Create a transaction with data (for smart contract calls)
+     *
+     * @param from source address
+     * @param to target address
+     * @param amount transfer amount
+     * @param nonce account nonce
+     * @param fee transaction fee
+     * @param data transaction data (max 1KB)
+     * @return unsigned transaction
+     * @throws IllegalArgumentException if data size exceeds MAX_DATA_LENGTH
+     */
+    public static Transaction createWithData(Bytes32 from, Bytes32 to, XAmount amount, long nonce, XAmount fee, Bytes data) {
+        if (data.size() > MAX_DATA_LENGTH) {
+            throw new IllegalArgumentException("Data size exceeds maximum: " + data.size() + " > " + MAX_DATA_LENGTH);
+        }
+
+        return Transaction.builder()
+                .from(from)
+                .to(to)
+                .amount(amount)
+                .nonce(nonce)
+                .fee(fee)
+                .data(data)
+                .build();
+    }
+}
