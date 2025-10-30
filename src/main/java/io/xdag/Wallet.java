@@ -31,6 +31,7 @@ import static java.nio.file.attribute.PosixFilePermission.OWNER_READ;
 import static java.nio.file.attribute.PosixFilePermission.OWNER_WRITE;
 
 import com.google.common.collect.Lists;
+import io.xdag.consensus.SyncManager;
 import io.xdag.config.Config;
 import io.xdag.core.*;
 import io.xdag.crypto.bip.Bip32Key;
@@ -485,17 +486,17 @@ public class Wallet {
 
     /**
      * Creates transaction blocks from a map of our keys and addresses to a destination address
-     * 
+     *
      * @param ourKeys Map of addresses and their corresponding keypairs that we own
      * @param to Destination address
      * @param remark Optional remark to include in transaction
-     * @return List of transaction block wrappers
+     * @return List of transaction blocks (v5.1 SyncBlock)
      */
-    public List<BlockWrapper> createTransactionBlock(Map<Address, ECKeyPair> ourKeys, Bytes32 to, String remark, UInt64 txNonce) {
+    public List<SyncManager.SyncBlock> createTransactionBlock(Map<Address, ECKeyPair> ourKeys, Bytes32 to, String remark, UInt64 txNonce) {
         // Check if remark exists
         int hasRemark = remark == null ? 0 : 1;
 
-        List<BlockWrapper> res = Lists.newArrayList();
+        List<SyncManager.SyncBlock> res = Lists.newArrayList();
 
         // Process ourKeys to calculate max entries per block
         LinkedList<Entry<Address, ECKeyPair>> stack = new LinkedList<>(ourKeys.entrySet());
@@ -556,14 +557,14 @@ public class Wallet {
 
     /**
      * Creates a single transaction block
-     * 
+     *
      * @param to Destination address
      * @param amount Transaction amount
      * @param keys Map of addresses and keypairs to use as inputs
      * @param remark Optional remark
-     * @return Transaction block wrapper
+     * @return Transaction block (v5.1 SyncBlock)
      */
-    private BlockWrapper createTransaction(Bytes32 to, XAmount amount, Map<Address, ECKeyPair> keys, String remark, UInt64 txNonce) {
+    private SyncManager.SyncBlock createTransaction(Bytes32 to, XAmount amount, Map<Address, ECKeyPair> keys, String remark, UInt64 txNonce) {
 
         List<Address> tos = Lists.newArrayList(new Address(to, XDAG_FIELD_OUTPUT, amount,true));
 
@@ -590,7 +591,7 @@ public class Wallet {
             block.signOut(getDefKey());
         }
 
-        return new BlockWrapper(block, getConfig().getNodeSpec().getTTL());
+        return new SyncManager.SyncBlock(block, getConfig().getNodeSpec().getTTL());
     }
 
     /**

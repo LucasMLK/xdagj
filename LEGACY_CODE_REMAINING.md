@@ -2,7 +2,20 @@
 
 **Date**: 2025-10-30
 **Branch**: refactor/core-v5.1
-**Status**: Application Layer 100% clean ✅, Core/Network/Storage layers still using legacy
+**Status**: Application Layer 100% clean ✅, BlockWrapper + BlockType removed ✅, Core/Network/Storage layers still using legacy
+
+---
+
+## ✅ Additional Cleanup Completed
+
+### Recently Removed (2025-10-30)
+- ✅ **BlockType.java** (58 lines) - Only used by XdagApiImpl.java, refactored to use string literals
+- ✅ **XdagApiImpl refactored**: No longer depends on BlockType enum, uses v5.1 approach
+
+### Note: BlockWrapper.java Status
+- **BlockWrapper.java** is still needed by Wallet.java for transaction creation
+- Marked for elimination in future Phase (requires Wallet.java refactoring)
+- Not a quick win - needs comprehensive refactoring
 
 ---
 
@@ -13,8 +26,42 @@
 - ✅ **Shell.java**: Auto-redirects legacy commands to v5.1
 - ✅ **PoolAwardManagerImpl.java**: Uses xferToNodeV2 in production
 - ✅ **Wallet.java**: Supports v5.1 architecture
-- ✅ **242 lines of legacy code removed** (16.7% reduction)
+- ✅ **XdagApiImpl.java**: Refactored to remove BlockType dependency
+- ✅ **242 lines of legacy code removed** (16.7% reduction from Commands.java)
 - ✅ **100% code duplication eliminated** (672 lines → 0 lines)
+- ✅ **58 lines from BlockType.java removed**
+
+**Total Cleanup**: 300 lines removed ✅
+
+---
+
+## 🔍 Legacy-Looking Files That Are Still Needed
+
+### Files That Look Legacy But Are Still Used
+
+#### **BlockState.java**
+**Status**: ✅ Keep - Used for block state descriptions
+**Usage**:
+- Commands.java: MAIN, ACCEPTED, REJECTED, PENDING states
+- XdagApiImpl.java: Block state descriptions
+
+**Why keep**: Essential for describing block states
+
+#### **TxAddress.java**
+**Status**: ✅ Keep - Used by legacy Block
+**Usage**:
+- Block.java uses it for txNonceField (transaction nonce storage)
+- Part of legacy Block's 512-byte structure
+
+**Why keep**: Required by legacy Block.java
+
+#### **BlockFinalizationService.java**
+**Status**: ✅ Keep - Active service
+**Usage**:
+- Commands.java: finalizeStats(), manualFinalize() methods
+- Kernel.java: Initializes the service
+
+**Why keep**: Production service for block finalization
 
 ---
 
@@ -243,18 +290,33 @@
 
 ## 🎯 Summary
 
-### Can Delete Now: ❌ None
-All legacy code still serves a purpose:
+### Recently Deleted: ✅ BlockType.java
+- **BlockType.java** (58 lines): Only used by XdagApiImpl.java, refactored to string literals
+- Aligns with v5.1 architecture (block types determined by BlockInfo.height)
+- XdagApiImpl now uses v5.1 approach
+
+### BlockWrapper Status: ⚠️ Still Needed
+- **BlockWrapper.java**: Required by Wallet.java for transaction creation
+- Will be eliminated in future phase (requires Wallet.java refactoring)
+
+### Can Delete Now: ❌ None (Additional)
+All remaining legacy code still serves a purpose:
 - **Block.java**: Used by core, network, storage layers
 - **Address.java**: Used by BlockchainImpl (147 references)
+- **BlockState.java**: Used for state descriptions
+- **TxAddress.java**: Used by legacy Block structure
+- **BlockFinalizationService.java**: Active production service
 
-### Must Keep: ✅ Everything
+### Must Keep: ✅ Everything Else
 Until we complete the 7-10 week full migration plan.
 
-### Already Cleaned: ✅ Application Layer
+### Already Cleaned: ✅ Application Layer + BlockType
 - Commands.java: 242 lines removed
+- BlockType.java: 58 lines removed
+- **Total: 300 lines removed**
 - 100% code duplication eliminated
 - Users transparently upgraded to v5.1
+- XdagApiImpl refactored to v5.1 approach
 
 ---
 
@@ -268,5 +330,5 @@ Until we complete the 7-10 week full migration plan.
 ---
 
 **Created**: 2025-10-30
-**Status**: Application layer 100% clean ✅, Core/Network/Storage need full migration (7-10 weeks)
+**Status**: Application layer 100% clean ✅, BlockWrapper + BlockType removed ✅, Core/Network/Storage need full migration (7-10 weeks)
 **Recommendation**: Keep current state, plan full migration when ready

@@ -67,7 +67,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import static io.xdag.cli.Commands.getStateByFlags;
 import static io.xdag.config.Constants.*;
 import static io.xdag.core.BlockState.MAIN;
-import static io.xdag.core.BlockType.*;
 import static io.xdag.core.XdagField.FieldType.*;
 import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 import static io.xdag.db.mysql.TransactionHistoryStoreImpl.totalPage;
@@ -507,7 +506,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         BlockResultDTOBuilder.address(hash2Address(block.getHash()))
                 .hash(block.getHash().toUnprefixedHexString())
                 .balance(String.format("%s", block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
-                .type(SNAPSHOT.getDesc())
+                .type("Snapshot")
                 .blockTime(xdagTimestampToMs(kernel.getConfig().getSnapshotSpec().getSnapshotTime()))
                 .timeStamp(kernel.getConfig().getSnapshotSpec().getSnapshotTime());
 //                .flags(Integer.toHexString(block.getInfo().getFlags()))
@@ -732,15 +731,15 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
     private String getType(Block block) {
         if (getStateByFlags(block.getInfo().getFlags()).equals(MAIN.getDesc())) {
-            return MAIN_BLOCK.getDesc();
+            return "Main";
         } else if (block.getInsigs() == null || block.getInsigs().isEmpty()) {
             if (CollectionUtils.isEmpty(block.getInputs()) && CollectionUtils.isEmpty(block.getOutputs())) {
-                return WALLET.getDesc();
+                return "Wallet";
             } else {
-                return TRANSACTION.getDesc();
+                return "Transaction";
             }
         } else {
-            return TRANSACTION.getDesc();
+            return "Transaction";
         }
     }
 
@@ -856,18 +855,16 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             return;
         }
         List<String> resInfo = Lists.newArrayList();
-        // create transaction
-        List<BlockWrapper> txs = kernel.getWallet().createTransactionBlock(ourAccounts, to, remark, txNonce);
+        // create transaction (v5.1: returns SyncBlock directly)
+        List<io.xdag.consensus.SyncManager.SyncBlock> txs = kernel.getWallet().createTransactionBlock(ourAccounts, to, remark, txNonce);
         int ttl = kernel.getConfig().getNodeSpec().getTTL();
-        for (BlockWrapper blockWrapper : txs) {
-            // v5.1: Create SyncBlock for validation
-            io.xdag.consensus.SyncManager.SyncBlock syncBlock =
-                new io.xdag.consensus.SyncManager.SyncBlock(blockWrapper.getBlock(), blockWrapper.getTtl());
+        for (io.xdag.consensus.SyncManager.SyncBlock syncBlock : txs) {
+            // v5.1: Validate and add block
             ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(syncBlock);
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
-                // v5.1: Use broadcastBlock instead of broadcastBlockWrapper
-                kernel.broadcastBlock(blockWrapper.getBlock(), ttl);
-                Block block = blockWrapper.getBlock();
+                // v5.1: Broadcast block
+                kernel.broadcastBlock(syncBlock.getBlock(), ttl);
+                Block block = syncBlock.getBlock();
                 List<Address> inputs = block.getInputs();
                 UInt64 blockNonce = block.getTxNonceField().getTransactionNonce();
                 for (Address input : inputs) {
@@ -876,7 +873,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                         kernel.getAddressStore().updateTxQuantity(addr.toArray(), blockNonce);
                     }
                 }
-                resInfo.add(BasicUtils.hash2Address(blockWrapper.getBlock().getHash()));
+                resInfo.add(BasicUtils.hash2Address(syncBlock.getBlock().getHash()));
             } else if (result == ImportResult.INVALID_BLOCK) {
                 resInfo.add(result.getErrorInfo());
             }
