@@ -438,8 +438,10 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             }
         }
         if (checkTransaction(block)) {
-            result = kernel.getSyncMgr().importBlock(
-                    new BlockWrapper(block, kernel.getConfig().getNodeSpec().getTTL()));
+            // v5.1: Create SyncBlock for import
+            io.xdag.consensus.SyncManager.SyncBlock syncBlock =
+                new io.xdag.consensus.SyncManager.SyncBlock(block, kernel.getConfig().getNodeSpec().getTTL());
+            result = kernel.getSyncMgr().importBlock(syncBlock);
         } else {
             result = ImportResult.INVALID_BLOCK;
         }
@@ -856,11 +858,16 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         List<String> resInfo = Lists.newArrayList();
         // create transaction
         List<BlockWrapper> txs = kernel.getWallet().createTransactionBlock(ourAccounts, to, remark, txNonce);
+        int ttl = kernel.getConfig().getNodeSpec().getTTL();
         for (BlockWrapper blockWrapper : txs) {
-            ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(blockWrapper);
+            // v5.1: Create SyncBlock for validation
+            io.xdag.consensus.SyncManager.SyncBlock syncBlock =
+                new io.xdag.consensus.SyncManager.SyncBlock(blockWrapper.getBlock(), blockWrapper.getTtl());
+            ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(syncBlock);
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
-                kernel.broadcastBlockWrapper(blockWrapper);
-                Block block = new Block(new XdagBlock(blockWrapper.getBlock().getXdagBlock().getData().toArray()));
+                // v5.1: Use broadcastBlock instead of broadcastBlockWrapper
+                kernel.broadcastBlock(blockWrapper.getBlock(), ttl);
+                Block block = blockWrapper.getBlock();
                 List<Address> inputs = block.getInputs();
                 UInt64 blockNonce = block.getTxNonceField().getTransactionNonce();
                 for (Address input : inputs) {

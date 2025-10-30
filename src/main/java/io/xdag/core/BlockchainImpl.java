@@ -1154,13 +1154,24 @@ public class BlockchainImpl implements Blockchain {
 
     @Override
     public Block createNewBlock(
-            Map<Address, ECKeyPair> pairs,
-            List<Address> to,
+            Map<Bytes32, ECKeyPair> addressPairs,
+            List<Bytes32> toAddresses,
             boolean mining,
             String remark,
             XAmount fee,
             UInt64 txNonce
     ) {
+        // v5.1: Convert Bytes32 addresses to Address objects for backward compatibility
+        Map<Address, ECKeyPair> pairs = new HashMap<>();
+        for (Map.Entry<Bytes32, ECKeyPair> entry : addressPairs.entrySet()) {
+            Address addr = new Address(entry.getKey(), XdagField.FieldType.XDAG_FIELD_IN, XAmount.ZERO, true);
+            pairs.put(addr, entry.getValue());
+        }
+
+        List<Address> to = new ArrayList<>();
+        for (Bytes32 toAddr : toAddresses) {
+            to.add(new Address(toAddr, XdagField.FieldType.XDAG_FIELD_OUT, XAmount.ZERO, true));
+        }
 
         int hasRemark = remark == null ? 0 : 1;
 
@@ -1258,7 +1269,13 @@ public class BlockchainImpl implements Blockchain {
      * Get a certain number of orphan blocks from orphan pool for linking
      */
     public List<Address> getBlockFromOrphanPool(int num, long[] sendtime) {
-        return orphanBlockStore.getOrphan(num, sendtime);
+        // v5.1: Convert Bytes32 to Address for backward compatibility
+        List<Bytes32> orphans = orphanBlockStore.getOrphan(num, sendtime);
+        List<Address> addresses = new ArrayList<>();
+        for (Bytes32 orphan : orphans) {
+            addresses.add(new Address(orphan, false));
+        }
+        return addresses;
     }
 
     public Bytes32 getPreTopMainBlockForLink(long sendTime) {

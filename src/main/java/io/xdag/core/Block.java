@@ -24,498 +24,590 @@
 
 package io.xdag.core;
 
+import com.google.common.collect.Lists;
+import io.xdag.config.Config;
 import io.xdag.crypto.hash.HashUtils;
-import lombok.Builder;
+import io.xdag.crypto.keys.ECKeyPair;
+import io.xdag.crypto.keys.PublicKey;
+import io.xdag.crypto.keys.Signature;
+import io.xdag.crypto.keys.Signer;
+import io.xdag.utils.BytesUtils;
+import io.xdag.utils.SimpleEncoder;
 import lombok.Getter;
-import lombok.Value;
+import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.bytes.MutableBytes;
+import org.apache.tuweni.bytes.MutableBytes32;
+import org.apache.tuweni.units.bigints.UInt64;
+import org.apache.tuweni.units.bigints.UInt256;
 
-import java.io.Serializable;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
+import java.math.BigInteger;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 
-/**
- * Block for XDAG v5.1 - Candidate Block
- *
- * Design principles (from CORE_DATA_STRUCTURES.md):
- * 1. Only contains references (Link), not full Transaction/Block data
- * 2. All blocks are candidate blocks (all have nonce and coinbase)
- * 3. Winner block (hash <= difficulty and smallest hash) becomes main block
- * 4. Block only stores hash references, enabling 1,485,000+ links in 48MB
- * 5. Hash is cached (lazy computation)
- *
- * Structure:
- * ```
- * Block {
- *     header: BlockHeader  (timestamp, difficulty, nonce, coinbase, hash_cache)
- *     links: List<Link>    (references to Transactions and other Blocks)
- * }
- * ```
- *
- * Capacity (48MB block):
- * - 48MB / 33 bytes per link ≈ 1,485,000 links
- * - TPS: 1,485,000 txs / 64秒 ≈ 23,200 TPS (96.7% Visa level)
- *
- * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">v5.1 Design</a>
- */
-@Value
-@Builder(toBuilder = true)
-public class Block implements Serializable {
+import static io.xdag.core.XdagField.FieldType.*;
 
+@Slf4j
+@Getter
+@Setter
+public class Block implements Cloneable {
+
+    public static final int MAX_LINKS = 15;
     /**
-     * Block header (participates in hash calculation)
-     * Contains: timestamp, difficulty, nonce, coinbase, hash_cache
+     * Whether the block exists locally
      */
-    BlockHeader header;
+    public boolean isSaved;
+    private Address coinBase;
 
+    // ========== Phase 2 Core Refactor: Use immutable BlockInfo ==========
+    private BlockInfo info;
+
+    private long transportHeader;
     /**
-     * DAG links (references to Transactions and other Blocks)
-     * Only stores hash references (33 bytes per link)
-     * Supports up to 1,485,000 links in 48MB block
+     * List of block links (inputs and outputs)
      */
-    @Builder.Default
-    List<Link> links = new ArrayList<>();
+    private List<Address> inputs = new CopyOnWriteArrayList<>();
 
-    // ========== Core Configuration ==========
-
+    private TxAddress txNonceField;
     /**
-     * Maximum block size: 48MB (soft limit)
+     * Outputs including pretop
      */
-    public static final int MAX_BLOCK_SIZE = 48 * 1024 * 1024;
-
+    private List<Address> outputs = new CopyOnWriteArrayList<>();
     /**
-     * Minimum Block references per block: 1
-     * Every block must reference at least one previous main block (prevMainBlock)
-     * (from DESIGN_DECISIONS.md D6)
+     * Record public keys (prefix + compressed public key)
      */
-    public static final int MIN_BLOCK_LINKS = 1;
-
+    private List<PublicKey> pubKeys = new CopyOnWriteArrayList<>();
+    private Map<Signature, Integer> insigs = new LinkedHashMap<>();
+    private Signature outsig;
     /**
-     * Maximum Block references per block: 16
-     * Prevents malicious complex DAG attacks
-     * (from DESIGN_DECISIONS.md D6)
+     * Main block nonce records miner address and nonce
      */
-    public static final int MAX_BLOCK_LINKS = 16;
+    private Bytes32 nonce;
+    private XdagBlock xdagBlock;
+    private boolean parsed;
+    private boolean isOurs;
+    private byte[] encoded;
+    private int tempLength;
+    private boolean pretopCandidate;
+    private BigInteger pretopCandidateDiff;
 
-    /**
-     * Maximum total links per block: ~1,485,000
-     * = 48MB / 33 bytes per link
-     * This includes both Block and Transaction links
-     */
-    public static final int MAX_LINKS_PER_BLOCK = 1_485_000;
+    public Block(
+            Config config,
+            long timestamp,
+            List<Address> links,
+            List<Address> pendings,
+            boolean mining,
+            List<ECKeyPair> keys,
+            String remark,
+            int defKeyIndex,
+            XAmount fee,
+            UInt64 txNonce) {
+        parsed = true;
 
-    /**
-     * Target TPS: 23,200
-     * = 1,485,000 txs / 64 seconds
-     */
-    public static final int TARGET_TPS = 23_200;
+        // Build type during construction
+        long typeValue = 0;
+        int lenghth = 0;
 
-    // ========== Hash Calculation ==========
+        typeValue |= ((long) config.getXdagFieldHeader().asByte()) << (lenghth++ << 2);
 
-    /**
-     * Get block hash (with caching)
-     *
-     * Hash calculation:
-     * 1. If hash already cached in header, return it
-     * 2. Otherwise: hash = Keccak256(serialize(header) + serialize(links))
-     * 3. Cache the hash in header
-     * 4. Return hash
-     *
-     * Thread-safe: uses immutable header with withHash()
-     *
-     * @return block hash (32 bytes)
-     */
-    public Bytes32 getHash() {
-        if (header.getHash() != null) {
-            return header.getHash();
+        if (txNonce != null) {
+            txNonceField = new TxAddress(txNonce);
+            typeValue |= ((long) XDAG_FIELD_TRANSACTION_NONCE.asByte()) << (lenghth++ << 2);
         }
 
-        // Calculate hash
-        Bytes32 hash = calculateHash();
+        if (CollectionUtils.isNotEmpty(links)) {
+            for (Address link : links) {
+                XdagField.FieldType type = link.getType();
+                typeValue |= ((long) type.asByte()) << (lenghth++ << 2);
+                if (type == XDAG_FIELD_OUT || type == XDAG_FIELD_OUTPUT) {
+                    outputs.add(link);
+                } else if (type == XDAG_FIELD_IN || type == XDAG_FIELD_INPUT) {
+                    inputs.add(link);
+                } else if (type == XDAG_FIELD_COINBASE) {
+                    this.coinBase = link;
+                    outputs.add(link);
+                }
+            }
+        }
 
-        // Cache hash in header (creates new immutable header)
-        // Note: This creates a new BlockV5 instance with updated header
-        // The caller should use the returned hash, not rely on this instance being updated
-        return hash;
+        if (CollectionUtils.isNotEmpty(pendings)) {
+            for (Address pending : pendings) {
+                XdagField.FieldType type = pending.getType();
+                typeValue |= ((long) type.asByte()) << (lenghth++ << 2);
+                if (type == XDAG_FIELD_OUT || type == XDAG_FIELD_OUTPUT) {
+                    outputs.add(pending);
+                } else if (type == XDAG_FIELD_IN || type == XDAG_FIELD_INPUT) {
+                    inputs.add(pending);
+                } else if (type == XDAG_FIELD_COINBASE) {
+                    this.coinBase = pending;
+                    outputs.add(pending);
+                }
+            }
+        }
+
+        Bytes remarkBytes = null;
+        if (StringUtils.isAsciiPrintable(remark)) {
+            typeValue |= ((long) XDAG_FIELD_REMARK.asByte()) << (lenghth++ << 2);
+            byte[] data = remark.getBytes(StandardCharsets.UTF_8);
+            byte[] safeRemark = new byte[32];
+            Arrays.fill(safeRemark, (byte) 0);
+            System.arraycopy(data, 0, safeRemark, 0, Math.min(data.length, 32));
+            remarkBytes = Bytes.wrap(safeRemark);
+        }
+
+        if (CollectionUtils.isNotEmpty(keys)) {
+            for (ECKeyPair key : keys) {
+                PublicKey publicKey = key.getPublicKey();
+                byte[] keydata = publicKey.toBytes().toArray();
+                boolean yBit = BytesUtils.toByte(BytesUtils.subArray(keydata, 0, 1)) == 0x03;
+                XdagField.FieldType type = yBit ? XDAG_FIELD_PUBLIC_KEY_1 : XDAG_FIELD_PUBLIC_KEY_0;
+                typeValue |= ((long) type.asByte()) << (lenghth++ << 2);
+                pubKeys.add(key.getPublicKey());
+            }
+            for (int i = 0; i < keys.size(); i++) {
+                if (i != defKeyIndex) {
+                    typeValue |= ((long) XDAG_FIELD_SIGN_IN.asByte()) << (lenghth++ << 2);
+                    typeValue |= ((long) XDAG_FIELD_SIGN_IN.asByte()) << (lenghth++ << 2);
+                } else {
+                    typeValue |= ((long) XDAG_FIELD_SIGN_OUT.asByte()) << (lenghth++ << 2);
+                    typeValue |= ((long) XDAG_FIELD_SIGN_OUT.asByte()) << (lenghth++ << 2);
+                }
+            }
+        }
+
+        if (defKeyIndex < 0) {
+            typeValue |= ((long) XDAG_FIELD_SIGN_OUT.asByte()) << (lenghth++ << 2);
+            typeValue |= ((long) XDAG_FIELD_SIGN_OUT.asByte()) << (lenghth << 2);
+        }
+
+        if (mining) {
+            typeValue |= ((long) XDAG_FIELD_SIGN_IN.asByte()) << (MAX_LINKS << 2);
+        }
+
+        // Create immutable BlockInfo
+        this.info = BlockInfo.builder()
+                .hash(null)  // Will be calculated later
+                .timestamp(timestamp)
+                .height(0)  // Will be set later
+                .type(typeValue)
+                .flags(0)  // Will be set later
+                .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
+                .ref(null)
+                .maxDiffLink(null)
+                .amount(XAmount.ZERO)
+                .fee(fee)
+                .remark(remarkBytes)
+                .isSnapshot(false)
+                .snapshotInfo(null)
+                .build();
+    }
+
+    /**
+     * main block
+     */
+    public Block(Config config, long timestamp,
+                 List<Address> pendings,
+                 boolean mining) {
+        this(config, timestamp, null, pendings, mining, null, null, -1, XAmount.ZERO, null);
+    }
+
+    /**
+     * Read from raw block of 512 bytes
+     */
+    public Block(XdagBlock xdagBlock) {
+        this.xdagBlock = xdagBlock;
+        // info will be created in parse() method
+        parse();
+    }
+
+    public Block(LegacyBlockInfo blockInfo) {
+        this.info = BlockInfo.fromLegacy(blockInfo);
+        this.isSaved = true;
+        this.parsed = true;
+    }
+
+    /**
+     * Create Block from new immutable BlockInfo (Phase 2 core refactor)
+     * This constructor directly uses the immutable BlockInfo
+     *
+     * @param blockInfo The new immutable BlockInfo
+     */
+    public Block(BlockInfo blockInfo) {
+        this.info = blockInfo;
+        this.isSaved = true;
+        this.parsed = true;
     }
 
     /**
      * Calculate block hash
-     *
-     * Hash = Keccak256(
-     *     timestamp + difficulty + nonce + coinbase +
-     *     links.size + links[0] + links[1] + ...
-     * )
-     *
-     * @return calculated hash
      */
-    private Bytes32 calculateHash() {
-        // Calculate total size
-        int headerSize = BlockHeader.getSerializedSize();  // 104 bytes
-        int linksSize = 4 + (links.size() * Link.LINK_SIZE);  // 4 bytes size + N×33 bytes
+    private byte[] calcHash() {
+        if (xdagBlock == null) {
+            xdagBlock = getXdagBlock();
+        }
+        return Bytes32.wrap(HashUtils.doubleSha256(Bytes.wrap(xdagBlock.getData())).reverse()).toArray();
+    }
 
-        ByteBuffer buffer = ByteBuffer.allocate(headerSize + linksSize);
+    /**
+     * Recalculate to avoid directly updating hash when miner sends share
+     */
+    public Bytes32 recalcHash() {
+        xdagBlock = new XdagBlock(toBytes());
+        return Bytes32.wrap(HashUtils.doubleSha256(Bytes.wrap(xdagBlock.getData())).reverse());
+    }
 
-        // Serialize header
-        buffer.putLong(header.getTimestamp());
-        buffer.put(header.getDifficulty().toBytes().toArray());
-        buffer.put(header.getNonce().toArray());
-        buffer.put(header.getCoinbase().toArray());
-
-        // Serialize links
-        buffer.putInt(links.size());
-        for (Link link : links) {
-            buffer.put(link.toBytes());
+    /**
+     * Parse 512 bytes data
+     */
+    public void parse() {
+        if (this.parsed) {
+            return;
         }
 
-        return HashUtils.keccak256(Bytes.wrap(buffer.array()));
-    }
+        // Collect data in temporary variables
+        byte[] hash = calcHash();
+        Bytes32 header = Bytes32.wrap(xdagBlock.getField(0).getData());
+        this.transportHeader = header.getLong(0, ByteOrder.LITTLE_ENDIAN);
+        long typeValue = header.getLong(8, ByteOrder.LITTLE_ENDIAN);
+        long timestamp = header.getLong(16, ByteOrder.LITTLE_ENDIAN);
+        XAmount fee = XAmount.of(header.getLong(24, ByteOrder.LITTLE_ENDIAN), XUnit.NANO_XDAG);
+        Bytes remarkBytes = null;
 
-    /**
-     * Create a new Block with cached hash
-     * This method should be called after hash calculation to cache it
-     *
-     * @param hash calculated hash
-     * @return new Block with hash cached in header
-     */
-    public Block withHash(Bytes32 hash) {
-        return this.toBuilder()
-                .header(header.toBuilder().hash(hash).build())
-                .build();
-    }
+        for (int i = 1; i < XdagBlock.XDAG_BLOCK_FIELDS; i++) {
+            XdagField field = xdagBlock.getField(i);
+            if (field == null) {
+                throw new IllegalArgumentException("xdagBlock field:" + i + " is null");
+            }
+            switch (field.getType()) {
+                case XDAG_FIELD_TRANSACTION_NONCE -> txNonceField = new TxAddress(field);
+                case XDAG_FIELD_IN -> inputs.add(new Address(field, false));
+                case XDAG_FIELD_INPUT -> inputs.add(new Address(field, true));
+                case XDAG_FIELD_OUT -> outputs.add(new Address(field, false));
+                case XDAG_FIELD_OUTPUT -> outputs.add(new Address(field, true));
+                case XDAG_FIELD_REMARK -> remarkBytes = field.getData();
+                case XDAG_FIELD_COINBASE -> {
+                    this.coinBase = new Address(field, true);
+                    outputs.add(new Address(field, true));
+                }
+                case XDAG_FIELD_SIGN_IN, XDAG_FIELD_SIGN_OUT -> {
+                    BigInteger r;
+                    BigInteger s;
+                    int j, signo_s = -1;
+                    XdagField ixf;
+                    for (j = i; j < XdagBlock.XDAG_BLOCK_FIELDS; ++j) {
+                        ixf = xdagBlock.getField(j);
+                        if (ixf.getType().ordinal() == XDAG_FIELD_SIGN_IN.ordinal()
+                                || ixf.getType() == XDAG_FIELD_SIGN_OUT) {
+                            if (j > i && signo_s < 0 && ixf.getType().ordinal() == xdagBlock.getField(i).getType()
+                                    .ordinal()) {
+                                signo_s = j;
+                                r = xdagBlock.getField(i).getData().toUnsignedBigInteger();
+                                s = xdagBlock.getField(signo_s).getData().toUnsignedBigInteger();
 
-    // ========== Block Properties ==========
+                                // r and s are 0, the signature is illegal, or it is a pseudo block sent by the miner
+                                if (r.compareTo(BigInteger.ZERO) == 0 && s.compareTo(BigInteger.ZERO) == 0) {
+                                    r = BigInteger.ONE;
+                                    s = BigInteger.ONE;
+                                }
 
-    /**
-     * Get epoch number
-     * epoch = timestamp / 64
-     *
-     * @return epoch number
-     */
-    public long getEpoch() {
-        return header.getEpoch();
-    }
-
-    /**
-     * Get timestamp
-     *
-     * @return timestamp in seconds
-     */
-    public long getTimestamp() {
-        return header.getTimestamp();
-    }
-
-    /**
-     * Check if this block satisfies PoW difficulty
-     * Valid if: hash <= difficulty
-     *
-     * @return true if valid PoW
-     */
-    public boolean isValidPoW() {
-        Bytes32 hash = getHash();
-        return header.toBuilder().hash(hash).build().satisfiesDifficulty();
-    }
-
-    /**
-     * Get block size in bytes (for network transmission)
-     *
-     * @return size in bytes
-     */
-    public int getSize() {
-        return BlockHeader.getSerializedSize() + 4 + (links.size() * Link.LINK_SIZE);
-    }
-
-    /**
-     * Check if block size exceeds limit
-     *
-     * @return true if size > MAX_BLOCK_SIZE
-     */
-    public boolean exceedsMaxSize() {
-        return getSize() > MAX_BLOCK_SIZE;
-    }
-
-    /**
-     * Check if links count exceeds limit
-     *
-     * @return true if links.size() > MAX_LINKS_PER_BLOCK
-     */
-    public boolean exceedsMaxLinks() {
-        return links.size() > MAX_LINKS_PER_BLOCK;
-    }
-
-    // ========== Link Operations ==========
-
-    /**
-     * Get all links
-     *
-     * @return unmodifiable list of links
-     */
-    public List<Link> getLinks() {
-        return List.copyOf(links);
-    }
-
-    /**
-     * Get transaction links only
-     *
-     * @return list of transaction links
-     */
-    public List<Link> getTransactionLinks() {
-        return links.stream()
-                .filter(Link::isTransaction)
-                .toList();
-    }
-
-    /**
-     * Get block links only
-     *
-     * @return list of block links
-     */
-    public List<Link> getBlockLinks() {
-        return links.stream()
-                .filter(Link::isBlock)
-                .toList();
-    }
-
-    /**
-     * Count transaction links
-     *
-     * @return number of transaction links
-     */
-    public int getTransactionCount() {
-        return (int) links.stream().filter(Link::isTransaction).count();
-    }
-
-    /**
-     * Count block links
-     *
-     * @return number of block links
-     */
-    public int getBlockRefCount() {
-        return (int) links.stream().filter(Link::isBlock).count();
-    }
-
-    // ========== Validation ==========
-
-    /**
-     * Validate this block
-     * Checks:
-     * 1. Block size <= MAX_BLOCK_SIZE
-     * 2. Total links count <= MAX_LINKS_PER_BLOCK
-     * 3. Block references: MIN_BLOCK_LINKS <= count <= MAX_BLOCK_LINKS
-     * 4. Header fields are valid (timestamp > 0, difficulty > 0, etc.)
-     * 5. PoW is valid (hash <= difficulty)
-     *
-     * @return true if valid
-     */
-    public boolean isValid() {
-        // Check size limits
-        if (exceedsMaxSize() || exceedsMaxLinks()) {
-            return false;
+                                Signature tmp = Signature.create(r, s, (byte) 0);
+                                if (ixf.getType().ordinal() == XDAG_FIELD_SIGN_IN.ordinal()) {
+                                    insigs.put(tmp, i);
+                                } else {
+                                    outsig = tmp;
+                                }
+                            }
+                        }
+                    }
+                    if (i == MAX_LINKS && field.getType().ordinal() == XDAG_FIELD_SIGN_IN.ordinal()) {
+                        this.nonce = Bytes32.wrap(xdagBlock.getField(i).getData());
+                    }
+                }
+                case XDAG_FIELD_PUBLIC_KEY_0, XDAG_FIELD_PUBLIC_KEY_1 -> {
+                    Bytes key = xdagBlock.getField(i).getData();
+                    boolean yBit = (field.getType().ordinal() == XDAG_FIELD_PUBLIC_KEY_1.ordinal());
+                    PublicKey publicKey = PublicKey.fromXCoordinate(key, yBit);
+                    pubKeys.add(publicKey);
+                }
+                default -> {
+                }
+                //                    log.debug("no match xdagBlock field type:" + field.getType());
+            }
         }
 
-        // Check Block reference limits (from DESIGN_DECISIONS.md D6)
-        int blockRefCount = getBlockRefCount();
-        if (blockRefCount < MIN_BLOCK_LINKS) {
-            return false;  // Must reference at least one prevMainBlock
-        }
-        if (blockRefCount > MAX_BLOCK_LINKS) {
-            return false;  // Too many Block references (prevents DAG attacks)
-        }
+        // Create immutable BlockInfo at the end
+        // Store full hash (32 bytes)
+        Bytes32 fullHash = Bytes32.wrap(hash);
 
-        // Check header validity
-        if (header.getTimestamp() <= 0) {
-            return false;
-        }
-        if (header.getDifficulty() == null || header.getDifficulty().isZero()) {
-            return false;
-        }
-        if (header.getNonce() == null || header.getCoinbase() == null) {
-            return false;
-        }
-
-        // Check PoW
-        return isValidPoW();
-    }
-
-    // ========== Factory Methods ==========
-
-    /**
-     * Create a candidate block (for mining)
-     *
-     * @param timestamp block timestamp
-     * @param difficulty PoW difficulty target
-     * @param coinbase miner address
-     * @param links DAG links (transaction and block references)
-     * @return candidate block (nonce not set, needs mining)
-     */
-    public static Block createCandidate(
-            long timestamp,
-            org.apache.tuweni.units.bigints.UInt256 difficulty,
-            Bytes32 coinbase,
-            List<Link> links) {
-
-        BlockHeader header = BlockHeader.builder()
+        this.info = BlockInfo.builder()
+                .hash(fullHash)
                 .timestamp(timestamp)
-                .difficulty(difficulty)
-                .nonce(Bytes32.ZERO)  // Will be set by mining
-                .coinbase(coinbase)
-                .hash(null)  // Will be calculated
+                .height(0)  // Will be set later
+                .type(typeValue)
+                .flags(0)  // Will be set later
+                .difficulty(UInt256.ZERO)  // Will be set later
+                .ref(null)  // Will be set later
+                .maxDiffLink(null)  // Will be set later
+                .amount(XAmount.ZERO)  // Will be set later
+                .fee(fee)
+                .remark(remarkBytes)
+                .isSnapshot(false)
+                .snapshotInfo(null)
                 .build();
 
-        return Block.builder()
-                .header(header)
-                .links(new ArrayList<>(links))
-                .build();
+        this.parsed = true;
     }
 
-    /**
-     * Create a block with specified nonce (after mining)
-     *
-     * @param timestamp block timestamp
-     * @param difficulty PoW difficulty target
-     * @param nonce PoW nonce (found by mining)
-     * @param coinbase miner address
-     * @param links DAG links
-     * @return block with nonce set
-     */
-    public static Block createWithNonce(
-            long timestamp,
-            org.apache.tuweni.units.bigints.UInt256 difficulty,
-            Bytes32 nonce,
-            Bytes32 coinbase,
-            List<Link> links) {
-
-        BlockHeader header = BlockHeader.builder()
-                .timestamp(timestamp)
-                .difficulty(difficulty)
-                .nonce(nonce)
-                .coinbase(coinbase)
-                .hash(null)
-                .build();
-
-        Block block = Block.builder()
-                .header(header)
-                .links(new ArrayList<>(links))
-                .build();
-
-        // Calculate and cache hash
-        Bytes32 hash = block.calculateHash();
-        return block.withHash(hash);
-    }
-
-    // ========== Serialization ==========
-
-    /**
-     * Serialize block to bytes (for network transmission or storage)
-     *
-     * Format:
-     * [Header - 104 bytes]
-     *   timestamp (8) + difficulty (32) + nonce (32) + coinbase (32)
-     *
-     * [Links - variable]
-     *   links_count (4) + link[0] (33) + link[1] (33) + ...
-     *
-     * @return serialized bytes
-     */
     public byte[] toBytes() {
-        int size = getSize();
-        ByteBuffer buffer = ByteBuffer.allocate(size);
+        SimpleEncoder encoder = new SimpleEncoder();
+        encoder.write(getEncodedBody());
 
-        // Serialize header (hash NOT included, it's cached)
-        buffer.putLong(header.getTimestamp());
-        buffer.put(header.getDifficulty().toBytes().toArray());
-        buffer.put(header.getNonce().toArray());
-        buffer.put(header.getCoinbase().toArray());
-
-        // Serialize links
-        buffer.putInt(links.size());
-        for (Link link : links) {
-            buffer.put(link.toBytes());
+        for (Signature sig : insigs.keySet()) {
+            encoder.writeSignature(BytesUtils.subArray(sig.encodedBytes().toArray(), 0, 64));
         }
-
-        return buffer.array();
+        if (outsig != null) {
+            encoder.writeSignature(BytesUtils.subArray(outsig.encodedBytes().toArray(), 0, 64));
+        }
+        int length = encoder.getWriteFieldIndex();
+        tempLength = length;
+        int res;
+        if (length == 16) {
+            return encoder.toBytes();
+        }
+        res = 15 - length;
+        for (int i = 0; i < res; i++) {
+            encoder.writeField(new byte[32]);
+        }
+        Bytes32 nonceNotNull = Objects.requireNonNullElse(nonce, Bytes32.ZERO);
+        encoder.writeField(nonceNotNull.toArray());
+        return encoder.toBytes();
     }
 
     /**
-     * Deserialize block from bytes
-     *
-     * @param bytes serialized block data
-     * @return Block instance
-     * @throws IllegalArgumentException if data is invalid
+     * without signature
      */
-    public static Block fromBytes(byte[] bytes) {
-        if (bytes.length < BlockHeader.getSerializedSize() + 4) {
-            throw new IllegalArgumentException(
-                "Invalid block data: too small (" + bytes.length + " bytes)"
-            );
+    private byte[] getEncodedBody() {
+        SimpleEncoder encoder = new SimpleEncoder();
+        encoder.writeField(getEncodedHeader());
+        List<Address> all = Lists.newArrayList();
+        all.addAll(inputs);
+        all.addAll(outputs);
+        if(txNonceField != null) {
+            encoder.writeField(txNonceField.getData().reverse().toArray());
         }
-
-        ByteBuffer buffer = ByteBuffer.wrap(bytes);
-
-        // Deserialize header
-        long timestamp = buffer.getLong();
-
-        byte[] diffBytes = new byte[32];
-        buffer.get(diffBytes);
-        org.apache.tuweni.units.bigints.UInt256 difficulty =
-            org.apache.tuweni.units.bigints.UInt256.fromBytes(Bytes.wrap(diffBytes));
-
-        byte[] nonceBytes = new byte[32];
-        buffer.get(nonceBytes);
-        Bytes32 nonce = Bytes32.wrap(nonceBytes);
-
-        byte[] coinbaseBytes = new byte[32];
-        buffer.get(coinbaseBytes);
-        Bytes32 coinbase = Bytes32.wrap(coinbaseBytes);
-
-        // Deserialize links
-        int linksCount = buffer.getInt();
-        if (linksCount < 0 || linksCount > MAX_LINKS_PER_BLOCK) {
-            throw new IllegalArgumentException(
-                "Invalid links count: " + linksCount
-            );
+        for (Address link : all) {
+            encoder.writeField(link.getData().reverse().toArray());
         }
-
-        List<Link> links = new ArrayList<>(linksCount);
-        for (int i = 0; i < linksCount; i++) {
-            byte[] linkBytes = new byte[Link.LINK_SIZE];
-            buffer.get(linkBytes);
-            links.add(Link.fromBytes(linkBytes));
+        if (info.getRemark() != null) {
+            encoder.write(info.getRemark().toArray());
         }
-
-        // Create block
-        return createWithNonce(timestamp, difficulty, nonce, coinbase, links);
+        for (PublicKey publicKey : pubKeys) {
+            byte[] pubkeyBytes = publicKey.toBytes().toArray();
+            byte[] key = BytesUtils.subArray(pubkeyBytes, 1, 32);
+            encoder.writeField(key);
+        }
+        encoded = encoder.toBytes();
+        return encoded;
     }
 
-    // ========== Object Methods ==========
+    private byte[] getEncodedHeader() {
+        //byte[] fee = BytesUtils.longToBytes(getFee(), true);
+        byte[] fee = BytesUtils.longToBytes(Long.parseLong(getFee().toString()), true);
+        byte[] time = BytesUtils.longToBytes(getTimestamp(), true);
+        byte[] type = BytesUtils.longToBytes(getType(), true);
+        byte[] transport = new byte[8];
+        return BytesUtils.merge(transport, type, time, fee);
+    }
+
+    public XdagBlock getXdagBlock() {
+        if (xdagBlock != null) {
+            return xdagBlock;
+        }
+        xdagBlock = new XdagBlock(toBytes());
+        return xdagBlock;
+    }
+
+    public void signIn(ECKeyPair ecKey) {
+        sign(ecKey, XDAG_FIELD_SIGN_IN);
+    }
+
+    public void signOut(ECKeyPair ecKey) {
+        sign(ecKey, XDAG_FIELD_SIGN_OUT);
+    }
+
+    private void sign(ECKeyPair ecKey, XdagField.FieldType type) {
+        byte[] encoded = toBytes();
+        // log.debug("sign encoded:{}", Hex.toHexString(encoded));
+        byte[] pubkeyBytes = ecKey.getPublicKey().toBytes().toArray();
+        byte[] digest = BytesUtils.merge(encoded, pubkeyBytes);
+        //log.debug("sign digest:{}", Hex.toHexString(digest));
+        Bytes32 hash = HashUtils.doubleSha256(Bytes.wrap(digest));
+        //log.debug("sign hash:{}", Hex.toHexString(hash.toArray()));
+        Signature signature = Signer.sign(hash, ecKey);
+        if (type == XDAG_FIELD_SIGN_OUT) {
+            outsig = signature;
+        } else {
+            insigs.put(signature, tempLength);
+        }
+    }
+
+    /**
+     * Only match input signatures and return useful keys
+     */
+    public List<PublicKey> verifiedKeys() {
+        List<PublicKey> keys = getPubKeys();
+        List<PublicKey> res = Lists.newArrayList();
+        Bytes digest;
+        Bytes32 hash;
+        for (Signature sig : this.getInsigs().keySet()) {
+            digest = getSubRawData(this.getInsigs().get(sig) - 1);
+            for (PublicKey publicKey : keys) {
+                byte[] pubkeyBytes = publicKey.toBytes().toArray();
+                hash = HashUtils.doubleSha256(Bytes.wrap(digest, Bytes.wrap(pubkeyBytes)));
+                if (Signer.verify(hash, sig, publicKey)) {
+                    res.add(publicKey);
+                }
+            }
+        }
+        digest = getSubRawData(getOutsigIndex() - 2);
+        for (PublicKey publicKey : keys) {
+            byte[] pubkeyBytes = publicKey.toBytes().toArray();
+            hash = HashUtils.doubleSha256(Bytes.wrap(digest, Bytes.wrap(pubkeyBytes)));
+            if (Signer.verify(hash, this.getOutsig(), publicKey)) {
+                res.add(publicKey);
+            }
+        }
+        return res;
+    }
+
+    /**
+     * Get the field index of output signature
+     */
+    public int getOutsigIndex() {
+        int i = 1;
+        long temp = this.info.getType();
+        while (i < XdagBlock.XDAG_BLOCK_FIELDS && (temp & 0xf) != 5) {
+            temp = temp >> 4;
+            i++;
+        }
+        return i;
+    }
+
+    public Bytes32 getHash() {
+        if (this.info.getHash() == null) {
+            byte[] hash = calcHash();
+            // Store full 32-byte hash
+            Bytes32 fullHash = Bytes32.wrap(hash);
+            // Update info with new hash
+            this.info = this.info.withHash(fullHash);
+        }
+        return this.info.getHash();
+    }
+
+    /**
+     * @deprecated Use {@link #getHash()} instead. This method now returns the same value as getHash().
+     */
+    @Deprecated
+    public Bytes32 getHashLow() {
+        return getHash();
+    }
+
+    public Signature getOutsig() {
+        return outsig == null ? null : outsig;
+    }
 
     @Override
     public String toString() {
-        return String.format(
-            "Block[epoch=%d, timestamp=%d, hash=%s, links=%d (%d txs, %d blocks), size=%d bytes]",
-            getEpoch(),
-            getTimestamp(),
-            header.getHash() != null ? header.getHash().toHexString().substring(0, 16) + "..." : "not_calculated",
-            links.size(),
-            getTransactionCount(),
-            getBlockRefCount(),
-            getSize()
-        );
+        return String.format("Block info:[Hash:{%s}][Time:{%s}]", getHash().toHexString(),
+                Long.toHexString(getTimestamp()));
     }
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof Block)) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+
         Block block = (Block) o;
         return Objects.equals(getHash(), block.getHash());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(getHash());
+        return Bytes.of(this.getHash().toArray()).hashCode();
+    }
+
+    public long getTimestamp() {
+        return this.info.getTimestamp();
+    }
+
+    public long getType() {
+        return this.info.getType();
+    }
+
+    public XAmount getFee() {
+        return this.info.getFee();
+    }
+
+    /**
+     * Get data of first length fields for signing
+     */
+    public MutableBytes getSubRawData(int length) {
+        Bytes data = getXdagBlock().getData();
+        MutableBytes res = MutableBytes.create(512);
+        res.set(0, data.slice(0, (length + 1) * 32));
+        for (int i = length + 1; i < 16; i++) {
+            long type = data.getLong(8, ByteOrder.LITTLE_ENDIAN);
+            byte typeB = (byte) (type >> (i << 2) & 0xf);
+            if (XDAG_FIELD_SIGN_IN.asByte() == typeB || XDAG_FIELD_SIGN_OUT.asByte() == typeB) {
+                continue;
+            }
+            res.set((i) * 32, data.slice((i) * 32, 32));
+        }
+        return res;
+    }
+
+    private void setType(XdagField.FieldType type, int n) {
+        long typeByte = type.asByte();
+        long newType = this.info.getType() | (typeByte << (n << 2));
+        // Update info with new type value
+        this.info = this.info.withType(newType);
+    }
+
+    public List<Address> getLinks() {
+        List<Address> links = Lists.newArrayList();
+        links.addAll(getInputs());
+        links.addAll(getOutputs());
+        return links;
+    }
+
+    // ========== Phase 2 Core Refactor: New accessors for BlockInfo ==========
+
+    /**
+     * Get new immutable BlockInfo (Phase 2 core refactor)
+     * Returns the BlockInfo directly
+     */
+    public BlockInfo getBlockInfo() {
+        return this.info;
+    }
+
+    @Override
+    public Object clone() {
+        Block ano = null;
+        try {
+            ano = (Block) super.clone();
+        } catch (CloneNotSupportedException e) {
+            log.error(e.getMessage(), e);
+        }
+        return ano;
     }
 }

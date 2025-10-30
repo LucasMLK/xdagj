@@ -283,11 +283,16 @@ public class Commands {
 
         // Create and broadcast transaction blocks
         List<BlockWrapper> txs = createTransactionBlock(ourAccounts, to, remark, txNonce);
+        int ttl = kernel.getConfig().getNodeSpec().getTTL();
         for (BlockWrapper blockWrapper : txs) {
-            ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(blockWrapper);
+            // v5.1: Create SyncBlock for validation
+            io.xdag.consensus.SyncManager.SyncBlock syncBlock =
+                new io.xdag.consensus.SyncManager.SyncBlock(blockWrapper.getBlock(), blockWrapper.getTtl());
+            ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(syncBlock);
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
-                kernel.broadcastBlockWrapper(blockWrapper);
-                Block block = new Block(new XdagBlock(blockWrapper.getBlock().getXdagBlock().getData().toArray()));
+                // v5.1: Use broadcastBlock instead of broadcastBlockWrapper
+                kernel.broadcastBlock(blockWrapper.getBlock(), ttl);
+                Block block = blockWrapper.getBlock();
                 List<Address> inputs = block.getInputs();
                 UInt64 blockNonce = block.getTxNonceField().getTransactionNonce();
                 for (Address input : inputs) {
@@ -296,7 +301,7 @@ public class Commands {
                         kernel.getAddressStore().updateTxQuantity(addr.toArray(), blockNonce);
                     }
                 }
-                str.append(hash2Address(blockWrapper.getBlock().getHash())).append("\n");
+                str.append(hash2Address(block.getHash())).append("\n");
             } else if (result == ImportResult.INVALID_BLOCK) {
                 str.append(result.getErrorInfo());
             }
@@ -375,7 +380,19 @@ public class Commands {
      */
     private BlockWrapper createTransaction(Bytes32 to, XAmount amount, Map<Address, ECKeyPair> keys, String remark, UInt64 txNonce) {
         List<Address> tos = Lists.newArrayList(new Address(to, XDAG_FIELD_OUTPUT, amount, true));
-        Block block = kernel.getBlockchain().createNewBlock(new HashMap<>(keys), tos, false, remark,
+
+        // v5.1: Convert Address to Bytes32 for interface compatibility
+        Map<Bytes32, ECKeyPair> addressPairs = new HashMap<>();
+        for (Map.Entry<Address, ECKeyPair> entry : keys.entrySet()) {
+            addressPairs.put(Bytes32.wrap(entry.getKey().getAddress()), entry.getValue());
+        }
+
+        List<Bytes32> toAddresses = new ArrayList<>();
+        for (Address addr : tos) {
+            toAddresses.add(Bytes32.wrap(addr.getAddress()));
+        }
+
+        Block block = kernel.getBlockchain().createNewBlock(addressPairs, toAddresses, false, remark,
                 XAmount.of(100, XUnit.MILLI_XDAG), txNonce);
 
         if (block == null) {
@@ -816,10 +833,15 @@ public class Commands {
 
         // Generate multiple transaction blocks
         List<BlockWrapper> txs = createTransactionBlock(ourBlocks, to, remark, null);
+        int ttl = kernel.getConfig().getNodeSpec().getTTL();
         for (BlockWrapper blockWrapper : txs) {
-            ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(blockWrapper);
+            // v5.1: Create SyncBlock for validation
+            io.xdag.consensus.SyncManager.SyncBlock syncBlock =
+                new io.xdag.consensus.SyncManager.SyncBlock(blockWrapper.getBlock(), blockWrapper.getTtl());
+            ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(syncBlock);
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
-                kernel.broadcastBlockWrapper(blockWrapper);
+                // v5.1: Use broadcastBlock instead of broadcastBlockWrapper
+                kernel.broadcastBlock(blockWrapper.getBlock(), ttl);
                 str.append(BasicUtils.hash2Address(blockWrapper.getBlock().getHash())).append("\n");
             }
         }
@@ -840,10 +862,15 @@ public class Commands {
         
         // Generate transaction blocks to reward node
         List<BlockWrapper> txs = createTransactionBlock(paymentsToNodesMap, to, remark, null);
+        int ttl = kernel.getConfig().getNodeSpec().getTTL();
         for (BlockWrapper blockWrapper : txs) {
-            ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(blockWrapper);
+            // v5.1: Create SyncBlock for validation
+            io.xdag.consensus.SyncManager.SyncBlock syncBlock =
+                new io.xdag.consensus.SyncManager.SyncBlock(blockWrapper.getBlock(), blockWrapper.getTtl());
+            ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(syncBlock);
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
-                kernel.broadcastBlockWrapper(blockWrapper);
+                // v5.1: Use broadcastBlock instead of broadcastBlockWrapper
+                kernel.broadcastBlock(blockWrapper.getBlock(), ttl);
                 str.append(BasicUtils.hash2Address(blockWrapper.getBlock().getHash()));
             } else {
                 return new StringBuilder("This transaction block is invalid. Tx hash:")

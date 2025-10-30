@@ -269,7 +269,18 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
         Address input = new Address(hash, XDAG_FIELD_IN, sendAmount, false);
         ECKeyPair inputKey = wallet.getAccount(keyPos);
         inputMap.put(input, inputKey);
-        Block block = blockchain.createNewBlock(inputMap, receipt, false, TX_REMARK, MIN_GAS, null);
+        // v5.1: Convert Address to Bytes32 for interface compatibility
+        Map<Bytes32, ECKeyPair> addressPairs = new HashMap<>();
+        for (Map.Entry<Address, ECKeyPair> entry : inputMap.entrySet()) {
+            addressPairs.put(Bytes32.wrap(entry.getKey().getAddress()), entry.getValue());
+        }
+
+        List<Bytes32> receiptAddresses = new ArrayList<>();
+        for (Address addr : receipt) {
+            receiptAddresses.add(Bytes32.wrap(addr.getAddress()));
+        }
+
+        Block block = blockchain.createNewBlock(addressPairs, receiptAddresses, false, TX_REMARK, MIN_GAS, null);
         if (inputKey.equals(wallet.getDefKey())) {
             block.signOut(inputKey);
         } else {
@@ -277,7 +288,8 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
             block.signOut(wallet.getDefKey());
         }
         log.debug("tx block hash [{}]", block.getHash().toHexString());
-        kernel.getSyncMgr().validateAndAddNewBlock(new BlockWrapper(block, 5));
+        // v5.1: Use SyncBlock instead of BlockWrapper
+        kernel.getSyncMgr().validateAndAddNewBlock(new io.xdag.consensus.SyncManager.SyncBlock(block, 5));
         // Rewards to the foundation and pool rewards are in the same transaction block
         transactionInfoSender.setTxBlock(block.getHash());
         transactionInfoSender.setDonateBlock(block.getHash());
