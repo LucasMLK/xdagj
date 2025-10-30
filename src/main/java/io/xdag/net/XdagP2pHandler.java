@@ -427,7 +427,13 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     }
 
     /**
-     * 区块请求响应一个区块 并开启一个线程不断发送一段时间内的区块 *
+     * Phase 3.3 Note: This handler still sends legacy Block messages
+     *
+     * TODO Phase 4: After storage migration, update to send BlockV5
+     * Currently chain.getBlocksByTime() returns Block objects from legacy storage.
+     * This will be updated once Phase 4 (storage layer migration) is complete.
+     *
+     * 区块请求响应一个区块 并开启一个线程不断发送一段时间内的区块
      */
     protected void processBlocksRequest(BlocksRequestMessage msg) {
         // 更新全网状态
@@ -445,6 +451,8 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
                 FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(XdagTime.xdagTimestampToMs(endTime)),
                 channel.getRemoteAddress());
         List<Block> blocks = chain.getBlocksByTime(startTime, endTime);
+
+        // Phase 3.3: Still using legacy messages until Phase 4 storage migration
         for (Block block : blocks) {
             SyncBlockMessage blockMsg = new SyncBlockMessage(block, 1);
             msgQueue.sendMessage(blockMsg);
@@ -486,22 +494,38 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     protected void processBlockExtRequest(BlockExtRequestMessage msg) {
     }
 
+    /**
+     * Phase 3.3 Note: This handler still sends legacy Block messages
+     *
+     * TODO Phase 4: After storage migration, update to send BlockV5
+     * Currently chain.getBlockByHash() returns Block objects from legacy storage.
+     * This will be updated once Phase 4 (storage layer migration) is complete.
+     */
     protected void processBlockRequest(BlockRequestMessage msg) {
         Bytes hash = msg.getHash();
         Block block = chain.getBlockByHash(Bytes32.wrap(hash), true);
         int ttl = config.getNodeSpec().getTTL();
         if (block != null) {
             log.debug("processBlockRequest: findBlock{}", Bytes32.wrap(hash).toHexString());
+            // Phase 3.3: Still using legacy message until Phase 4 storage migration
             NewBlockMessage message = new NewBlockMessage(block, ttl);
             msgQueue.sendMessage(message);
         }
     }
 
+    /**
+     * Phase 3.3 Note: This handler still sends legacy Block messages
+     *
+     * TODO Phase 4: After storage migration, update to send BlockV5
+     * Currently chain.getBlockByHash() returns Block objects from legacy storage.
+     * This will be updated once Phase 4 (storage layer migration) is complete.
+     */
     private void processSyncBlockRequest(SyncBlockRequestMessage msg) {
         Bytes hash = msg.getHash();
         Block block = chain.getBlockByHash(Bytes32.wrap(hash), true);
         if (block != null) {
             log.debug("processSyncBlockRequest, findBlock: {}, to node: {}", Bytes32.wrap(hash).toHexString(), channel.getRemoteAddress());
+            // Phase 3.3: Still using legacy message until Phase 4 storage migration
             SyncBlockMessage message = new SyncBlockMessage(block, 1);
             msgQueue.sendMessage(message);
         }
