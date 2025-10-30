@@ -72,6 +72,9 @@ public class MessageFactory {
                 case NEW_BLOCK -> new NewBlockMessage(body);
                 case SYNC_BLOCK -> new SyncBlockMessage(body);
                 case SYNCBLOCK_REQUEST -> new SyncBlockRequestMessage(body);
+                // Phase 3: BlockV5 messages
+                case NEW_BLOCK_V5 -> new NewBlockV5Message(body);
+                case SYNC_BLOCK_V5 -> new SyncBlockV5Message(body);
             };
         } catch (Exception e) {
             throw new MessageException("Failed to decode message", e);

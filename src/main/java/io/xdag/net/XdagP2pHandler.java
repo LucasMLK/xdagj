@@ -49,6 +49,7 @@ import io.xdag.config.Config;
 import io.xdag.config.spec.NodeSpec;
 import io.xdag.consensus.SyncManager;
 import io.xdag.core.Block;
+import io.xdag.core.BlockV5;
 import io.xdag.core.Blockchain;
 import io.xdag.core.XdagStats;
 import io.xdag.net.message.Message;
@@ -59,9 +60,11 @@ import io.xdag.net.message.consensus.BlockRequestMessage;
 import io.xdag.net.message.consensus.BlocksReplyMessage;
 import io.xdag.net.message.consensus.BlocksRequestMessage;
 import io.xdag.net.message.consensus.NewBlockMessage;
+import io.xdag.net.message.consensus.NewBlockV5Message;
 import io.xdag.net.message.consensus.SumReplyMessage;
 import io.xdag.net.message.consensus.SumRequestMessage;
 import io.xdag.net.message.consensus.SyncBlockMessage;
+import io.xdag.net.message.consensus.SyncBlockV5Message;
 import io.xdag.net.message.consensus.SyncBlockRequestMessage;
 import io.xdag.net.message.consensus.XdagMessage;
 import io.xdag.net.message.p2p.DisconnectMessage;
@@ -191,7 +194,8 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
         case HANDSHAKE_WORLD -> onHandshakeWorld((WorldMessage) msg);
 
         /* sync */
-        case BLOCKS_REQUEST, BLOCKS_REPLY, SUMS_REQUEST, SUMS_REPLY, BLOCKEXT_REQUEST, BLOCKEXT_REPLY, BLOCK_REQUEST, NEW_BLOCK, SYNC_BLOCK, SYNCBLOCK_REQUEST ->
+        case BLOCKS_REQUEST, BLOCKS_REPLY, SUMS_REQUEST, SUMS_REPLY, BLOCKEXT_REQUEST, BLOCKEXT_REPLY, BLOCK_REQUEST, NEW_BLOCK, SYNC_BLOCK, SYNCBLOCK_REQUEST,
+        NEW_BLOCK_V5, SYNC_BLOCK_V5 ->  // Phase 3: BlockV5 message support
                 onXdag(msg);
         default -> ctx.fireChannelRead(msg);
         }
@@ -303,6 +307,7 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
 
         switch (msg.getCode()) {
             case NEW_BLOCK -> processNewBlock((NewBlockMessage) msg);
+            case NEW_BLOCK_V5 -> processNewBlockV5((NewBlockV5Message) msg);  // Phase 3
             case BLOCK_REQUEST -> processBlockRequest((BlockRequestMessage) msg);
             case BLOCKS_REQUEST -> processBlocksRequest((BlocksRequestMessage) msg);
             case BLOCKS_REPLY -> processBlocksReply((BlocksReplyMessage) msg);
@@ -310,6 +315,7 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
             case SUMS_REPLY -> processSumsReply((SumReplyMessage) msg);
             case BLOCKEXT_REQUEST -> processBlockExtRequest((BlockExtRequestMessage) msg);
             case SYNC_BLOCK -> processSyncBlock((SyncBlockMessage) msg);
+            case SYNC_BLOCK_V5 -> processSyncBlockV5((SyncBlockV5Message) msg);  // Phase 3
             case SYNCBLOCK_REQUEST -> processSyncBlockRequest((SyncBlockRequestMessage) msg);
             default -> throw new UnreachableException();
         }
@@ -369,6 +375,55 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
         SyncManager.SyncBlock syncBlock = new SyncManager.SyncBlock(
             block, msg.getTtl() - 1, channel.getRemotePeer(), true);
         syncMgr.validateAndAddNewBlock(syncBlock);
+    }
+
+    /**
+     * Phase 3 - Network Layer Migration: Process BlockV5 new block
+     *
+     * Handles NEW_BLOCK_V5 messages (0x1B) containing v5.1 BlockV5 structure.
+     * This method directly calls Blockchain.tryToConnect(BlockV5) without wrapping.
+     *
+     * @param msg NewBlockV5Message containing BlockV5 and TTL
+     */
+    protected void processNewBlockV5(NewBlockV5Message msg) {
+        BlockV5 block = msg.getBlock();
+        if (syncMgr.isSyncOld()) {
+            return;
+        }
+
+        log.debug("processNewBlockV5:{} from node {} (v5.1)",
+            block.getHash(), channel.getRemoteAddress());
+
+        // Phase 3: Direct BlockV5 processing
+        // Use Blockchain.tryToConnect(BlockV5) - no wrapper needed
+        try {
+            chain.tryToConnect(block);
+        } catch (Exception e) {
+            log.error("Failed to process BlockV5: {}", block.getHash(), e);
+        }
+    }
+
+    /**
+     * Phase 3 - Network Layer Migration: Process BlockV5 sync block
+     *
+     * Handles SYNC_BLOCK_V5 messages (0x1C) containing v5.1 BlockV5 structure.
+     * Similar to processNewBlockV5 but for synchronization (not broadcasting).
+     *
+     * @param msg SyncBlockV5Message containing BlockV5 and TTL
+     */
+    protected void processSyncBlockV5(SyncBlockV5Message msg) {
+        BlockV5 block = msg.getBlock();
+
+        log.debug("processSyncBlockV5:{} from node {} (v5.1)",
+            block.getHash(), channel.getRemoteAddress());
+
+        // Phase 3: Direct BlockV5 processing
+        // Use Blockchain.tryToConnect(BlockV5) - no wrapper needed
+        try {
+            chain.tryToConnect(block);
+        } catch (Exception e) {
+            log.error("Failed to process BlockV5 during sync: {}", block.getHash(), e);
+        }
     }
 
     /**
