@@ -101,13 +101,25 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
                 "xfertonew -  transfer the old balance to new address \n",
                 "Usage: balance xfertonew",
                 "  -? --help                    Show help",
+                "",
+                "NOTE: This command now uses v5.1 Transaction architecture.",
+                "      Consider using 'xfertonewv2' command for explicit v5.1 features.",
         };
         try {
             Options opt = parseOptions(usage, input.args());
             if (opt.isSet("help")) {
                 throw new Options.HelpException(opt.usage());
             }
-            println(commands.xferToNew());
+
+            // Verify wallet password (required by v5.1 method)
+            Wallet wallet = new Wallet(kernel.getConfig());
+            if (!wallet.unlock(readPassword())) {
+                println("The password is incorrect");
+                return;
+            }
+
+            // NOTE: Legacy 'xfertonew' command now uses v5.1 architecture (xferToNewV2)
+            println(commands.xferToNewV2());
 
         } catch (Exception e) {
             saveException(e);
@@ -415,8 +427,11 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
     private void processXfer(CommandInput input) {
         final String[] usage = {
                 "xfer -  transfer [AMOUNT] XDAG to the address [ADDRESS]",
-                "Usage: transfer [AMOUNT] [ADDRESS]",
+                "Usage: transfer [AMOUNT] [ADDRESS] [REMARK]",
                 "  -? --help                    Show help",
+                "",
+                "NOTE: This command now uses v5.1 Transaction architecture.",
+                "      Consider using 'xferv2' command for explicit v5.1 features and custom fees.",
         };
         try {
             Options opt = parseOptions(usage, input.args());
@@ -430,19 +445,16 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
                 return;
             }
 
-            Bytes32 hash;
             double amount = BasicUtils.getDouble(argv.get(0));
-
-            String remark = argv.size() == 3 ? argv.get(2) : null;
+            String addressStr = argv.get(1);
+            String remark = argv.size() >= 3 ? argv.get(2) : null;
 
             if (amount < 0) {
                 println("The transfer amount must be greater than 0");
                 return;
             }
 
-            if (WalletUtils.checkAddress(argv.get(1))) {
-                hash = pubAddress2Hash(argv.get(1));
-            } else {
+            if (!WalletUtils.checkAddress(addressStr)) {
                 println("Incorrect address");
                 return;
             }
@@ -452,7 +464,10 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
                 println("The password is incorrect");
                 return;
             }
-            println(commands.xfer(amount, hash, remark));
+
+            // NOTE: Legacy 'xfer' command now uses v5.1 architecture (xferV2)
+            // Using default MIN_GAS fee (100 milli XDAG = 0.1 XDAG)
+            println(commands.xferV2(amount, addressStr, remark, 100.0));
 
         } catch (Exception e) {
             saveException(e);

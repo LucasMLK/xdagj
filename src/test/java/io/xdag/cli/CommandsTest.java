@@ -169,15 +169,8 @@ public class CommandsTest {
         assertEquals("Balance: 18887.000000000 XDAG", str);
     }
 
-    @Test
-    public void testXfer() throws AddressFormatException {
-        XAmount xAmount = XAmount.of(100, XUnit.XDAG);
-        String str = commands.xfer(xAmount.toDecimal(2, XUnit.XDAG).doubleValue(), BasicUtils.pubAddress2Hash("PbwjuQP3y9F3ZnbbWUvue4zpgkQv3DHas"), null);
-        assertEquals("""
-                Transaction :{\s
-                }, it will take several minutes to complete the transaction.\s
-                """, str);
-    }
+    // testXfer() removed - legacy xfer() method has been removed
+    // Use CommandsV5IntegrationTest.testXferV2_Success() for v5.1 transfer testing
 
     @Test
     public void testStats() {
@@ -340,13 +333,7 @@ public class CommandsTest {
                 """, st).replace("\r\n", "\n"), str.replace("\r\n", "\n"));
     }
 
-    @Test
-    public void testXferToNew() {
-        Mockito.when(wallet.getDefKey()).thenReturn(keyPair_1);
-        String str = commands.xferToNew();
-        assertEquals("""
-                 Transaction :{\s
-                 }, it will take several minutes to complete the transaction.""", str);
-    }
+    // testXferToNew() removed - legacy xferToNew() method has been removed
+    // Use TransferE2ETest for v5.1 comprehensive transfer testing
 
 }
