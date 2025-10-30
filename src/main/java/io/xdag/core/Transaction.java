@@ -379,4 +379,118 @@ public class Transaction implements Serializable {
                 .data(data)
                 .build();
     }
+
+    // ========== Serialization ==========
+
+    /**
+     * Serialize transaction to bytes (for storage or network transmission)
+     *
+     * Format (minimum 156 bytes + data length):
+     * [from - 32 bytes]
+     * [to - 32 bytes]
+     * [amount - 8 bytes]
+     * [nonce - 8 bytes]
+     * [fee - 8 bytes]
+     * [data_length - 2 bytes]
+     * [data - variable, max 1024 bytes]
+     * [v - 1 byte]
+     * [r - 32 bytes]
+     * [s - 32 bytes]
+     *
+     * @return serialized transaction bytes
+     */
+    public byte[] toBytes() {
+        int size = getSize();
+        ByteBuffer buffer = ByteBuffer.allocate(size);
+
+        // Serialize transaction data
+        buffer.put(from.toArray());
+        buffer.put(to.toArray());
+        buffer.putLong(amount.toXAmount().toLong());
+        buffer.putLong(nonce);
+        buffer.putLong(fee.toXAmount().toLong());
+        buffer.putShort((short) data.size());
+        buffer.put(data.toArray());
+
+        // Serialize signature
+        buffer.put((byte) v);
+        buffer.put(r != null ? r.toArray() : new byte[32]);
+        buffer.put(s != null ? s.toArray() : new byte[32]);
+
+        return buffer.array();
+    }
+
+    /**
+     * Deserialize transaction from bytes
+     *
+     * @param bytes serialized transaction data
+     * @return Transaction instance
+     * @throws IllegalArgumentException if data is invalid
+     */
+    public static Transaction fromBytes(byte[] bytes) {
+        if (bytes.length < 156) {  // Minimum size without data
+            throw new IllegalArgumentException(
+                "Invalid transaction data: too small (" + bytes.length + " bytes)"
+            );
+        }
+
+        ByteBuffer buffer = ByteBuffer.wrap(bytes);
+
+        // Deserialize transaction data
+        byte[] fromBytes = new byte[32];
+        buffer.get(fromBytes);
+        Bytes32 from = Bytes32.wrap(fromBytes);
+
+        byte[] toBytes = new byte[32];
+        buffer.get(toBytes);
+        Bytes32 to = Bytes32.wrap(toBytes);
+
+        long amountValue = buffer.getLong();
+        XAmount amount = XAmount.ofXAmount(amountValue);
+
+        long nonce = buffer.getLong();
+
+        long feeValue = buffer.getLong();
+        XAmount fee = XAmount.ofXAmount(feeValue);
+
+        short dataLength = buffer.getShort();
+        if (dataLength < 0 || dataLength > MAX_DATA_LENGTH) {
+            throw new IllegalArgumentException(
+                "Invalid data length: " + dataLength
+            );
+        }
+
+        Bytes data;
+        if (dataLength > 0) {
+            byte[] dataBytes = new byte[dataLength];
+            buffer.get(dataBytes);
+            data = Bytes.wrap(dataBytes);
+        } else {
+            data = Bytes.EMPTY;
+        }
+
+        // Deserialize signature
+        int v = buffer.get() & 0xFF;
+
+        byte[] rBytes = new byte[32];
+        buffer.get(rBytes);
+        Bytes32 r = Bytes32.wrap(rBytes);
+
+        byte[] sBytes = new byte[32];
+        buffer.get(sBytes);
+        Bytes32 s = Bytes32.wrap(sBytes);
+
+        // Build transaction
+        return Transaction.builder()
+                .from(from)
+                .to(to)
+                .amount(amount)
+                .nonce(nonce)
+                .fee(fee)
+                .data(data)
+                .v(v)
+                .r(r)
+                .s(s)
+                .build();
+    }
 }
