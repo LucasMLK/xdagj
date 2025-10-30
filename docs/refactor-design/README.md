@@ -56,7 +56,7 @@
 | **缓存命中率** | 无 | 80-90% | **大幅提升** ✅ |
 | **代码质量** | 技术债务高 | 完全现代化 | **显著改善** ✅ |
 
-## 📚 文档列表（21个核心文档）
+## 📚 文档列表（23个核心文档）
 
 ### 🚀 入门文档（4个）
 
@@ -140,24 +140,36 @@
     - 存储优化：575 GB → 5.76 GB（100倍降低）
     - 防止DoS攻击和存储爆炸
 
-### 📝 项目记录（4个）
+### 📝 项目记录与迁移规划（6个）
 
 18. **[DOCUMENTATION_CLEANUP_SUMMARY.md](DOCUMENTATION_CLEANUP_SUMMARY.md)** - 文档清理记录
     - 两次清理历史
     - 从48个文档精简到16个
 
-19. **[PHASE4_APPLICATION_LAYER_MIGRATION.md](PHASE4_APPLICATION_LAYER_MIGRATION.md)** - 应用层 v5.1 迁移完成 ⭐⭐⭐ **NEW!**
+19. **[PHASE4_APPLICATION_LAYER_MIGRATION.md](PHASE4_APPLICATION_LAYER_MIGRATION.md)** - 应用层 v5.1 迁移完成 ⭐⭐⭐
     - 完整的应用层 v5.1 架构迁移记录 (2025-10-30)
     - Commands.java, Wallet.java, PoolAwardManagerImpl 迁移细节
     - CLI 命令 v5.1 支持 (xferv2, xfertonewv2)
     - 13 个完成文档汇总
 
-20. **[migration-logs/](migration-logs/)** - 迁移过程日志 📁
+20. **[../../CORE_ARCHITECTURE_GAP_ANALYSIS.md](../../CORE_ARCHITECTURE_GAP_ANALYSIS.md)** - 核心架构差距分析 ⭐⭐⭐ **NEW!**
+    - 核心层 vs v5.1 设计完整对比 (2025-10-30)
+    - BlockInfo, Block, Address, Transaction 四大结构差距分析
+    - 详细迁移计划（14-20周估算）
+    - 推荐渐进式迁移策略
+
+21. **[../../BLOCKINFO_V5.1_GAP_ANALYSIS.md](../../BLOCKINFO_V5.1_GAP_ANALYSIS.md)** - BlockInfo v5.1 差距分析 ⭐⭐ **NEW!**
+    - BlockInfo：13字段 → 4字段详细方案 (2025-10-30)
+    - ~430个调用点迁移计划
+    - 4周渐进式迁移路线图
+    - 性能优化策略（缓存、延迟加载）
+
+22. **[migration-logs/](migration-logs/)** - 迁移过程日志 📁
     - Phase 2-6 详细迁移日志（30个文档）
     - 代码清理计划和完成记录
     - 所有中间步骤的完整记录
 
-21. **本文档 (README.md)** - 项目总索引
+23. **本文档 (README.md)** - 项目总索引
 
 ## 🚀 快速开始（按角色）
 
@@ -174,7 +186,8 @@
 3. **命名规范**: [NAMING_CONVENTION.md](NAMING_CONVENTION.md) ⭐
 4. **总体进度**: [OVERALL_PROGRESS.md](OVERALL_PROGRESS.md) ⭐⭐⭐
 5. **查询决策**: [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md)
-6. **应用层迁移**: [PHASE4_APPLICATION_LAYER_MIGRATION.md](PHASE4_APPLICATION_LAYER_MIGRATION.md) ⭐⭐⭐ 最新完成
+6. **应用层迁移**: [PHASE4_APPLICATION_LAYER_MIGRATION.md](PHASE4_APPLICATION_LAYER_MIGRATION.md) ⭐⭐⭐
+7. **核心层差距**: [../../CORE_ARCHITECTURE_GAP_ANALYSIS.md](../../CORE_ARCHITECTURE_GAP_ANALYSIS.md) ⭐⭐⭐ **NEW!** 下一步工作
 
 ### 🔍 项目负责人（想了解整体方案）
 1. **核心目标和效果**: 本文档 (README.md) - 概览
@@ -193,8 +206,9 @@
 ### 🏗️ 实施团队（准备开始编码）
 1. **命名规范**: [NAMING_CONVENTION.md](NAMING_CONVENTION.md) ⭐ 第一个要读
 2. **总体进度**: [OVERALL_PROGRESS.md](OVERALL_PROGRESS.md) ⭐⭐⭐ 了解当前状态
-3. **应用层迁移**: [PHASE4_APPLICATION_LAYER_MIGRATION.md](PHASE4_APPLICATION_LAYER_MIGRATION.md) ⭐⭐⭐ 最新完成
-4. **技术规格**:
+3. **应用层迁移**: [PHASE4_APPLICATION_LAYER_MIGRATION.md](PHASE4_APPLICATION_LAYER_MIGRATION.md) ⭐⭐⭐ 已完成
+4. **核心层差距**: [../../CORE_ARCHITECTURE_GAP_ANALYSIS.md](../../CORE_ARCHITECTURE_GAP_ANALYSIS.md) ⭐⭐⭐ **NEW!** 下一步规划
+5. **技术规格**:
    - [CORE_DATA_STRUCTURES.md](CORE_DATA_STRUCTURES.md) - 核心设计 ⭐⭐⭐
    - [CORE_PARAMETERS_DECISIONS.md](CORE_PARAMETERS_DECISIONS.md) - 核心参数 ⭐⭐
    - [HYBRID_SYNC_PROTOCOL.md](HYBRID_SYNC_PROTOCOL.md) - 同步协议

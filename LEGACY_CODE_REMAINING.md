@@ -10,12 +10,9 @@
 
 ### Recently Removed (2025-10-30)
 - ✅ **BlockType.java** (58 lines) - Only used by XdagApiImpl.java, refactored to use string literals
+- ✅ **BlockWrapper.java** (removed) - Wallet.java migrated to use SyncManager.SyncBlock (v5.1 standard)
 - ✅ **XdagApiImpl refactored**: No longer depends on BlockType enum, uses v5.1 approach
-
-### Note: BlockWrapper.java Status
-- **BlockWrapper.java** is still needed by Wallet.java for transaction creation
-- Marked for elimination in future Phase (requires Wallet.java refactoring)
-- Not a quick win - needs comprehensive refactoring
+- ✅ **Wallet.java migrated**: Now returns `List<SyncManager.SyncBlock>` instead of BlockWrapper
 
 ---
 
@@ -322,13 +319,16 @@ Until we complete the 7-10 week full migration plan.
 
 ## 📚 Related Documents
 
+- [CORE_ARCHITECTURE_GAP_ANALYSIS.md](CORE_ARCHITECTURE_GAP_ANALYSIS.md) - **NEW!** Comprehensive core layer gap analysis
+- [BLOCKINFO_V5.1_GAP_ANALYSIS.md](BLOCKINFO_V5.1_GAP_ANALYSIS.md) - BlockInfo detailed migration plan
+- [V5.1_ARCHITECTURE_COMPLETION.md](V5.1_ARCHITECTURE_COMPLETION.md) - Application layer completion report
 - [V5.1_IMPLEMENTATION_STATUS.md](V5.1_IMPLEMENTATION_STATUS.md) - v5.1 implementation status
 - [LEGACY_CODE_CLEANUP_COMPLETE.md](LEGACY_CODE_CLEANUP_COMPLETE.md) - Application layer cleanup report
 - [PHASE6_ACTUAL_COMPLETION.md](PHASE6_ACTUAL_COMPLETION.md) - Phase 6 completion summary
-- [docs/refactor-design/CORE_DATA_STRUCTURES.md](docs/refactor-design/CORE_DATA_STRUCTURES.md) - v5.1 design
+- [docs/refactor-design/CORE_DATA_STRUCTURES.md](docs/refactor-design/CORE_DATA_STRUCTURES.md) - v5.1 design specification
 
 ---
 
 **Created**: 2025-10-30
-**Status**: Application layer 100% clean ✅, BlockWrapper + BlockType removed ✅, Core/Network/Storage need full migration (7-10 weeks)
-**Recommendation**: Keep current state, plan full migration when ready
+**Status**: Application layer 100% clean ✅, BlockWrapper + BlockType removed ✅, Core layer gaps documented in CORE_ARCHITECTURE_GAP_ANALYSIS.md
+**Recommendation**: Keep current state, review CORE_ARCHITECTURE_GAP_ANALYSIS.md for comprehensive core layer migration plan (14-20 weeks estimated)
