@@ -29,6 +29,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.Kernel;
 import io.xdag.core.AbstractXdagLifecycle;
 import io.xdag.core.Block;
+import io.xdag.core.BlockV5;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -179,8 +180,29 @@ public class ChannelManager extends AbstractXdagLifecycle {
         }
     }
 
+    /**
+     * Phase 3.2: Send BlockV5 to all connected peers
+     * Pure v5.1 implementation - no protocol negotiation
+     */
+    public void sendNewBlockV5(BlockV5 block, int ttl) {
+        for (Channel channel : activeChannels.values()) {
+            channel.getP2pHandler().sendNewBlockV5(block, ttl);
+        }
+    }
+
     public void onNewForeignBlock(Block block, int ttl) {
         newForeignBlocks.add(new BlockDistribution(block, ttl));
+    }
+
+    /**
+     * Phase 3.2: Queue BlockV5 from other peers for broadcast
+     * Note: Currently uses legacy BlockDistribution, will be refactored
+     */
+    public void onNewForeignBlockV5(BlockV5 block, int ttl) {
+        // TODO Phase 3.3: Create BlockV5Distribution class
+        // For now, this is a placeholder - BlockV5 foreign blocks are processed directly
+        log.debug("Foreign BlockV5 received: {}, ttl: {}", block.getHash(), ttl);
+        sendNewBlockV5(block, ttl - 1);
     }
 
     private void initWhiteIPs() {

@@ -516,6 +516,28 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
         sendMessage(msg);
     }
 
+    /**
+     * Phase 3.2 - Send BlockV5 to peer
+     *
+     * Sends NEW_BLOCK_V5 message (0x1B) to connected peer.
+     * Should only be called if peer supports v5.1 protocol.
+     *
+     * Usage:
+     * ```java
+     * if (channel.getRemotePeer().supportsV5()) {
+     *     handler.sendNewBlockV5(blockV5, ttl);
+     * }
+     * ```
+     *
+     * @param newBlock BlockV5 to send
+     * @param TTL Time-to-live (number of hops)
+     */
+    public void sendNewBlockV5(BlockV5 newBlock, int TTL) {
+        log.debug("send blockV5:{} to node:{} (v5.1)", newBlock.getHash(), channel.getRemoteAddress());
+        NewBlockV5Message msg = new NewBlockV5Message(newBlock, TTL);
+        sendMessage(msg);
+    }
+
     public long sendGetBlocks(long startTime, long endTime) {
         log.debug("Request blocks between {} and {} from node {}",
                 FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(XdagTime.xdagTimestampToMs(startTime)),

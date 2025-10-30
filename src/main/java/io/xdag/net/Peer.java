@@ -103,6 +103,26 @@ public class Peer {
     }
 
     /**
+     * Check if peer supports v5.1 protocol (BlockV5)
+     *
+     * Phase 3.2: Protocol version detection
+     * Checks if peer's capabilities contain "xdag-v5.1" flag
+     *
+     * @return true if peer supports BlockV5 messages
+     */
+    public boolean supportsV5() {
+        if (capabilities == null) {
+            return false;
+        }
+        for (String capability : capabilities) {
+            if ("xdag-v5.1".equals(capability)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Returns string representation of peer in format: peerId@ip:port
      */
     @Override
