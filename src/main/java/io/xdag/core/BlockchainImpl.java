@@ -95,7 +95,8 @@ public class BlockchainImpl implements Blockchain {
     private final AddressStore addressStore;
     private final BlockStore blockStore;
     private final TransactionHistoryStore txHistoryStore;
-    
+    private final TransactionStore transactionStore;  // Phase 4 - v5.1 Transaction storage
+
     // Store for non-Extra orphan blocks
     private final OrphanBlockStore orphanBlockStore;
 
@@ -135,6 +136,7 @@ public class BlockchainImpl implements Blockchain {
         this.blockStore = kernel.getBlockStore();
         this.orphanBlockStore = kernel.getOrphanBlockStore();
         this.txHistoryStore = kernel.getTxHistoryStore();
+        this.transactionStore = kernel.getTransactionStore();
         snapshotHeight = kernel.getConfig().getSnapshotSpec().getSnapshotHeight();
 
         // Initialize snapshot if enabled
@@ -243,7 +245,193 @@ public class BlockchainImpl implements Blockchain {
         this.listeners.add(listener);
     }
 
-    // Try to connect a new block to the chain
+    // ========== Phase 4 Step 2.1: BlockV5 Support ==========
+
+    /**
+     * Try to connect a BlockV5 to the blockchain (v5.1 implementation)
+     *
+     * Phase 4 Step 2.1: This is the NEW implementation for BlockV5 that uses
+     * Link-based references instead of Address objects.
+     *
+     * @param block BlockV5 to connect (uses List<Link>)
+     * @return ImportResult indicating success or failure
+     */
+    public synchronized ImportResult tryToConnect(BlockV5 block) {
+        return tryToConnectV2(block);
+    }
+
+    /**
+     * Internal implementation for BlockV5 (v5.1 Link-based design)
+     *
+     * Key differences from V1 (old Block + Address):
+     * 1. Uses Link instead of Address
+     * 2. Transaction details retrieved from TransactionStore
+     * 3. Block references contain no amount (only hash + type)
+     *
+     * Phase 4 Step 2.3 Part 2: Added BlockInfo initialization for new blocks
+     *
+     * @param block BlockV5 instance
+     * @return ImportResult
+     */
+    private synchronized ImportResult tryToConnectV2(BlockV5 block) {
+        try {
+            ImportResult result = ImportResult.IMPORTED_NOT_BEST;
+
+            // Phase 1: Basic validation
+            if (block.getTimestamp() > (XdagTime.getCurrentTimestamp() + MAIN_CHAIN_PERIOD / 4)
+                    || block.getTimestamp() < kernel.getConfig().getXdagEra()) {
+                result = ImportResult.INVALID_BLOCK;
+                result.setErrorInfo("Block's time is illegal");
+                log.debug("BlockV5 time is illegal: {}", block.getTimestamp());
+                return result;
+            }
+
+            // Check if block already exists
+            if (isExist(block.getHash())) {
+                return ImportResult.EXIST;
+            }
+
+            if (isExistInMem(block.getHash())) {
+                return ImportResult.IN_MEM;
+            }
+
+            // Validate block structure (from BlockV5.isValid())
+            if (!block.isValid()) {
+                result = ImportResult.INVALID_BLOCK;
+                result.setErrorInfo("BlockV5 structure validation failed");
+                log.debug("BlockV5 validation failed: {}", block.getHash().toHexString());
+                return result;
+            }
+
+            // Phase 2: Validate links (Transaction and Block references)
+            List<Link> links = block.getLinks();
+
+            for (Link link : links) {
+                if (link.isTransaction()) {
+                    // Transaction link validation
+                    Transaction tx = transactionStore.getTransaction(link.getTargetHash());
+                    if (tx == null) {
+                        result = ImportResult.NO_PARENT;
+                        result.setHash(link.getTargetHash());
+                        result.setErrorInfo("Transaction not found: " + link.getTargetHash().toHexString());
+                        log.debug("Transaction {} not found", link.getTargetHash().toHexString());
+                        return result;
+                    }
+
+                    // Validate transaction structure
+                    if (!tx.isValid()) {
+                        result = ImportResult.INVALID_BLOCK;
+                        result.setHash(link.getTargetHash());
+                        result.setErrorInfo("Invalid transaction structure");
+                        log.debug("Transaction {} invalid", tx.getHash().toHexString());
+                        return result;
+                    }
+
+                    // Validate transaction signature
+                    if (!tx.verifySignature()) {
+                        result = ImportResult.INVALID_BLOCK;
+                        result.setHash(link.getTargetHash());
+                        result.setErrorInfo("Invalid transaction signature");
+                        log.debug("Transaction {} signature invalid", tx.getHash().toHexString());
+                        return result;
+                    }
+
+                    // Validate transaction amount (amount + fee >= MIN_GAS)
+                    if (tx.getAmount().add(tx.getFee()).subtract(MIN_GAS).isNegative()) {
+                        result = ImportResult.INVALID_BLOCK;
+                        result.setHash(link.getTargetHash());
+                        result.setErrorInfo("Transaction amount + fee < minGas");
+                        log.debug("Transaction {} amount insufficient", tx.getHash().toHexString());
+                        return result;
+                    }
+
+                } else {
+                    // Block link validation
+                    Block refBlock = getBlockByHash(link.getTargetHash(), false);
+                    if (refBlock == null) {
+                        result = ImportResult.NO_PARENT;
+                        result.setHash(link.getTargetHash());
+                        result.setErrorInfo("Block not found: " + link.getTargetHash().toHexString());
+                        log.debug("Referenced block {} not found", link.getTargetHash().toHexString());
+                        return result;
+                    }
+
+                    // Validate block timestamp order
+                    if (refBlock.getTimestamp() >= block.getTimestamp()) {
+                        result = ImportResult.INVALID_BLOCK;
+                        result.setHash(refBlock.getHash());
+                        result.setErrorInfo("Ref block's time >= block's time");
+                        log.debug("Block {} timestamp order invalid", refBlock.getHash().toHexString());
+                        return result;
+                    }
+                }
+            }
+
+            // ====================
+            // Phase 3: Remove orphan block links
+            // ====================
+            for (Link link : links) {
+                if (link.isBlock()) {
+                    // Remove block links from orphan pool
+                    removeOrphan(link.getTargetHash(), OrphanRemoveActions.ORPHAN_REMOVE_NORMAL);
+                }
+            }
+
+            // ====================
+            // Phase 4: Record Transaction history
+            // ====================
+            // Note: Currently records based on Transaction links
+            // TODO: Redesign onNewTxHistory() to work directly with Transaction objects
+            for (Link link : links) {
+                if (link.isTransaction()) {
+                    Transaction tx = transactionStore.getTransaction(link.getTargetHash());
+                    if (tx != null) {
+                        // Record transaction history for sender (from)
+                        onNewTxHistoryV2(tx.getFrom(), block.getHash(), tx.getAmount(),
+                                        block.getTimestamp(), true /* isFrom */);
+
+                        // Record transaction history for receiver (to)
+                        onNewTxHistoryV2(tx.getTo(), block.getHash(), tx.getAmount(),
+                                        block.getTimestamp(), false /* isFrom */);
+                    }
+                }
+            }
+
+            // ====================
+            // Phase 5: Initialize BlockInfo (Phase 4 Step 2.3 Part 2)
+            // ====================
+            // For BlockV5, we need to initialize BlockInfo with basic values
+            // This enables applyBlockV2() and other BlockInfo-dependent operations
+            BlockInfo initialInfo = BlockInfo.builder()
+                    .hash(block.getHash())
+                    .timestamp(block.getTimestamp())
+                    .type(0L)  // Default type
+                    .flags(0)  // No flags initially
+                    .height(0L)  // Will be set when block becomes main
+                    .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)  // Will be calculated
+                    .ref(null)  // Will be set during applyBlock
+                    .maxDiffLink(null)  // Will be calculated
+                    .amount(XAmount.ZERO)  // Initial amount
+                    .fee(XAmount.ZERO)  // Initial fee
+                    .remark(null)  // No remark
+                    .isSnapshot(false)  // Not a snapshot block
+                    .snapshotInfo(null)  // No snapshot info
+                    .build();
+
+            // Save initial BlockInfo to database
+            blockStore.saveBlockInfoV2(initialInfo);
+
+            log.info("BlockV5 connected successfully with BlockInfo initialized: {}",
+                     block.getHash().toHexString());
+            return result;
+
+        } catch (Throwable e) {
+            log.error("Error connecting BlockV5: " + e.getMessage(), e);
+            return ImportResult.ERROR;
+        }
+    }
+
+    // Try to connect a new block to the chain (V1 - legacy Block with Address)
     @Override
     public synchronized ImportResult tryToConnect(Block block) {
 
@@ -594,6 +782,73 @@ public class BlockchainImpl implements Blockchain {
         }
     }
 
+    /**
+     * Record transaction history (v5.1 version for Transaction objects)
+     *
+     * Phase 4 Step 2.1: This version works with Transaction objects instead of Address objects.
+     * Simplified design that records sender/receiver transaction history without block-level complexity.
+     *
+     * @param address Account address (from or to)
+     * @param blockHash Block hash that includes this transaction
+     * @param amount Transaction amount
+     * @param timestamp Block timestamp
+     * @param isFrom true if this is the sender (from), false if receiver (to)
+     */
+    private void onNewTxHistoryV2(Bytes32 address, Bytes32 blockHash, XAmount amount,
+                                   long timestamp, boolean isFrom) {
+        if (txHistoryStore == null) {
+            return;
+        }
+
+        try {
+            // Create transaction history record
+            // For v5.1, we use a simplified model:
+            // - isFrom=true → sender (similar to XDAG_FIELD_OUTPUT for V1 - money going out)
+            // - isFrom=false → receiver (similar to XDAG_FIELD_INPUT for V1 - money coming in)
+            XdagField.FieldType fieldType = isFrom ? XDAG_FIELD_OUTPUT : XDAG_FIELD_INPUT;
+
+            // Create Address wrapper for TxHistory (temporary compatibility layer)
+            // TODO Phase 4 Step 2.4: Update TxHistory to use Bytes32 addresses directly
+            Address addressWrapper = new Address(address, fieldType, amount, true);
+
+            TxHistory txHistory = new TxHistory();
+            txHistory.setAddress(addressWrapper);
+            txHistory.setHash(BasicUtils.hash2Address(blockHash));
+            txHistory.setTimestamp(timestamp);
+            // No remark for Transaction-based history (remark is block-level, not tx-level)
+
+            // Save transaction history (same logic as V1)
+            if (kernel.getXdagState() == XdagState.CDST || kernel.getXdagState() == XdagState.CTST ||
+                kernel.getXdagState() == XdagState.CONN || kernel.getXdagState() == XdagState.CDSTP ||
+                kernel.getXdagState() == XdagState.CTSTP || kernel.getXdagState() == XdagState.CONNP) {
+                // Batch mode during sync
+                txHistoryStore.batchSaveTxHistory(txHistory);
+            } else {
+                // Normal mode with fallback to RocksDB
+                if (!txHistoryStore.saveTxHistory(txHistory)) {
+                    log.warn("tx history write to mysql fail (V2): {}", txHistory);
+                    // MySQL exception, fall back to RocksDB
+                    // Note: For V2, we don't have an ID field, so we use 0 as placeholder
+                    blockStore.saveTxHistoryToRocksdb(txHistory, 0);
+                } else {
+                    // Check if there are pending entries in RocksDB and flush them
+                    List<TxHistory> txHistoriesInRocksdb = blockStore.getAllTxHistoryFromRocksdb();
+                    if (!txHistoriesInRocksdb.isEmpty()) {
+                        for (TxHistory txHistoryInRocksdb : txHistoriesInRocksdb) {
+                            txHistoryStore.batchSaveTxHistory(txHistoryInRocksdb, txHistoriesInRocksdb.size());
+                        }
+                        if (txHistoryStore.batchSaveTxHistory(null)) {
+                            blockStore.deleteAllTxHistoryFromRocksdb();
+                        }
+                    }
+                }
+            }
+
+        } catch (Exception e) {
+            log.error("Error recording transaction history (V2): " + e.getMessage(), e);
+        }
+    }
+
     // Get transaction history by address
     public List<TxHistory> getBlockTxHistoryByAddress(Bytes32 addressHash, int page, Object... parameters) {
         List<TxHistory> txHistory = Lists.newArrayList();
@@ -795,6 +1050,229 @@ public class BlockchainImpl implements Blockchain {
         } else {
             return block2.equals(block1);
         }
+    }
+
+    // ========== Phase 4 Step 2.2/2.3: BlockV5 applyBlock() Support ==========
+
+    /**
+     * Execute BlockV5 and return gas fee (v5.1 implementation)
+     *
+     * Phase 4 Step 2.2: Transaction execution (Complete)
+     * Phase 4 Step 2.3 Part 2: Block link recursive processing (Complete)
+     *
+     * Key differences from V1:
+     * 1. Uses List<Link> instead of List<Address>
+     * 2. Transaction amount/fee retrieved from TransactionStore
+     * 3. Handles from/to balance updates for Transactions
+     * 4. BlockV5 is immutable, so BlockInfo updates are done in database directly
+     *
+     * @param flag true if this is the main block, false for recursive calls
+     * @param block BlockV5 to execute
+     * @return collected gas fees (or -1 if already processed)
+     */
+    private XAmount applyBlockV2(boolean flag, BlockV5 block) {
+        XAmount gas = XAmount.ZERO;
+
+        // Phase 4 Step 2.3 Part 2: Check if already processed (BI_MAIN_REF flag)
+        BlockInfo blockInfo = loadBlockInfo(block);
+        if (blockInfo != null && (blockInfo.getFlags() & BI_MAIN_REF) != 0) {
+            return XAmount.ZERO.subtract(XAmount.ONE);  // -1 indicates already processed
+        }
+
+        // Mark as BI_MAIN_REF (processing started)
+        updateBlockV5Flag(block, BI_MAIN_REF, true);
+
+        List<Link> links = block.getLinks();
+        if (links == null || links.isEmpty()) {
+            // No links to process, mark as applied
+            updateBlockV5Flag(block, BI_APPLIED, true);
+            return XAmount.ZERO;
+        }
+
+        // Phase 1: Process Block links recursively first
+        for (Link link : links) {
+            if (link.isBlock()) {
+                // Block link: Recursive processing
+                Block refBlock = getBlockByHash(link.getTargetHash(), false);
+                if (refBlock == null) {
+                    log.error("Block not found during apply: {}", link.getTargetHash().toHexString());
+                    return XAmount.ZERO;
+                }
+
+                XAmount ret;
+                BlockInfo refInfo = refBlock.getInfo();
+
+                // Check if already processed
+                if (refInfo != null && (refInfo.getFlags() & BI_MAIN_REF) != 0) {
+                    ret = XAmount.ZERO.subtract(XAmount.ONE);  // -1 indicates already processed
+                } else {
+                    // Recursively process (need full data)
+                    refBlock = getBlockByHash(link.getTargetHash(), true);
+
+                    // For Phase 4 Step 2.3 Part 2: Referenced blocks are legacy Block objects
+                    // Once all blocks are migrated to BlockV5, this can call applyBlockV2() recursively
+                    ret = applyBlock(false, refBlock);
+                }
+
+                // Skip if already processed
+                if (ret.equals(XAmount.ZERO.subtract(XAmount.ONE))) {
+                    continue;
+                }
+
+                // Accumulate gas from recursively processed blocks
+                sumGas = sumGas.add(ret);
+
+                // Update ref field (only for top-level mainBlock)
+                if (flag) {
+                    updateBlockV5Ref(refBlock, block.getHash());
+                }
+
+                // Add collected gas to mainBlock's fee (only for top-level mainBlock)
+                if (flag && sumGas.compareTo(XAmount.ZERO) != 0) {
+                    // For BlockV5, we can't modify the block, but we update BlockInfo in database
+                    BlockInfo mainInfo = loadBlockInfo(block);
+                    if (mainInfo != null) {
+                        BlockInfo updatedInfo = mainInfo.toBuilder()
+                            .fee(mainInfo.getFee().add(sumGas))
+                            .amount(mainInfo.getAmount().add(sumGas))
+                            .build();
+                        saveBlockInfo(updatedInfo);
+                    }
+                    sumGas = XAmount.ZERO;
+                }
+            }
+        }
+
+        // Phase 2: Process Transaction links
+        for (Link link : links) {
+            if (link.isTransaction()) {
+                // Transaction execution
+                Transaction tx = transactionStore.getTransaction(link.getTargetHash());
+                if (tx == null) {
+                    log.error("Transaction not found during apply: {}", link.getTargetHash().toHexString());
+                    return XAmount.ZERO;
+                }
+
+                // Subtract from sender (from address)
+                XAmount fromBalance = addressStore.getBalanceByAddress(tx.getFrom().toArray());
+                XAmount totalDeduction = tx.getAmount().add(tx.getFee());
+
+                if (fromBalance.compareTo(totalDeduction) < 0) {
+                    log.debug("Insufficient balance for tx {}: balance={}, need={}",
+                             tx.getHash().toHexString(), fromBalance, totalDeduction);
+                    return XAmount.ZERO;
+                }
+
+                addressStore.updateBalance(tx.getFrom().toArray(), fromBalance.subtract(totalDeduction));
+                log.debug("applyBlockV2: Subtract from={}, amount={}, fee={}",
+                         tx.getFrom().toHexString(), tx.getAmount(), tx.getFee());
+
+                // Add to receiver (to address)
+                XAmount toBalance = addressStore.getBalanceByAddress(tx.getTo().toArray());
+                addressStore.updateBalance(tx.getTo().toArray(), toBalance.add(tx.getAmount()));
+                log.debug("applyBlockV2: Add to={}, amount={}",
+                         tx.getTo().toHexString(), tx.getAmount());
+
+                // Collect gas fee
+                gas = gas.add(tx.getFee());
+            }
+        }
+
+        // Mark block as BI_APPLIED (processing complete)
+        updateBlockV5Flag(block, BI_APPLIED, true);
+
+        log.debug("applyBlockV2: Completed with gas={}", gas);
+        return gas;
+    }
+
+    // ========== Phase 4 Step 2.3: BlockV5 BlockInfo Helper Methods ==========
+
+    /**
+     * Load BlockInfo for BlockV5 (from block or database)
+     *
+     * Phase 4 Step 2.3 Part 2: Helper method to get BlockInfo for immutable BlockV5.
+     * Since BlockV5 is immutable and info field might be null, we need to load from database.
+     *
+     * @param block BlockV5 instance
+     * @return BlockInfo (may be null if not found)
+     */
+    private BlockInfo loadBlockInfo(BlockV5 block) {
+        // First try to get from block itself
+        if (block.getInfo() != null) {
+            return block.getInfo();
+        }
+
+        // Load from database
+        Block blockFromStore = blockStore.getBlockInfoByHash(block.getHash());
+        if (blockFromStore != null) {
+            return blockFromStore.getInfo();
+        }
+
+        return null;
+    }
+
+    /**
+     * Update BlockV5 flag in database
+     *
+     * Phase 4 Step 2.3 Part 2: Update BlockInfo flags for immutable BlockV5.
+     * Since we can't modify BlockV5 directly, we update BlockInfo in database.
+     *
+     * @param block BlockV5 instance
+     * @param flag Flag to update (BI_MAIN_REF, BI_APPLIED, etc.)
+     * @param direction true to set flag, false to clear flag
+     */
+    private void updateBlockV5Flag(BlockV5 block, byte flag, boolean direction) {
+        BlockInfo info = loadBlockInfo(block);
+        if (info == null) {
+            log.warn("BlockInfo not found for BlockV5: {}", block.getHash().toHexString());
+            return;
+        }
+
+        int newFlags;
+        if (direction) {
+            newFlags = info.getFlags() | flag;
+        } else {
+            newFlags = info.getFlags() & ~flag;
+        }
+
+        BlockInfo updatedInfo = info.toBuilder()
+            .flags(newFlags)
+            .build();
+
+        saveBlockInfo(updatedInfo);
+    }
+
+    /**
+     * Update BlockV5 ref field in database
+     *
+     * Phase 4 Step 2.3 Part 2: Update BlockInfo.ref for BlockV5.
+     *
+     * @param refBlock Referenced block (can be Block or BlockV5)
+     * @param mainBlockHash Hash of the main block that references this block
+     */
+    private void updateBlockV5Ref(Block refBlock, Bytes32 mainBlockHash) {
+        BlockInfo refInfo = refBlock.getInfo();
+        if (refInfo == null) {
+            log.warn("BlockInfo not found for ref block: {}", refBlock.getHash().toHexString());
+            return;
+        }
+
+        BlockInfo updatedInfo = refInfo.toBuilder()
+            .ref(mainBlockHash)
+            .build();
+
+        saveBlockInfo(updatedInfo);
+    }
+
+    /**
+     * Save BlockInfo to database (v5.1 version)
+     *
+     * Phase 4 Step 2.3 Part 2: Save BlockInfo using V2 serialization.
+     *
+     * @param info BlockInfo to save
+     */
+    private void saveBlockInfo(BlockInfo info) {
+        blockStore.saveBlockInfoV2(info);
     }
 
     /**

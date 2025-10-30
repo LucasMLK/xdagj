@@ -220,7 +220,8 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
                            TransactionInfoSender transactionInfoSender)
         throws AddressFormatException {
         if (paymentsToNodesMap.size() == 10) {
-            StringBuilder txHash = commands.xferToNode(paymentsToNodesMap);
+            // Phase 4 Layer 3 Task 4.2: Use v5.1 xferToNodeV2() for node reward distribution
+            StringBuilder txHash = commands.xferToNodeV2(paymentsToNodesMap);
             log.info(String.valueOf(txHash));
             paymentsToNodesMap.clear();
         }

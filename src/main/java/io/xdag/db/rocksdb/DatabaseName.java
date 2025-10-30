@@ -52,6 +52,12 @@ public enum DatabaseName {
 
     TXHISTORY,
 
+    /**
+     * Transaction store (Phase 4 - v5.1)
+     * Primary storage for Transaction objects
+     */
+    TRANSACTION,
+
     // ========== Phase 2 Core Refactor: New Indexes ==========
 
     /**

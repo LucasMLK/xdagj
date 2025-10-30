@@ -75,6 +75,7 @@ public class Kernel {
     protected BlockStore blockStore;
     protected OrphanBlockStore orphanBlockStore;
     protected TransactionHistoryStore txHistoryStore;
+    protected TransactionStore transactionStore;  // Phase 4 - v5.1 Transaction storage
 
     protected SnapshotStore snapshotStore;
 
@@ -110,6 +111,69 @@ public class Kernel {
             if (channel.isFinishHandshake()) {
                 p2pEventHandler.sendNewBlock(channel, block, ttl);
             }
+        }
+    }
+
+    /**
+     * Broadcast a new BlockV5 to all connected peers (Phase 4 Layer 3 Task 1.2)
+     *
+     * TEMPORARY IMPLEMENTATION:
+     * This is a transitional implementation that directly serializes BlockV5.
+     *
+     * TODO Phase 4: Full network layer migration
+     * - Create NewBlockV5Message class for proper message encapsulation
+     * - Update receiving logic to handle BlockV5 deserialization
+     * - Add BlockV5-specific message code for version negotiation
+     * - Implement backward compatibility with legacy Block messages
+     *
+     * Current limitations:
+     * - Uses same NEW_BLOCK message code (receiving nodes may not understand BlockV5 format)
+     * - No version negotiation (assumes all nodes support BlockV5)
+     * - Simplified serialization (may need protocol updates for production)
+     *
+     * @param block BlockV5 to broadcast
+     * @param ttl Time-to-live for broadcast propagation
+     */
+    public void broadcastBlockV5(BlockV5 block, int ttl) {
+        if (p2pService == null || p2pEventHandler == null) {
+            log.warn("P2P service not initialized, cannot broadcast BlockV5");
+            return;
+        }
+
+        try {
+            // Serialize BlockV5
+            byte[] blockBytes = block.toBytes();
+
+            // Create message manually (temporary - should use dedicated NewBlockV5Message)
+            io.xdag.utils.SimpleEncoder enc = new io.xdag.utils.SimpleEncoder();
+            enc.writeBytes(blockBytes);
+            enc.writeInt(ttl);
+            byte[] messageBody = enc.toBytes();
+
+            // Prepend message type (NEW_BLOCK for now - should be NEW_BLOCK_V5 in future)
+            byte[] fullMessage = new byte[messageBody.length + 1];
+            fullMessage[0] = io.xdag.net.message.MessageCode.NEW_BLOCK.toByte();
+            System.arraycopy(messageBody, 0, fullMessage, 1, messageBody.length);
+
+            // Broadcast to all channels
+            int sentCount = 0;
+            for (io.xdag.p2p.channel.Channel channel : p2pService.getChannelManager().getChannels().values()) {
+                if (channel.isFinishHandshake()) {
+                    try {
+                        channel.send(Bytes.wrap(fullMessage));
+                        sentCount++;
+                    } catch (Exception e) {
+                        log.error("Error broadcasting BlockV5 to {}: {}",
+                                channel.getRemoteAddress(), e.getMessage());
+                    }
+                }
+            }
+
+            log.debug("BlockV5 {} broadcasted to {} peers (ttl={})",
+                    block.getHash().toHexString().substring(0, 16) + "...", sentCount, ttl);
+
+        } catch (Exception e) {
+            log.error("Error broadcasting BlockV5: {}", e.getMessage(), e);
         }
     }
 
@@ -208,6 +272,13 @@ public class Kernel {
 
         orphanBlockStore = new OrphanBlockStoreImpl(dbFactory.getDB(DatabaseName.ORPHANIND));
         orphanBlockStore.start();
+
+        // Initialize TransactionStore (Phase 4 - v5.1)
+        transactionStore = new io.xdag.db.rocksdb.TransactionStoreImpl(
+                dbFactory.getDB(DatabaseName.TRANSACTION),
+                dbFactory.getDB(DatabaseName.INDEX));
+        transactionStore.start();
+        log.info("Transaction Store init.");
 
         if (config.getEnableTxHistory()) {
             long txPageSizeLimit = config.getTxPageSizeLimit();

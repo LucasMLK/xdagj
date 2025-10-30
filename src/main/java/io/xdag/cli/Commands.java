@@ -849,10 +849,23 @@ public class Commands {
     }
 
     /**
-     * Distribute block rewards to node
+     * Distribute block rewards to node (Legacy method)
+     *
+     * @deprecated Use {@link #xferToNodeV2(Map)} instead.
+     *             This method uses legacy Address + Block architecture.
+     *             xferToNodeV2() uses v5.1 Transaction + BlockV5 architecture with the following improvements:
+     *             1. Account-level aggregation (reduces transaction count)
+     *             2. Independent Transaction objects (better validation)
+     *             3. Link-based references (cleaner architecture)
+     *             4. Detailed distribution output (improved logging)
+     *
+     *             Migration status: PoolAwardManagerImpl has been migrated to xferToNodeV2() (Phase 4 Task 4.2).
+     *             This method is kept for backward compatibility only.
+     *
      * @param paymentsToNodesMap Map of addresses and keypairs for node payments
      * @return StringBuilder containing transaction result message
      */
+    @Deprecated
     public StringBuilder xferToNode(Map<Address, ECKeyPair> paymentsToNodesMap) {
         StringBuilder str = new StringBuilder("Tx hash paid to the node :{");
         MutableBytes32 to = MutableBytes32.create();
@@ -906,5 +919,530 @@ public class Commands {
 
         long count = kernel.getBlockFinalizationService().manualFinalize();
         return String.format("Manual finalization completed. %d blocks finalized.", count);
+    }
+
+    // ========== Phase 4 Layer 3: v5.1 Transaction Methods ==========
+
+    /**
+     * Transfer XDAG using v5.1 Transaction architecture (convenience overload with default fee)
+     *
+     * Phase 4 Layer 3 Phase 2: Full implementation with configurable fee and remark support.
+     *
+     * This is a convenience method that uses the default fee of 100 milli-XDAG.
+     *
+     * @param sendAmount Amount to send
+     * @param toAddress Recipient address (Base58 encoded)
+     * @param remark Optional transaction remark (encoded to Transaction.data field)
+     * @return Transaction result message
+     */
+    public String xferV2(double sendAmount, String toAddress, String remark) {
+        // Use default fee of 100 milli-XDAG
+        return xferV2(sendAmount, toAddress, remark, 100.0);
+    }
+
+    /**
+     * Transfer XDAG using v5.1 Transaction architecture (full implementation)
+     *
+     * Phase 4 Layer 3 Phase 2: Full implementation with configurable fee and remark support.
+     *
+     * Key differences from xfer():
+     * 1. Uses Transaction instead of Address
+     * 2. Uses BlockV5 instead of Block
+     * 3. Uses Link to reference Transaction
+     * 4. Stores Transaction in TransactionStore
+     * 5. Supports configurable fee
+     * 6. Properly encodes remark to Transaction.data field
+     * 7. Simplified: only single-account transfers (no batch)
+     *
+     * @param sendAmount Amount to send
+     * @param toAddress Recipient address (Base58 encoded)
+     * @param remark Optional transaction remark (encoded to Transaction.data field)
+     * @param feeMilliXdag Transaction fee in milli-XDAG (e.g., 100.0 = 0.1 XDAG)
+     * @return Transaction result message
+     */
+    public String xferV2(double sendAmount, String toAddress, String remark, double feeMilliXdag) {
+        try {
+            // Convert amount
+            XAmount amount = XAmount.of(BigDecimal.valueOf(sendAmount), XUnit.XDAG);
+            XAmount fee = XAmount.of(BigDecimal.valueOf(feeMilliXdag), XUnit.MILLI_XDAG);
+            XAmount totalRequired = amount.add(fee);
+
+            // Parse recipient address
+            Bytes32 to;
+            if (checkAddress(toAddress)) {
+                // Base58 address format
+                to = pubAddress2Hash(toAddress);
+            } else if (toAddress.length() == 32) {
+                // Hash format
+                to = address2Hash(toAddress);
+            } else {
+                to = getHash(toAddress);
+            }
+
+            if (to == null) {
+                return "Invalid recipient address format.";
+            }
+
+            // Find account with sufficient balance
+            ECKeyPair fromAccount = null;
+            Bytes32 fromAddress = null;
+            long currentNonce = 0;
+
+            for (ECKeyPair account : kernel.getWallet().getAccounts()) {
+                byte[] addr = toBytesAddress(account).toArray();
+                XAmount balance = kernel.getAddressStore().getBalanceByAddress(addr);
+
+                if (balance.compareTo(totalRequired) >= 0) {
+                    fromAccount = account;
+                    fromAddress = keyPair2Hash(account);
+                    // Get current nonce
+                    UInt64 txQuantity = kernel.getAddressStore().getTxQuantity(addr);
+                    currentNonce = txQuantity.toLong() + 1;
+                    break;
+                }
+            }
+
+            if (fromAccount == null) {
+                return "Balance not enough. Need " + totalRequired.toDecimal(9, XUnit.XDAG).toPlainString() + " XDAG";
+            }
+
+            // Phase 2 Task 2.1: Process remark and encode to Transaction.data field
+            Bytes remarkData = Bytes.EMPTY;
+            if (remark != null && !remark.isEmpty()) {
+                // Encode remark as UTF-8 bytes
+                remarkData = Bytes.wrap(remark.getBytes(StandardCharsets.UTF_8));
+            }
+
+            // Create Transaction
+            Transaction tx = Transaction.builder()
+                    .from(fromAddress)
+                    .to(to)
+                    .amount(amount)
+                    .nonce(currentNonce)
+                    .fee(fee)
+                    .data(remarkData)  // Phase 2 Task 2.1: Encoded remark
+                    .build();
+
+            // Sign Transaction
+            Transaction signedTx = tx.sign(fromAccount);
+
+            // Validate Transaction
+            if (!signedTx.isValid()) {
+                return "Transaction validation failed.";
+            }
+
+            if (!signedTx.verifySignature()) {
+                return "Transaction signature verification failed.";
+            }
+
+            // Save Transaction to TransactionStore
+            kernel.getTransactionStore().saveTransaction(signedTx);
+
+            // Create BlockV5 with Transaction link
+            List<Link> links = Lists.newArrayList(Link.toTransaction(signedTx.getHash()));
+
+            // Create BlockHeader
+            BlockHeader header = BlockHeader.builder()
+                    .timestamp(XdagTime.getCurrentTimestamp())
+                    .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
+                    .nonce(Bytes32.ZERO)
+                    .coinbase(fromAddress)
+                    .hash(null)  // Will be calculated by BlockV5.getHash()
+                    .build();
+
+            // Create BlockV5
+            BlockV5 block = BlockV5.builder()
+                    .header(header)
+                    .links(links)
+                    .info(null)  // Will be initialized by tryToConnectV2()
+                    .build();
+
+            // Validate and add block
+            // Phase 4 Layer 3 Task 1.1: Blockchain interface now supports BlockV5
+            ImportResult result = kernel.getBlockchain().tryToConnect(block);
+
+            if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
+                // Update nonce in address store
+                byte[] fromAddr = toBytesAddress(fromAccount).toArray();
+                kernel.getAddressStore().updateTxQuantity(fromAddr, UInt64.valueOf(currentNonce));
+
+                // Phase 4 Layer 3 Task 1.2: Broadcast BlockV5 using new network method
+                int ttl = kernel.getConfig().getNodeSpec().getTTL();
+                kernel.broadcastBlockV5(block, ttl);
+
+                // Phase 2 Task 2.1: Build success message with optional remark
+                StringBuilder successMsg = new StringBuilder();
+                successMsg.append("Transaction created successfully!\n");
+                successMsg.append(String.format("  Transaction hash: %s\n",
+                        signedTx.getHash().toHexString().substring(0, 16) + "..."));
+                successMsg.append(String.format("  Block hash: %s\n",
+                        hash2Address(block.getHash())));
+                successMsg.append(String.format("  From: %s\n",
+                        fromAddress.toHexString().substring(0, 16) + "..."));
+                successMsg.append(String.format("  To: %s\n",
+                        to.toHexString().substring(0, 16) + "..."));
+                successMsg.append(String.format("  Amount: %s XDAG\n",
+                        amount.toDecimal(9, XUnit.XDAG).toPlainString()));
+                successMsg.append(String.format("  Fee: %s XDAG\n",
+                        fee.toDecimal(9, XUnit.XDAG).toPlainString()));
+
+                // Show remark if present
+                if (remark != null && !remark.isEmpty()) {
+                    successMsg.append(String.format("  Remark: %s\n", remark));
+                }
+
+                successMsg.append(String.format("  Nonce: %d\n", currentNonce));
+                successMsg.append(String.format("  Status: %s\n", result.name()));
+                successMsg.append(String.format("\n✅ BlockV5 broadcasted to network (TTL=%d)", ttl));
+
+                return successMsg.toString();
+            } else {
+                return String.format(
+                    "Transaction failed!\n" +
+                    "  Result: %s\n" +
+                    "  Error: %s",
+                    result.name(),
+                    result.getErrorInfo() != null ? result.getErrorInfo() : "Unknown error"
+                );
+            }
+
+        } catch (Exception e) {
+            log.error("xferV2 failed: " + e.getMessage(), e);
+            return "Transaction failed: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Transfer block balance to a new address using v5.1 Transaction architecture
+     *
+     * Phase 4 Layer 3 Phase 3: Block balance transfer migration using v5.1 design.
+     *
+     * This method transfers all confirmed block balances to the default key address.
+     * Unlike legacy xferToNew(), this uses Transaction objects for each transfer.
+     *
+     * Key differences from xferToNew():
+     * 1. Uses Transaction instead of Address
+     * 2. Uses BlockV5 instead of Block
+     * 3. Creates one Transaction per account balance
+     * 4. Simpler logic: account-to-account transfers (not block-as-input)
+     *
+     * @return Transaction result message
+     */
+    public String xferToNewV2() {
+        try {
+            StringBuilder result = new StringBuilder();
+            result.append("Block Balance Transfer (v5.1):\n\n");
+
+            // Target address (default key)
+            Bytes32 toAddress = keyPair2Hash(kernel.getWallet().getDefKey());
+            String remark = "block balance to new address";
+
+            // Collect all confirmed block balances by account
+            Map<Integer, XAmount> accountBalances = new HashMap<>();
+
+            kernel.getBlockStore().fetchOurBlocks(pair -> {
+                int index = pair.getKey();
+                Block block = pair.getValue();
+
+                // Skip if block is too recent (less than 2 * CONFIRMATIONS_COUNT epochs old)
+                if (XdagTime.getCurrentEpoch() < XdagTime.getEpoch(block.getTimestamp()) + 2 * CONFIRMATIONS_COUNT) {
+                    return false;
+                }
+
+                // Add block balance to account total
+                if (compareAmountTo(XAmount.ZERO, block.getInfo().getAmount()) < 0) {
+                    XAmount currentBalance = accountBalances.getOrDefault(index, XAmount.ZERO);
+                    accountBalances.put(index, currentBalance.add(block.getInfo().getAmount()));
+                }
+
+                return false;
+            });
+
+            if (accountBalances.isEmpty()) {
+                return "No confirmed block balances available for transfer.";
+            }
+
+            result.append(String.format("Found %d accounts with confirmed balances\n\n", accountBalances.size()));
+
+            // Transfer each account's balance using xferV2
+            int successCount = 0;
+            XAmount totalTransferred = XAmount.ZERO;
+
+            for (Map.Entry<Integer, XAmount> entry : accountBalances.entrySet()) {
+                int accountIndex = entry.getKey();
+                XAmount balance = entry.getValue();
+
+                // Skip if balance is too small (less than fee)
+                XAmount fee = XAmount.of(100, XUnit.MILLI_XDAG);
+                if (balance.compareTo(fee) <= 0) {
+                    result.append(String.format("  Account %d: %.9f XDAG (too small, skipped)\n",
+                            accountIndex, balance.toDecimal(9, XUnit.XDAG).doubleValue()));
+                    continue;
+                }
+
+                // Calculate transfer amount (balance - fee)
+                XAmount transferAmount = balance.subtract(fee);
+
+                // Get account key
+                ECKeyPair fromAccount = kernel.getWallet().getAccounts().get(accountIndex);
+                Bytes32 fromAddress = keyPair2Hash(fromAccount);
+
+                // Get current nonce
+                byte[] addr = toBytesAddress(fromAccount).toArray();
+                UInt64 txQuantity = kernel.getAddressStore().getTxQuantity(addr);
+                long currentNonce = txQuantity.toLong() + 1;
+
+                // Create Transaction
+                Bytes remarkData = Bytes.wrap(remark.getBytes(StandardCharsets.UTF_8));
+                Transaction tx = Transaction.builder()
+                        .from(fromAddress)
+                        .to(toAddress)
+                        .amount(transferAmount)
+                        .nonce(currentNonce)
+                        .fee(fee)
+                        .data(remarkData)
+                        .build();
+
+                // Sign Transaction
+                Transaction signedTx = tx.sign(fromAccount);
+
+                // Validate Transaction
+                if (!signedTx.isValid() || !signedTx.verifySignature()) {
+                    result.append(String.format("  Account %d: %.9f XDAG (validation failed)\n",
+                            accountIndex, balance.toDecimal(9, XUnit.XDAG).doubleValue()));
+                    continue;
+                }
+
+                // Save Transaction to TransactionStore
+                kernel.getTransactionStore().saveTransaction(signedTx);
+
+                // Create BlockV5 with Transaction link
+                List<Link> links = Lists.newArrayList(Link.toTransaction(signedTx.getHash()));
+
+                BlockHeader header = BlockHeader.builder()
+                        .timestamp(XdagTime.getCurrentTimestamp())
+                        .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
+                        .nonce(Bytes32.ZERO)
+                        .coinbase(fromAddress)
+                        .hash(null)
+                        .build();
+
+                BlockV5 block = BlockV5.builder()
+                        .header(header)
+                        .links(links)
+                        .info(null)
+                        .build();
+
+                // Validate and add block
+                ImportResult importResult = kernel.getBlockchain().tryToConnect(block);
+
+                if (importResult == ImportResult.IMPORTED_BEST || importResult == ImportResult.IMPORTED_NOT_BEST) {
+                    // Update nonce
+                    kernel.getAddressStore().updateTxQuantity(addr, UInt64.valueOf(currentNonce));
+
+                    // Broadcast
+                    int ttl = kernel.getConfig().getNodeSpec().getTTL();
+                    kernel.broadcastBlockV5(block, ttl);
+
+                    // Update stats
+                    successCount++;
+                    totalTransferred = totalTransferred.add(transferAmount);
+
+                    result.append(String.format("  Account %d: %.9f XDAG → %.9f XDAG (✅ %s)\n",
+                            accountIndex,
+                            balance.toDecimal(9, XUnit.XDAG).doubleValue(),
+                            transferAmount.toDecimal(9, XUnit.XDAG).doubleValue(),
+                            hash2Address(block.getHash())));
+                } else {
+                    result.append(String.format("  Account %d: %.9f XDAG (❌ %s)\n",
+                            accountIndex,
+                            balance.toDecimal(9, XUnit.XDAG).doubleValue(),
+                            importResult.name()));
+                }
+            }
+
+            result.append(String.format("\nSummary:\n"));
+            result.append(String.format("  Successful transfers: %d\n", successCount));
+            result.append(String.format("  Total transferred: %.9f XDAG\n",
+                    totalTransferred.toDecimal(9, XUnit.XDAG).doubleValue()));
+            result.append("\nIt will take several minutes to complete the transactions.");
+
+            return result.toString();
+
+        } catch (Exception e) {
+            log.error("xferToNewV2 failed: " + e.getMessage(), e);
+            return "Block balance transfer failed: " + e.getMessage();
+        }
+    }
+
+    /**
+     * Distribute node rewards using v5.1 Transaction architecture
+     *
+     * Phase 4 Layer 3 Phase 4: Node reward distribution migration using v5.1 design.
+     *
+     * This method distributes accumulated node rewards to the default key address.
+     * Unlike legacy xferToNode(), this uses Transaction objects for each reward.
+     *
+     * Key differences from xferToNode():
+     * 1. Uses Transaction instead of Address
+     * 2. Uses BlockV5 instead of Block
+     * 3. Creates one Transaction per account balance
+     * 4. Simpler logic: account-to-account transfers (not block-as-input)
+     *
+     * @param paymentsToNodesMap Map of block addresses and keypairs for node payments
+     *                            (from PoolAwardManagerImpl batching)
+     * @return Transaction result message (StringBuilder for compatibility)
+     */
+    public StringBuilder xferToNodeV2(Map<Address, ECKeyPair> paymentsToNodesMap) {
+        try {
+            StringBuilder result = new StringBuilder();
+            result.append("Node Reward Distribution (v5.1):\n\n");
+
+            // Target address (default key)
+            Bytes32 toAddress = keyPair2Hash(kernel.getWallet().getDefKey());
+            String remark = "Pay to " + kernel.getConfig().getNodeSpec().getNodeTag();
+
+            // Aggregate amounts by account (multiple blocks may belong to same account)
+            Map<Integer, XAmount> accountRewards = new HashMap<>();
+            Map<Integer, ECKeyPair> accountKeys = new HashMap<>();
+
+            // Build account index lookup
+            List<ECKeyPair> allAccounts = kernel.getWallet().getAccounts();
+            Map<ECKeyPair, Integer> keyToIndex = new HashMap<>();
+            for (int i = 0; i < allAccounts.size(); i++) {
+                keyToIndex.put(allAccounts.get(i), i);
+            }
+
+            // Aggregate rewards by account
+            for (Map.Entry<Address, ECKeyPair> entry : paymentsToNodesMap.entrySet()) {
+                Address addr = entry.getKey();
+                ECKeyPair key = entry.getValue();
+
+                Integer accountIndex = keyToIndex.get(key);
+                if (accountIndex == null) {
+                    result.append(String.format("  Warning: Unknown account key for block %s (skipped)\n",
+                            hash2Address(Bytes32.wrap(addr.getAddress()))));
+                    continue;
+                }
+
+                XAmount currentReward = accountRewards.getOrDefault(accountIndex, XAmount.ZERO);
+                accountRewards.put(accountIndex, currentReward.add(addr.getAmount()));
+                accountKeys.put(accountIndex, key);
+            }
+
+            if (accountRewards.isEmpty()) {
+                return new StringBuilder("No valid node rewards to distribute.");
+            }
+
+            result.append(String.format("Found %d accounts with node rewards\n\n", accountRewards.size()));
+
+            // Transfer each account's rewards using Transaction
+            int successCount = 0;
+            XAmount totalDistributed = XAmount.ZERO;
+
+            for (Map.Entry<Integer, XAmount> entry : accountRewards.entrySet()) {
+                int accountIndex = entry.getKey();
+                XAmount rewardAmount = entry.getValue();
+
+                // Skip if reward is too small (less than fee)
+                XAmount fee = XAmount.of(100, XUnit.MILLI_XDAG);
+                if (rewardAmount.compareTo(fee) <= 0) {
+                    result.append(String.format("  Account %d: %.9f XDAG (too small, skipped)\n",
+                            accountIndex, rewardAmount.toDecimal(9, XUnit.XDAG).doubleValue()));
+                    continue;
+                }
+
+                // Calculate transfer amount (reward - fee)
+                XAmount transferAmount = rewardAmount.subtract(fee);
+
+                // Get account key
+                ECKeyPair fromAccount = accountKeys.get(accountIndex);
+                Bytes32 fromAddress = keyPair2Hash(fromAccount);
+
+                // Get current nonce
+                byte[] addr = toBytesAddress(fromAccount).toArray();
+                UInt64 txQuantity = kernel.getAddressStore().getTxQuantity(addr);
+                long currentNonce = txQuantity.toLong() + 1;
+
+                // Create Transaction
+                Bytes remarkData = Bytes.wrap(remark.getBytes(StandardCharsets.UTF_8));
+                Transaction tx = Transaction.builder()
+                        .from(fromAddress)
+                        .to(toAddress)
+                        .amount(transferAmount)
+                        .nonce(currentNonce)
+                        .fee(fee)
+                        .data(remarkData)
+                        .build();
+
+                // Sign Transaction
+                Transaction signedTx = tx.sign(fromAccount);
+
+                // Validate Transaction
+                if (!signedTx.isValid() || !signedTx.verifySignature()) {
+                    result.append(String.format("  Account %d: %.9f XDAG (validation failed)\n",
+                            accountIndex, rewardAmount.toDecimal(9, XUnit.XDAG).doubleValue()));
+                    continue;
+                }
+
+                // Save Transaction to TransactionStore
+                kernel.getTransactionStore().saveTransaction(signedTx);
+
+                // Create BlockV5 with Transaction link
+                List<Link> links = Lists.newArrayList(Link.toTransaction(signedTx.getHash()));
+
+                BlockHeader header = BlockHeader.builder()
+                        .timestamp(XdagTime.getCurrentTimestamp())
+                        .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
+                        .nonce(Bytes32.ZERO)
+                        .coinbase(fromAddress)
+                        .hash(null)
+                        .build();
+
+                BlockV5 block = BlockV5.builder()
+                        .header(header)
+                        .links(links)
+                        .info(null)
+                        .build();
+
+                // Validate and add block
+                ImportResult importResult = kernel.getBlockchain().tryToConnect(block);
+
+                if (importResult == ImportResult.IMPORTED_BEST || importResult == ImportResult.IMPORTED_NOT_BEST) {
+                    // Update nonce
+                    kernel.getAddressStore().updateTxQuantity(addr, UInt64.valueOf(currentNonce));
+
+                    // Broadcast
+                    int ttl = kernel.getConfig().getNodeSpec().getTTL();
+                    kernel.broadcastBlockV5(block, ttl);
+
+                    // Update stats
+                    successCount++;
+                    totalDistributed = totalDistributed.add(transferAmount);
+
+                    result.append(String.format("  Account %d: %.9f XDAG → %.9f XDAG (✅ %s)\n",
+                            accountIndex,
+                            rewardAmount.toDecimal(9, XUnit.XDAG).doubleValue(),
+                            transferAmount.toDecimal(9, XUnit.XDAG).doubleValue(),
+                            hash2Address(block.getHash())));
+                } else {
+                    result.append(String.format("  Account %d: %.9f XDAG (❌ %s)\n",
+                            accountIndex,
+                            rewardAmount.toDecimal(9, XUnit.XDAG).doubleValue(),
+                            importResult.name()));
+                }
+            }
+
+            result.append(String.format("\nSummary:\n"));
+            result.append(String.format("  Successful distributions: %d\n", successCount));
+            result.append(String.format("  Total distributed: %.9f XDAG\n",
+                    totalDistributed.toDecimal(9, XUnit.XDAG).doubleValue()));
+
+            return result;
+
+        } catch (Exception e) {
+            log.error("xferToNodeV2 failed: " + e.getMessage(), e);
+            return new StringBuilder("Node reward distribution failed: " + e.getMessage());
+        }
     }
 }

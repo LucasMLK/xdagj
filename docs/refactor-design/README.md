@@ -1,6 +1,6 @@
 # XDAG 重构设计文档
 
-> **项目状态 (2025-10-29)**: Phase 1-5 全部完成 ✅, Phase 6 部分完成 (6.3, 6.4, 6.7) 🎉
+> **项目状态 (2025-10-30)**: Phase 1-5 全部完成 ✅, Phase 6 部分完成, 应用层v5.1迁移 100% 完成 🎉
 >
 > **测试状态**: 334/334 tests passing (100%) ✅
 >
@@ -9,6 +9,10 @@
 > - ✅ 网络带宽节省 63% (P2P协议升级)
 > - ✅ 代码完全现代化 (BlockLink API)
 > - ✅ Flags字段移除 (推导状态)
+> - ✅ **应用层 v5.1 架构迁移完成** (2025-10-30) 🚀
+>   - Commands.java 完全支持 v5.1
+>   - PoolAwardManagerImpl 生产环境迁移完成
+>   - CLI 命令支持 v5.1 (xferv2, xfertonewv2)
 > - ✅ **核心数据结构v5.1设计完成** (2025-10-29)
 >   - 极简架构：只有Transaction和Block两种类型
 >   - TPS 23,200（96.7% Visa水平）
@@ -18,7 +22,7 @@
 
 ## 概述
 
-本目录包含 XDAG 完整重构方案的详细设计文档和完成记录，项目已完成 Phase 1-5 的全部工作。
+本目录包含 XDAG 完整重构方案的详细设计文档和完成记录，项目已完成 Phase 1-5 的全部工作，以及应用层 v5.1 架构迁移。
 
 **已完成核心成果**:
 - ✅ **数据结构现代化** (Phase 1): BlockInfo, ChainStats, BlockLink, CompactSerializer
@@ -27,6 +31,7 @@
 - ✅ **P2P协议升级** (Phase 4): CompactSerializer网络集成, 63%带宽节省
 - ✅ **Block内部重构** (Phase 5): 100% BlockLink, 激进API清理
 - 🔄 **架构清理** (Phase 6): Referenced索引 (6.3), 类型检测 (6.4), Flags移除 (6.7)
+- ✅ **应用层 v5.1 迁移**: Commands.java, Wallet.java, PoolAwardManagerImpl完全迁移 🎉
 
 ## 🎯 实际成果
 
@@ -39,7 +44,7 @@
 | **缓存命中率** | 无 | 80-90% | **大幅提升** ✅ |
 | **代码质量** | 技术债务高 | 完全现代化 | **显著改善** ✅ |
 
-## 📚 文档列表（19个核心文档）
+## 📚 文档列表（20个核心文档）
 
 ### 🚀 入门文档（4个）
 
@@ -123,13 +128,19 @@
     - 存储优化：575 GB → 5.76 GB（100倍降低）
     - 防止DoS攻击和存储爆炸
 
-### 📝 项目记录（2个）
+### 📝 项目记录（3个）
 
 18. **[DOCUMENTATION_CLEANUP_SUMMARY.md](DOCUMENTATION_CLEANUP_SUMMARY.md)** - 文档清理记录
     - 两次清理历史
     - 从48个文档精简到16个
 
-19. **本文档 (README.md)** - 项目总索引
+19. **[PHASE4_APPLICATION_LAYER_MIGRATION.md](PHASE4_APPLICATION_LAYER_MIGRATION.md)** - 应用层 v5.1 迁移完成 ⭐⭐⭐ **NEW!**
+    - 完整的应用层 v5.1 架构迁移记录 (2025-10-30)
+    - Commands.java, Wallet.java, PoolAwardManagerImpl 迁移细节
+    - CLI 命令 v5.1 支持 (xferv2, xfertonewv2)
+    - 13 个完成文档汇总
+
+20. **本文档 (README.md)** - 项目总索引
 
 ## 🚀 快速开始（按角色）
 
@@ -138,6 +149,7 @@
 2. **了解命名规范**: [NAMING_CONVENTION.md](NAMING_CONVENTION.md) ⭐ 必读
 3. **查看完成状态**: [OVERALL_PROGRESS.md](OVERALL_PROGRESS.md) ⭐⭐⭐
 4. **深入技术细节**: [CORE_DATA_STRUCTURES.md](CORE_DATA_STRUCTURES.md) ⭐⭐⭐
+5. **应用层迁移**: [PHASE4_APPLICATION_LAYER_MIGRATION.md](PHASE4_APPLICATION_LAYER_MIGRATION.md) ⭐⭐⭐ 最新完成
 
 ### 🤖 AI助手（断线后恢复上下文）
 1. **立即阅读**: [CONTEXT_RECOVERY.md](CONTEXT_RECOVERY.md) 🚨
@@ -145,11 +157,13 @@
 3. **命名规范**: [NAMING_CONVENTION.md](NAMING_CONVENTION.md) ⭐
 4. **总体进度**: [OVERALL_PROGRESS.md](OVERALL_PROGRESS.md) ⭐⭐⭐
 5. **查询决策**: [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md)
+6. **应用层迁移**: [PHASE4_APPLICATION_LAYER_MIGRATION.md](PHASE4_APPLICATION_LAYER_MIGRATION.md) ⭐⭐⭐ 最新完成
 
 ### 🔍 项目负责人（想了解整体方案）
 1. **核心目标和效果**: 本文档 (README.md) - 概览
 2. **总体进度**: [OVERALL_PROGRESS.md](OVERALL_PROGRESS.md) ⭐⭐⭐
 3. **设计决策**: [DESIGN_DECISIONS.md](DESIGN_DECISIONS.md) - 为什么这样设计
+4. **应用层迁移**: [PHASE4_APPLICATION_LAYER_MIGRATION.md](PHASE4_APPLICATION_LAYER_MIGRATION.md) ⭐⭐⭐ 最新完成
 
 ### 🔒 安全审计人员
 1. **安全机制总览**: [DAG_SYNC_PROTECTION.md](DAG_SYNC_PROTECTION.md) - 6层防护
@@ -162,7 +176,8 @@
 ### 🏗️ 实施团队（准备开始编码）
 1. **命名规范**: [NAMING_CONVENTION.md](NAMING_CONVENTION.md) ⭐ 第一个要读
 2. **总体进度**: [OVERALL_PROGRESS.md](OVERALL_PROGRESS.md) ⭐⭐⭐ 了解当前状态
-3. **技术规格**:
+3. **应用层迁移**: [PHASE4_APPLICATION_LAYER_MIGRATION.md](PHASE4_APPLICATION_LAYER_MIGRATION.md) ⭐⭐⭐ 最新完成
+4. **技术规格**:
    - [CORE_DATA_STRUCTURES.md](CORE_DATA_STRUCTURES.md) - 核心设计 ⭐⭐⭐
    - [CORE_PARAMETERS_DECISIONS.md](CORE_PARAMETERS_DECISIONS.md) - 核心参数 ⭐⭐
    - [HYBRID_SYNC_PROTOCOL.md](HYBRID_SYNC_PROTOCOL.md) - 同步协议
@@ -355,11 +370,11 @@ Timeline:
 
 ---
 
-**版本**: v2.1
+**版本**: v2.2
 **创建时间**: 2025-01
-**最后更新**: 2025-10-29
+**最后更新**: 2025-10-30
 **作者**: Claude Code
-**状态**: Phase 1-5 完成 ✅, Phase 6 部分完成 🔄, v5.1设计完成 ✅
+**状态**: Phase 1-5 完成 ✅, Phase 6 部分完成 🔄, 应用层 v5.1 迁移完成 ✅, v5.1设计完成 ✅
 **测试状态**: 334/334 passing (100%) ✅
 
 **联系方式**：如有问题或建议，请在GitHub提issue或PR。

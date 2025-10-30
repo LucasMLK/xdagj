@@ -82,6 +82,9 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         commandExecute.put("stats", new CommandMethods(this::processStats, this::defaultCompleter));
         commandExecute.put("xfer", new CommandMethods(this::processXfer, this::defaultCompleter));
         commandExecute.put("xfertonew", new CommandMethods(this::processXferToNew, this::defaultCompleter));
+        // Phase 6 Task 6.2: v5.1 CLI commands
+        commandExecute.put("xferv2", new CommandMethods(this::processXferV2, this::defaultCompleter));
+        commandExecute.put("xfertonewv2", new CommandMethods(this::processXferToNewV2, this::defaultCompleter));
         commandExecute.put("pool", new CommandMethods(this::processPool, this::defaultCompleter));
         commandExecute.put("keygen", new CommandMethods(this::processKeygen, this::defaultCompleter));
         commandExecute.put("net", new CommandMethods(this::processNet, this::defaultCompleter));
@@ -105,6 +108,49 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
                 throw new Options.HelpException(opt.usage());
             }
             println(commands.xferToNew());
+
+        } catch (Exception e) {
+            saveException(e);
+        }
+    }
+
+    /**
+     * Process xfertonewv2 command - Transfer block balances using v5.1 Transaction architecture
+     * Phase 6 Task 6.2: CLI command for xferToNewV2()
+     */
+    private void processXferToNewV2(CommandInput input) {
+        final String[] usage = {
+                "xfertonewv2 - transfer confirmed block balances to default address using v5.1 architecture",
+                "Usage: xfertonewv2",
+                "  -? --help         Show help",
+                "",
+                "Description:",
+                "  This command transfers all confirmed block balances (older than 2*CONFIRMATIONS_COUNT epochs)",
+                "  to the default account address using v5.1 Transaction architecture.",
+                "",
+                "  Key differences from 'xfertonew':",
+                "  - Uses v5.1 Transaction + BlockV5 architecture",
+                "  - Account-level aggregation (more efficient)",
+                "  - Independent Transaction objects (better validation)",
+                "  - Detailed transfer output with statistics",
+                "",
+                "  Note: Requires wallet password for authorization.",
+        };
+        try {
+            Options opt = parseOptions(usage, input.args());
+            if (opt.isSet("help")) {
+                throw new Options.HelpException(opt.usage());
+            }
+
+            // Verify wallet password
+            Wallet wallet = new Wallet(kernel.getConfig());
+            if (!wallet.unlock(readPassword())) {
+                println("The password is incorrect");
+                return;
+            }
+
+            // Execute block balance transfer using v5.1 method
+            println(commands.xferToNewV2());
 
         } catch (Exception e) {
             saveException(e);
@@ -407,6 +453,85 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
                 return;
             }
             println(commands.xfer(amount, hash, remark));
+
+        } catch (Exception e) {
+            saveException(e);
+        }
+    }
+
+    /**
+     * Process xferv2 command - Transfer using v5.1 Transaction architecture
+     * Phase 6 Task 6.2: CLI command for xferV2()
+     */
+    private void processXferV2(CommandInput input) {
+        final String[] usage = {
+                "xferv2 - transfer [AMOUNT] XDAG to the address [ADDRESS] using v5.1 architecture",
+                "Usage: xferv2 [AMOUNT] [ADDRESS] [REMARK] [FEE_MILLI_XDAG]",
+                "  AMOUNT            Amount to send in XDAG",
+                "  ADDRESS           Recipient address (Base58 format)",
+                "  REMARK            (Optional) Transaction remark",
+                "  FEE_MILLI_XDAG    (Optional) Transaction fee in milli-XDAG (default: 100 = 0.1 XDAG)",
+                "  -? --help         Show help",
+                "",
+                "Examples:",
+                "  xferv2 10.5 2gHjwW7kNTj8VTg7yoS5fMT1APU7gGFSXm8jFL9qLMNYSZPM                    # Default fee (0.1 XDAG)",
+                "  xferv2 10.5 2gHjwW7kNTj8VTg7yoS5fMT1APU7gGFSXm8jFL9qLMNYSZPM \"payment\"         # With remark",
+                "  xferv2 10.5 2gHjwW7kNTj8VTg7yoS5fMT1APU7gGFSXm8jFL9qLMNYSZPM \"payment\" 200   # Custom fee",
+        };
+        try {
+            Options opt = parseOptions(usage, input.args());
+            List<String> argv = opt.args();
+            if (opt.isSet("help")) {
+                throw new Options.HelpException(opt.usage());
+            }
+
+            if (argv.size() < 2) {
+                println("Missing required parameters: AMOUNT and ADDRESS");
+                println("Usage: xferv2 [AMOUNT] [ADDRESS] [REMARK] [FEE_MILLI_XDAG]");
+                return;
+            }
+
+            // Parse amount
+            double amount = BasicUtils.getDouble(argv.get(0));
+            if (amount < 0) {
+                println("The transfer amount must be greater than 0");
+                return;
+            }
+
+            // Parse address
+            String addressStr = argv.get(1);
+            if (!WalletUtils.checkAddress(addressStr)) {
+                println("Incorrect address format. Please use Base58 address.");
+                return;
+            }
+
+            // Parse optional remark
+            String remark = argv.size() >= 3 ? argv.get(2) : null;
+
+            // Parse optional fee (in milli-XDAG)
+            double feeMilliXdag = 100.0; // Default: 0.1 XDAG
+            if (argv.size() >= 4) {
+                try {
+                    feeMilliXdag = Double.parseDouble(argv.get(3));
+                    if (feeMilliXdag < 0) {
+                        println("Fee must be non-negative");
+                        return;
+                    }
+                } catch (NumberFormatException e) {
+                    println("Invalid fee format: " + argv.get(3));
+                    return;
+                }
+            }
+
+            // Verify wallet password
+            Wallet wallet = new Wallet(kernel.getConfig());
+            if (!wallet.unlock(readPassword())) {
+                println("The password is incorrect");
+                return;
+            }
+
+            // Execute transfer using v5.1 method
+            println(commands.xferV2(amount, addressStr, remark, feeMilliXdag));
 
         } catch (Exception e) {
             saveException(e);

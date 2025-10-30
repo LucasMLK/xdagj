@@ -56,6 +56,7 @@ import java.util.Objects;
  * BlockV5 {
  *     header: BlockHeader  (timestamp, difficulty, nonce, coinbase, hash_cache)
  *     links: List<Link>    (references to Transactions and other Blocks)
+ *     info: BlockInfo      (runtime metadata, not serialized)
  * }
  * ```
  *
@@ -82,6 +83,22 @@ public class BlockV5 implements Serializable {
      */
     @Builder.Default
     List<Link> links = new ArrayList<>();
+
+    /**
+     * Block metadata (runtime only, not serialized)
+     *
+     * Phase 4 Step 2.3: BlockInfo integration
+     * - Contains: flags, difficulty, ref, maxDiffLink, amount, fee, etc.
+     * - Loaded from BlockStore at runtime
+     * - Does NOT participate in serialization (toBytes/fromBytes)
+     * - Does NOT participate in equals/hashCode (only hash is used)
+     *
+     * Usage:
+     * - getInfo(): Get BlockInfo (may be null if not loaded)
+     * - withInfo(info): Create new BlockV5 with BlockInfo attached
+     */
+    @Builder.Default
+    BlockInfo info = null;
 
     // ========== Core Configuration ==========
 
@@ -248,6 +265,42 @@ public class BlockV5 implements Serializable {
      */
     public boolean exceedsMaxLinks() {
         return links.size() > MAX_LINKS_PER_BLOCK;
+    }
+
+    // ========== BlockInfo Operations (Phase 4 Step 2.3) ==========
+
+    /**
+     * Create new BlockV5 with BlockInfo attached
+     *
+     * Phase 4 Step 2.3: This method allows attaching runtime metadata to BlockV5
+     *
+     * Usage:
+     * ```java
+     * BlockV5 blockWithInfo = block.withInfo(newInfo);
+     * ```
+     *
+     * @param newInfo BlockInfo to attach
+     * @return new BlockV5 with BlockInfo attached
+     */
+    public BlockV5 withInfo(BlockInfo newInfo) {
+        return this.toBuilder().info(newInfo).build();
+    }
+
+    /**
+     * Get BlockInfo (may be null if not loaded from BlockStore)
+     *
+     * Phase 4 Step 2.3: BlockInfo contains runtime metadata:
+     * - flags (BI_MAIN, BI_APPLIED, BI_REF, BI_MAIN_REF, etc.)
+     * - difficulty, ref, maxDiffLink
+     * - amount, fee
+     * - remark, snapshot info
+     *
+     * Note: Use withInfo() to attach BlockInfo after loading from BlockStore
+     *
+     * @return BlockInfo or null if not loaded
+     */
+    public BlockInfo getInfo() {
+        return info;
     }
 
     // ========== Link Operations ==========

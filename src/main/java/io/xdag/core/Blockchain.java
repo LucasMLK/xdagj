@@ -41,6 +41,19 @@ public interface Blockchain {
     ImportResult tryToConnect(Block block);
 
     /**
+     * Try to connect a new BlockV5 to the blockchain (Phase 4 Layer 3 Task 1.1)
+     *
+     * This method validates and imports a BlockV5 into the blockchain.
+     * BlockV5 uses Link-based references instead of Address objects.
+     *
+     * @param block BlockV5 to connect
+     * @return ImportResult indicating the result of the import operation
+     *
+     * @since Phase 4 v5.1
+     */
+    ImportResult tryToConnect(BlockV5 block);
+
+    /**
      * Create a new block (v5.1 migration in progress)
      *
      * NOTE: This method signature is transitional during v5.1 migration.

@@ -448,7 +448,23 @@ public synchronized ImportResult tryToConnect(Block block) {
 
 ---
 
-#### Step 2.2: BlockchainImpl.applyBlock() 重写 (3天)
+#### Step 2.2: BlockchainImpl.applyBlock() 重写 (3天) ✅
+
+**状态**: ✅ 已完成 (2025-10-30)
+**实际耗时**: 0.5天
+**实现位置**: BlockchainImpl.java:1044-1121
+
+**完成内容**:
+1. ✅ 创建 applyBlockV2() 方法框架
+2. ✅ 实现 Transaction link 执行逻辑（from/to 余额更新、fee 收集）
+3. ✅ Block link 处理延期到 Step 2.3（需要 BlockInfo 架构）
+4. ✅ 编译通过，v5.1 测试套件全部通过（55/55）
+
+**设计决策**:
+- Transaction 执行完全实现（不依赖 BlockInfo）
+- Block link 递归处理延期（依赖 BlockInfo.BI_MAIN_REF 标志）
+- 复用现有 addressStore.updateBalance() 方法
+- 详细的 TODO 标记说明 Step 2.3 需要完成的工作
 
 **目标**: 使用 Link + Transaction 处理金额
 
@@ -520,7 +536,22 @@ private XAmount applyBlock(boolean flag, Block block) {
 
 ---
 
-#### Step 2.3: Block (旧) → BlockV5 迁移 (1天)
+#### Step 2.3: Block (旧) → BlockV5 迁移 (1天) ⏳
+
+**状态**: ⏳ 进行中 - Part 1 完成 (2025-10-30)
+**实际耗时**: Part 1: 0.5天
+**实现位置**: BlockV5.java:87-304
+
+**Part 1 完成内容** (2025-10-30):
+1. ✅ 为 BlockV5 添加 BlockInfo 字段（不参与序列化）
+2. ✅ 实现 getInfo() 和 withInfo() 方法
+3. ✅ 编译通过，v5.1 测试套件全部通过（55/55）
+4. ✅ 创建 PHASE4_STEP2.3_PART1_COMPLETION.md 文档
+
+**Part 2 待完成**:
+1. ⏸️ 完成 applyBlockV2() 延期功能（Block link 递归处理）
+2. ⏸️ 在 tryToConnectV2() 中创建和管理 BlockInfo
+3. ⏸️ 更新 BlockInfo 标志（BI_MAIN_REF, BI_APPLIED 等）
 
 **目标**: 激活 BlockV5，删除旧 Block
 
