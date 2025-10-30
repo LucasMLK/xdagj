@@ -428,9 +428,9 @@ public class Transaction implements Serializable {
      * @throws IllegalArgumentException if data is invalid
      */
     public static Transaction fromBytes(byte[] bytes) {
-        if (bytes.length < 156) {  // Minimum size without data
+        if (bytes.length < 155) {  // Minimum size without data (from+to+amount+nonce+fee+data_length+v+r+s)
             throw new IllegalArgumentException(
-                "Invalid transaction data: too small (" + bytes.length + " bytes)"
+                "Invalid transaction data: too small (" + bytes.length + " bytes, minimum 155)"
             );
         }
 
