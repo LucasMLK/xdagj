@@ -37,7 +37,35 @@ public interface Blockchain {
     // Get pre-seed for snapshot initialization
     byte[] getPreSeed();
 
-    // Try to connect a new block to the blockchain
+    /**
+     * Try to connect a new block to the blockchain (legacy v1.0 implementation).
+     *
+     * @deprecated As of v5.1 refactor, this method accepts legacy Block objects with Address-based
+     *             references. After complete refactor and system restart with BlockV5-only storage,
+     *             all block connection should use {@link #tryToConnect(BlockV5)}.
+     *
+     *             <p><b>Migration Path:</b>
+     *             <ul>
+     *               <li>Phase 5.4 (Current): Mark as @Deprecated</li>
+     *               <li>Post-Restart: After fresh start, all blocks are BlockV5,
+     *                   making this Block-based method obsolete</li>
+     *               <li>Future: Remove this method entirely after system is stable with BlockV5-only</li>
+     *             </ul>
+     *
+     *             <p><b>Replacement Strategy:</b>
+     *             Use {@link #tryToConnect(BlockV5)} for connecting new blocks. After complete refactor,
+     *             all block creation will produce BlockV5 objects, so this method will no longer be called.
+     *
+     *             <p><b>Impact:</b>
+     *             This method is the main entry point for adding blocks to the blockchain. It validates
+     *             block structure, checks parent blocks, handles fork resolution, and updates the main
+     *             chain. Used by network layer, mining, and wallet operations.
+     *
+     * @param block The Block to connect (legacy Address-based structure)
+     * @return ImportResult indicating success or failure
+     * @see #tryToConnect(BlockV5)
+     */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     ImportResult tryToConnect(Block block);
 
     /**
