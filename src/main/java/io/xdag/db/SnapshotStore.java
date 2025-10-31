@@ -24,7 +24,6 @@
 package io.xdag.db;
 
 import io.xdag.core.LegacyBlockInfo;
-import io.xdag.core.PreBlockInfo;
 import io.xdag.core.XAmount;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.db.rocksdb.RocksdbKVSource;
@@ -37,7 +36,8 @@ public interface SnapshotStore {
 
     void reset();
 
-    void makeSnapshot(RocksdbKVSource blockSource,RocksdbKVSource indexSource,boolean b);
+    // Phase 7.1.2: Removed boolean parameter - always deserialize to LegacyBlockInfo directly
+    void makeSnapshot(RocksdbKVSource blockSource,RocksdbKVSource indexSource);
 
     void saveSnapshotToIndex(BlockStore blockStore, TransactionHistoryStore txHistoryStore, List<ECKeyPair> keys,long snapshotTime);
 
@@ -45,7 +45,7 @@ public interface SnapshotStore {
 
     void save(RocksIterator iter, LegacyBlockInfo blockInfo);
 
-    void setBlockInfo(LegacyBlockInfo blockInfo, PreBlockInfo preBlockInfo);
+    // Phase 7.1.2: Removed setBlockInfo() method - PreBlockInfo deleted
 
     XAmount getOurBalance();
 

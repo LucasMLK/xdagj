@@ -231,7 +231,8 @@ public class SnapshotStoreTest {
         indexSource.setConfig(dataConfig);
         indexSource.init();
 
-        snapshotStore.makeSnapshot(blockSource, indexSource,false);
+        // Phase 7.1.2: Removed boolean parameter - always use LegacyBlockInfo
+        snapshotStore.makeSnapshot(blockSource, indexSource);
         height = snapshotStore.getHeight();
     }
 

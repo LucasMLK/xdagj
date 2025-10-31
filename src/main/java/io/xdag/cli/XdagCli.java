@@ -188,12 +188,8 @@ public class XdagCli extends Launcher {
         } else if (cmd.hasOption(XdagOption.IMPORT_MNEMONIC.toString())) {
             importMnemonic(cmd.getOptionValue(XdagOption.IMPORT_MNEMONIC.toString()).trim());
         } else if (cmd.hasOption(XdagOption.MAKE_SNAPSHOT.toString())) {
-            boolean convertXAmount = false;
-            String action = cmd.getOptionValue(XdagOption.MAKE_SNAPSHOT.toString());
-            if (action != null && action.trim().equals("convertxamount")) {
-                convertXAmount = true;
-            }
-            makeSnapshot(convertXAmount);
+            // Phase 7.1.2: Removed convertXAmount parameter - always use LegacyBlockInfo
+            makeSnapshot();
         } else {
             if (cmd.hasOption(XdagOption.ENABLE_SNAPSHOT.toString())) {
                 String[] values = cmd.getOptionValues(XdagOption.ENABLE_SNAPSHOT.toString().trim());
@@ -500,9 +496,9 @@ public class XdagCli extends Launcher {
         return new String(console.readPassword(prompt));
     }
 
-    public void makeSnapshot(boolean b) {
+    // Phase 7.1.2: Removed boolean parameter - always deserialize to LegacyBlockInfo directly
+    public void makeSnapshot() {
         System.out.println("make snapshot start");
-        System.out.println("convertXAmount = " + b);
         long start = System.currentTimeMillis();
         this.getConfig().getSnapshotSpec().setSnapshotJ(true);
         RocksdbKVSource blockSource = new RocksdbKVSource(DatabaseName.TIME.toString());
@@ -516,7 +512,7 @@ public class XdagCli extends Launcher {
         indexSource.init();
         SnapshotStore snapshotStore = new SnapshotStoreImpl(snapshotSource);
 
-        snapshotStore.makeSnapshot(blockSource,indexSource,b);
+        snapshotStore.makeSnapshot(blockSource,indexSource);
 
         Path source = Paths.get(getConfig().getRootDir() + "/rocksdb/xdagdb/ADDRESS");
         Path target = Paths.get(getConfig().getRootDir() + "/rocksdb/xdagdb/SNAPSHOT/ADDRESS");

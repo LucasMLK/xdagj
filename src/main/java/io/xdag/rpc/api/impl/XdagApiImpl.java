@@ -66,7 +66,6 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static io.xdag.cli.Commands.getStateByFlags;
 import static io.xdag.config.Constants.*;
-import static io.xdag.core.BlockState.MAIN;
 import static io.xdag.core.XdagField.FieldType.*;
 import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 import static io.xdag.db.mysql.TransactionHistoryStoreImpl.totalPage;
@@ -597,7 +596,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         List<TxHistory> txHistories = blockchain.getBlockTxHistoryByAddress(block.getHash(), page, parameters);
         List<BlockResponse.TxLink> txLinks = Lists.newArrayList();
         // 1. earning info
-        if (getStateByFlags(block.getInfo().getFlags()).equals(MAIN.getDesc()) && block.getInfo().getHeight() > kernel.getConfig().getSnapshotSpec().getSnapshotHeight()) {
+        if (getStateByFlags(block.getInfo().getFlags()).equals("Main") && block.getInfo().getHeight() > kernel.getConfig().getSnapshotSpec().getSnapshotHeight()) {
             BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
             String remark = "";
             if (block.getInfo().getRemark() != null && block.getInfo().getRemark().size() != 0) {
@@ -650,7 +649,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                 .hash(block.getInfo().getRef() == null ? "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
                         : Bytes32.wrap(block.getInfo().getRef()).toUnprefixedHexString())
                 .amount(block.getInfo().getRef() == null ? String.format("%.9f", amount2xdag(0)) :
-                        (getStateByFlags(block.getInfo().getFlags()).equals(MAIN.getDesc()) ? kernel.getBlockStore().getBlockInfoByHash(block.getHash()).getFee().toDecimal(9, XUnit.XDAG).toPlainString() :
+                        (getStateByFlags(block.getInfo().getFlags()).equals("Main") ? kernel.getBlockStore().getBlockInfoByHash(block.getHash()).getFee().toDecimal(9, XUnit.XDAG).toPlainString() :
                                 (block.getInputs().isEmpty() ? XAmount.ZERO.toDecimal(9, XUnit.XDAG).toPlainString() :
                                         MIN_GAS.multiply(block.getOutputs().size()).toDecimal(9, XUnit.XDAG).toPlainString())))// calculate the fee
                 .direction(2);
@@ -730,7 +729,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     }
 
     private String getType(Block block) {
-        if (getStateByFlags(block.getInfo().getFlags()).equals(MAIN.getDesc())) {
+        if (getStateByFlags(block.getInfo().getFlags()).equals("Main")) {
             return "Main";
         } else if (block.getInsigs() == null || block.getInsigs().isEmpty()) {
             if (CollectionUtils.isEmpty(block.getInputs()) && CollectionUtils.isEmpty(block.getOutputs())) {

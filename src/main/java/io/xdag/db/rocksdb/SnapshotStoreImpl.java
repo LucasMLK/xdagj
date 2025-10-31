@@ -28,7 +28,18 @@ import com.esotericsoftware.kryo.KryoException;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.util.DefaultInstantiatorStrategy;
-import io.xdag.core.*;
+import io.xdag.core.Address;
+import io.xdag.core.Block;
+import io.xdag.core.LegacyBlockInfo;
+import io.xdag.core.SnapshotInfo;
+import io.xdag.core.TxHistory;
+import io.xdag.core.XAmount;
+import io.xdag.core.XUnit;
+import io.xdag.core.XdagBlock;
+import io.xdag.core.XdagExtStats;
+import io.xdag.core.XdagField;
+import io.xdag.core.XdagStats;
+import io.xdag.core.XdagTopStatus;
 import io.xdag.crypto.hash.HashUtils;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.crypto.keys.Signature;
@@ -95,37 +106,18 @@ public class SnapshotStoreImpl implements SnapshotStore {
         snapshotSource.reset();
     }
 
-    public void setBlockInfo(LegacyBlockInfo blockInfo, PreBlockInfo preBlockInfo) {
-        blockInfo.setSnapshot(preBlockInfo.isSnapshot());
-        blockInfo.setSnapshotInfo(preBlockInfo.getSnapshotInfo());
-        blockInfo.setFee(XAmount.of(preBlockInfo.getFee()));
-        blockInfo.setHashlow(preBlockInfo.getHash());
-        blockInfo.setDifficulty(preBlockInfo.getDifficulty());
-        blockInfo.setAmount(preBlockInfo.getAmount());
-        blockInfo.setFlags(preBlockInfo.getFlags());
-        blockInfo.setHeight(preBlockInfo.getHeight());
-        blockInfo.setMaxDiffLink(preBlockInfo.getMaxDiffLink());
-        blockInfo.setRef(preBlockInfo.getRef());
-        blockInfo.setRemark(preBlockInfo.getRemark());
-        blockInfo.setTimestamp(preBlockInfo.getTimestamp());
-        blockInfo.setType(preBlockInfo.getType());
-    }
+    // Phase 7.1.2: Removed setBlockInfo() method - PreBlockInfo deleted, use LegacyBlockInfo directly
 
-    public void makeSnapshot(RocksdbKVSource blockSource, RocksdbKVSource indexSource, boolean b) {
+    // Phase 7.1.2: Removed boolean parameter - always deserialize to LegacyBlockInfo directly
+    public void makeSnapshot(RocksdbKVSource blockSource, RocksdbKVSource indexSource) {
         try (RocksIterator iter = indexSource.getDb().newIterator()) {
             for (iter.seek(new byte[]{HASH_BLOCK_INFO}); iter.isValid() && iter.key()[0] < SUMS_BLOCK_INFO; iter.next()) {
-                PreBlockInfo preBlockInfo;
                 LegacyBlockInfo blockInfo = new LegacyBlockInfo();
                 if (iter.value() != null) {
                     try {
-                        if (b) {
-                            preBlockInfo = (PreBlockInfo) deserialize(iter.value(), PreBlockInfo.class);
-                            setBlockInfo(blockInfo, preBlockInfo);
-                        } else {
-                            blockInfo = (LegacyBlockInfo) deserialize(iter.value(), LegacyBlockInfo.class);
-                        }
+                        blockInfo = (LegacyBlockInfo) deserialize(iter.value(), LegacyBlockInfo.class);
                     } catch (DeserializationException e) {
-//                        log.error("hash low:{}", Hex.toHexString(blockInfo.getHash()));
+//                        log.error("hash low:{}", Hex.toHexString(blockInfo.getHashlow()));
                         log.error("can't deserialize data:{}", Hex.toHexString(iter.value()));
                         log.error(e.getMessage(), e);
                     }
@@ -342,7 +334,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
         kryo.register(SnapshotInfo.class);
         kryo.register(UInt64.class);
         kryo.register(XAmount.class);
-        kryo.register(PreBlockInfo.class);
+        // Phase 7.1.2: Removed PreBlockInfo.class registration (class deleted)
     }
 
 }

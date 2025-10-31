@@ -57,7 +57,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static io.xdag.config.Constants.*;
-import static io.xdag.core.BlockState.MAIN;
 import static io.xdag.core.XdagField.FieldType.*;
 import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 import static io.xdag.utils.BasicUtils.*;
@@ -71,6 +70,12 @@ import static io.xdag.utils.WalletUtils.*;
 public class Commands {
 
     private final Kernel kernel;
+
+    // Block state string constants (Phase 7.1: Replacing BlockState enum)
+    private static final String MAIN_STATE = "Main";
+    private static final String ACCEPTED_STATE = "Accepted";
+    private static final String REJECTED_STATE = "Rejected";
+    private static final String PENDING_STATE = "Pending";
 
     public Commands(Kernel kernel) {
         this.kernel = kernel;
@@ -123,17 +128,17 @@ public class Commands {
         int flag = flags & ~(BI_OURS | BI_REMARK);
         // 1F
         if (flag == (BI_REF | BI_MAIN_REF | BI_APPLIED | BI_MAIN | BI_MAIN_CHAIN)) {
-            return MAIN.getDesc();
+            return MAIN_STATE;
         }
         // 1C
         if (flag == (BI_REF | BI_MAIN_REF | BI_APPLIED)) {
-            return BlockState.ACCEPTED.getDesc();
+            return ACCEPTED_STATE;
         }
         // 18
         if (flag == (BI_REF | BI_MAIN_REF)) {
-            return BlockState.REJECTED.getDesc();
+            return REJECTED_STATE;
         }
-        return BlockState.PENDING.getDesc();
+        return PENDING_STATE;
     }
 
     /**
@@ -371,7 +376,7 @@ public class Commands {
                     outputs.append(String.format("    output: %s           %s%n",
                             output.getIsAddress() ? Base58.encodeCheck(
                                 hash2byte(output.getAddress())) : hash2Address(output.getAddress()),
-                            getStateByFlags(block.getInfo().getFlags()).equals(MAIN.getDesc()) ? output.getAmount().toDecimal(9, XUnit.XDAG).toPlainString() :
+                            getStateByFlags(block.getInfo().getFlags()).equals(MAIN_STATE) ? output.getAmount().toDecimal(9, XUnit.XDAG).toPlainString() :
                                     block.getInputs().isEmpty() ? XAmount.ZERO.toDecimal(9, XUnit.XDAG).toPlainString() :
                                             output.getAmount().subtract(MIN_GAS).toDecimal(9, XUnit.XDAG).toPlainString()
                     ));
@@ -385,7 +390,7 @@ public class Commands {
                  direction  address                                    amount                 time
                 """;
         StringBuilder tx = new StringBuilder();
-        if (getStateByFlags(block.getInfo().getFlags()).equals(MAIN.getDesc()) && block.getInfo().getHeight() > kernel.getConfig().getSnapshotSpec().getSnapshotHeight()) {
+        if (getStateByFlags(block.getInfo().getFlags()).equals(MAIN_STATE) && block.getInfo().getHeight() > kernel.getConfig().getSnapshotSpec().getSnapshotHeight()) {
             tx.append(String.format("    earn: %s           %s   %s%n", hash2Address(block.getHash()),
                             kernel.getBlockchain().getReward(block.getInfo().getHeight()).toDecimal(9, XUnit.XDAG).toPlainString(),
                             FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS")
@@ -431,7 +436,7 @@ public class Commands {
                 hash2Address(block.getHash()), block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
                 block.getInfo().getRef() == null ? "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" : hash2Address(block.getInfo().getRef()),
                 block.getInfo().getRef() == null ? XAmount.ZERO.toDecimal(9, XUnit.XDAG).toPlainString() :
-                        (getStateByFlags(block.getInfo().getFlags()).equals(MAIN.getDesc()) ? kernel.getBlockStore().getBlockInfoByHash(block.getHash()).getFee().toDecimal(9, XUnit.XDAG).toPlainString() :
+                        (getStateByFlags(block.getInfo().getFlags()).equals(MAIN_STATE) ? kernel.getBlockStore().getBlockInfoByHash(block.getHash()).getFee().toDecimal(9, XUnit.XDAG).toPlainString() :
                                 (block.getInputs().isEmpty() ? XAmount.ZERO.toDecimal(9, XUnit.XDAG).toPlainString() :
                                         MIN_GAS.multiply(block.getOutputs().size()).toDecimal(9, XUnit.XDAG).toPlainString()))
         )
