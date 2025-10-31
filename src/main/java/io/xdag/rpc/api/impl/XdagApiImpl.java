@@ -46,6 +46,7 @@ import io.xdag.rpc.api.XdagApi;
 import io.xdag.utils.BasicUtils;
 import io.xdag.utils.BytesUtils;
 import io.xdag.utils.WalletUtils;
+import io.xdag.utils.XdagTime;
 import io.xdag.utils.exception.XdagOverFlowException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -770,6 +771,19 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         }
     }
 
+    /**
+     * RPC transaction creation method (Phase 8.1: BlockV5 + Transaction migration)
+     *
+     * Phase 8.1.1: Single-account RPC transactions
+     * Phase 8.1.2: Multi-account RPC transactions (deferred)
+     *
+     * @param sendValue Amount to send in XDAG
+     * @param fromAddress Source address (null = multi-account aggregation, deprecated in Phase 8.1.1)
+     * @param toAddress Destination address
+     * @param remark Optional transaction remark
+     * @param txNonce Transaction nonce (null = auto-calculate)
+     * @param processResponse Response object to populate
+     */
     public void doXfer(
             double sendValue,
             Bytes32 fromAddress,
@@ -778,6 +792,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             UInt64 txNonce,
             ProcessResponse processResponse
     ) {
+        // Validate amount
         XAmount amount;
         try {
             amount = XAmount.of(BigDecimal.valueOf(sendValue), XUnit.XDAG);
@@ -786,104 +801,152 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             processResponse.setErrMsg("param invalid");
             return;
         }
-        MutableBytes32 to = MutableBytes32.create();
-        to.set(8, toAddress.slice(8, 20));
 
-        // Remaining balance to transfer
-        AtomicReference<XAmount> remain = new AtomicReference<>(amount);
-        // Transfer inputs
-        Map<Address, ECKeyPair> ourAccounts = Maps.newHashMap();
+        XAmount fee = MIN_GAS;  // 0.1 XDAG fee
+        XAmount totalRequired = amount.add(fee);
 
-        // If no from address, search from node accounts
-        if (fromAddress == null) {
-            log.debug("fromAddress is null, search all our blocks");
-            // our block select
-
-            List<ECKeyPair> accounts = kernel.getWallet().getAccounts();
-            for (ECKeyPair account : accounts) {
-                Bytes addr = toBytesAddress(account);
-                XAmount addrBalance = kernel.getAddressStore().getBalanceByAddress(addr.toArray());
-
-                if (txNonce == null) {
-                    UInt64 currentTxQuantity = kernel.getAddressStore().getTxQuantity(addr.toArray());
-                    txNonce = currentTxQuantity.add(UInt64.ONE);
-                } else if (txNonce.compareTo(kernel.getAddressStore().getTxQuantity(addr.toArray()).add(UInt64.ONE)) != 0) {
-                    processResponse.setCode(ERR_XDAG_PARAM);
-                    processResponse.setErrMsg("The nonce passed is incorrect. Please fill in the nonce according to the query value");
-                    return;
-                }
-
-                if (compareAmountTo(remain.get(), addrBalance) <= 0) {
-                    ourAccounts.put(new Address(keyPair2Hash(account), XDAG_FIELD_INPUT, remain.get(), true), account);
-                    remain.set(XAmount.ZERO);
-                    break;
-                } else {
-                    if (compareAmountTo(addrBalance, XAmount.ZERO) > 0) {
-                        remain.set(remain.get().subtract(addrBalance));
-                        ourAccounts.put(new Address(keyPair2Hash(account), XDAG_FIELD_INPUT, addrBalance, true), account);
-                    }
-                }
-            }
-        } else {
+        // Phase 8.1.1: Single-account BlockV5 + Transaction path
+        if (fromAddress != null) {
+            // Extract address bytes (20 bytes)
             MutableBytes32 from = MutableBytes32.create();
             from.set(8, fromAddress.slice(8, 20));
-            byte[] addr = from.slice(8, 20).toArray();
+            byte[] fromAddr = from.slice(8, 20).toArray();
 
-            if (txNonce == null) {
-                UInt64 currentTxQuantity = kernel.getAddressStore().getTxQuantity(addr);
-                txNonce = currentTxQuantity.add(UInt64.ONE);
-            } else if (txNonce.compareTo(kernel.getAddressStore().getTxQuantity(addr).add(UInt64.ONE)) != 0) {
-                processResponse.setCode(ERR_XDAG_PARAM);
-                processResponse.setErrMsg("The nonce passed is incorrect. Please fill in the nonce according to the query value");
+            // Check balance
+            XAmount balance = kernel.getAddressStore().getBalanceByAddress(fromAddr);
+            if (compareAmountTo(balance, totalRequired) < 0) {
+                processResponse.setCode(ERR_XDAG_BALANCE);
+                processResponse.setErrMsg("Insufficient balance. Need " +
+                        totalRequired.toDecimal(9, XUnit.XDAG).toPlainString() +
+                        " XDAG, have " + balance.toDecimal(9, XUnit.XDAG).toPlainString() + " XDAG");
                 return;
             }
 
-            // If balance is sufficient
-            if (compareAmountTo(kernel.getAddressStore().getBalanceByAddress(addr), remain.get()) >= 0) {
-                // if (fromBlock.getInfo().getAmount() >= remain.get()) {
-                ourAccounts.put(new Address(from, XDAG_FIELD_INPUT, remain.get(), true),
-                        kernel.getWallet().getAccount(addr));
-                remain.set(XAmount.ZERO);
+            // Get account keypair
+            ECKeyPair account = kernel.getWallet().getAccount(fromAddr);
+            if (account == null) {
+                processResponse.setCode(ERR_XDAG_WALLET);
+                processResponse.setErrMsg("Account not found in wallet");
+                return;
             }
-        }
 
-        // Insufficient balance
-        if (compareAmountTo(remain.get(), XAmount.ZERO) > 0) {
-            processResponse.setCode(ERR_XDAG_BALANCE);
-            processResponse.setErrMsg("balance not enough");
+            // Get/validate nonce
+            UInt64 finalNonce;
+            if (txNonce == null) {
+                UInt64 currentTxQuantity = kernel.getAddressStore().getTxQuantity(fromAddr);
+                finalNonce = currentTxQuantity.add(UInt64.ONE);
+            } else {
+                UInt64 expectedNonce = kernel.getAddressStore().getTxQuantity(fromAddr).add(UInt64.ONE);
+                if (!txNonce.equals(expectedNonce)) {
+                    processResponse.setCode(ERR_XDAG_PARAM);
+                    processResponse.setErrMsg("The nonce passed is incorrect. Expected " +
+                            expectedNonce.toLong() + ", got " + txNonce.toLong());
+                    return;
+                }
+                finalNonce = txNonce;
+            }
+
+            try {
+                // Encode remark as bytes
+                Bytes remarkData = Bytes.EMPTY;
+                if (remark != null && !remark.isEmpty()) {
+                    remarkData = Bytes.wrap(remark.getBytes(StandardCharsets.UTF_8));
+                }
+
+                // Create Transaction object
+                Transaction tx = Transaction.builder()
+                        .from(fromAddress)
+                        .to(toAddress)
+                        .amount(amount)
+                        .nonce(finalNonce.toLong())
+                        .fee(fee)
+                        .data(remarkData)
+                        .build();
+
+                // Sign Transaction
+                Transaction signedTx = tx.sign(account);
+
+                // Validate Transaction
+                if (!signedTx.isValid()) {
+                    processResponse.setCode(ERR_XDAG_PARAM);
+                    processResponse.setErrMsg("Transaction validation failed");
+                    return;
+                }
+
+                if (!signedTx.verifySignature()) {
+                    processResponse.setCode(ERR_XDAG_PARAM);
+                    processResponse.setErrMsg("Transaction signature verification failed");
+                    return;
+                }
+
+                // Save Transaction to TransactionStore
+                kernel.getTransactionStore().saveTransaction(signedTx);
+
+                // Create BlockV5 with Transaction link
+                List<Link> links = Lists.newArrayList(Link.toTransaction(signedTx.getHash()));
+
+                // Create BlockHeader
+                BlockHeader header = BlockHeader.builder()
+                        .timestamp(XdagTime.getCurrentTimestamp())
+                        .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
+                        .nonce(Bytes32.ZERO)
+                        .coinbase(fromAddress)
+                        .hash(null)  // Will be calculated by BlockV5.getHash()
+                        .build();
+
+                // Create BlockV5
+                BlockV5 block = BlockV5.builder()
+                        .header(header)
+                        .links(links)
+                        .info(null)  // Will be initialized by tryToConnect()
+                        .build();
+
+                // Import to blockchain
+                ImportResult result = kernel.getBlockchain().tryToConnect(block);
+
+                if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
+                    // Update nonce in address store
+                    kernel.getAddressStore().updateTxQuantity(fromAddr, finalNonce);
+
+                    // Broadcast BlockV5
+                    int ttl = kernel.getConfig().getNodeSpec().getTTL();
+                    kernel.broadcastBlockV5(block, ttl);
+
+                    // Success response
+                    processResponse.setCode(SUCCESS);
+                    processResponse.setResInfo(Lists.newArrayList(
+                            BasicUtils.hash2Address(block.getHash())
+                    ));
+
+                    log.info("RPC transaction successful (BlockV5): tx={}, block={}, amount={} XDAG",
+                            signedTx.getHash().toHexString().substring(0, 16) + "...",
+                            BasicUtils.hash2Address(block.getHash()),
+                            amount.toDecimal(9, XUnit.XDAG).toPlainString());
+                } else {
+                    processResponse.setCode(ERR_XDAG_PARAM);
+                    processResponse.setErrMsg("Transaction import failed: " + result.name() +
+                            (result.getErrorInfo() != null ? " - " + result.getErrorInfo() : ""));
+
+                    log.error("RPC transaction import failed: result={}, block={}",
+                            result, block.getHash().toHexString());
+                }
+
+            } catch (Exception e) {
+                log.error("RPC transaction creation failed", e);
+                processResponse.setCode(ERR_XDAG_PARAM);
+                processResponse.setErrMsg("Transaction creation failed: " + e.getMessage());
+            }
+
             return;
         }
-        List<String> resInfo = Lists.newArrayList();
-        // create transaction (v5.1: returns SyncBlock directly)
-        List<io.xdag.consensus.SyncManager.SyncBlock> txs = kernel.getWallet().createTransactionBlock(ourAccounts, to, remark, txNonce);
-        int ttl = kernel.getConfig().getNodeSpec().getTTL();
-        for (io.xdag.consensus.SyncManager.SyncBlock syncBlock : txs) {
-            // v5.1: Validate and add block
-            ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(syncBlock);
-            if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
-                // Phase 7.3.0: Legacy Block broadcasting no longer supported
-                // TODO: Migrate RPC transaction system to create and broadcast BlockV5 objects
-                log.warn("RPC transaction created but cannot broadcast legacy Block (NEW_BLOCK deleted). " +
-                        "Block hash: {}", syncBlock.getBlock().getHash().toHexString());
-                log.warn("RPC transaction system needs migration to BlockV5 format");
 
-                Block block = syncBlock.getBlock();
-                List<Address> inputs = block.getInputs();
-                UInt64 blockNonce = block.getTxNonceField().getTransactionNonce();
-                for (Address input : inputs) {
-                    if (input.getType() == XDAG_FIELD_INPUT) {
-                        Bytes addr = BytesUtils.byte32ToArray(input.getAddress());
-                        kernel.getAddressStore().updateTxQuantity(addr.toArray(), blockNonce);
-                    }
-                }
-                resInfo.add(BasicUtils.hash2Address(syncBlock.getBlock().getHash()));
-            } else if (result == ImportResult.INVALID_BLOCK) {
-                resInfo.add(result.getErrorInfo());
-            }
-        }
-
-        processResponse.setCode(SUCCESS);
-        processResponse.setResInfo(resInfo);
+        // Phase 8.1.2: Multi-account aggregation path (deferred)
+        // For now, reject fromAddress == null with clear error message
+        log.warn("Multi-account RPC transactions not yet supported with BlockV5");
+        processResponse.setCode(ERR_XDAG_PARAM);
+        processResponse.setErrMsg("Please specify 'from' address for BlockV5 transactions. " +
+                "Multi-account aggregation will be supported in future update. " +
+                "You can manually transfer funds from multiple accounts to one account first.");
     }
 
     private Bytes32 checkFrom(String fromAddress, ProcessResponse processResponse)
