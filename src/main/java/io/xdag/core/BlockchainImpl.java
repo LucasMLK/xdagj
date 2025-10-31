@@ -421,8 +421,12 @@ public class BlockchainImpl implements Blockchain {
             // Save initial BlockInfo to database
             blockStore.saveBlockInfoV2(initialInfo);
 
-            log.info("BlockV5 connected successfully with BlockInfo initialized: {}",
-                     block.getHash().toHexString());
+            // Phase 4.5: Save raw BlockV5 data to storage
+            // Attach BlockInfo to BlockV5 before saving (BlockV5 is immutable)
+            BlockV5 blockWithInfo = block.toBuilder().info(initialInfo).build();
+            blockStore.saveBlockV5(blockWithInfo);
+
+            log.info("BlockV5 connected and saved to storage: {}", block.getHash().toHexString());
             return result;
 
         } catch (Throwable e) {
