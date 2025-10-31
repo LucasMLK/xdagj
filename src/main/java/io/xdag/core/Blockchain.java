@@ -54,12 +54,22 @@ public interface Blockchain {
     ImportResult tryToConnect(BlockV5 block);
 
     /**
-     * Create a new block (v5.1 migration in progress)
+     * Create a new block (legacy v1.0 implementation).
      *
-     * NOTE: This method signature is transitional during v5.1 migration.
-     * In v5.1 final design, block creation should work with Link-based references.
+     * @deprecated As of v5.1 refactor, this method creates legacy Block objects with Address-based
+     *             references. After complete refactor and system restart with BlockV5-only storage,
+     *             all block creation should use BlockV5 with Transaction and Link structures.
      *
-     * Current parameters use Bytes32 (address hash) instead of Address objects.
+     *             <p><b>Migration Path:</b>
+     *             <ul>
+     *               <li>Phase 5.2 (Current): Mark as @Deprecated</li>
+     *               <li>Phase 5.5 (Planned): Create BlockV5 creation methods</li>
+     *               <li>Post-Restart: Remove this method entirely</li>
+     *             </ul>
+     *
+     *             <p><b>Replacement Strategy:</b>
+     *             For transaction blocks, use Transaction objects instead of Address-based blocks.
+     *             For mining blocks, use createMainBlock() replacement (TBD in Phase 5.5).
      *
      * @param addressPairs Map of address hash to EC key pairs (for signing)
      * @param toAddresses List of recipient address hashes
@@ -69,11 +79,11 @@ public interface Blockchain {
      * @param txNonce Transaction nonce for replay protection
      * @return Created block
      *
-     * TODO v5.1: Redesign this API to use:
-     *  - List<Bytes32> blockRefs (1-16 previous block references)
-     *  - List<Bytes32> txRefs (transaction references to include)
-     *  - Bytes32 coinbase (miner reward address)
+     * @see io.xdag.core.BlockV5
+     * @see io.xdag.core.Transaction
+     * @see io.xdag.core.Link
      */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     Block createNewBlock(
             Map<Bytes32, ECKeyPair> addressPairs,
             List<Bytes32> toAddresses,

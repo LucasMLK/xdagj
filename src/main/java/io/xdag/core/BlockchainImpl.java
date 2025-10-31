@@ -1634,6 +1634,34 @@ public class BlockchainImpl implements Blockchain {
         addressStore.updateTxQuantity(address.toArray(), currentTxNonce, currentExeNonce);
     }
 
+    /**
+     * Create a new block for transaction or mining (legacy v1.0 implementation).
+     *
+     * @deprecated As of v5.1 refactor, this method creates legacy Block objects with Address-based
+     *             references. After complete refactor and system restart with BlockV5-only storage,
+     *             all block creation should use BlockV5 with Transaction and Link structures.
+     *
+     *             <p><b>Migration Path:</b>
+     *             <ul>
+     *               <li>Phase 5.2 (Current): Mark as @Deprecated</li>
+     *               <li>Phase 5.5 (Planned): Create BlockV5 creation methods</li>
+     *               <li>Post-Restart: Remove this method entirely</li>
+     *             </ul>
+     *
+     *             <p><b>Replacement Strategy:</b>
+     *             For transaction blocks, use Transaction objects instead of Address-based blocks.
+     *             For mining blocks, use {@link #createMainBlock()} (also deprecated, see below).
+     *
+     *             <p><b>Impact:</b>
+     *             This method is used by wallet and pool for transaction creation. After migration,
+     *             transactions should be created as standalone Transaction objects and included in
+     *             BlockV5 via Link references.
+     *
+     * @see io.xdag.core.BlockV5
+     * @see io.xdag.core.Transaction
+     * @see io.xdag.core.Link
+     */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     @Override
     public Block createNewBlock(
             Map<Bytes32, ECKeyPair> addressPairs,
@@ -1698,6 +1726,35 @@ public class BlockchainImpl implements Blockchain {
         return new Block(kernel.getConfig(), sendTime[0], all, refs, mining, keys, remark, defKeyIndex, fee, txNonce);
     }
 
+    /**
+     * Create a mining main block (legacy v1.0 implementation).
+     *
+     * @deprecated As of v5.1 refactor, this method creates legacy Block objects for POW mining
+     *             with Address-based references. After complete refactor and system restart with
+     *             BlockV5-only storage, all mining block creation should use BlockV5 structures.
+     *
+     *             <p><b>Migration Path:</b>
+     *             <ul>
+     *               <li>Phase 5.2 (Current): Mark as @Deprecated</li>
+     *               <li>Phase 5.5 (Planned): Create BlockV5 mining block creation methods</li>
+     *               <li>Post-Restart: Remove this method entirely</li>
+     *             </ul>
+     *
+     *             <p><b>Replacement Strategy:</b>
+     *             Mining blocks should be created as BlockV5 objects with Link-based references to
+     *             pretop blocks, coinbase addresses, and orphan blocks. The POW miner should be
+     *             updated to work with BlockV5 structures.
+     *
+     *             <p><b>Impact:</b>
+     *             This method is used by the POW mining system to create main blocks (candidates for
+     *             blockchain tip). After migration, the mining system should create BlockV5 main blocks
+     *             that include links to previous blocks and transactions.
+     *
+     * @see io.xdag.core.BlockV5
+     * @see io.xdag.core.Link
+     * @return Legacy Block object for mining (will be replaced by BlockV5)
+     */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     public Block createMainBlock() {
         // <header + remark + outsig + nonce>
         int res = 1 + 1 + 2 + 1;
@@ -1731,6 +1788,37 @@ public class BlockchainImpl implements Blockchain {
                 kernel.getConfig().getNodeSpec().getNodeTag(), -1, XAmount.ZERO, null);
     }
 
+    /**
+     * Create a link block for network health (legacy v1.0 implementation).
+     *
+     * @deprecated As of v5.1 refactor, this method creates legacy Block objects for link blocks
+     *             with Address-based references. After complete refactor and system restart with
+     *             BlockV5-only storage, all link block creation should use BlockV5 structures.
+     *
+     *             <p><b>Migration Path:</b>
+     *             <ul>
+     *               <li>Phase 5.2 (Current): Mark as @Deprecated</li>
+     *               <li>Phase 5.5 (Planned): Create BlockV5 link block creation methods</li>
+     *               <li>Post-Restart: Remove this method entirely</li>
+     *             </ul>
+     *
+     *             <p><b>Replacement Strategy:</b>
+     *             Link blocks should be created as BlockV5 objects with Link-based references to
+     *             orphan blocks. These blocks help maintain network health by referencing unreferenced
+     *             blocks (orphans), preventing them from being pruned.
+     *
+     *             <p><b>Impact:</b>
+     *             This method is used by {@link #checkOrphan()} to periodically create link blocks
+     *             that reference orphan blocks in the network. After migration, the orphan health
+     *             system should create BlockV5 link blocks.
+     *
+     * @param remark Optional remark/tag for the link block
+     * @see io.xdag.core.BlockV5
+     * @see io.xdag.core.Link
+     * @see #checkOrphan()
+     * @return Legacy Block object for network linking (will be replaced by BlockV5)
+     */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     public Block createLinkBlock(String remark) {
         // <header + remark + outsig + nonce>
         int hasRemark = remark == null ? 0 : 1;
