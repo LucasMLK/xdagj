@@ -873,7 +873,39 @@ public class BlockchainImpl implements Blockchain {
         return currentHeight >= syncFixHeight;
     }
 
-    // Find common ancestor block
+    /**
+     * Find common ancestor block during fork resolution (legacy v1.0 implementation).
+     *
+     * @deprecated As of v5.1 refactor, this method operates on legacy Block objects. After complete
+     *             refactor and system restart with BlockV5-only storage, all main chain management
+     *             should work with BlockV5 structures.
+     *
+     *             <p><b>Migration Path:</b>
+     *             <ul>
+     *               <li>Phase 5.3 (Current): Mark as @Deprecated</li>
+     *               <li>Post-Restart: After fresh start, all blocks in storage are BlockV5,
+     *                   making this Block-based method obsolete</li>
+     *               <li>Future: May need BlockV5-specific version if significant refactoring is required</li>
+     *             </ul>
+     *
+     *             <p><b>Replacement Strategy:</b>
+     *             After complete refactor, this method will process BlockV5 objects from storage.
+     *             No code changes needed if Block/BlockV5 interface is compatible. May require
+     *             BlockV5-specific version if chain reorganization logic differs significantly.
+     *
+     *             <p><b>Impact:</b>
+     *             This method is critical for blockchain fork resolution. It finds the common
+     *             ancestor between the current main chain and a new candidate chain. Used by
+     *             {@link #tryToConnect(Block)} during fork handling.
+     *
+     * @param block The new block triggering fork resolution
+     * @param isFork Whether this is a fork scenario (affects BI_MAIN_CHAIN flag updates)
+     * @return The common ancestor block, or null if not found
+     * @see #tryToConnect(Block)
+     * @see #unWindMain(Block)
+     * @see #updateNewChain(Block, boolean)
+     */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     public Block findAncestor(Block block, boolean isFork) {
         Block blockRef;
         Block blockRef0 = null;
@@ -908,7 +940,38 @@ public class BlockchainImpl implements Blockchain {
         return blockRef;
     }
 
-    // Update new chain after fork
+    /**
+     * Update new chain after fork (legacy v1.0 implementation).
+     *
+     * @deprecated As of v5.1 refactor, this method operates on legacy Block objects. After complete
+     *             refactor and system restart with BlockV5-only storage, all main chain management
+     *             should work with BlockV5 structures.
+     *
+     *             <p><b>Migration Path:</b>
+     *             <ul>
+     *               <li>Phase 5.3 (Current): Mark as @Deprecated</li>
+     *               <li>Post-Restart: After fresh start, all blocks in storage are BlockV5,
+     *                   making this Block-based method obsolete</li>
+     *               <li>Future: May need BlockV5-specific version if significant refactoring is required</li>
+     *             </ul>
+     *
+     *             <p><b>Replacement Strategy:</b>
+     *             After complete refactor, this method will process BlockV5 objects from storage.
+     *             No code changes needed if Block/BlockV5 interface is compatible. May require
+     *             BlockV5-specific version if chain reorganization logic differs significantly.
+     *
+     *             <p><b>Impact:</b>
+     *             This method is critical for blockchain fork resolution. It updates BI_MAIN_CHAIN
+     *             flags for the new candidate chain after finding the common ancestor. Used by
+     *             {@link #tryToConnect(Block)} during fork handling.
+     *
+     * @param block The new block that triggered fork resolution
+     * @param isFork Whether this is a fork scenario (if false, method returns immediately)
+     * @see #tryToConnect(Block)
+     * @see #findAncestor(Block, boolean)
+     * @see #unWindMain(Block)
+     */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     public void updateNewChain(Block block, boolean isFork) {
         if (!isFork) {
             return;
@@ -1022,8 +1085,38 @@ public class BlockchainImpl implements Blockchain {
     }
 
     /**
-     * Rollback to specified block
+     * Rollback main chain to specified block (legacy v1.0 implementation).
+     *
+     * @deprecated As of v5.1 refactor, this method operates on legacy Block objects. After complete
+     *             refactor and system restart with BlockV5-only storage, all main chain management
+     *             should work with BlockV5 structures.
+     *
+     *             <p><b>Migration Path:</b>
+     *             <ul>
+     *               <li>Phase 5.3 (Current): Mark as @Deprecated</li>
+     *               <li>Post-Restart: After fresh start, all blocks in storage are BlockV5,
+     *                   making this Block-based method obsolete</li>
+     *               <li>Future: May need BlockV5-specific version if significant refactoring is required</li>
+     *             </ul>
+     *
+     *             <p><b>Replacement Strategy:</b>
+     *             After complete refactor, this method will process BlockV5 objects from storage.
+     *             No code changes needed if Block/BlockV5 interface is compatible. May require
+     *             BlockV5-specific version if chain reorganization logic differs significantly.
+     *
+     *             <p><b>Impact:</b>
+     *             This method is critical for blockchain fork resolution. It unwinds the main chain
+     *             back to the common ancestor by clearing BI_MAIN_CHAIN flags and calling
+     *             {@link #unSetMain(Block)} for main blocks. Used by {@link #tryToConnect(Block)}
+     *             during fork handling.
+     *
+     * @param block The common ancestor block to unwind to (or null to unwind all)
+     * @see #tryToConnect(Block)
+     * @see #findAncestor(Block, boolean)
+     * @see #updateNewChain(Block, boolean)
+     * @see #unSetMain(Block)
      */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     public void unWindMain(Block block) {
         log.debug("Unwind main to block,{}", block == null ? "null" : block.getHash().toHexString());
 
@@ -1555,8 +1648,37 @@ public class BlockchainImpl implements Blockchain {
     }
 
     /**
-     * Set the main chain with block as the main block - either fork or extend
+     * Set the main chain with block as the main block - either fork or extend (legacy v1.0 implementation).
+     *
+     * @deprecated As of v5.1 refactor, this method operates on legacy Block objects. After complete
+     *             refactor and system restart with BlockV5-only storage, all main chain management
+     *             should work with BlockV5 structures.
+     *
+     *             <p><b>Migration Path:</b>
+     *             <ul>
+     *               <li>Phase 5.3 (Current): Mark as @Deprecated</li>
+     *               <li>Post-Restart: After fresh start, all blocks in storage are BlockV5,
+     *                   making this Block-based method obsolete</li>
+     *               <li>Future: May need BlockV5-specific version if significant refactoring is required</li>
+     *             </ul>
+     *
+     *             <p><b>Replacement Strategy:</b>
+     *             After complete refactor, this method will process BlockV5 objects from storage.
+     *             No code changes needed if Block/BlockV5 interface is compatible. May require
+     *             BlockV5-specific version if chain management logic differs significantly.
+     *
+     *             <p><b>Impact:</b>
+     *             This method is critical for blockchain main chain management. It sets a block as
+     *             the main block (either extending or forking the chain), accepts block reward,
+     *             applies transactions recursively, and collects fees. Used by {@link #checkNewMain()}
+     *             during main chain consensus.
+     *
+     * @param block The block to set as main block
+     * @see #checkNewMain()
+     * @see #unSetMain(Block)
+     * @see #applyBlock(boolean, Block)
      */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     public void setMain(Block block) {
 
         synchronized (this) {
@@ -1596,8 +1718,36 @@ public class BlockchainImpl implements Blockchain {
     }
 
     /**
-     * Cancel Block main block status
+     * Cancel Block main block status (legacy v1.0 implementation).
+     *
+     * @deprecated As of v5.1 refactor, this method operates on legacy Block objects. After complete
+     *             refactor and system restart with BlockV5-only storage, all main chain management
+     *             should work with BlockV5 structures.
+     *
+     *             <p><b>Migration Path:</b>
+     *             <ul>
+     *               <li>Phase 5.3 (Current): Mark as @Deprecated</li>
+     *               <li>Post-Restart: After fresh start, all blocks in storage are BlockV5,
+     *                   making this Block-based method obsolete</li>
+     *               <li>Future: May need BlockV5-specific version if significant refactoring is required</li>
+     *             </ul>
+     *
+     *             <p><b>Replacement Strategy:</b>
+     *             After complete refactor, this method will process BlockV5 objects from storage.
+     *             No code changes needed if Block/BlockV5 interface is compatible. May require
+     *             BlockV5-specific version if chain management logic differs significantly.
+     *
+     *             <p><b>Impact:</b>
+     *             This method is critical for blockchain fork resolution. It cancels a block's main
+     *             block status during chain reorganization, removing rewards and unapplying all
+     *             transactions. Used by {@link #unWindMain(Block)} during fork handling.
+     *
+     * @param block The block to unset as main block
+     * @see #unWindMain(Block)
+     * @see #setMain(Block)
+     * @see #unApplyBlock(Block)
      */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     // TODO: Change to new way to cancel main block reward
     public void unSetMain(Block block) {
 
