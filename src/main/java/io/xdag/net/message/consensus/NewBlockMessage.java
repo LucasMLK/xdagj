@@ -32,6 +32,28 @@ import io.xdag.utils.SimpleDecoder;
 import lombok.Getter;
 import lombok.Setter;
 
+/**
+ * Legacy network message for broadcasting new blocks (v1.0 protocol).
+ *
+ * @deprecated As of v5.1 refactor, this message is deprecated in favor of {@link NewBlockV5Message}.
+ *             This class will be removed after the system completes the v5.1 migration and restarts
+ *             with BlockV5-only storage.
+ *
+ *             <p><b>Migration Path:</b>
+ *             <ul>
+ *               <li>Phase 3.3 (Complete): Network handlers now send {@link NewBlockV5Message} (0x1B)
+ *                   when BlockV5 is available, with graceful fallback to this legacy message (0x18)</li>
+ *               <li>Phase 5 (In Progress): All Block creation migrated to BlockV5</li>
+ *               <li>Post-Restart: System will start with BlockV5-only storage, making this message
+ *                   obsolete</li>
+ *             </ul>
+ *
+ *             <p><b>Replacement:</b> Use {@link NewBlockV5Message} for v5.1 BlockV5 structures.
+ *
+ * @see NewBlockV5Message
+ * @see io.xdag.core.BlockV5
+ */
+@Deprecated(since = "0.8.1", forRemoval = true)
 @Getter
 @Setter
 public class NewBlockMessage extends Message {
