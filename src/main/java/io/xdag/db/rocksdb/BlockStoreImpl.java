@@ -829,5 +829,134 @@ public class BlockStoreImpl implements BlockStore {
         return result;
     }
 
+    // ========== Phase 4: BlockV5 Storage Implementation ==========
+
+    @Override
+    public void saveBlockV5(BlockV5 block) {
+        long time = block.getTimestamp();
+        Bytes32 hash = block.getHash();
+
+        // 1. Time index (same as Block)
+        timeSource.put(BlockUtils.getTimeKey(time, hash), new byte[]{0});
+
+        // 2. Raw BlockV5 data (variable-length serialization)
+        byte[] blockV5Bytes = block.toBytes();
+        blockSource.put(hash.toArray(), blockV5Bytes);
+
+        // 3. BlockInfo metadata
+        // Note: BlockV5.getInfo() may return null if not initialized
+        BlockInfo info = block.getInfo();
+        if (info != null) {
+            saveBlockInfoV2(info);
+        } else {
+            // Create minimal BlockInfo for blocks without metadata
+            // This should not normally happen, but we handle it gracefully
+            log.warn("BlockV5 {} has no BlockInfo, creating minimal metadata", hash.toHexString());
+            BlockInfo minimalInfo = BlockInfo.builder()
+                .hash(hash)
+                .timestamp(block.getTimestamp())
+                .type(0L)
+                .flags(0)
+                .height(0L)
+                .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
+                .amount(XAmount.ZERO)
+                .fee(XAmount.ZERO)
+                .build();
+            saveBlockInfoV2(minimalInfo);
+        }
+
+        log.debug("Saved BlockV5: {} ({} bytes)", hash.toHexString(), blockV5Bytes.length);
+    }
+
+    @Override
+    public BlockV5 getBlockV5ByHash(Bytes32 hash, boolean isRaw) {
+        if (isRaw) {
+            return getRawBlockV5ByHash(hash);
+        }
+        return getBlockV5InfoByHash(hash);
+    }
+
+    @Override
+    public BlockV5 getRawBlockV5ByHash(Bytes32 hash) {
+        // 1. Get raw BlockV5 bytes from blockSource
+        byte[] blockV5Bytes = blockSource.get(hash.toArray());
+        if (blockV5Bytes == null) {
+            log.debug("BlockV5 raw data not found for hash: {}", hash.toHexString());
+            return null;
+        }
+
+        // 2. Deserialize BlockV5 from bytes
+        BlockV5 block;
+        try {
+            block = BlockV5.fromBytes(blockV5Bytes);
+        } catch (Exception e) {
+            log.error("Failed to deserialize BlockV5 from bytes for hash: {}", hash.toHexString(), e);
+            return null;
+        }
+
+        // 3. Load BlockInfo from indexSource
+        BlockInfo info = loadBlockInfoFromIndex(hash);
+        if (info != null) {
+            // Attach BlockInfo to BlockV5
+            // Note: BlockV5 is immutable, so we need to rebuild it with info
+            block = block.toBuilder().info(info).build();
+        } else {
+            log.warn("BlockInfo not found for BlockV5: {}, using block without metadata", hash.toHexString());
+        }
+
+        return block;
+    }
+
+    @Override
+    public BlockV5 getBlockV5InfoByHash(Bytes32 hash) {
+        // Get BlockInfo only, no raw data
+        BlockInfo info = loadBlockInfoFromIndex(hash);
+        if (info == null) {
+            log.debug("BlockInfo not found for hash: {}", hash.toHexString());
+            return null;
+        }
+
+        // Create minimal BlockV5 with BlockInfo only
+        // This is useful for metadata-only queries (faster than full deserialization)
+        // We create a minimal BlockV5 with empty header and links
+        BlockV5 block = BlockV5.builder()
+            .header(BlockHeader.builder()
+                .timestamp(info.getTimestamp())
+                .nonce(Bytes32.ZERO)
+                .difficulty(info.getDifficulty())
+                .coinbase(Bytes32.ZERO)
+                .build())
+            .links(Lists.newArrayList())
+            .info(info)
+            .build();
+
+        return block;
+    }
+
+    /**
+     * Helper method to load BlockInfo from indexSource
+     * Tries CompactSerializer first, fallback to Kryo for legacy data
+     */
+    private BlockInfo loadBlockInfoFromIndex(Bytes32 hash) {
+        byte[] value = indexSource.get(BytesUtils.merge(HASH_BLOCK_INFO, hash.toArray()));
+        if (value == null) {
+            return null;
+        }
+
+        // Try CompactSerializer first (new format)
+        try {
+            return io.xdag.serialization.CompactSerializer.deserializeBlockInfo(value);
+        } catch (Exception e) {
+            // Fallback to Kryo deserialization (legacy format)
+            try {
+                LegacyBlockInfo legacyInfo = (LegacyBlockInfo) deserialize(value, LegacyBlockInfo.class);
+                return BlockInfo.fromLegacy(legacyInfo);
+            } catch (DeserializationException ex) {
+                log.error("Failed to deserialize BlockInfo for hash: {}", hash.toHexString(), ex);
+                return null;
+            }
+        }
+    }
+
 }
 

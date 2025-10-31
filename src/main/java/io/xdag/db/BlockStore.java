@@ -197,4 +197,45 @@ public interface BlockStore extends XdagLifecycle {
      */
     List<Block> getBlocksByHashes(List<Bytes32> hashes);
 
+    // ========== Phase 4: BlockV5 Storage Support ==========
+
+    /**
+     * Save BlockV5 to storage (Phase 4.1)
+     *
+     * Stores:
+     * - Raw BlockV5 bytes (variable-length serialization)
+     * - BlockInfo metadata (CompactSerializer)
+     * - Time index for range queries
+     * - Epoch/height indexes
+     *
+     * @param block BlockV5 to save
+     */
+    void saveBlockV5(BlockV5 block);
+
+    /**
+     * Get BlockV5 by hash (Phase 4.1)
+     *
+     * @param hash Block hash
+     * @param isRaw true to load full raw data, false for BlockInfo only
+     * @return BlockV5 or null if not found
+     */
+    BlockV5 getBlockV5ByHash(Bytes32 hash, boolean isRaw);
+
+    /**
+     * Get raw BlockV5 with full deserialized data (Phase 4.1)
+     *
+     * @param hash Block hash
+     * @return BlockV5 with complete data or null if not found
+     */
+    BlockV5 getRawBlockV5ByHash(Bytes32 hash);
+
+    /**
+     * Get BlockV5 with BlockInfo metadata only (Phase 4.1)
+     * Does not load or parse raw block data (faster)
+     *
+     * @param hash Block hash
+     * @return BlockV5 with BlockInfo or null if not found
+     */
+    BlockV5 getBlockV5InfoByHash(Bytes32 hash);
+
 }
