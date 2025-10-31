@@ -428,6 +428,10 @@ public class BlockchainImpl implements Blockchain {
             blockStore.saveBlockV5(blockWithInfo);
 
             log.info("BlockV5 connected and saved to storage: {}", block.getHash().toHexString());
+
+            // Phase 7.3: Notify listeners (e.g., pool listener) of new BlockV5
+            onNewBlockV5(blockWithInfo);
+
             return result;
 
         } catch (Throwable e) {
@@ -745,6 +749,22 @@ public class BlockchainImpl implements Blockchain {
     protected void onNewBlock(Block block) {
         for (Listener listener : listeners) {
             listener.onMessage(new BlockMessage(Bytes.wrap(block.getXdagBlock().getData()), NEW_LINK));
+        }
+    }
+
+    /**
+     * Notify listeners of new BlockV5 (v5.1 implementation)
+     *
+     * Phase 7.3: Pool listener migration to BlockV5.
+     * Sends BlockV5 serialized data to listener system (e.g., XdagPow).
+     *
+     * @param block BlockV5 to broadcast
+     */
+    protected void onNewBlockV5(BlockV5 block) {
+        for (Listener listener : listeners) {
+            // Serialize BlockV5 to bytes for listener
+            byte[] blockBytes = block.toBytes();
+            listener.onMessage(new BlockMessage(Bytes.wrap(blockBytes), NEW_LINK));
         }
     }
 

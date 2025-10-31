@@ -484,12 +484,29 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
     @Override
     public void onMessage(io.xdag.listener.Message msg) {
         if (msg instanceof BlockMessage message) {
-            // Phase 7.3.0: Legacy Block broadcasting no longer supported
-            // Listener system receives legacy Block format, but NEW_BLOCK messages were deleted
-            // TODO: Migrate listener system to use BlockV5 objects
-            log.warn("Received legacy Block from listener system, but NEW_BLOCK broadcast is no longer supported. " +
-                    "Block hash: {}", Bytes32.wrap(message.getData().slice(0, 32)).toHexString());
-            log.warn("Listener system needs migration to BlockV5 format");
+            try {
+                // Phase 7.3: Pool listener migrated to BlockV5
+                // Deserialize BlockV5 from message data
+                byte[] blockBytes = message.getData().toArray();
+                BlockV5 block = BlockV5.fromBytes(blockBytes);
+
+                // Import to blockchain
+                ImportResult result = kernel.getBlockchain().tryToConnect(block);
+
+                // Broadcast if successful
+                if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
+                    int ttl = kernel.getConfig().getNodeSpec().getTTL();
+                    broadcaster.broadcast(block, ttl);
+                    log.info("Pool-mined BlockV5 imported and broadcast: {}, result: {}",
+                            block.getHash().toHexString(), result);
+                } else {
+                    log.warn("Pool-mined BlockV5 import failed: {}, result: {}, error: {}",
+                            block.getHash().toHexString(), result,
+                            result.getErrorInfo() != null ? result.getErrorInfo() : "none");
+                }
+            } catch (Exception e) {
+                log.error("Failed to process BlockMessage from pool listener: {}", e.getMessage(), e);
+            }
         }
         if (msg instanceof PretopMessage message) {
             receiveNewPretop(message.getData());
