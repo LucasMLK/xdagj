@@ -387,6 +387,10 @@ public class BlockchainImpl implements Blockchain {
                 if (link.isTransaction()) {
                     Transaction tx = transactionStore.getTransaction(link.getTargetHash());
                     if (tx != null) {
+                        // Phase 8.2: Index transaction to block for efficient block transaction queries
+                        // This enables transactionStore.getTransactionsByBlock() to work
+                        transactionStore.indexTransactionToBlock(block.getHash(), tx.getHash());
+
                         // Record transaction history for sender (from)
                         onNewTxHistoryV2(tx.getFrom(), block.getHash(), tx.getAmount(),
                                         block.getTimestamp(), true /* isFrom */);
