@@ -83,8 +83,9 @@ public enum MessageCode {
     BLOCKEXT_REPLY(0x15),
     BLOCK_REQUEST(0x16),
 //    RECEIVE_BLOCK(0x17),
-    NEW_BLOCK(0x18),
-    SYNC_BLOCK(0x19),
+    // Phase 7.3.0: Removed NEW_BLOCK and SYNC_BLOCK (use NEW_BLOCK_V5 and SYNC_BLOCK_V5)
+//    NEW_BLOCK(0x18),
+//    SYNC_BLOCK(0x19),
     SYNCBLOCK_REQUEST(0x1A),
 
     // v5.1 messages (Phase 3 - Network Layer Migration)
@@ -100,7 +101,14 @@ public enum MessageCode {
      * Uses BlockV5 structure instead of legacy Block
      * @see io.xdag.net.message.consensus.SyncBlockV5Message
      */
-    SYNC_BLOCK_V5(0x1C);
+    SYNC_BLOCK_V5(0x1C),
+
+    /**
+     * [0x1D] BLOCKV5_REQUEST - Request specific BlockV5 by hash (Phase 7.3)
+     * Used when a BlockV5 references a missing parent block
+     * @see io.xdag.net.message.consensus.BlockV5RequestMessage
+     */
+    BLOCKV5_REQUEST(0x1D);
 
 
     private static final MessageCode[] map = new MessageCode[256];

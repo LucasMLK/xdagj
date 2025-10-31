@@ -266,49 +266,56 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
                             TransactionInfoSender transactionInfoSender) {
         log.debug("Total balance pending transfer: {}", sendAmount);
         log.debug("unlock keypos =[{}]", keyPos);
-        Map<Address, ECKeyPair> inputMap = new HashMap<>();
-        Address input = new Address(hash, XDAG_FIELD_IN, sendAmount, false);
-        ECKeyPair inputKey = wallet.getAccount(keyPos);
-        inputMap.put(input, inputKey);
-        // v5.1: Convert Address to Bytes32 for interface compatibility
-        Map<Bytes32, ECKeyPair> addressPairs = new HashMap<>();
-        for (Map.Entry<Address, ECKeyPair> entry : inputMap.entrySet()) {
-            addressPairs.put(Bytes32.wrap(entry.getKey().getAddress()), entry.getValue());
-        }
 
-        List<Bytes32> receiptAddresses = new ArrayList<>();
+        // Phase 7.6: Pool reward distribution using BlockV5
+        ECKeyPair sourceKey = wallet.getAccount(keyPos);
+
+        // Convert Address list to Bytes32 recipients and amounts
+        List<Bytes32> recipients = new ArrayList<>();
+        List<XAmount> amounts = new ArrayList<>();
+
         for (Address addr : receipt) {
-            receiptAddresses.add(Bytes32.wrap(addr.getAddress()));
+            recipients.add(Bytes32.wrap(addr.getAddress()));
+            amounts.add(addr.getAmount());
         }
 
-        Block block = blockchain.createNewBlock(addressPairs, receiptAddresses, false, TX_REMARK, MIN_GAS, null);
-        if (inputKey.equals(wallet.getDefKey())) {
-            block.signOut(inputKey);
-        } else {
-            block.signIn(inputKey);
-            block.signOut(wallet.getDefKey());
-        }
-        log.debug("tx block hash [{}]", block.getHash().toHexString());
-        // v5.1: Use SyncBlock instead of BlockWrapper
-        kernel.getSyncMgr().validateAndAddNewBlock(new io.xdag.consensus.SyncManager.SyncBlock(block, 5));
-        // Rewards to the foundation and pool rewards are in the same transaction block
-        transactionInfoSender.setTxBlock(block.getHash());
-        transactionInfoSender.setDonateBlock(block.getHash());
-        /*
-        * Send the award distribute transaction information to pools for pools to validate and then distribute award
-        to miners
-        * */
+        // Create reward BlockV5
+        // Note: Using nonce = 0 for now (TODO: implement proper nonce tracking)
+        BlockV5 rewardBlock = blockchain.createRewardBlockV5(
+            hash,           // source block hash
+            recipients,     // recipient addresses
+            amounts,        // amounts for each recipient
+            sourceKey,      // source key for signing
+            0,              // nonce (TODO: track properly)
+            MIN_GAS.multiply(recipients.size())  // total fee
+        );
+
+        // Import reward block to blockchain
+        ImportResult result = kernel.getSyncMgr().validateAndAddNewBlockV5(
+            new io.xdag.consensus.SyncManager.SyncBlockV5(rewardBlock, 5)
+        );
+
+        log.debug("Reward BlockV5 import result: {}", result);
+        log.debug("Reward block hash: {}", rewardBlock.getHash().toHexString());
+
+        // Update transaction info for pool
+        transactionInfoSender.setTxBlock(rewardBlock.getHash());
+        transactionInfoSender.setDonateBlock(rewardBlock.getHash());
+
+        // Send reward distribution info to pools
         if (awardMessageHistoryQueue.remainingCapacity() == 0) {
             awardMessageHistoryQueue.poll();
         }
+
         // Send the last 16 reward distribution transaction history to the pool
         if (awardMessageHistoryQueue.offer(transactionInfoSender.toJsonString())) {
             ChannelSupervise.send2Pools(BlockRewardHistorySender.toJsonString());
         } else {
             log.error("Failed to add transaction history");
         }
-        log.debug("The reward for block {} has been distributed to pool address {}", hash,
-                Base58.encodeCheck(receipt.get(1).getAddress().slice(8, 20)));
+
+        log.debug("The reward for block {} has been distributed to {} recipients",
+                 hash.toHexString(), recipients.size());
     }
 
 

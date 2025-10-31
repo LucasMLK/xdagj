@@ -76,9 +76,9 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     protected int netHandshakeExpiry = 5 * 60 * 1000;
     protected int netChannelIdleTimeout = 2 * 60 * 1000;
 
-    // Prioritized network messages
+    // Prioritized network messages (Phase 7.3.0: Updated to BlockV5 messages)
     protected Set<MessageCode> netPrioritizedMessages = new HashSet<>(Arrays.asList(
-            MessageCode.NEW_BLOCK,
+            MessageCode.NEW_BLOCK_V5,  // Phase 7.3.0: Changed from NEW_BLOCK
             MessageCode.BLOCK_REQUEST,
             MessageCode.BLOCKS_REQUEST));
 

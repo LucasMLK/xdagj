@@ -161,7 +161,9 @@ public class ChannelManager extends AbstractXdagLifecycle {
             try {
                 distribution = newForeignBlocks.take();
                 log.debug("no problem..");
-                sendNewBlock(distribution.block, distribution.ttl);
+                // Phase 7.3.0: sendNewBlock() deleted - blocks should be broadcast as BlockV5
+                // Legacy Block distribution no longer supported
+                log.warn("Attempted to broadcast legacy Block, skipping (use BlockV5 instead)");
             } catch (InterruptedException e) {
                 break;
             } catch (Throwable e) {
@@ -174,11 +176,12 @@ public class ChannelManager extends AbstractXdagLifecycle {
         }
     }
 
-    public void sendNewBlock(Block block, int ttl) {
-        for (Channel channel : activeChannels.values()) {
-            channel.getP2pHandler().sendNewBlock(block, ttl);
-        }
-    }
+    /**
+     * Phase 7.3.0: sendNewBlock() deleted - use sendNewBlockV5() instead
+     *
+     * Legacy sendNewBlock(Block, int) method was removed when NewBlockMessage was deleted.
+     * All block broadcasting should now use sendNewBlockV5(BlockV5, int).
+     */
 
     /**
      * Phase 3.2: Send BlockV5 to all connected peers

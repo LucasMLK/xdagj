@@ -69,12 +69,15 @@ public class MessageFactory {
                 case BLOCKEXT_REQUEST -> new BlockExtRequestMessage(body);
                 case BLOCKEXT_REPLY -> new BlockExtReplyMessage(body);
                 case BLOCK_REQUEST -> new BlockRequestMessage(body);
-                case NEW_BLOCK -> new NewBlockMessage(body);
-                case SYNC_BLOCK -> new SyncBlockMessage(body);
+                // Phase 7.3.0: Removed NEW_BLOCK and SYNC_BLOCK cases (use V5 messages)
+                // case NEW_BLOCK -> new NewBlockMessage(body);
+                // case SYNC_BLOCK -> new SyncBlockMessage(body);
                 case SYNCBLOCK_REQUEST -> new SyncBlockRequestMessage(body);
                 // Phase 3: BlockV5 messages
                 case NEW_BLOCK_V5 -> new NewBlockV5Message(body);
                 case SYNC_BLOCK_V5 -> new SyncBlockV5Message(body);
+                // Phase 7.3: BlockV5 request
+                case BLOCKV5_REQUEST -> new BlockV5RequestMessage(body);
             };
         } catch (Exception e) {
             throw new MessageException("Failed to decode message", e);

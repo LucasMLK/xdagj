@@ -37,36 +37,6 @@ public interface Blockchain {
     // Get pre-seed for snapshot initialization
     byte[] getPreSeed();
 
-    /**
-     * Try to connect a new block to the blockchain (legacy v1.0 implementation).
-     *
-     * @deprecated As of v5.1 refactor, this method accepts legacy Block objects with Address-based
-     *             references. After complete refactor and system restart with BlockV5-only storage,
-     *             all block connection should use {@link #tryToConnect(BlockV5)}.
-     *
-     *             <p><b>Migration Path:</b>
-     *             <ul>
-     *               <li>Phase 5.4 (Current): Mark as @Deprecated</li>
-     *               <li>Post-Restart: After fresh start, all blocks are BlockV5,
-     *                   making this Block-based method obsolete</li>
-     *               <li>Future: Remove this method entirely after system is stable with BlockV5-only</li>
-     *             </ul>
-     *
-     *             <p><b>Replacement Strategy:</b>
-     *             Use {@link #tryToConnect(BlockV5)} for connecting new blocks. After complete refactor,
-     *             all block creation will produce BlockV5 objects, so this method will no longer be called.
-     *
-     *             <p><b>Impact:</b>
-     *             This method is the main entry point for adding blocks to the blockchain. It validates
-     *             block structure, checks parent blocks, handles fork resolution, and updates the main
-     *             chain. Used by network layer, mining, and wallet operations.
-     *
-     * @param block The Block to connect (legacy Address-based structure)
-     * @return ImportResult indicating success or failure
-     * @see #tryToConnect(BlockV5)
-     */
-    @Deprecated(since = "0.8.1", forRemoval = true)
-    ImportResult tryToConnect(Block block);
 
     /**
      * Try to connect a new BlockV5 to the blockchain (Phase 4 Layer 3 Task 1.1)
@@ -80,45 +50,6 @@ public interface Blockchain {
      * @since Phase 4 v5.1
      */
     ImportResult tryToConnect(BlockV5 block);
-
-    /**
-     * Create a new block (legacy v1.0 implementation).
-     *
-     * @deprecated As of v5.1 refactor, this method creates legacy Block objects with Address-based
-     *             references. After complete refactor and system restart with BlockV5-only storage,
-     *             all block creation should use BlockV5 with Transaction and Link structures.
-     *
-     *             <p><b>Migration Path:</b>
-     *             <ul>
-     *               <li>Phase 5.2 (Current): Mark as @Deprecated</li>
-     *               <li>Phase 5.5 (Planned): Create BlockV5 creation methods</li>
-     *               <li>Post-Restart: Remove this method entirely</li>
-     *             </ul>
-     *
-     *             <p><b>Replacement Strategy:</b>
-     *             For transaction blocks, use Transaction objects instead of Address-based blocks.
-     *             For mining blocks, use createMainBlock() replacement (TBD in Phase 5.5).
-     *
-     * @param addressPairs Map of address hash to EC key pairs (for signing)
-     * @param toAddresses List of recipient address hashes
-     * @param mining Whether this is a mining block
-     * @param remark Optional remark text
-     * @param fee Transaction fee
-     * @param txNonce Transaction nonce for replay protection
-     * @return Created block
-     *
-     * @see io.xdag.core.BlockV5
-     * @see io.xdag.core.Transaction
-     * @see io.xdag.core.Link
-     */
-    @Deprecated(since = "0.8.1", forRemoval = true)
-    Block createNewBlock(
-            Map<Bytes32, ECKeyPair> addressPairs,
-            List<Bytes32> toAddresses,
-            boolean mining,
-            String remark,
-            XAmount fee,
-            UInt64 txNonce);
 
     /**
      * Create a BlockV5 mining main block (v5.1 implementation)
@@ -144,6 +75,59 @@ public interface Blockchain {
      * @since Phase 5.5 v5.1
      */
     BlockV5 createMainBlockV5();
+
+    /**
+     * Create a genesis BlockV5 (v5.1 implementation)
+     *
+     * Phase 7.5: Genesis block creation for fresh node startup.
+     * Called when xdagStats.getOurLastBlockHash() == null (first-time node initialization).
+     *
+     * Genesis block characteristics:
+     * 1. Empty links list (no previous blocks to reference)
+     * 2. Minimal difficulty (difficulty = 1)
+     * 3. Zero nonce (no mining required for genesis)
+     * 4. Coinbase set to wallet's default key
+     * 5. Timestamp = current time or config genesis time
+     *
+     * @param key ECKeyPair for coinbase address
+     * @param timestamp Genesis block timestamp
+     * @return BlockV5 genesis block
+     * @see BlockV5#createWithNonce(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, Bytes32, List)
+     * @since Phase 7.5 v5.1
+     */
+    BlockV5 createGenesisBlockV5(ECKeyPair key, long timestamp);
+
+    /**
+     * Create a reward BlockV5 for pool distribution (v5.1 implementation)
+     *
+     * Phase 7.6: Pool reward distribution using BlockV5 architecture.
+     * Creates a BlockV5 containing Transaction references for reward distribution.
+     *
+     * This method:
+     * 1. Creates Transaction objects for each recipient (foundation, pool)
+     * 2. Signs each Transaction with the source key
+     * 3. Saves Transactions to TransactionStore
+     * 4. Creates BlockV5 with Link.toTransaction() references
+     * 5. Returns BlockV5 (caller imports via tryToConnect)
+     *
+     * @param sourceBlockHash Hash of source block (where funds come from)
+     * @param recipients List of recipient addresses
+     * @param amounts List of amounts for each recipient (must match recipients size)
+     * @param sourceKey ECKeyPair for signing transactions (source of funds)
+     * @param nonce Account nonce for first transaction
+     * @param totalFee Total transaction fee (distributed across transactions)
+     * @return BlockV5 containing reward transactions
+     * @see Transaction#createTransfer(Bytes32, Bytes32, XAmount, long, XAmount)
+     * @see Link#toTransaction(Bytes32)
+     * @since Phase 7.6 v5.1
+     */
+    BlockV5 createRewardBlockV5(
+            Bytes32 sourceBlockHash,
+            List<Bytes32> recipients,
+            List<XAmount> amounts,
+            ECKeyPair sourceKey,
+            long nonce,
+            XAmount totalFee);
 
     // Get block by its hash
     Block getBlockByHash(Bytes32 hash, boolean isRaw);
@@ -180,6 +164,32 @@ public interface Blockchain {
 
     // Get blocks within specified time range
     List<Block> getBlocksByTime(long starttime, long endtime);
+
+    /**
+     * Get BlockV5 objects within specified time range (v5.1 implementation).
+     *
+     * Phase 7.3.0: This is the BlockV5 version of getBlocksByTime().
+     * Used by network layer to send BlockV5 messages instead of legacy Block messages.
+     *
+     * @param starttime Start time in XDAG timestamp format
+     * @param endtime End time in XDAG timestamp format
+     * @return List of BlockV5 objects in the time range
+     * @since Phase 7.3.0 v5.1
+     */
+    List<BlockV5> getBlockV5sByTime(long starttime, long endtime);
+
+    /**
+     * Get BlockV5 by its hash (v5.1 implementation).
+     *
+     * Phase 7.3.0: This is the BlockV5 version of getBlockByHash().
+     * Delegates to blockStore.getBlockV5ByHash().
+     *
+     * @param hash Block hash
+     * @param isRaw Whether to include raw block data
+     * @return BlockV5 or null if not found
+     * @since Phase 7.3.0 v5.1
+     */
+    BlockV5 getBlockV5ByHash(Bytes32 hash, boolean isRaw);
 
     // Start main chain check thread with given period
     void startCheckMain(long period);

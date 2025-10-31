@@ -384,6 +384,7 @@ public class BlockV5 implements Serializable {
      * 1. Block size <= MAX_BLOCK_SIZE
      * 2. Total links count <= MAX_LINKS_PER_BLOCK
      * 3. Block references: MIN_BLOCK_LINKS <= count <= MAX_BLOCK_LINKS
+     *    (Exception: Genesis block can have 0 links)
      * 4. Header fields are valid (timestamp > 0, difficulty > 0, etc.)
      * 5. PoW is valid (hash <= difficulty)
      *
@@ -397,8 +398,15 @@ public class BlockV5 implements Serializable {
 
         // Check Block reference limits (from DESIGN_DECISIONS.md D6)
         int blockRefCount = getBlockRefCount();
-        if (blockRefCount < MIN_BLOCK_LINKS) {
-            return false;  // Must reference at least one prevMainBlock
+
+        // Phase 7.5: Allow genesis block with empty links
+        // Genesis block is identified by: empty links list and difficulty == 1
+        boolean isGenesis = (links.isEmpty() &&
+                           header.getDifficulty() != null &&
+                           header.getDifficulty().equals(org.apache.tuweni.units.bigints.UInt256.ONE));
+
+        if (!isGenesis && blockRefCount < MIN_BLOCK_LINKS) {
+            return false;  // Non-genesis blocks must reference at least one prevMainBlock
         }
         if (blockRefCount > MAX_BLOCK_LINKS) {
             return false;  // Too many Block references (prevents DAG attacks)

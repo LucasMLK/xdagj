@@ -861,8 +861,12 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             // v5.1: Validate and add block
             ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(syncBlock);
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
-                // v5.1: Broadcast block
-                kernel.broadcastBlock(syncBlock.getBlock(), ttl);
+                // Phase 7.3.0: Legacy Block broadcasting no longer supported
+                // TODO: Migrate RPC transaction system to create and broadcast BlockV5 objects
+                log.warn("RPC transaction created but cannot broadcast legacy Block (NEW_BLOCK deleted). " +
+                        "Block hash: {}", syncBlock.getBlock().getHash().toHexString());
+                log.warn("RPC transaction system needs migration to BlockV5 format");
+
                 Block block = syncBlock.getBlock();
                 List<Address> inputs = block.getInputs();
                 UInt64 blockNonce = block.getTxNonceField().getTransactionNonce();

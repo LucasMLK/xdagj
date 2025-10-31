@@ -31,8 +31,9 @@ import io.xdag.net.message.MessageCode;
 
 public class SyncBlockRequestMessage extends XdagMessage {
 
+    // Phase 7.3.0: Updated to use SyncBlockV5Message.class (SyncBlockMessage deleted)
     public SyncBlockRequestMessage(MutableBytes hash, XdagStats xdagStats) {
-        super(MessageCode.SYNCBLOCK_REQUEST, SyncBlockMessage.class, 0, 0, Bytes32.wrap(hash), xdagStats);
+        super(MessageCode.SYNCBLOCK_REQUEST, SyncBlockV5Message.class, 0, 0, Bytes32.wrap(hash), xdagStats);
     }
 
     public SyncBlockRequestMessage(byte[] body) {

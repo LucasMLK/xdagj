@@ -59,11 +59,11 @@ import io.xdag.net.message.consensus.BlockExtRequestMessage;
 import io.xdag.net.message.consensus.BlockRequestMessage;
 import io.xdag.net.message.consensus.BlocksReplyMessage;
 import io.xdag.net.message.consensus.BlocksRequestMessage;
-import io.xdag.net.message.consensus.NewBlockMessage;
+// Phase 7.3.0: Removed NewBlockMessage and SyncBlockMessage imports (use V5 messages)
 import io.xdag.net.message.consensus.NewBlockV5Message;
 import io.xdag.net.message.consensus.SumReplyMessage;
 import io.xdag.net.message.consensus.SumRequestMessage;
-import io.xdag.net.message.consensus.SyncBlockMessage;
+// Phase 7.3.0: Removed SyncBlockMessage import (use V5 messages)
 import io.xdag.net.message.consensus.SyncBlockV5Message;
 import io.xdag.net.message.consensus.SyncBlockRequestMessage;
 import io.xdag.net.message.consensus.XdagMessage;
@@ -194,7 +194,8 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
         case HANDSHAKE_WORLD -> onHandshakeWorld((WorldMessage) msg);
 
         /* sync */
-        case BLOCKS_REQUEST, BLOCKS_REPLY, SUMS_REQUEST, SUMS_REPLY, BLOCKEXT_REQUEST, BLOCKEXT_REPLY, BLOCK_REQUEST, NEW_BLOCK, SYNC_BLOCK, SYNCBLOCK_REQUEST,
+        // Phase 7.3.0: Removed NEW_BLOCK, SYNC_BLOCK from routing (use V5 messages)
+        case BLOCKS_REQUEST, BLOCKS_REPLY, SUMS_REQUEST, SUMS_REPLY, BLOCKEXT_REQUEST, BLOCKEXT_REPLY, BLOCK_REQUEST, SYNCBLOCK_REQUEST,
         NEW_BLOCK_V5, SYNC_BLOCK_V5 ->  // Phase 3: BlockV5 message support
                 onXdag(msg);
         default -> ctx.fireChannelRead(msg);
@@ -306,7 +307,7 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
         }
 
         switch (msg.getCode()) {
-            case NEW_BLOCK -> processNewBlock((NewBlockMessage) msg);
+            // Phase 7.3.0: Removed NEW_BLOCK and SYNC_BLOCK cases (use V5 messages)
             case NEW_BLOCK_V5 -> processNewBlockV5((NewBlockV5Message) msg);  // Phase 3
             case BLOCK_REQUEST -> processBlockRequest((BlockRequestMessage) msg);
             case BLOCKS_REQUEST -> processBlocksRequest((BlocksRequestMessage) msg);
@@ -314,7 +315,6 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
             case SUMS_REQUEST -> processSumsRequest((SumRequestMessage) msg);
             case SUMS_REPLY -> processSumsReply((SumReplyMessage) msg);
             case BLOCKEXT_REQUEST -> processBlockExtRequest((BlockExtRequestMessage) msg);
-            case SYNC_BLOCK -> processSyncBlock((SyncBlockMessage) msg);
             case SYNC_BLOCK_V5 -> processSyncBlockV5((SyncBlockV5Message) msg);  // Phase 3
             case SYNCBLOCK_REQUEST -> processSyncBlockRequest((SyncBlockRequestMessage) msg);
             default -> throw new UnreachableException();
@@ -354,34 +354,15 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     /**
      * ********************** Message Processing * ***********************
      */
-    protected void processNewBlock(NewBlockMessage msg) {
-        Block block = msg.getBlock();
-        if (syncMgr.isSyncOld()) {
-            return;
-        }
-
-        log.debug("processNewBlock:{} from node {}", block.getHash(), channel.getRemoteAddress());
-        // v5.1: Use SyncBlock instead of BlockWrapper
-        SyncManager.SyncBlock syncBlock = new SyncManager.SyncBlock(
-            block, msg.getTtl() - 1, channel.getRemotePeer(), false);
-        syncMgr.validateAndAddNewBlock(syncBlock);
-    }
-
-    protected void processSyncBlock(SyncBlockMessage msg) {
-        Block block = msg.getBlock();
-
-        log.debug("processSyncBlock:{}  from node {}", block.getHash(), channel.getRemoteAddress());
-        // v5.1: Use SyncBlock instead of BlockWrapper
-        SyncManager.SyncBlock syncBlock = new SyncManager.SyncBlock(
-            block, msg.getTtl() - 1, channel.getRemotePeer(), true);
-        syncMgr.validateAndAddNewBlock(syncBlock);
-    }
 
     /**
      * Phase 3 - Network Layer Migration: Process BlockV5 new block
      *
      * Handles NEW_BLOCK_V5 messages (0x1B) containing v5.1 BlockV5 structure.
      * This method directly calls Blockchain.tryToConnect(BlockV5) without wrapping.
+     *
+     * Phase 7.3.0: This is now the ONLY way to receive new blocks from peers.
+     * Legacy NEW_BLOCK messages are no longer accepted.
      *
      * @param msg NewBlockV5Message containing BlockV5 and TTL
      */
@@ -427,11 +408,11 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     }
 
     /**
-     * Phase 3.3 Note: This handler still sends legacy Block messages
+     * Phase 7.3.0: Send BlockV5 messages only (legacy message support removed)
      *
-     * TODO Phase 4: After storage migration, update to send BlockV5
-     * Currently chain.getBlocksByTime() returns Block objects from legacy storage.
-     * This will be updated once Phase 4 (storage layer migration) is complete.
+     * Note: This method can only send blocks that exist as BlockV5 in storage.
+     * Legacy blocks that haven't been migrated to BlockV5 format will be skipped.
+     * This is acceptable as the network should only use v5.1 protocol going forward.
      *
      * 区块请求响应一个区块 并开启一个线程不断发送一段时间内的区块
      */
@@ -452,26 +433,19 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
                 channel.getRemoteAddress());
         List<Block> blocks = chain.getBlocksByTime(startTime, endTime);
 
-        // Phase 3.3: Try to send BlockV5 messages when available
+        // Phase 7.3.0: Send BlockV5 messages only (no legacy fallback)
         for (Block block : blocks) {
-            boolean sentAsBlockV5 = false;
-
             // Try to get BlockV5 version
             try {
                 BlockV5 blockV5 = kernel.getBlockStore().getBlockV5ByHash(block.getHash(), true);
                 if (blockV5 != null) {
                     SyncBlockV5Message blockMsg = new SyncBlockV5Message(blockV5, 1);
                     msgQueue.sendMessage(blockMsg);
-                    sentAsBlockV5 = true;
+                } else {
+                    log.debug("Block {} not available as BlockV5, skipping", block.getHash().toHexString());
                 }
             } catch (Exception e) {
-                // BlockV5 not available, will fallback to legacy
-            }
-
-            // Fallback to legacy Block message
-            if (!sentAsBlockV5) {
-                SyncBlockMessage blockMsg = new SyncBlockMessage(block, 1);
-                msgQueue.sendMessage(blockMsg);
+                log.debug("Failed to get BlockV5 for hash {}: {}", block.getHash().toHexString(), e.getMessage());
             }
         }
         msgQueue.sendMessage(new BlocksReplyMessage(startTime, endTime, random, chain.getXdagStats()));
@@ -512,16 +486,16 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     }
 
     /**
-     * Phase 3.3: Send BlockV5 messages when available, fallback to legacy Block
+     * Phase 7.3.0: Send BlockV5 messages only (legacy message support removed)
      *
-     * After Phase 4 storage migration, this handler can retrieve BlockV5 from storage
-     * and send NEW_BLOCK_V5 messages (0x1B) to peers.
+     * After Phase 7.3.0, this handler only sends NEW_BLOCK_V5 messages (0x1B) to peers.
+     * Blocks not available as BlockV5 will be skipped (not sent).
      */
     protected void processBlockRequest(BlockRequestMessage msg) {
         Bytes hash = msg.getHash();
         int ttl = config.getNodeSpec().getTTL();
 
-        // Phase 3.3: Try BlockV5 first (after Phase 4 storage migration)
+        // Phase 7.3.0: Send BlockV5 messages only
         try {
             BlockV5 blockV5 = kernel.getBlockStore().getBlockV5ByHash(Bytes32.wrap(hash), true);
             if (blockV5 != null) {
@@ -529,31 +503,25 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
                 NewBlockV5Message message = new NewBlockV5Message(blockV5, ttl);
                 msgQueue.sendMessage(message);
                 return;
+            } else {
+                log.debug("Block {} not available as BlockV5, not sending", Bytes32.wrap(hash).toHexString());
             }
         } catch (Exception e) {
-            log.debug("BlockV5 not available for hash {}, falling back to legacy Block",
-                     Bytes32.wrap(hash).toHexString());
-        }
-
-        // Fallback to legacy Block
-        Block block = chain.getBlockByHash(Bytes32.wrap(hash), true);
-        if (block != null) {
-            log.debug("processBlockRequest: findBlock {} (legacy)", Bytes32.wrap(hash).toHexString());
-            NewBlockMessage message = new NewBlockMessage(block, ttl);
-            msgQueue.sendMessage(message);
+            log.debug("Failed to get BlockV5 for hash {}: {}",
+                     Bytes32.wrap(hash).toHexString(), e.getMessage());
         }
     }
 
     /**
-     * Phase 3.3: Send BlockV5 messages when available, fallback to legacy Block
+     * Phase 7.3.0: Send BlockV5 messages only (legacy message support removed)
      *
-     * After Phase 4 storage migration, this handler can retrieve BlockV5 from storage
-     * and send SYNC_BLOCK_V5 messages (0x1C) to peers during synchronization.
+     * After Phase 7.3.0, this handler only sends SYNC_BLOCK_V5 messages (0x1C) to peers
+     * during synchronization. Blocks not available as BlockV5 will be skipped.
      */
     private void processSyncBlockRequest(SyncBlockRequestMessage msg) {
         Bytes hash = msg.getHash();
 
-        // Phase 3.3: Try BlockV5 first (after Phase 4 storage migration)
+        // Phase 7.3.0: Send BlockV5 messages only
         try {
             BlockV5 blockV5 = kernel.getBlockStore().getBlockV5ByHash(Bytes32.wrap(hash), true);
             if (blockV5 != null) {
@@ -562,30 +530,28 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
                 SyncBlockV5Message message = new SyncBlockV5Message(blockV5, 1);
                 msgQueue.sendMessage(message);
                 return;
+            } else {
+                log.debug("Block {} not available as BlockV5, not sending to node: {}",
+                         Bytes32.wrap(hash).toHexString(), channel.getRemoteAddress());
             }
         } catch (Exception e) {
-            log.debug("BlockV5 not available for hash {}, falling back to legacy Block",
-                     Bytes32.wrap(hash).toHexString());
-        }
-
-        // Fallback to legacy Block
-        Block block = chain.getBlockByHash(Bytes32.wrap(hash), true);
-        if (block != null) {
-            log.debug("processSyncBlockRequest: findBlock {} (legacy), to node: {}",
-                     Bytes32.wrap(hash).toHexString(), channel.getRemoteAddress());
-            SyncBlockMessage message = new SyncBlockMessage(block, 1);
-            msgQueue.sendMessage(message);
+            log.debug("Failed to get BlockV5 for hash {}: {}",
+                     Bytes32.wrap(hash).toHexString(), e.getMessage());
         }
     }
 
     /**
      * ********************** Xdag Message ************************
      */
-    public void sendNewBlock(Block newBlock, int TTL) {
-        log.debug("send block:{} to node:{}", newBlock.getHash(), channel.getRemoteAddress());
-        NewBlockMessage msg = new NewBlockMessage(newBlock, TTL);
-        sendMessage(msg);
-    }
+
+    /**
+     * Phase 7.3.0: Deleted sendNewBlock() - use sendNewBlockV5() instead
+     *
+     * The legacy sendNewBlock(Block, int) method was removed in Phase 7.3.0
+     * when NewBlockMessage and SyncBlockMessage were deleted.
+     *
+     * For sending new blocks, use sendNewBlockV5(BlockV5, int) instead.
+     */
 
     /**
      * Phase 3.2 - Send BlockV5 to peer

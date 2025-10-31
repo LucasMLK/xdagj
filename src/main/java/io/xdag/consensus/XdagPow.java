@@ -351,10 +351,8 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
             Bytes32 currentPreHash = Bytes32.wrap(currentTask.get().getTask()[0].getData());
             poolAwardManager.addAwardBlock(minShare.get(), currentPreHash, blockV5.getHash(), blockV5.getTimestamp());
 
-            // Phase 5.5: Broadcast BlockV5
-            // TODO: Update Broadcaster to accept BlockV5 (temporarily convert to Block for backward compatibility)
-            Block legacyBlock = convertBlockV5ToBlock(blockV5);
-            broadcaster.broadcast(legacyBlock, kernel.getConfig().getNodeSpec().getTTL());
+            // Phase 7.7: Broadcast BlockV5 directly (no conversion needed)
+            broadcaster.broadcast(blockV5, kernel.getConfig().getNodeSpec().getTTL());
         }
         isWorking = true;
         // start generate main block
@@ -364,33 +362,6 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
     protected void onNewPreTop() {
         log.debug("Receive New PreTop");
         newBlock();
-    }
-
-    /**
-     * Temporary conversion method: BlockV5 → Block (Phase 5.5 backward compatibility)
-     *
-     * This method provides temporary backward compatibility for Broadcaster which currently
-     * only accepts Block objects. After Phase 5.6 (network layer migration), this method
-     * will be removed and Broadcaster will work directly with BlockV5.
-     *
-     * IMPORTANT: This is a TEMPORARY solution. Do NOT use this method elsewhere.
-     * The goal is to fully migrate to BlockV5 and remove all Block usage.
-     *
-     * @param blockV5 BlockV5 to convert
-     * @return Legacy Block object
-     * @deprecated Temporary method for Phase 5.5, will be removed in Phase 5.6
-     */
-    @Deprecated(since = "0.8.1", forRemoval = true)
-    private Block convertBlockV5ToBlock(BlockV5 blockV5) {
-        // Serialize BlockV5 to bytes
-        byte[] blockBytes = blockV5.toBytes();
-
-        // Create legacy Block from bytes using XdagBlock wrapper
-        // Note: This is a simplified conversion that may not preserve all Block features
-        // For Phase 5.5, this is acceptable since we only need basic broadcasting
-        Block legacyBlock = new Block(new XdagBlock(blockBytes));
-
-        return legacyBlock;
     }
 
     /**
@@ -513,9 +484,12 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
     @Override
     public void onMessage(io.xdag.listener.Message msg) {
         if (msg instanceof BlockMessage message) {
-            Block block = new Block(new XdagBlock(message.getData().toArray()));
-            // v5.1: Broadcast directly with block + ttl
-            broadcaster.broadcast(block, kernel.getConfig().getNodeSpec().getTTL());
+            // Phase 7.3.0: Legacy Block broadcasting no longer supported
+            // Listener system receives legacy Block format, but NEW_BLOCK messages were deleted
+            // TODO: Migrate listener system to use BlockV5 objects
+            log.warn("Received legacy Block from listener system, but NEW_BLOCK broadcast is no longer supported. " +
+                    "Block hash: {}", Bytes32.wrap(message.getData().slice(0, 32)).toHexString());
+            log.warn("Listener system needs migration to BlockV5 format");
         }
         if (msg instanceof PretopMessage message) {
             receiveNewPretop(message.getData());
@@ -607,15 +581,17 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
     }
 
     /**
-     * Broadcaster for v5.1 - Simplified block broadcasting
-     * Replaces BlockWrapper with simple Block + TTL tuple
+     * Broadcaster for v5.1 - BlockV5 broadcasting (Phase 7.7)
+     *
+     * Phase 7.7: Updated to broadcast BlockV5 directly instead of legacy Block.
+     * Uses kernel.broadcastBlockV5() for network propagation.
      */
     public class Broadcaster implements Runnable {
-        // Simple tuple for block + TTL
+        // Simple tuple for BlockV5 + TTL
         private static class BroadcastTask {
-            final Block block;
+            final BlockV5 block;
             final int ttl;
-            BroadcastTask(Block block, int ttl) {
+            BroadcastTask(BlockV5 block, int ttl) {
                 this.block = block;
                 this.ttl = ttl;
             }
@@ -635,12 +611,12 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
                     log.error(e.getMessage(), e);
                 }
                 if (task != null) {
-                    kernel.broadcastBlock(task.block, task.ttl);
+                    kernel.broadcastBlockV5(task.block, task.ttl);
                 }
             }
         }
 
-        public void broadcast(Block block, int ttl) {
+        public void broadcast(BlockV5 block, int ttl) {
             if (!queue.offer(new BroadcastTask(block, ttl))) {
                 log.error("Failed to add a message to the broadcast queue: block = {}",
                         block.getHash().toHexString());

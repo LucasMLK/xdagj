@@ -98,21 +98,16 @@ public class Kernel {
     protected XdagP2pEventHandler p2pEventHandler;
 
     /**
-     * Broadcast a new block to all connected peers via P2P service
+     * Phase 7.3.0: Deleted broadcastBlock(Block, int) method
+     *
+     * Legacy Block broadcasting was removed when NEW_BLOCK message support was deleted.
+     * All block broadcasting should now use broadcastBlockV5(BlockV5, int).
+     *
+     * Callers that still use legacy Block objects need migration:
+     * - XdagPow.onMessage() - Listener system needs BlockV5 migration
+     * - SyncManager.distributeBlock() - Only called from deprecated importBlock()
+     * - XdagApiImpl.doXfer() - RPC transaction system needs BlockV5 migration
      */
-    public void broadcastBlock(Block block, int ttl) {
-        if (p2pService == null || p2pEventHandler == null) {
-            log.warn("P2P service not initialized, cannot broadcast block");
-            return;
-        }
-
-        // Broadcast to all channels via P2P service
-        for (io.xdag.p2p.channel.Channel channel : p2pService.getChannelManager().getChannels().values()) {
-            if (channel.isFinishHandshake()) {
-                p2pEventHandler.sendNewBlock(channel, block, ttl);
-            }
-        }
-    }
 
     /**
      * Broadcast a new BlockV5 to all connected peers (Phase 4 Layer 3 Task 1.2)
@@ -150,9 +145,9 @@ public class Kernel {
             enc.writeInt(ttl);
             byte[] messageBody = enc.toBytes();
 
-            // Prepend message type (NEW_BLOCK for now - should be NEW_BLOCK_V5 in future)
+            // Phase 7.3.0: Use NEW_BLOCK_V5 message code for BlockV5
             byte[] fullMessage = new byte[messageBody.length + 1];
-            fullMessage[0] = io.xdag.net.message.MessageCode.NEW_BLOCK.toByte();
+            fullMessage[0] = io.xdag.net.message.MessageCode.NEW_BLOCK_V5.toByte();
             System.arraycopy(messageBody, 0, fullMessage, 1, messageBody.length);
 
             // Broadcast to all channels
@@ -311,16 +306,28 @@ public class Kernel {
         XdagStats xdagStats = blockchain.getXdagStats();
         
         // Create genesis block if first startup
+        // Phase 7.5: Genesis BlockV5 creation restored
         if (xdagStats.getOurLastBlockHash() == null) {
             firstAccount = toBytesAddress(wallet.getDefKey().getPublicKey());
-            firstBlock = new Block(config, XdagTime.getCurrentTimestamp(), null, null, false,
-                    null, null, -1, XAmount.ZERO, null);
-            firstBlock.signOut(wallet.getDefKey());
-            xdagStats.setOurLastBlockHash(firstBlock.getHash().toArray());
+
+            // Create genesis BlockV5
+            BlockV5 genesisBlock = blockchain.createGenesisBlockV5(
+                wallet.getDefKey(),
+                XdagTime.getCurrentTimestamp()
+            );
+
+            // Set initial stats
+            xdagStats.setOurLastBlockHash(genesisBlock.getHash().toArray());
             if (xdagStats.getGlobalMiner() == null) {
                 xdagStats.setGlobalMiner(firstAccount.toArray());
             }
-            blockchain.tryToConnect(firstBlock);
+
+            // Import genesis block to blockchain
+            ImportResult result = blockchain.tryToConnect(genesisBlock);
+            log.info("Genesis BlockV5 import result: {}", result);
+
+            // Store the genesis block reference
+            firstBlock = null;  // No legacy Block for genesis (BlockV5 only)
         } else {
             firstAccount = toBytesAddress(wallet.getDefKey().getPublicKey());
         }
