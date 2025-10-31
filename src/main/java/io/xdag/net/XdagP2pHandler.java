@@ -452,10 +452,27 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
                 channel.getRemoteAddress());
         List<Block> blocks = chain.getBlocksByTime(startTime, endTime);
 
-        // Phase 3.3: Still using legacy messages until Phase 4 storage migration
+        // Phase 3.3: Try to send BlockV5 messages when available
         for (Block block : blocks) {
-            SyncBlockMessage blockMsg = new SyncBlockMessage(block, 1);
-            msgQueue.sendMessage(blockMsg);
+            boolean sentAsBlockV5 = false;
+
+            // Try to get BlockV5 version
+            try {
+                BlockV5 blockV5 = kernel.getBlockStore().getBlockV5ByHash(block.getHash(), true);
+                if (blockV5 != null) {
+                    SyncBlockV5Message blockMsg = new SyncBlockV5Message(blockV5, 1);
+                    msgQueue.sendMessage(blockMsg);
+                    sentAsBlockV5 = true;
+                }
+            } catch (Exception e) {
+                // BlockV5 not available, will fallback to legacy
+            }
+
+            // Fallback to legacy Block message
+            if (!sentAsBlockV5) {
+                SyncBlockMessage blockMsg = new SyncBlockMessage(block, 1);
+                msgQueue.sendMessage(blockMsg);
+            }
         }
         msgQueue.sendMessage(new BlocksReplyMessage(startTime, endTime, random, chain.getXdagStats()));
     }
@@ -495,37 +512,67 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     }
 
     /**
-     * Phase 3.3 Note: This handler still sends legacy Block messages
+     * Phase 3.3: Send BlockV5 messages when available, fallback to legacy Block
      *
-     * TODO Phase 4: After storage migration, update to send BlockV5
-     * Currently chain.getBlockByHash() returns Block objects from legacy storage.
-     * This will be updated once Phase 4 (storage layer migration) is complete.
+     * After Phase 4 storage migration, this handler can retrieve BlockV5 from storage
+     * and send NEW_BLOCK_V5 messages (0x1B) to peers.
      */
     protected void processBlockRequest(BlockRequestMessage msg) {
         Bytes hash = msg.getHash();
-        Block block = chain.getBlockByHash(Bytes32.wrap(hash), true);
         int ttl = config.getNodeSpec().getTTL();
+
+        // Phase 3.3: Try BlockV5 first (after Phase 4 storage migration)
+        try {
+            BlockV5 blockV5 = kernel.getBlockStore().getBlockV5ByHash(Bytes32.wrap(hash), true);
+            if (blockV5 != null) {
+                log.debug("processBlockRequest: findBlockV5 {}", Bytes32.wrap(hash).toHexString());
+                NewBlockV5Message message = new NewBlockV5Message(blockV5, ttl);
+                msgQueue.sendMessage(message);
+                return;
+            }
+        } catch (Exception e) {
+            log.debug("BlockV5 not available for hash {}, falling back to legacy Block",
+                     Bytes32.wrap(hash).toHexString());
+        }
+
+        // Fallback to legacy Block
+        Block block = chain.getBlockByHash(Bytes32.wrap(hash), true);
         if (block != null) {
-            log.debug("processBlockRequest: findBlock{}", Bytes32.wrap(hash).toHexString());
-            // Phase 3.3: Still using legacy message until Phase 4 storage migration
+            log.debug("processBlockRequest: findBlock {} (legacy)", Bytes32.wrap(hash).toHexString());
             NewBlockMessage message = new NewBlockMessage(block, ttl);
             msgQueue.sendMessage(message);
         }
     }
 
     /**
-     * Phase 3.3 Note: This handler still sends legacy Block messages
+     * Phase 3.3: Send BlockV5 messages when available, fallback to legacy Block
      *
-     * TODO Phase 4: After storage migration, update to send BlockV5
-     * Currently chain.getBlockByHash() returns Block objects from legacy storage.
-     * This will be updated once Phase 4 (storage layer migration) is complete.
+     * After Phase 4 storage migration, this handler can retrieve BlockV5 from storage
+     * and send SYNC_BLOCK_V5 messages (0x1C) to peers during synchronization.
      */
     private void processSyncBlockRequest(SyncBlockRequestMessage msg) {
         Bytes hash = msg.getHash();
+
+        // Phase 3.3: Try BlockV5 first (after Phase 4 storage migration)
+        try {
+            BlockV5 blockV5 = kernel.getBlockStore().getBlockV5ByHash(Bytes32.wrap(hash), true);
+            if (blockV5 != null) {
+                log.debug("processSyncBlockRequest: findBlockV5 {}, to node: {}",
+                         Bytes32.wrap(hash).toHexString(), channel.getRemoteAddress());
+                SyncBlockV5Message message = new SyncBlockV5Message(blockV5, 1);
+                msgQueue.sendMessage(message);
+                return;
+            }
+        } catch (Exception e) {
+            log.debug("BlockV5 not available for hash {}, falling back to legacy Block",
+                     Bytes32.wrap(hash).toHexString());
+        }
+
+        // Fallback to legacy Block
         Block block = chain.getBlockByHash(Bytes32.wrap(hash), true);
         if (block != null) {
-            log.debug("processSyncBlockRequest, findBlock: {}, to node: {}", Bytes32.wrap(hash).toHexString(), channel.getRemoteAddress());
-            // Phase 3.3: Still using legacy message until Phase 4 storage migration
+            log.debug("processSyncBlockRequest: findBlock {} (legacy), to node: {}",
+                     Bytes32.wrap(hash).toHexString(), channel.getRemoteAddress());
             SyncBlockMessage message = new SyncBlockMessage(block, 1);
             msgQueue.sendMessage(message);
         }
