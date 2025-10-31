@@ -60,6 +60,7 @@ import org.bouncycastle.util.encoders.Hex;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -940,13 +941,185 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             return;
         }
 
-        // Phase 8.1.2: Multi-account aggregation path (deferred)
-        // For now, reject fromAddress == null with clear error message
-        log.warn("Multi-account RPC transactions not yet supported with BlockV5");
-        processResponse.setCode(ERR_XDAG_PARAM);
-        processResponse.setErrMsg("Please specify 'from' address for BlockV5 transactions. " +
-                "Multi-account aggregation will be supported in future update. " +
-                "You can manually transfer funds from multiple accounts to one account first.");
+        // Phase 8.1.2: Multi-account aggregation path
+        log.debug("Multi-account RPC transaction requested (from == null)");
+
+        // Find all accounts and calculate how much each can contribute
+        List<ECKeyPair> accounts = kernel.getWallet().getAccounts();
+        List<ContributingAccount> contributors = new ArrayList<>();
+        XAmount remainingAmount = amount;
+
+        for (ECKeyPair account : accounts) {
+            if (remainingAmount.compareTo(XAmount.ZERO) <= 0) {
+                break;
+            }
+
+            byte[] addr = toBytesAddress(account).toArray();
+            XAmount balance = kernel.getAddressStore().getBalanceByAddress(addr);
+
+            // Skip accounts without sufficient balance for at least the fee
+            if (balance.compareTo(fee) <= 0) {
+                continue;
+            }
+
+            // Calculate how much this account can contribute (balance - fee)
+            XAmount maxContribution = balance.subtract(fee);
+            XAmount contribution = remainingAmount.compareTo(maxContribution) <= 0 ? remainingAmount : maxContribution;
+
+            // Get nonce for this account
+            UInt64 accountNonce;
+            if (txNonce == null) {
+                UInt64 currentTxQuantity = kernel.getAddressStore().getTxQuantity(addr);
+                accountNonce = currentTxQuantity.add(UInt64.ONE);
+            } else {
+                // For multi-account, txNonce is not supported (which account's nonce?)
+                processResponse.setCode(ERR_XDAG_PARAM);
+                processResponse.setErrMsg("Manual nonce not supported for multi-account transactions (from == null)");
+                return;
+            }
+
+            contributors.add(new ContributingAccount(account, addr, contribution, accountNonce));
+            remainingAmount = remainingAmount.subtract(contribution);
+        }
+
+        // Check if we have enough total balance
+        if (remainingAmount.compareTo(XAmount.ZERO) > 0) {
+            processResponse.setCode(ERR_XDAG_BALANCE);
+            processResponse.setErrMsg("Insufficient total balance across all accounts. Need " +
+                    amount.toDecimal(9, XUnit.XDAG).toPlainString() +
+                    " XDAG, missing " + remainingAmount.toDecimal(9, XUnit.XDAG).toPlainString() + " XDAG");
+            return;
+        }
+
+        if (contributors.isEmpty()) {
+            processResponse.setCode(ERR_XDAG_BALANCE);
+            processResponse.setErrMsg("No accounts with sufficient balance found");
+            return;
+        }
+
+        // Create one Transaction per contributing account
+        List<String> txHashes = new ArrayList<>();
+        int successCount = 0;
+
+        for (ContributingAccount contributor : contributors) {
+            try {
+                // Encode remark as bytes
+                Bytes remarkData = Bytes.EMPTY;
+                if (remark != null && !remark.isEmpty()) {
+                    remarkData = Bytes.wrap(remark.getBytes(StandardCharsets.UTF_8));
+                }
+
+                // Get fromAddress hash for this account
+                Bytes32 accountFromAddress = keyPair2Hash(contributor.account);
+
+                // Create Transaction object
+                Transaction tx = Transaction.builder()
+                        .from(accountFromAddress)
+                        .to(toAddress)
+                        .amount(contributor.contribution)
+                        .nonce(contributor.nonce.toLong())
+                        .fee(fee)
+                        .data(remarkData)
+                        .build();
+
+                // Sign Transaction
+                Transaction signedTx = tx.sign(contributor.account);
+
+                // Validate Transaction
+                if (!signedTx.isValid()) {
+                    log.error("Multi-account transaction validation failed for account {}",
+                            Base58.encodeCheck(contributor.address));
+                    continue;
+                }
+
+                if (!signedTx.verifySignature()) {
+                    log.error("Multi-account transaction signature verification failed for account {}",
+                            Base58.encodeCheck(contributor.address));
+                    continue;
+                }
+
+                // Save Transaction to TransactionStore
+                kernel.getTransactionStore().saveTransaction(signedTx);
+
+                // Create BlockV5 with Transaction link
+                List<Link> links = Lists.newArrayList(Link.toTransaction(signedTx.getHash()));
+
+                // Create BlockHeader
+                BlockHeader header = BlockHeader.builder()
+                        .timestamp(XdagTime.getCurrentTimestamp())
+                        .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
+                        .nonce(Bytes32.ZERO)
+                        .coinbase(accountFromAddress)
+                        .hash(null)  // Will be calculated by BlockV5.getHash()
+                        .build();
+
+                // Create BlockV5
+                BlockV5 block = BlockV5.builder()
+                        .header(header)
+                        .links(links)
+                        .info(null)  // Will be initialized by tryToConnect()
+                        .build();
+
+                // Import to blockchain
+                ImportResult result = kernel.getBlockchain().tryToConnect(block);
+
+                if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
+                    // Update nonce in address store
+                    kernel.getAddressStore().updateTxQuantity(contributor.address, contributor.nonce);
+
+                    // Broadcast BlockV5
+                    int ttl = kernel.getConfig().getNodeSpec().getTTL();
+                    kernel.broadcastBlockV5(block, ttl);
+
+                    // Add to success list
+                    txHashes.add(BasicUtils.hash2Address(block.getHash()));
+                    successCount++;
+
+                    log.debug("Multi-account transaction successful: account={}, amount={} XDAG, block={}",
+                            Base58.encodeCheck(contributor.address),
+                            contributor.contribution.toDecimal(9, XUnit.XDAG).toPlainString(),
+                            BasicUtils.hash2Address(block.getHash()));
+                } else {
+                    log.error("Multi-account transaction import failed for account {}: result={}, error={}",
+                            Base58.encodeCheck(contributor.address),
+                            result,
+                            result.getErrorInfo());
+                }
+
+            } catch (Exception e) {
+                log.error("Multi-account transaction failed for account {}: {}",
+                        Base58.encodeCheck(contributor.address), e.getMessage(), e);
+            }
+        }
+
+        // Return results
+        if (successCount > 0) {
+            processResponse.setCode(SUCCESS);
+            processResponse.setResInfo(txHashes);
+
+            log.info("Multi-account RPC transaction completed: {} of {} accounts successful, total amount={} XDAG",
+                    successCount, contributors.size(), amount.toDecimal(9, XUnit.XDAG).toPlainString());
+        } else {
+            processResponse.setCode(ERR_XDAG_PARAM);
+            processResponse.setErrMsg("All multi-account transactions failed to import");
+        }
+    }
+
+    /**
+     * Helper class for multi-account transaction aggregation
+     */
+    private static class ContributingAccount {
+        final ECKeyPair account;
+        final byte[] address;
+        final XAmount contribution;
+        final UInt64 nonce;
+
+        ContributingAccount(ECKeyPair account, byte[] address, XAmount contribution, UInt64 nonce) {
+            this.account = account;
+            this.address = address;
+            this.contribution = contribution;
+            this.nonce = nonce;
+        }
     }
 
     private Bytes32 checkFrom(String fromAddress, ProcessResponse processResponse)
