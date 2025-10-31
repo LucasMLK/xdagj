@@ -208,6 +208,28 @@ public class BlockV5 implements Serializable {
                 .build();
     }
 
+    /**
+     * Create a new BlockV5 with updated nonce (for mining)
+     *
+     * Phase 5.5: This method enables updating nonce during POW mining.
+     * Since BlockV5 is immutable, this creates a new instance with the new nonce.
+     *
+     * Usage during mining:
+     * ```java
+     * BlockV5 template = blockchain.createMainBlockV5();  // nonce = 0
+     * // Mining finds better nonce
+     * BlockV5 minedBlock = template.withNonce(bestNonce);  // Create new instance
+     * ```
+     *
+     * @param nonce POW nonce (32 bytes)
+     * @return new BlockV5 with updated nonce
+     */
+    public BlockV5 withNonce(Bytes32 nonce) {
+        return this.toBuilder()
+                .header(header.toBuilder().nonce(nonce).hash(null).build())  // Clear hash cache
+                .build();
+    }
+
     // ========== Block Properties ==========
 
     /**
@@ -461,6 +483,53 @@ public class BlockV5 implements Serializable {
         // Calculate and cache hash
         Bytes32 hash = block.calculateHash();
         return block.withHash(hash);
+    }
+
+    // ========== Mining & RandomX Support (Phase 5.5) ==========
+
+    /**
+     * Calculate preHash for RandomX mining
+     *
+     * Phase 5.5: This method replaces the legacy block.getXdagBlock().getData().slice(0, 480)
+     * approach. For BlockV5, we use the serialized header + links metadata as input.
+     *
+     * PreHash calculation:
+     * 1. Serialize header (timestamp, difficulty, nonce, coinbase) = 104 bytes
+     * 2. Serialize links metadata (count + first few link hashes) to reach ~480 bytes
+     * 3. Calculate SHA256 of the combined data
+     *
+     * This preHash is used by RandomX for POW mining:
+     * - taskData = [preHash(32 bytes) + share(32 bytes)]
+     * - RandomX calculates: hash = randomx(taskData, seed)
+     *
+     * @return preHash (32 bytes) for RandomX input
+     */
+    public Bytes32 getRandomXPreHash() {
+        // Calculate how much data we need for ~480 bytes equivalent
+        // Header: 104 bytes (timestamp 8 + difficulty 32 + nonce 32 + coinbase 32)
+        // Links: 4 bytes (count) + N × 33 bytes (each link)
+        // Target: ~480 bytes to match legacy behavior
+
+        int headerSize = BlockHeader.getSerializedSize();  // 104 bytes
+        int remainingSize = 480 - headerSize;  // 376 bytes
+        int maxLinks = Math.min((remainingSize - 4) / Link.LINK_SIZE, links.size());  // ~11 links
+
+        ByteBuffer buffer = ByteBuffer.allocate(headerSize + 4 + (maxLinks * Link.LINK_SIZE));
+
+        // Serialize header
+        buffer.putLong(header.getTimestamp());
+        buffer.put(header.getDifficulty().toBytes().toArray());
+        buffer.put(header.getNonce().toArray());
+        buffer.put(header.getCoinbase().toArray());
+
+        // Serialize links metadata (count + first N links)
+        buffer.putInt(links.size());  // Total link count
+        for (int i = 0; i < maxLinks; i++) {
+            buffer.put(links.get(i).toBytes());
+        }
+
+        // Calculate SHA256 of the data (equivalent to legacy SHA256(block.getData().slice(0, 480)))
+        return HashUtils.sha256(Bytes.wrap(buffer.array()));
     }
 
     // ========== Serialization ==========

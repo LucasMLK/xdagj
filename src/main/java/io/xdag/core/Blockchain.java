@@ -120,6 +120,31 @@ public interface Blockchain {
             XAmount fee,
             UInt64 txNonce);
 
+    /**
+     * Create a BlockV5 mining main block (v5.1 implementation)
+     *
+     * Phase 5.5: This is the NEW method for BlockV5 mining block creation.
+     * Replaces the deprecated createNewBlock() method for mining use case.
+     *
+     * Key features:
+     * 1. Uses Link.toBlock() instead of Address objects for block references
+     * 2. Coinbase stored in BlockHeader (not as a link)
+     * 3. Returns BlockV5 with Link-based DAG structure
+     * 4. Uses current network difficulty from blockchain stats
+     * 5. Creates candidate block (nonce = 0, ready for POW mining)
+     *
+     * Block structure:
+     * - Header: timestamp, difficulty, nonce=0, coinbase
+     * - Links: [pretop_block (if exists), orphan_blocks...]
+     * - Max block links: 16 (from BlockV5.MAX_BLOCK_LINKS)
+     *
+     * @return BlockV5 candidate block for mining (nonce = 0, needs POW)
+     * @see BlockV5#createCandidate(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, List)
+     * @see Link#toBlock(Bytes32)
+     * @since Phase 5.5 v5.1
+     */
+    BlockV5 createMainBlockV5();
+
     // Get block by its hash
     Block getBlockByHash(Bytes32 hash, boolean isRaw);
 

@@ -69,8 +69,8 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
     protected Broadcaster broadcaster;
     @Getter
     protected GetShares sharesFromPools;
-    // Current block
-    protected AtomicReference<Block> generateBlock = new AtomicReference<>();
+    // Current block (Phase 5.5: migrated to BlockV5)
+    protected AtomicReference<BlockV5> generateBlockV5 = new AtomicReference<>();
     protected AtomicReference<Bytes32> minShare = new AtomicReference<>();
     protected final AtomicReference<Bytes32> minHash = new AtomicReference<>();
     protected final Wallet wallet;
@@ -169,40 +169,88 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
                 randomXUtils.setRandomXPoolMemIndex(randomXUtils.getRandomXPoolMemIndex() + 1);
                 memory.setIsSwitched(1);
             }
-            generateBlock.set(generateRandomXBlock(sendTime));
+            generateBlockV5.set(generateRandomXBlock(sendTime));
         } else {
-            generateBlock.set(generateBlock(sendTime));
+            generateBlockV5.set(generateBlock(sendTime));
         }
     }
 
 
-    public Block generateRandomXBlock(long sendTime) {
+    /**
+     * Generate RandomX mining block (Phase 5.5: BlockV5 version)
+     *
+     * Key changes from legacy Block version:
+     * 1. Uses blockchain.createMainBlockV5() instead of createNewBlock()
+     * 2. No signOut() call (coinbase already in BlockHeader)
+     * 3. Uses block.withNonce() to set initial nonce (immutable pattern)
+     * 4. Returns BlockV5 instead of Block
+     *
+     * @param sendTime mining timestamp
+     * @return BlockV5 candidate block for mining
+     */
+    public BlockV5 generateRandomXBlock(long sendTime) {
         taskIndex.incrementAndGet();
-        Block block = blockchain.createNewBlock(null, null, true, null, XAmount.ZERO, null);
-        block.signOut(wallet.getDefKey());
-        // The last 20 bytes of the initial nonce are the node wallet address.
-        minShare.set(Bytes32.wrap(BytesUtils.merge(CryptoProvider.nextBytes(12),
-                hash2byte(keyPair2Hash(wallet.getDefKey())))));
-        block.setNonce(minShare.get());
+
+        // Create BlockV5 candidate (nonce = 0, coinbase in header)
+        BlockV5 block = blockchain.createMainBlockV5();
+
+        // Set initial nonce (last 20 bytes are node wallet address)
+        Bytes32 initialNonce = Bytes32.wrap(BytesUtils.merge(
+            CryptoProvider.nextBytes(12),
+            hash2byte(keyPair2Hash(wallet.getDefKey()))
+        ));
+        minShare.set(initialNonce);
+
+        // Create new block with initial nonce (BlockV5 is immutable)
+        block = block.withNonce(minShare.get());
+
+        // Reset minHash
         minHash.set(Bytes32.fromHexString("ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"));
+
+        // Create task and broadcast to pools
         currentTask.set(createTaskByRandomXBlock(block, sendTime));
         ChannelSupervise.send2Pools(currentTask.get().toJsonString());
+
         return block;
     }
 
 
-    public Block generateBlock(long sendTime) {
+    /**
+     * Generate non-RandomX mining block (Phase 5.5: BlockV5 version)
+     *
+     * Key changes from legacy Block version:
+     * 1. Uses blockchain.createMainBlockV5() instead of createNewBlock()
+     * 2. No signOut() call (coinbase already in BlockHeader)
+     * 3. Uses block.withNonce() to set initial nonce (immutable pattern)
+     * 4. Uses block.getHash() instead of recalcHash()
+     * 5. Returns BlockV5 instead of Block
+     *
+     * @param sendTime mining timestamp
+     * @return BlockV5 candidate block for mining
+     */
+    public BlockV5 generateBlock(long sendTime) {
         taskIndex.incrementAndGet();
-        Block block = blockchain.createNewBlock(null, null, true, null, XAmount.ZERO, null);
-        block.signOut(wallet.getDefKey());
-        // The last 20 bytes of the initial nonce are the node wallet address.
-        minShare.set(Bytes32.wrap(BytesUtils.merge(CryptoProvider.nextBytes(12),
-                hash2byte(keyPair2Hash(wallet.getDefKey())))));
-        block.setNonce(minShare.get());
-        // initial nonce
-        minHash.set(block.recalcHash());
+
+        // Create BlockV5 candidate (nonce = 0, coinbase in header)
+        BlockV5 block = blockchain.createMainBlockV5();
+
+        // Set initial nonce (last 20 bytes are node wallet address)
+        Bytes32 initialNonce = Bytes32.wrap(BytesUtils.merge(
+            CryptoProvider.nextBytes(12),
+            hash2byte(keyPair2Hash(wallet.getDefKey()))
+        ));
+        minShare.set(initialNonce);
+
+        // Create new block with initial nonce (BlockV5 is immutable)
+        block = block.withNonce(minShare.get());
+
+        // Calculate initial hash
+        minHash.set(block.getHash());
+
+        // Create task and broadcast to pools
         currentTask.set(createTaskByNewBlock(block, sendTime));
         ChannelSupervise.send2Pools(currentTask.get().toJsonString());
+
         return block;
     }
 
@@ -272,9 +320,13 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
                     log.debug("Receive a hash from pool,hash {} is valid.", hash.toHexString());
                     minHash.set(hash);
                     minShare.set(share);
-                    // put minShare into nonce
-                    Block b = generateBlock.get();
-                    b.setNonce(minShare.get());
+
+                    // Phase 5.5: Update BlockV5 with new nonce (immutable pattern)
+                    // BlockV5 is immutable, so we create a new instance with updated nonce
+                    BlockV5 currentBlock = generateBlockV5.get();
+                    BlockV5 updatedBlock = currentBlock.withNonce(minShare.get());
+                    generateBlockV5.set(updatedBlock);
+
                     log.debug("New MinShare :{}", share.toHexString());
                     log.debug("New MinHash :{}", hash.toHexString());
                 }
@@ -286,18 +338,23 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
 
 
     protected void onTimeout() {
-        Block b = generateBlock.get();
+        BlockV5 blockV5 = generateBlockV5.get();
         // stop generate main block
         isWorking = false;
-        if (b != null) {
-            Block newBlock = new Block(new XdagBlock(b.toBytes()));
-            log.debug("Broadcast locally generated blockchain, waiting to be verified. block hash = [{}]", newBlock.getHash().toHexString());
-            // add new block and broadcast the new block
-            kernel.getBlockchain().tryToConnect(newBlock);
+        if (blockV5 != null) {
+            log.debug("Broadcast locally generated blockchain, waiting to be verified. block hash = [{}]",
+                     blockV5.getHash().toHexString());
+
+            // Phase 5.5: Connect BlockV5 to blockchain
+            kernel.getBlockchain().tryToConnect(blockV5);
+
             Bytes32 currentPreHash = Bytes32.wrap(currentTask.get().getTask()[0].getData());
-            poolAwardManager.addAwardBlock(minShare.get(), currentPreHash, newBlock.getHash(), newBlock.getTimestamp());
-            // v5.1: Broadcast directly with block + ttl
-            broadcaster.broadcast(newBlock, kernel.getConfig().getNodeSpec().getTTL());
+            poolAwardManager.addAwardBlock(minShare.get(), currentPreHash, blockV5.getHash(), blockV5.getTimestamp());
+
+            // Phase 5.5: Broadcast BlockV5
+            // TODO: Update Broadcaster to accept BlockV5 (temporarily convert to Block for backward compatibility)
+            Block legacyBlock = convertBlockV5ToBlock(blockV5);
+            broadcaster.broadcast(legacyBlock, kernel.getConfig().getNodeSpec().getTTL());
         }
         isWorking = true;
         // start generate main block
@@ -310,15 +367,53 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
     }
 
     /**
-     * Create a RandomX task
+     * Temporary conversion method: BlockV5 → Block (Phase 5.5 backward compatibility)
+     *
+     * This method provides temporary backward compatibility for Broadcaster which currently
+     * only accepts Block objects. After Phase 5.6 (network layer migration), this method
+     * will be removed and Broadcaster will work directly with BlockV5.
+     *
+     * IMPORTANT: This is a TEMPORARY solution. Do NOT use this method elsewhere.
+     * The goal is to fully migrate to BlockV5 and remove all Block usage.
+     *
+     * @param blockV5 BlockV5 to convert
+     * @return Legacy Block object
+     * @deprecated Temporary method for Phase 5.5, will be removed in Phase 5.6
      */
-    private Task createTaskByRandomXBlock(Block block, long sendTime) {
+    @Deprecated(since = "0.8.1", forRemoval = true)
+    private Block convertBlockV5ToBlock(BlockV5 blockV5) {
+        // Serialize BlockV5 to bytes
+        byte[] blockBytes = blockV5.toBytes();
+
+        // Create legacy Block from bytes using XdagBlock wrapper
+        // Note: This is a simplified conversion that may not preserve all Block features
+        // For Phase 5.5, this is acceptable since we only need basic broadcasting
+        Block legacyBlock = new Block(new XdagBlock(blockBytes));
+
+        return legacyBlock;
+    }
+
+    /**
+     * Create a RandomX task (Phase 5.5: BlockV5 version)
+     *
+     * Key changes from legacy Block version:
+     * 1. Accepts BlockV5 instead of Block
+     * 2. Uses block.getRandomXPreHash() instead of SHA256(block.getXdagBlock().getData().slice(0, 480))
+     * 3. Task structure unchanged (still uses XdagField for pool compatibility)
+     *
+     * @param block BlockV5 mining candidate
+     * @param sendTime mining timestamp
+     * @return Task for RandomX mining
+     */
+    private Task createTaskByRandomXBlock(BlockV5 block, long sendTime) {
         Task newTask = new Task();
         XdagField[] task = new XdagField[2];
 
         RandomXMemory memory = randomXUtils.getGlobalMemory()[(int) randomXUtils.getRandomXPoolMemIndex() & 1];
 
-        Bytes32 preHash = HashUtils.sha256(block.getXdagBlock().getData().slice(0, 480));
+        // Phase 5.5: Use BlockV5.getRandomXPreHash() instead of legacy XdagBlock slicing
+        Bytes32 preHash = block.getRandomXPreHash();
+
         // task[0]=preHash
         task[0] = new XdagField(preHash.mutableCopy());
         // task[1]=taskSeed
@@ -332,29 +427,49 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
     }
 
     /**
-     * Create original task, now deprecated
+     * Create original task (Phase 5.5: BlockV5 version)
+     *
+     * Key changes from legacy Block version:
+     * 1. Accepts BlockV5 instead of Block
+     * 2. Uses block.toBytes() to get serialized data for SHA256 digest
+     * 3. Task structure unchanged (still uses XdagField for pool compatibility)
+     *
+     * @param block BlockV5 mining candidate
+     * @param sendTime mining timestamp
+     * @return Task for non-RandomX mining
      */
-    private Task createTaskByNewBlock(Block block, long sendTime) {
+    private Task createTaskByNewBlock(BlockV5 block, long sendTime) {
         Task newTask = new Task();
 
         XdagField[] task = new XdagField[2];
-        task[1] = block.getXdagBlock().getField(14);
-        MutableBytes data = MutableBytes.create(448);
-        data.set(0, block.getXdagBlock().getData().slice(0, 448));
+
+        // Phase 5.5: Use BlockV5 serialization
+        // Get the nonce field (last 32 bytes of header, equivalent to field 14 in legacy format)
+        byte[] blockBytes = block.toBytes();
+        int headerSize = BlockHeader.getSerializedSize();  // 104 bytes
+        byte[] nonceBytes = new byte[32];
+        // Nonce is at offset 72-104 in header (timestamp 8 + difficulty 32 + nonce 32)
+        System.arraycopy(blockBytes, 72, nonceBytes, 0, 32);
+        task[1] = new XdagField(MutableBytes.wrap(nonceBytes));
+
+        // Calculate SHA256 digest of first 448 bytes (equivalent to legacy format)
+        MutableBytes data = MutableBytes.wrap(blockBytes, 0, Math.min(448, blockBytes.length));
 
         XdagSha256Digest currentTaskDigest = new XdagSha256Digest();
         try {
             currentTaskDigest.sha256Update(data);
             byte[] state = currentTaskDigest.getState();
             task[0] = new XdagField(MutableBytes.wrap(state));
-            currentTaskDigest.sha256Update(block.getXdagBlock().getField(14).getData());
+            currentTaskDigest.sha256Update(MutableBytes.wrap(nonceBytes));
         } catch (IOException e) {
             log.error(e.getMessage(), e);
         }
+
         newTask.setTask(task);
         newTask.setTaskTime(XdagTime.getEpoch(sendTime));
         newTask.setTaskIndex(taskIndex.get());
         newTask.setDigest(currentTaskDigest);
+
         return newTask;
     }
 

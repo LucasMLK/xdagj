@@ -1939,6 +1939,73 @@ public class BlockchainImpl implements Blockchain {
     }
 
     /**
+     * Create a BlockV5 mining main block (v5.1 implementation)
+     *
+     * Phase 5.5: This is the NEW implementation for BlockV5 mining blocks.
+     * Replaces the deprecated createMainBlock() method.
+     *
+     * Key differences from legacy createMainBlock():
+     * 1. Uses Link.toBlock() instead of Address objects for block references
+     * 2. Coinbase stored in BlockHeader (not as a link)
+     * 3. Returns BlockV5 with Link-based DAG structure
+     * 4. Uses current network difficulty from xdagStats
+     * 5. Creates candidate block (nonce = 0, ready for POW mining)
+     *
+     * Block structure:
+     * - Header: timestamp, difficulty, nonce=0, coinbase
+     * - Links: [pretop_block (if exists), orphan_blocks...]
+     * - Max block links: 16 (from BlockV5.MAX_BLOCK_LINKS)
+     *
+     * @return BlockV5 candidate block for mining (nonce = 0, needs POW)
+     * @see BlockV5#createCandidate(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, List)
+     * @see Link#toBlock(Bytes32)
+     */
+    public BlockV5 createMainBlockV5() {
+        // Get mining timestamp (aligned to 64-second epoch)
+        long timestamp = XdagTime.getMainTime();
+
+        // Get current network difficulty target
+        BigInteger networkDiff = xdagStats.getDifficulty();
+        org.apache.tuweni.units.bigints.UInt256 difficulty =
+            org.apache.tuweni.units.bigints.UInt256.valueOf(networkDiff);
+
+        // Get coinbase address (miner reward address)
+        // In BlockV5, coinbase is stored in BlockHeader, not as a Link
+        Bytes32 coinbase = keyPair2Hash(wallet.getDefKey());
+
+        // Build DAG links (only block references, no coinbase link)
+        List<Link> links = new ArrayList<>();
+
+        // 1. Add pretop block reference (if exists)
+        Bytes32 pretopHash = getPreTopMainBlockForLink(timestamp);
+        if (pretopHash != null) {
+            links.add(Link.toBlock(pretopHash));
+        }
+
+        // 2. Add orphan block references
+        // Calculate available space: MAX=16, used: pretop(1 if exists)
+        int maxOrphans = BlockV5.MAX_BLOCK_LINKS - links.size();
+        long[] sendTime = new long[2];
+        sendTime[0] = timestamp;
+
+        List<Bytes32> orphans = orphanBlockStore.getOrphan(maxOrphans, sendTime);
+        for (Bytes32 orphan : orphans) {
+            links.add(Link.toBlock(orphan));
+        }
+
+        // Create candidate block (nonce = ZERO, will be set by mining)
+        BlockV5 candidateBlock = BlockV5.createCandidate(timestamp, difficulty, coinbase, links);
+
+        log.debug("Created BlockV5 mining candidate: epoch={}, links={} (pretop={}, orphans={})",
+                 XdagTime.getEpoch(timestamp),
+                 links.size(),
+                 pretopHash != null ? 1 : 0,
+                 orphans.size());
+
+        return candidateBlock;
+    }
+
+    /**
      * Create a link block for network health (legacy v1.0 implementation).
      *
      * @deprecated As of v5.1 refactor, this method creates legacy Block objects for link blocks
