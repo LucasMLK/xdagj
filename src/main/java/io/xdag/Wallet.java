@@ -485,13 +485,66 @@ public class Wallet {
     }
 
     /**
-     * Creates transaction blocks from a map of our keys and addresses to a destination address
+     * Creates transaction blocks from a map of our keys and addresses to a destination address (legacy v1.0)
+     *
+     * @deprecated As of v5.1 refactor (Phase 5.5 Part 2), this method creates legacy Block objects with
+     *             Address-based references for transactions. In v5.1, transactions are created directly
+     *             as Transaction objects, not as blocks.
+     *
+     *             <p><b>Migration Path:</b>
+     *             <ul>
+     *               <li>Phase 5.5 Part 2 (Current): Mark as @Deprecated</li>
+     *               <li>Post-Restart: After fresh start, transaction creation uses Transaction objects directly</li>
+     *               <li>Future: Remove this method entirely</li>
+     *             </ul>
+     *
+     *             <p><b>Replacement Strategy:</b>
+     *             Use Transaction.builder() to create transactions directly, then create BlockV5 with
+     *             Link.toTransaction(). See Commands.xferV2() for reference implementation:
+     *             <pre>{@code
+     * // 1. Create Transaction
+     * Transaction tx = Transaction.builder()
+     *     .from(fromAddress)
+     *     .to(toAddress)
+     *     .amount(amount)
+     *     .nonce(nonce)
+     *     .fee(fee)
+     *     .data(remarkData)
+     *     .build();
+     *
+     * // 2. Sign Transaction
+     * Transaction signedTx = tx.sign(fromAccount);
+     *
+     * // 3. Save to TransactionStore
+     * transactionStore.saveTransaction(signedTx);
+     *
+     * // 4. Create BlockV5 with Transaction link
+     * List<Link> links = Lists.newArrayList(Link.toTransaction(signedTx.getHash()));
+     * BlockV5 block = BlockV5.builder()
+     *     .header(header)
+     *     .links(links)
+     *     .build();
+     *
+     * // 5. Connect to blockchain
+     * blockchain.tryToConnect(block);
+     *             }</pre>
+     *
+     *             <p><b>Impact:</b>
+     *             This method is used by legacy transaction creation code. After migration, wallets create
+     *             Transaction objects directly instead of transaction blocks. Transaction objects are then
+     *             referenced by BlockV5 via Link.toTransaction().
      *
      * @param ourKeys Map of addresses and their corresponding keypairs that we own
      * @param to Destination address
      * @param remark Optional remark to include in transaction
+     * @param txNonce Transaction nonce
      * @return List of transaction blocks (v5.1 SyncBlock)
+     * @see io.xdag.core.Transaction
+     * @see io.xdag.core.BlockV5
+     * @see io.xdag.core.Link#toTransaction(Bytes32)
+     * @see io.xdag.cli.Commands#xferV2(double, String, String, double)
      */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     public List<SyncManager.SyncBlock> createTransactionBlock(Map<Address, ECKeyPair> ourKeys, Bytes32 to, String remark, UInt64 txNonce) {
         // Check if remark exists
         int hasRemark = remark == null ? 0 : 1;
@@ -556,14 +609,24 @@ public class Wallet {
     }
 
     /**
-     * Creates a single transaction block
+     * Creates a single transaction block (legacy v1.0 implementation)
+     *
+     * @deprecated As of v5.1 refactor (Phase 5.5 Part 2), this method creates legacy Block objects
+     *             for transactions. In v5.1, transactions are Transaction objects, not blocks.
+     *
+     *             <p><b>Replacement:</b> Use Transaction.builder() to create Transaction objects directly,
+     *             then reference them in BlockV5 via Link.toTransaction().
      *
      * @param to Destination address
      * @param amount Transaction amount
      * @param keys Map of addresses and keypairs to use as inputs
      * @param remark Optional remark
+     * @param txNonce Transaction nonce
      * @return Transaction block (v5.1 SyncBlock)
+     * @see io.xdag.core.Transaction
+     * @see io.xdag.cli.Commands#xferV2(double, String, String, double)
      */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     private SyncManager.SyncBlock createTransaction(Bytes32 to, XAmount amount, Map<Address, ECKeyPair> keys, String remark, UInt64 txNonce) {
 
         List<Address> tos = Lists.newArrayList(new Address(to, XDAG_FIELD_OUTPUT, amount,true));
@@ -595,13 +658,24 @@ public class Wallet {
     }
 
     /**
-     * Creates a new transaction block
-     * 
+     * Creates a new transaction block (legacy v1.0 implementation)
+     *
+     * @deprecated As of v5.1 refactor (Phase 5.5 Part 2), this method creates legacy Block objects
+     *             for transactions with Address-based references. In v5.1, transactions are created
+     *             as Transaction objects and referenced by BlockV5 via Link.toTransaction().
+     *
+     *             <p><b>Replacement:</b> Create Transaction objects directly using Transaction.builder(),
+     *             then create BlockV5 with Link.toTransaction(). This method is no longer needed.
+     *
      * @param pairs Map of input addresses and keypairs
      * @param to List of output addresses
      * @param remark Optional remark
+     * @param txNonce Transaction nonce
      * @return New transaction block
+     * @see io.xdag.core.Transaction
+     * @see io.xdag.cli.Commands#xferV2(double, String, String, double)
      */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     private Block createNewBlock(Map<Address, ECKeyPair> pairs, List<Address> to,
             String remark, UInt64 txNonce) {
         int hasRemark = remark == null ? 0 : 1;
