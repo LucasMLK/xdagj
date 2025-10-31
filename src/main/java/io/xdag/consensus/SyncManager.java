@@ -71,9 +71,46 @@ public class SyncManager extends AbstractXdagLifecycle {
     public static final int DELETE_NUM = 5000;
 
     /**
-     * SyncBlock - Simple block wrapper for sync process (v5.1)
-     * Replaces BlockWrapper with minimal metadata needed for synchronization
+     * SyncBlock - Simple block wrapper for sync process (legacy v1.0)
+     *
+     * @deprecated As of v5.1 refactor (Phase 5.5 Part 3), this class wraps legacy Block objects.
+     *             After complete BlockV5 migration, sync will work directly with BlockV5 objects
+     *             without needing a wrapper class.
+     *
+     *             <p><b>Migration Path:</b>
+     *             <ul>
+     *               <li>Phase 5.5 Part 3 (Current): Mark as @Deprecated</li>
+     *               <li>Post-Restart: After fresh start with BlockV5-only storage, network layer will
+     *                   use BlockV5Message directly</li>
+     *               <li>Future: Remove this class and work directly with BlockV5</li>
+     *             </ul>
+     *
+     *             <p><b>Replacement Strategy:</b>
+     *             Network layer already has BlockV5 message support (NewBlockV5Message, SyncBlockV5Message).
+     *             After migration, sync process will:
+     *             <pre>{@code
+     * // 1. Receive BlockV5 from network
+     * BlockV5 block = blockV5Message.getBlock();
+     *
+     * // 2. Validate and import directly
+     * ImportResult result = blockchain.tryToConnect(block);
+     *
+     * // 3. Broadcast if needed (no wrapper required)
+     * if (shouldBroadcast(result)) {
+     *     kernel.broadcastBlockV5(block, ttl);
+     * }
+     *             }</pre>
+     *
+     *             <p><b>Impact:</b>
+     *             This wrapper is used throughout sync process. After BlockV5 migration, the sync
+     *             flow becomes simpler: receive BlockV5 → validate → import → broadcast (no wrapping needed).
+     *
+     * @see io.xdag.core.BlockV5
+     * @see io.xdag.net.message.consensus.NewBlockV5Message
+     * @see io.xdag.net.message.consensus.SyncBlockV5Message
+     * @see io.xdag.core.Blockchain#tryToConnect(BlockV5)
      */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     @Getter
     @Setter
     public static class SyncBlock {
@@ -199,8 +236,46 @@ public class SyncManager extends AbstractXdagLifecycle {
     }
 
     /**
-     * Process blocks in queue and add them to the chain
+     * Process blocks in queue and add them to the chain (legacy v1.0)
+     *
+     * @deprecated As of v5.1 refactor (Phase 5.5 Part 3), this method processes legacy SyncBlock
+     *             wrappers containing Block objects. Uses deprecated blockchain.tryToConnect(Block).
+     *             After BlockV5 migration, sync will import BlockV5 objects directly.
+     *
+     *             <p><b>Migration Path:</b>
+     *             <ul>
+     *               <li>Phase 5.5 Part 3 (Current): Mark as @Deprecated</li>
+     *               <li>Post-Restart: Use blockchain.tryToConnect(BlockV5) directly</li>
+     *               <li>Future: Remove this method</li>
+     *             </ul>
+     *
+     *             <p><b>Replacement Strategy:</b>
+     *             After migration, import BlockV5 directly without wrapper:
+     *             <pre>{@code
+     * // Receive BlockV5 from network
+     * BlockV5 block = blockV5Message.getBlock();
+     *
+     * // Import directly
+     * ImportResult result = blockchain.tryToConnect(block);
+     *
+     * // Handle result
+     * switch (result) {
+     *     case IMPORTED_BEST, IMPORTED_NOT_BEST -> handleSuccess(block);
+     *     case NO_PARENT -> requestParent(result.getHash());
+     *     case INVALID_BLOCK -> handleInvalid(block);
+     * }
+     *             }</pre>
+     *
+     *             <p><b>Impact:</b>
+     *             Core sync import method. Uses deprecated tryToConnect(Block) at line 208.
+     *             After migration, sync becomes simpler without SyncBlock wrapper.
+     *
+     * @param syncBlock Legacy SyncBlock wrapper containing Block
+     * @return ImportResult from blockchain connection attempt
+     * @see io.xdag.core.Blockchain#tryToConnect(BlockV5)
+     * @see SyncBlock
      */
+    @Deprecated(since = "0.8.1", forRemoval = true)
     // TODO: Modify consensus
     public ImportResult importBlock(SyncBlock syncBlock) {
         log.debug("importBlock:{}", syncBlock.getBlock().getHash());
