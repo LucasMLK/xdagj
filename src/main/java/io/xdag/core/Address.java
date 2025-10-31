@@ -33,6 +33,117 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes32;
 import org.apache.tuweni.units.bigints.UInt64;
 
+/**
+ * Legacy Address class for block/transaction references with amount (v1.0 architecture)
+ *
+ * @deprecated As of v5.1 refactor (Phase 6.5 - Deep Core Cleanup), this class represents
+ *             legacy Address-based block references that include both hash and amount.
+ *             In v5.1, the {@link Link} class is used for references (33 bytes vs ~64 bytes).
+ *
+ *             <p><b>Why Deprecated:</b>
+ *             <ul>
+ *             <li><b>Memory Inefficiency:</b> Address uses ~64 bytes per reference (hash 32 + amount 8 + metadata 24).
+ *                 Link uses only 33 bytes (hash 32 + type 1), saving 48% memory.</li>
+ *             <li><b>Mutable Design:</b> Address uses MutableBytes32 and has mutable fields.
+ *                 Link is immutable and thread-safe.</li>
+ *             <li><b>Embedded Amount:</b> Address stores amount in the reference itself.
+ *                 In v5.1, amounts are stored in Transaction objects, not in links.</li>
+ *             <li><b>Complex Parsing:</b> Address requires parse() method and getData() serialization.
+ *                 Link has simple, direct construction.</li>
+ *             <li><b>Tied to XdagField:</b> Address is tightly coupled with XdagField.FieldType.
+ *                 Link uses its own simpler Link.Type enum.</li>
+ *             </ul>
+ *
+ *             <p><b>v5.1 Replacement: {@link Link}</b>
+ *             <pre>{@code
+ * // Legacy Address (~64 bytes)
+ * Address addr = new Address(hash, XdagField.FieldType.XDAG_FIELD_OUT, amount, false);
+ * MutableBytes32 addressHash = addr.getAddress();  // Requires parsing
+ * XAmount amount = addr.getAmount();
+ *
+ * // v5.1 Link (33 bytes)
+ * Link link = Link.toTransaction(txHash);  // or Link.toBlock(blockHash)
+ * Bytes32 hash = link.getHash();  // Direct access, no parsing
+ * // Amount stored in Transaction object, not in link
+ *             }</pre>
+ *
+ *             <p><b>Size Comparison:</b>
+ *             <table border="1">
+ *             <tr><th>Class</th><th>Size</th><th>Fields</th></tr>
+ *             <tr><td><b>Address</b></td><td>~64 bytes</td>
+ *                 <td>hash (32) + amount (8) + type + flags + metadata</td></tr>
+ *             <tr><td><b>Link</b></td><td>33 bytes</td>
+ *                 <td>hash (32) + type (1)</td></tr>
+ *             <tr><td><b>Savings</b></td><td><b>-48%</b></td><td>Simpler, faster ✅</td></tr>
+ *             </table>
+ *
+ *             <p><b>Architecture Change:</b>
+ *             <br>In legacy Block architecture, references (Address objects) contain amount information.
+ *             This couples the DAG structure with transaction amounts.
+ *
+ *             <br>In BlockV5 architecture, Link objects only contain references (hash + type).
+ *             Transaction amounts are stored in Transaction objects, achieving clear separation.
+ *
+ *             <pre>{@code
+ * // Legacy: Amount in reference
+ * Block block = ...;
+ * for (Address input : block.getInputs()) {
+ *     Bytes32 hash = input.getAddress();
+ *     XAmount amount = input.getAmount();  // Amount in Address
+ * }
+ *
+ * // v5.1: Amount in Transaction
+ * BlockV5 block = ...;
+ * for (Link link : block.getLinks()) {
+ *     if (link.getType() == Link.Type.TO_TRANSACTION) {
+ *         Transaction tx = transactionStore.get(link.getHash());
+ *         XAmount amount = tx.getAmount();  // Amount in Transaction
+ *     }
+ * }
+ *             }</pre>
+ *
+ *             <p><b>Migration Path:</b>
+ *             <pre>{@code
+ * // Legacy: Create Address for block reference
+ * Address blockRef = new Address(blockHash, XdagField.FieldType.XDAG_FIELD_OUT, false);
+ * Address txRef = new Address(txHash, XdagField.FieldType.XDAG_FIELD_OUTPUT, amount, true);
+ *
+ * // v5.1: Create Link for reference (no amount)
+ * Link blockLink = Link.toBlock(blockHash);
+ * Link txLink = Link.toTransaction(txHash);
+ * // Amount stored separately in Transaction object
+ *             }</pre>
+ *
+ *             <p><b>Current Usage:</b>
+ *             <br>Address is only used in 3 test files:
+ *             <ul>
+ *             <li>BlockBuilder.java (test utility)</li>
+ *             <li>CommandsTest.java (unit test)</li>
+ *             <li>TransactionHistoryStoreImplTest.java (unit test)</li>
+ *             </ul>
+ *
+ *             <p><b>Performance Impact:</b>
+ *             <br>Replacing Address with Link enables:
+ *             <ul>
+ *             <li>48% memory savings per reference</li>
+ *             <li>1,485,000 links per 48MB block (vs ~750K with Address)</li>
+ *             <li>Simpler, faster parsing (no getData() serialization)</li>
+ *             <li>Thread-safe immutable design</li>
+ *             </ul>
+ *
+ *             <p><b>Related Deprecations:</b>
+ *             <ul>
+ *             <li>{@link Block} - Uses Address objects, replaced by BlockV5 with Link</li>
+ *             <li>{@link XdagField} - FieldType enum coupled with Address</li>
+ *             <li>{@link XdagBlock} - 512-byte format with Address-based fields</li>
+ *             </ul>
+ *
+ * @see Link
+ * @see Link.Type
+ * @see BlockV5
+ * @see Transaction
+ */
+@Deprecated(since = "0.8.1", forRemoval = true)
 public class Address {
 
     /**

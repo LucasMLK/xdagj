@@ -31,7 +31,49 @@ import lombok.Getter;
  * REJECTED - Block has been rejected
  * ACCEPTED - Block has been accepted but not yet in main chain
  * PENDING - Block is pending validation
+ *
+ * @deprecated As of v5.1 refactor (Phase 6.5 - Deep Core Cleanup), this enum is redundant
+ *             with {@link BlockInfo} flags system. BlockInfo uses bit flags (BI_MAIN, BI_MAIN_REF,
+ *             BI_APPLIED, etc.) to represent block state.
+ *
+ *             <p><b>Why Deprecated:</b>
+ *             <ul>
+ *             <li><b>Redundant:</b> BlockInfo.flags already contains state information.</li>
+ *             <li><b>Display Only:</b> Only used in getStateByFlags() to convert flags to display string.</li>
+ *             <li><b>Enum Overhead:</b> Simple string constants would suffice.</li>
+ *             </ul>
+ *
+ *             <p><b>v5.1 Replacement: BlockInfo.flags</b>
+ *             <pre>{@code
+ * // Legacy: Use BlockState enum
+ * String state = BlockState.MAIN.getDesc();  // Returns "Main"
+ *
+ * // Modern: Use BlockInfo.flags directly
+ * if ((blockInfo.getFlags() & (BI_MAIN | BI_MAIN_CHAIN)) != 0) {
+ *     return "Main";
+ * } else if ((blockInfo.getFlags() & BI_APPLIED) != 0) {
+ *     return "Accepted";
+ * } else {
+ *     return "Pending";
+ * }
+ *             }</pre>
+ *
+ *             <p><b>Current Usage:</b>
+ *             <ul>
+ *             <li>{@link io.xdag.cli.Commands#getStateByFlags(int)} - Converts flags to string</li>
+ *             <li>{@link io.xdag.rpc.api.impl.XdagApiImpl} - Imports MAIN constant</li>
+ *             </ul>
+ *
+ *             <p><b>Simplification:</b>
+ *             <br>This enum can be replaced with:
+ *             <ul>
+ *             <li>Option 1: Inline string constants in Commands.getStateByFlags()</li>
+ *             <li>Option 2: Simple utility class with static final String constants</li>
+ *             </ul>
+ *
+ * @see BlockInfo
  */
+@Deprecated(since = "0.8.1", forRemoval = true)
 @Getter
 public enum BlockState {
     MAIN(0, "Main"),

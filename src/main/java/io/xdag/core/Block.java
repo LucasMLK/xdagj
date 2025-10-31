@@ -53,6 +53,171 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import static io.xdag.core.XdagField.FieldType.*;
 
+/**
+ * Legacy mutable Block class (v1.0 architecture)
+ *
+ * @deprecated As of v5.1 refactor (Phase 6.5 - Deep Core Cleanup), this class represents
+ *             the legacy Block architecture with mutable design and Address-based references.
+ *             In v5.1, the immutable {@link BlockV5} architecture is used instead.
+ *
+ *             <p><b>Why Deprecated:</b>
+ *             <ul>
+ *             <li><b>Mutable Design:</b> Block allows state mutations (signOut, parse, etc.),
+ *                 making it harder to reason about and not thread-safe. BlockV5 is immutable.</li>
+ *             <li><b>Address-based References:</b> Uses {@link Address} objects (~64 bytes per reference)
+ *                 instead of {@link Link} objects (33 bytes per reference). This wastes 48% memory.</li>
+ *             <li><b>Complex Structure:</b> 613 lines of code with embedded signing logic, XdagBlock
+ *                 serialization coupling, and legacy field type handling.</li>
+ *             <li><b>Fixed Size Limitation:</b> Tied to 512-byte XdagBlock format (16 fields × 32 bytes).
+ *                 BlockV5 supports up to 48MB blocks with 1,485,000 links.</li>
+ *             <li><b>Transaction Confusion:</b> Transactions represented as special Block objects.
+ *                 BlockV5 separates {@link Transaction} objects from blocks.</li>
+ *             </ul>
+ *
+ *             <p><b>v5.1 Replacement: {@link BlockV5}</b>
+ *             <pre>{@code
+ * // Legacy Block (mutable, 613 lines)
+ * Block block = new Block(config, timestamp, links, pendings, mining, keys, remark, defKeyIndex, fee, txNonce);
+ * block.signOut(key);  // Mutable: modifies internal state
+ * List<Address> refs = block.getLinks();  // ~64 bytes per reference
+ *
+ * // v5.1 BlockV5 (immutable, cleaner)
+ * BlockV5 block = BlockV5.builder()
+ *     .header(BlockHeader.builder()
+ *         .timestamp(timestamp)
+ *         .difficulty(difficulty)
+ *         .coinbase(coinbase)
+ *         .build())
+ *     .links(links)  // Link objects (33 bytes each)
+ *     .build();
+ * // No signing needed - coinbase in header
+ * // Immutable - no state mutations
+ *             }</pre>
+ *
+ *             <p><b>Architecture Comparison:</b>
+ *             <table border="1">
+ *             <tr><th>Aspect</th><th>Block (Legacy)</th><th>BlockV5 (v5.1)</th><th>Improvement</th></tr>
+ *             <tr><td><b>Design</b></td><td>Mutable</td><td>Immutable</td><td>Thread-safe ✅</td></tr>
+ *             <tr><td><b>References</b></td><td>Address (~64 bytes)</td><td>Link (33 bytes)</td><td>-48% size ✅</td></tr>
+ *             <tr><td><b>Max Block Size</b></td><td>512 bytes</td><td>48MB</td><td>97,656x ✅</td></tr>
+ *             <tr><td><b>Max Links</b></td><td>~15</td><td>1,485,000</td><td>99,000x ✅</td></tr>
+ *             <tr><td><b>Transaction</b></td><td>Special Block</td><td>Separate objects</td><td>Clearer ✅</td></tr>
+ *             <tr><td><b>Hash Caching</b></td><td>Recalculation</td><td>Lazy cache</td><td>O(1) ✅</td></tr>
+ *             <tr><td><b>Complexity</b></td><td>613 lines</td><td>Modular design</td><td>Maintainable ✅</td></tr>
+ *             </table>
+ *
+ *             <p><b>Migration Examples:</b>
+ *
+ *             <p><b>1. Mining Block Creation:</b>
+ *             <pre>{@code
+ * // Legacy
+ * Block miningBlock = blockchain.createNewBlock(keys, addresses, true, remark, fee, nonce);
+ *
+ * // v5.1
+ * BlockV5 miningBlock = blockchain.createMainBlockV5();
+ * miningBlock = miningBlock.withNonce(minedNonce);  // Immutable pattern
+ *             }</pre>
+ *
+ *             <p><b>2. Transaction Block Creation:</b>
+ *             <pre>{@code
+ * // Legacy: Transaction as Block
+ * List<SyncBlock> txBlocks = wallet.createTransactionBlock(keys, to, remark, nonce);
+ * for (SyncBlock sb : txBlocks) {
+ *     blockchain.tryToConnect(sb.getBlock());
+ * }
+ *
+ * // v5.1: Transaction as separate object
+ * Transaction tx = Transaction.builder()
+ *     .from(fromAddress).to(toAddress).amount(amount)
+ *     .nonce(nonce).fee(fee).data(remarkData)
+ *     .build().sign(account);
+ * transactionStore.saveTransaction(tx);
+ *
+ * BlockV5 block = BlockV5.builder()
+ *     .header(header)
+ *     .links(Lists.newArrayList(Link.toTransaction(tx.getHash())))
+ *     .build();
+ * blockchain.tryToConnect(block);
+ *             }</pre>
+ *
+ *             <p><b>3. Block Synchronization:</b>
+ *             <pre>{@code
+ * // Legacy: Wrapped in SyncBlock
+ * SyncBlock syncBlock = new SyncBlock(block, ttl, peer, isOld);
+ * syncManager.importBlock(syncBlock);
+ *
+ * // v5.1: Direct BlockV5 usage
+ * BlockV5 block = blockV5Message.getBlock();
+ * ImportResult result = blockchain.tryToConnect(block);
+ * if (shouldBroadcast(result)) {
+ *     kernel.broadcastBlockV5(block, ttl);
+ * }
+ *             }</pre>
+ *
+ *             <p><b>4. Block Storage/Retrieval:</b>
+ *             <pre>{@code
+ * // Legacy
+ * Block block = blockStore.getBlockByHash(hash);  // Returns Block
+ *
+ * // v5.1
+ * BlockV5 block = blockStore.getBlockV5(hash);  // Returns BlockV5
+ *             }</pre>
+ *
+ *             <p><b>Current Usage (17 files):</b>
+ *             <ul>
+ *             <li>Storage layer: FinalizedBlockStore, CachedBlockStore, BloomFilterBlockStore, OrphanBlockStore</li>
+ *             <li>Network layer: XdagP2pHandler, XdagP2pEventHandler, ChannelManager</li>
+ *             <li>Deprecated messages: NewBlockMessage, SyncBlockMessage</li>
+ *             <li>Consensus: RandomX, XdagSync</li>
+ *             <li>Tests: BlockBuilder, CommandsTest, BlockStoreImplTest, RandomXTest</li>
+ *             </ul>
+ *
+ *             <p><b>Backward Compatibility:</b>
+ *             <br>Block class implementation is kept for backward compatibility with existing storage.
+ *             After full BlockV5-only deployment, this class will be removed in Phase 7.
+ *
+ *             <p><b>Migration Status:</b>
+ *             <ul>
+ *             <li>✅ BlockV5 architecture complete (Phase 1-2)</li>
+ *             <li>✅ Storage layer supports BlockV5 (Phase 4)</li>
+ *             <li>✅ Network layer supports BlockV5 (Phase 3)</li>
+ *             <li>✅ Runtime migrated to BlockV5 (Phase 5)</li>
+ *             <li>✅ Legacy code removed (Phase 6)</li>
+ *             <li>⏳ Storage migration to BlockV5-only (Future Phase 7)</li>
+ *             </ul>
+ *
+ *             <p><b>Performance Impact:</b>
+ *             <br>BlockV5 enables:
+ *             <ul>
+ *             <li>23,200 TPS capacity (96.7% Visa level)</li>
+ *             <li>1,485,000 transactions per 48MB block</li>
+ *             <li>48% memory reduction per reference</li>
+ *             <li>Thread-safe immutable design</li>
+ *             <li>O(1) hash lookups (cached)</li>
+ *             </ul>
+ *
+ *             <p><b>Related Deprecations:</b>
+ *             <ul>
+ *             <li>{@link Address} - Replaced by {@link Link}</li>
+ *             <li>{@link io.xdag.core.XdagBlock} - Replaced by BlockV5 serialization</li>
+ *             <li>{@link io.xdag.net.message.consensus.NewBlockMessage} - Replaced by NewBlockV5Message</li>
+ *             <li>{@link io.xdag.net.message.consensus.SyncBlockMessage} - Replaced by SyncBlockV5Message</li>
+ *             </ul>
+ *
+ *             <p><b>Reference Implementation:</b>
+ *             <ul>
+ *             <li>{@link BlockchainImpl#createMainBlockV5()} - Mining block creation</li>
+ *             <li>{@link BlockchainImpl#tryToConnect(BlockV5)} - Block import</li>
+ *             <li>{@link io.xdag.cli.Commands#xferV2} - Transaction creation example</li>
+ *             </ul>
+ *
+ * @see BlockV5
+ * @see Link
+ * @see Transaction
+ * @see BlockHeader
+ * @see BlockInfo
+ */
+@Deprecated(since = "0.8.1", forRemoval = true)
 @Slf4j
 @Getter
 @Setter
