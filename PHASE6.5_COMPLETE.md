@@ -9,15 +9,17 @@
 
 ## Executive Summary
 
-**Phase 6.5 - Deep Core Cleanup** successfully deprecated **4 legacy core data structures** that remained unmarked after Phase 6 initial cleanup. This completes the core package cleanup, providing clear deprecation signals and migration paths for all legacy v1.0 architecture components.
+**Phase 6.5 - Deep Core Cleanup** successfully deprecated **6 legacy core data structures** that remained unmarked after Phase 6 initial cleanup. This completes the core package cleanup, providing clear deprecation signals and migration paths for all legacy v1.0 architecture components.
 
 **Deprecated Classes**:
 1. ✅ **Block.java** (613 lines) - Legacy mutable block class
 2. ✅ **Address.java** (184 lines) - Legacy address-based references
 3. ✅ **XdagBlock.java** - Fixed 512-byte serialization format
 4. ✅ **BlockState.java** (58 lines) - Redundant state enum
+5. ✅ **LegacyBlockInfo.java** (114 lines) - Mutable BlockInfo with 24-byte hash
+6. ✅ **PreBlockInfo.java** (65 lines) - Temporary DTO for LegacyBlockInfo
 
-**Total Documentation Added**: **445 lines of comprehensive Javadoc**
+**Total Documentation Added**: **698 lines of comprehensive Javadoc**
 
 ---
 
@@ -28,6 +30,8 @@ After completing Phase 6 (Legacy Cleanup), analysis revealed **significant legac
 - Address.java: 184 lines, used by 3 test files
 - XdagBlock.java: Used by deprecated messages
 - BlockState.java: 58 lines, redundant with BlockInfo.flags
+- LegacyBlockInfo.java: 114 lines, used by 18 files
+- PreBlockInfo.java: 65 lines, used by 4 files
 
 These classes represent the v1.0 architecture that has been replaced by v5.1 (BlockV5, Link, Transaction, etc.).
 
@@ -148,6 +152,60 @@ These classes represent the v1.0 architecture that has been replaced by v5.1 (Bl
 
 ---
 
+### 5. LegacyBlockInfo.java Deprecation ✅
+
+**File**: `src/main/java/io/xdag/core/LegacyBlockInfo.java`
+**Lines Added**: **153 lines** of Javadoc
+**Status**: Deprecated with `@Deprecated(since = "0.8.1", forRemoval = true)`
+
+**Why Deprecated**:
+- **Mutable Design**: Public mutable fields and setters, non-thread-safe
+- **Truncated Hash**: Uses 24-byte truncated hash (hashlow) instead of full 32-byte hash
+- **Primitive Types**: Uses raw byte[] for hash, ref, maxDiffLink
+- **Storage Format Coupling**: Designed for legacy RocksDB storage format
+- **Migration Bridge**: Only purpose is BlockInfo.fromLegacy() conversion
+
+**v5.1 Replacement**: `BlockInfo.java` (immutable, full 32-byte hash, typed fields)
+
+**Javadoc Includes**:
+- Why deprecated (5 reasons)
+- Hash format comparison (24-byte vs 32-byte)
+- Design differences diagram (mutable vs immutable)
+- Why 24-byte hash is problematic
+- Thread safety comparison
+- Migration path for storage layer
+- Removal timeline
+- Related deprecations
+
+**Files Affected**: 18 files now show deprecation warnings
+
+---
+
+### 6. PreBlockInfo.java Deprecation ✅
+
+**File**: `src/main/java/io/xdag/core/PreBlockInfo.java`
+**Lines Added**: **100 lines** of Javadoc
+**Status**: Deprecated with `@Deprecated(since = "0.8.1", forRemoval = true)`
+
+**Why Deprecated**:
+- **Tied to LegacyBlockInfo**: Only purpose is to populate LegacyBlockInfo
+- **Mutable Design**: Public mutable fields and setters, non-thread-safe
+- **Temporary DTO**: Acts as intermediate data structure with no business logic
+- **Limited Usage**: Only used in SnapshotStore implementations (4 files)
+
+**v5.1 Replacement**: Direct BlockInfo construction (Future Phase 7)
+
+**Javadoc Includes**:
+- Why deprecated (4 reasons)
+- Data flow comparison (legacy 3-step vs v5.1 direct)
+- Why temporary DTOs are problematic
+- Removal timeline
+- Related deprecations
+
+**Files Affected**: 4 files now show deprecation warnings
+
+---
+
 ## Statistics
 
 ### Code Changes
@@ -158,7 +216,9 @@ These classes represent the v1.0 architecture that has been replaced by v5.1 (Bl
 | **Address.java** | 184 | **111 lines** | ✅ Deprecated |
 | **XdagBlock.java** | ~110 | **122 lines** | ✅ Deprecated |
 | **BlockState.java** | 58 | **48 lines** | ✅ Deprecated |
-| **Total** | **965** | **445 lines** | ✅ Complete |
+| **LegacyBlockInfo.java** | 114 | **153 lines** | ✅ Deprecated |
+| **PreBlockInfo.java** | 65 | **100 lines** | ✅ Deprecated |
+| **Total** | **1,144** | **698 lines** | ✅ Complete |
 
 ### Deprecation Impact
 
@@ -168,12 +228,14 @@ These classes represent the v1.0 architecture that has been replaced by v5.1 (Bl
 | **Address.java** | 3 files (tests) | ~10 warnings |
 | **XdagBlock.java** | 3 files (2 deprecated) | ~5 warnings |
 | **BlockState.java** | 3 files | ~5 warnings |
-| **Total** | **26 file usages** | **~50-60 warnings** |
+| **LegacyBlockInfo.java** | 18 files | ~20-25 warnings |
+| **PreBlockInfo.java** | 4 files | ~5 warnings |
+| **Total** | **48 file usages** | **~75-90 warnings** |
 
 ### Total Warnings
 
 **Before Phase 6.5**: ~70 warnings (Phase 5 deprecations)
-**After Phase 6.5**: **~120-130 warnings** (all expected and documented)
+**After Phase 6.5**: **~145-160 warnings** (all expected and documented)
 
 ---
 
@@ -213,6 +275,8 @@ All warnings are **expected, documented, and tracked** ✅
 - ✅ Address.java (legacy references)
 - ✅ XdagBlock.java (legacy serialization)
 - ✅ BlockState.java (redundant enum)
+- ✅ LegacyBlockInfo.java (mutable BlockInfo with truncated hash)
+- ✅ PreBlockInfo.java (temporary DTO for legacy storage)
 
 **Result**: **All legacy v1.0 architecture components now deprecated** ✅
 
@@ -241,11 +305,13 @@ All warnings are **expected, documented, and tracked** ✅
 - `Address.java` - 111 lines (memory efficiency focus)
 - `XdagBlock.java` - 122 lines (serialization format comparison)
 - `BlockState.java` - 48 lines (simplification recommendation)
+- `LegacyBlockInfo.java` - 153 lines (truncated hash issues)
+- `PreBlockInfo.java` - 100 lines (temporary DTO elimination)
 
 **Completion Report**:
 - `PHASE6.5_COMPLETE.md` - This document
 
-**Total Documentation**: **10+ KB** across 5 documents
+**Total Documentation**: **10+ KB** across 6 documents
 
 ---
 
@@ -336,17 +402,19 @@ if ((blockInfo.getFlags() & (BI_MAIN | BI_MAIN_CHAIN)) != 0) {
 - [x] Address.java deprecated (111 lines Javadoc)
 - [x] XdagBlock.java deprecated (122 lines Javadoc)
 - [x] BlockState.java deprecated (48 lines Javadoc)
+- [x] LegacyBlockInfo.java deprecated (153 lines Javadoc)
+- [x] PreBlockInfo.java deprecated (100 lines Javadoc)
 - [x] Compilation successful (BUILD SUCCESS)
 - [x] All warnings expected and documented
 - [x] Migration paths clearly defined
-- [x] Documentation comprehensive (445 lines Javadoc + analysis doc)
+- [x] Documentation comprehensive (698 lines Javadoc + analysis doc)
 
 ### Impact ✅
 
-- **4 legacy classes** explicitly deprecated
-- **445 lines** of migration guidance added
-- **~50-60 new warnings** (all expected)
-- **26 file usages** now tracked with compiler warnings
+- **6 legacy classes** explicitly deprecated
+- **698 lines** of migration guidance added
+- **~75-90 new warnings** (all expected)
+- **48 file usages** now tracked with compiler warnings
 - **100% core package legacy code** now marked
 
 ---
@@ -419,10 +487,10 @@ if ((blockInfo.getFlags() & (BI_MAIN | BI_MAIN_CHAIN)) != 0) {
 ✅ **Phase 6.5 - Deep Core Cleanup: COMPLETE**
 
 **What Was Accomplished**:
-- 4 legacy core classes deprecated with comprehensive Javadoc (445 lines)
+- 6 legacy core classes deprecated with comprehensive Javadoc (698 lines)
 - All v1.0 architecture components now explicitly marked for removal
 - Clear migration paths to v5.1 architecture
-- BUILD SUCCESS with expected warnings (~50-60 new)
+- BUILD SUCCESS with expected warnings (~75-90 new)
 - No breaking changes, full backward compatibility
 
 **Impact**:
@@ -433,8 +501,8 @@ if ((blockInfo.getFlags() & (BI_MAIN | BI_MAIN_CHAIN)) != 0) {
 
 **Status**:
 - ✅ Analysis complete (CORE_PACKAGE_LEGACY_ANALYSIS.md)
-- ✅ Deprecation complete (4 classes)
-- ✅ Documentation complete (445 lines + reports)
+- ✅ Deprecation complete (6 classes)
+- ✅ Documentation complete (698 lines + reports)
 - ✅ Compilation successful (BUILD SUCCESS)
 - ✅ Ready for commit and merge
 

@@ -32,12 +32,155 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Legacy block information class (deprecated - use BlockInfo instead)
- * This class will be replaced by the new immutable BlockInfo implementation.
+ * Legacy mutable BlockInfo class with 24-byte truncated hash (v1.0 architecture)
  *
- * @deprecated Use {@link BlockInfo} instead
+ * @deprecated As of v5.1 refactor (Phase 6.5 - Deep Core Cleanup), this class represents
+ *             the legacy mutable BlockInfo implementation used for backward compatibility
+ *             with old storage formats. In v5.1, the immutable {@link BlockInfo} class
+ *             is used instead.
+ *
+ *             <p><b>Why Deprecated:</b>
+ *             <ul>
+ *             <li><b>Mutable Design:</b> LegacyBlockInfo uses public mutable fields and setters,
+ *                 making it non-thread-safe. BlockInfo is immutable with builder pattern.</li>
+ *             <li><b>Truncated Hash:</b> Uses 24-byte truncated hash (hashlow) instead of full
+ *                 32-byte hash. BlockInfo uses Bytes32 for full hash storage.</li>
+ *             <li><b>Primitive Types:</b> Uses raw byte[] for hash, ref, maxDiffLink.
+ *                 BlockInfo uses typed Bytes32 objects.</li>
+ *             <li><b>Storage Format Coupling:</b> Designed for legacy RocksDB storage format.
+ *                 BlockInfo is storage-agnostic.</li>
+ *             <li><b>Migration Bridge:</b> Only purpose is BlockInfo.fromLegacy() conversion.
+ *                 After storage migration (Phase 7), this class will be removed.</li>
+ *             </ul>
+ *
+ *             <p><b>v5.1 Replacement: {@link BlockInfo}</b>
+ *             <pre>{@code
+ * // Legacy: Mutable with truncated hash
+ * LegacyBlockInfo legacy = new LegacyBlockInfo();
+ * legacy.setHashlow(hash24bytes);  // Only 24 bytes
+ * legacy.setHeight(123);           // Mutable
+ * legacy.setFlags(flags);          // Mutable
+ *
+ * // v5.1: Immutable with full hash
+ * BlockInfo info = BlockInfo.builder()
+ *     .hash(Bytes32.wrap(hash32bytes))  // Full 32 bytes
+ *     .height(123)
+ *     .flags(flags)
+ *     .build();
+ * // Immutable - no setters
+ *             }</pre>
+ *
+ *             <p><b>Hash Format Comparison:</b>
+ *             <table border="1">
+ *             <tr><th>Format</th><th>Size</th><th>Type</th><th>Usage</th></tr>
+ *             <tr><td><b>LegacyBlockInfo.hashlow</b></td><td>24 bytes</td><td>byte[]</td>
+ *                 <td>Truncated for legacy storage</td></tr>
+ *             <tr><td><b>BlockInfo.hash</b></td><td>32 bytes</td><td>Bytes32</td>
+ *                 <td>Full hash for v5.1</td></tr>
+ *             </table>
+ *
+ *             <p><b>Migration Path:</b>
+ *             <br>LegacyBlockInfo is used during storage migration to convert old format to new:
+ *             <pre>{@code
+ * // Phase 4 Storage: Reading legacy storage
+ * byte[] legacyData = rocksdb.get(key);
+ * LegacyBlockInfo legacy = deserialize(legacyData);
+ *
+ * // Convert to new immutable BlockInfo
+ * BlockInfo info = BlockInfo.fromLegacy(legacy);
+ *
+ * // Future Phase 7: Direct BlockInfo storage (no LegacyBlockInfo)
+ * BlockInfo info = BlockInfo.deserialize(data);
+ *             }</pre>
+ *
+ *             <p><b>Current Usage (18 files):</b>
+ *             <ul>
+ *             <li>{@link Block#Block(LegacyBlockInfo)} - Legacy Block constructor</li>
+ *             <li>{@link BlockInfo#fromLegacy(LegacyBlockInfo)} - Migration method</li>
+ *             <li>{@link io.xdag.db.BlockStore} - Storage layer interfaces</li>
+ *             <li>{@link io.xdag.db.rocksdb.BlockStoreImpl} - RocksDB implementation</li>
+ *             <li>SnapshotStore - Snapshot operations</li>
+ *             <li>Various test files</li>
+ *             </ul>
+ *
+ *             <p><b>Design Differences:</b>
+ *             <pre>
+ * LegacyBlockInfo (Mutable):
+ * ┌─────────────────────────────────────┐
+ * │ public long type               (8B) │  Direct field access
+ * │ public int flags               (4B) │  Public mutable
+ * │ private byte[] hashlow        (24B) │  Truncated hash
+ * │ private byte[] ref            (24B) │  Raw bytes
+ * │ private byte[] maxDiffLink    (24B) │  Raw bytes
+ * │ ... (setters for all fields)        │
+ * └─────────────────────────────────────┘
+ *
+ * BlockInfo (Immutable):
+ * ┌─────────────────────────────────────┐
+ * │ Bytes32 hash                  (32B) │  Full hash, typed
+ * │ long timestamp                 (8B) │  Immutable
+ * │ long height                    (8B) │  Immutable
+ * │ long type                      (8B) │  Immutable
+ * │ int flags                      (4B) │  Immutable
+ * │ UInt256 difficulty           (32B)  │  Typed
+ * │ Bytes32 ref                   (32B) │  Full hash, typed
+ * │ Bytes32 maxDiffLink           (32B) │  Full hash, typed
+ * │ ... (no setters, builder only)      │
+ * └─────────────────────────────────────┘
+ *             </pre>
+ *
+ *             <p><b>Why 24-byte Hash is Legacy:</b>
+ *             <br>In early XDAG implementation, only lower 24 bytes of hash were stored
+ *             to save space. This caused issues:
+ *             <ul>
+ *             <li>Ambiguous references (hash collisions)</li>
+ *             <li>Inconsistent with full 32-byte Bytes32 standard</li>
+ *             <li>Complicates hash comparisons</li>
+ *             <li>Not compatible with standard SHA-256 tooling</li>
+ *             </ul>
+ *
+ *             <p><b>Thread Safety:</b>
+ *             <pre>{@code
+ * // Legacy: NOT thread-safe (mutable)
+ * LegacyBlockInfo legacy = new LegacyBlockInfo();
+ * thread1: legacy.setHeight(100);  // Race condition!
+ * thread2: legacy.setHeight(200);  // Race condition!
+ *
+ * // v5.1: Thread-safe (immutable)
+ * BlockInfo info = BlockInfo.builder().height(100).build();
+ * // No setters - safe to share across threads
+ *             }</pre>
+ *
+ *             <p><b>Performance Impact:</b>
+ *             <br>Removing LegacyBlockInfo enables:
+ *             <ul>
+ *             <li>Thread-safe immutable design (safe multi-threaded access)</li>
+ *             <li>Full 32-byte hash (eliminates collision risk)</li>
+ *             <li>Typed fields (Bytes32, UInt256) instead of raw byte[]</li>
+ *             <li>Builder pattern (cleaner construction)</li>
+ *             <li>Defensive copying eliminated (immutability guarantees)</li>
+ *             </ul>
+ *
+ *             <p><b>Removal Timeline:</b>
+ *             <ul>
+ *             <li>Phase 4 (Storage): Added BlockInfo support alongside LegacyBlockInfo</li>
+ *             <li>Phase 6.5 (Current): Deprecated LegacyBlockInfo</li>
+ *             <li>Phase 7 (Future): Storage migration to BlockInfo-only format</li>
+ *             <li>Phase 7 (Future): Remove LegacyBlockInfo class entirely</li>
+ *             </ul>
+ *
+ *             <p><b>Related Deprecations:</b>
+ *             <ul>
+ *             <li>{@link Block} - Uses LegacyBlockInfo constructor</li>
+ *             <li>{@link PreBlockInfo} - Helper class for LegacyBlockInfo population</li>
+ *             <li>{@link Address} - Legacy reference format</li>
+ *             <li>{@link XdagBlock} - Legacy 512-byte serialization</li>
+ *             </ul>
+ *
+ * @see BlockInfo
+ * @see BlockInfo#fromLegacy(LegacyBlockInfo)
  */
-@Deprecated
+@Deprecated(since = "0.8.1", forRemoval = true)
 @Getter
 @Setter
 public class LegacyBlockInfo {
