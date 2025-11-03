@@ -1800,6 +1800,56 @@ public class BlockchainImpl implements Blockchain {
     }
 
     /**
+     * Create a link BlockV5 for network health (v5.1 implementation - Phase 8.3.1)
+     *
+     * Phase 8.3.1: Orphan health system migration to BlockV5.
+     * Creates a BlockV5 that references orphan blocks to maintain network health.
+     *
+     * Link blocks help prevent orphan blocks from being forgotten by periodically
+     * referencing them. This maintains network connectivity and reduces orphan count.
+     *
+     * Key differences from createMainBlockV5():
+     * 1. No pretop block reference (link blocks only reference orphans)
+     * 2. No mining required (nonce = 0)
+     * 3. Uses all available space for orphan references
+     *
+     * @return BlockV5 link block ready for import
+     * @see #checkOrphan()
+     * @see BlockV5#createCandidate(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, List)
+     * @since Phase 8.3.1 v5.1
+     */
+    public BlockV5 createLinkBlockV5() {
+        // Get current timestamp (link blocks don't use main time alignment)
+        long timestamp = XdagTime.getCurrentTimestamp();
+
+        // Get current network difficulty
+        BigInteger networkDiff = xdagStats.getDifficulty();
+        org.apache.tuweni.units.bigints.UInt256 difficulty =
+            org.apache.tuweni.units.bigints.UInt256.valueOf(networkDiff);
+
+        // Get coinbase address (link block creator)
+        Bytes32 coinbase = keyPair2Hash(wallet.getDefKey());
+
+        // Get orphan blocks to reference (use ALL available link slots)
+        long[] sendTime = new long[2];
+        sendTime[0] = timestamp;
+        List<Bytes32> orphans = orphanBlockStore.getOrphan(BlockV5.MAX_BLOCK_LINKS, sendTime);
+
+        List<Link> links = new ArrayList<>();
+        for (Bytes32 orphan : orphans) {
+            links.add(Link.toBlock(orphan));
+        }
+
+        // Create link block (nonce = 0, no mining needed)
+        BlockV5 linkBlock = BlockV5.createCandidate(timestamp, difficulty, coinbase, links);
+
+        log.debug("Created BlockV5 link block: epoch={}, orphans={}",
+                 XdagTime.getEpoch(timestamp), links.size());
+
+        return linkBlock;
+    }
+
+    /**
      * Create a link block for network health (legacy v1.0 implementation).
      *
      * @deprecated As of v5.1 refactor, this method creates legacy Block objects for link blocks
@@ -2474,42 +2524,16 @@ public class BlockchainImpl implements Blockchain {
             nblk = nblk / 61 + (b ? 1 : 0);
         }
         while (nblk-- > 0) {
-            // Phase 7.1: Use createLinkBlock() instead of deprecated createNewBlock()
+            // Phase 8.3.1: Use BlockV5 for link block creation
             // Link blocks help maintain network health by referencing orphan blocks
-            Block linkBlock = createLinkBlock(kernel.getConfig().getNodeSpec().getNodeTag());
-            linkBlock.signOut(kernel.getWallet().getDefKey());
+            BlockV5 linkBlock = createLinkBlockV5();
 
-            // Phase 7.1: Temporary workaround - use legacy tryToConnect(Block)
-            // TODO: After sync migration to BlockV5, this will use tryToConnect(BlockV5)
-            // For now, use the internal implementation that still exists for legacy Block objects
-            ImportResult result = tryToConnectLegacy(linkBlock);
+            // Import using working BlockV5 method
+            ImportResult result = tryToConnect(linkBlock);
             if (result == IMPORTED_NOT_BEST || result == IMPORTED_BEST) {
-                onNewBlock(linkBlock);
+                onNewBlockV5(linkBlock);
             }
         }
-    }
-
-    /**
-     * TEMPORARY: Legacy tryToConnect for Block objects (Phase 7.1 cleanup workaround)
-     *
-     * This is a temporary internal method to support legacy Block objects during the transition.
-     * After the deleted tryToConnect(Block) method removal, some code paths still need legacy support.
-     *
-     * @deprecated This method exists only for transition support. Will be removed after:
-     *             1. Sync system migrates to BlockV5
-     *             2. All Block creation converted to BlockV5 creation
-     *             3. Network layer fully supports BlockV5 messages
-     *
-     * @param block Legacy Block object
-     * @return ImportResult
-     */
-    @Deprecated(since = "0.8.1", forRemoval = true)
-    private synchronized ImportResult tryToConnectLegacy(Block block) {
-        // For now, return INVALID_BLOCK to indicate this path is not supported
-        // The proper solution is to migrate to BlockV5
-        log.warn("tryToConnectLegacy called - this is a temporary workaround. Block: {}",
-                block.getHash().toHexString());
-        return ImportResult.INVALID_BLOCK;
     }
 
     public void checkMain() {
