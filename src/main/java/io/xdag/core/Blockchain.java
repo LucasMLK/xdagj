@@ -129,11 +129,30 @@ public interface Blockchain {
             long nonce,
             XAmount totalFee);
 
-    // Get block by its hash
-    Block getBlockByHash(Bytes32 hash, boolean isRaw);
+    /**
+     * Get BlockV5 by its hash (v5.1 unified interface - Phase 8.3.2)
+     *
+     * Phase 8.3.2: Blockchain interface migration to BlockV5.
+     * This replaces the legacy Block getBlockByHash() method.
+     *
+     * @param hash Block hash
+     * @param isRaw Whether to include raw block data
+     * @return BlockV5 or null if not found
+     * @since Phase 8.3.2 v5.1
+     */
+    BlockV5 getBlockByHash(Bytes32 hash, boolean isRaw);
 
-    // Get block by its height
-    Block getBlockByHeight(long height);
+    /**
+     * Get BlockV5 by its height (v5.1 unified interface - Phase 8.3.2)
+     *
+     * Phase 8.3.2: Blockchain interface migration to BlockV5.
+     * This replaces the legacy Block getBlockByHeight() method.
+     *
+     * @param height Block height (main block number)
+     * @return BlockV5 or null if not found
+     * @since Phase 8.3.2 v5.1
+     */
+    BlockV5 getBlockByHeight(long height);
 
     // Check and update main chain
     void checkNewMain();
@@ -141,11 +160,29 @@ public interface Blockchain {
     // Get the latest main block number
     long getLatestMainBlockNumber();
 
-    // Get list of main blocks with specified count
-    List<Block> listMainBlocks(int count);
+    /**
+     * Get list of main BlockV5s with specified count (v5.1 unified interface - Phase 8.3.2)
+     *
+     * Phase 8.3.2: Blockchain interface migration to BlockV5.
+     * This replaces the legacy List<Block> listMainBlocks() method.
+     *
+     * @param count Number of main blocks to retrieve
+     * @return List of BlockV5 main blocks
+     * @since Phase 8.3.2 v5.1
+     */
+    List<BlockV5> listMainBlocks(int count);
 
-    // Get list of mined blocks with specified count
-    List<Block> listMinedBlocks(int count);
+    /**
+     * Get list of mined BlockV5s with specified count (v5.1 unified interface - Phase 8.3.2)
+     *
+     * Phase 8.3.2: Blockchain interface migration to BlockV5.
+     * This replaces the legacy List<Block> listMinedBlocks() method.
+     *
+     * @param count Number of mined blocks to retrieve
+     * @return List of BlockV5 mined blocks
+     * @since Phase 8.3.2 v5.1
+     */
+    List<BlockV5> listMinedBlocks(int count);
 
     // Get memory blocks created by current node
     Map<Bytes, Integer> getMemOurBlocks();
@@ -162,34 +199,18 @@ public interface Blockchain {
     // Calculate total supply at given main block number
     XAmount getSupply(long nmain);
 
-    // Get blocks within specified time range
-    List<Block> getBlocksByTime(long starttime, long endtime);
-
     /**
-     * Get BlockV5 objects within specified time range (v5.1 implementation).
+     * Get BlockV5 objects within specified time range (v5.1 unified interface - Phase 8.3.2)
      *
-     * Phase 7.3.0: This is the BlockV5 version of getBlocksByTime().
-     * Used by network layer to send BlockV5 messages instead of legacy Block messages.
+     * Phase 8.3.2: Blockchain interface migration to BlockV5.
+     * This replaces the legacy List<Block> getBlocksByTime() method.
      *
      * @param starttime Start time in XDAG timestamp format
      * @param endtime End time in XDAG timestamp format
      * @return List of BlockV5 objects in the time range
-     * @since Phase 7.3.0 v5.1
+     * @since Phase 8.3.2 v5.1
      */
-    List<BlockV5> getBlockV5sByTime(long starttime, long endtime);
-
-    /**
-     * Get BlockV5 by its hash (v5.1 implementation).
-     *
-     * Phase 7.3.0: This is the BlockV5 version of getBlockByHash().
-     * Delegates to blockStore.getBlockV5ByHash().
-     *
-     * @param hash Block hash
-     * @param isRaw Whether to include raw block data
-     * @return BlockV5 or null if not found
-     * @since Phase 7.3.0 v5.1
-     */
-    BlockV5 getBlockV5ByHash(Bytes32 hash, boolean isRaw);
+    List<BlockV5> getBlocksByTime(long starttime, long endtime);
 
     // Start main chain check thread with given period
     void startCheckMain(long period);

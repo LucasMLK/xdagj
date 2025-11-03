@@ -454,7 +454,18 @@ public class Commands {
      * @param n Number of blocks to list
      */
     public String mainblocks(int n) {
-        List<Block> blocks = kernel.getBlockchain().listMainBlocks(n);
+        // Phase 8.3.2: Blockchain interface now returns BlockV5
+        List<BlockV5> blockV5List = kernel.getBlockchain().listMainBlocks(n);
+
+        // Convert BlockV5 → Block for CLI display
+        List<Block> blocks = new ArrayList<>();
+        for (BlockV5 v5 : blockV5List) {
+            Block block = kernel.getBlockStore().getBlockByHash(v5.getHash(), false);
+            if (block != null) {
+                blocks.add(block);
+            }
+        }
+
         if (CollectionUtils.isEmpty(blocks)) {
             return "empty";
         }
@@ -467,7 +478,18 @@ public class Commands {
      * @param n Number of blocks to list
      */
     public String minedBlocks(int n) {
-        List<Block> blocks = kernel.getBlockchain().listMinedBlocks(n);
+        // Phase 8.3.2: Blockchain interface now returns BlockV5
+        List<BlockV5> blockV5List = kernel.getBlockchain().listMinedBlocks(n);
+
+        // Convert BlockV5 → Block for CLI display
+        List<Block> blocks = new ArrayList<>();
+        for (BlockV5 v5 : blockV5List) {
+            Block block = kernel.getBlockStore().getBlockByHash(v5.getHash(), false);
+            if (block != null) {
+                blocks.add(block);
+            }
+        }
+
         if (CollectionUtils.isEmpty(blocks)) {
             return "empty";
         }
@@ -579,9 +601,10 @@ public class Commands {
 
         for (TxHistory txHistory : kernel.getBlockchain().getBlockTxHistoryByAddress(wrap, page)) {
             Address address = txHistory.getAddress();
-            Block block = kernel.getBlockchain().getBlockByHash(address.getAddress(), false);
-            if (block != null) {
-                BlockInfo blockInfo = block.getInfo();
+            // Phase 8.3.2: Blockchain interface now returns BlockV5
+            BlockV5 blockV5 = kernel.getBlockchain().getBlockByHash(address.getAddress(), false);
+            if (blockV5 != null) {
+                BlockInfo blockInfo = blockV5.getInfo();
                 if ((blockInfo.getFlags() & BI_APPLIED) == 0) {
                     continue;
                 }

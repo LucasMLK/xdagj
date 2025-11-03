@@ -46,6 +46,7 @@ import org.bouncycastle.util.encoders.Hex;
 import io.xdag.config.Config;
 import io.xdag.config.MainnetConfig;
 import io.xdag.core.Block;
+import io.xdag.core.BlockV5;
 import io.xdag.core.Blockchain;
 import io.xdag.utils.XdagTime;
 import lombok.Setter;
@@ -91,7 +92,8 @@ public class RandomX extends AbstractXdagLifecycle {
     }
 
     // Public method to set the fork time
-    public void randomXSetForkTime(Block block) {
+    // Phase 8.3.2: Updated to accept BlockV5 instead of Block
+    public void randomXSetForkTime(BlockV5 block) {
         long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
         seedEpoch -= 1;
         if (block.getInfo().getHeight() >= randomXForkSeedHeight) {
@@ -124,7 +126,8 @@ public class RandomX extends AbstractXdagLifecycle {
     }
 
     // Public method to unset the fork time
-    public void randomXUnsetForkTime(Block block) {
+    // Phase 8.3.2: Updated to accept BlockV5 instead of Block
+    public void randomXUnsetForkTime(BlockV5 block) {
         long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
         seedEpoch -= 1;
         if (block.getInfo().getHeight() >= randomXForkSeedHeight) {
@@ -271,10 +274,11 @@ public class RandomX extends AbstractXdagLifecycle {
         firstMemory.isSwitched = 0;
 
         long lag = isTestNet ? SEEDHASH_EPOCH_TESTNET_LAG : SEEDHASH_EPOCH_LAG;
+        // Phase 8.3.2: Blockchain interface now returns BlockV5
         randomXForkTime = XdagTime
                 .getEpoch(
                         blockchain.getBlockByHeight(config.getSnapshotSpec().getSnapshotHeight() - lag).getTimestamp());
-        Block block;
+        BlockV5 block;
         for (long i = lag; i >= 0; i--) {
             block = blockchain.getBlockByHeight(config.getSnapshotSpec().getSnapshotHeight() - i);
             if (block == null) {
@@ -295,7 +299,8 @@ public class RandomX extends AbstractXdagLifecycle {
     }
 
     public void randomXLoadingSnapshot() {
-        Block block;
+        // Phase 8.3.2: Blockchain interface now returns BlockV5
+        BlockV5 block;
         long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
         if (blockchain.getXdagStats().nmain >= config.getSnapshotSpec().getSnapshotHeight()) {
             block = blockchain.getBlockByHeight(
@@ -308,7 +313,8 @@ public class RandomX extends AbstractXdagLifecycle {
     }
 
     public void randomXLoadingSnapshotJ() {
-        Block block;
+        // Phase 8.3.2: Blockchain interface now returns BlockV5
+        BlockV5 block;
         long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
         if (blockchain.getXdagStats().nmain >= config.getSnapshotSpec().getSnapshotHeight()) {
             if (config.getSnapshotSpec().getSnapshotHeight() > RANDOMX_FORK_HEIGHT) {
@@ -322,7 +328,8 @@ public class RandomX extends AbstractXdagLifecycle {
     }
 
     public void randomXLoadingForkTime() {
-        Block block;
+        // Phase 8.3.2: Blockchain interface now returns BlockV5
+        BlockV5 block;
         if (blockchain.getXdagStats().nmain >= randomXForkSeedHeight) {
             block = blockchain.getBlockByHeight(randomXForkSeedHeight);
             randomXForkTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag;
@@ -334,7 +341,8 @@ public class RandomX extends AbstractXdagLifecycle {
     }
 
   private void doRandomXSeed(long seedEpoch) {
-    Block block;
+    // Phase 8.3.2: Blockchain interface now returns BlockV5
+    BlockV5 block;
     long seedHeight = blockchain.getXdagStats().nmain & ~seedEpoch;
     long preSeedHeight = seedHeight - seedEpoch - 1;
 

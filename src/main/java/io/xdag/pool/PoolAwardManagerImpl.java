@@ -167,10 +167,17 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
         // Obtain the hash (legacy format) of this block for query
         MutableBytes32 hash = MutableBytes32.create();
         hash.set(8, Bytes.wrap(blockHash).slice(8, 24));
-        Block block = blockchain.getBlockByHash(hash, true);
+        // Phase 8.3.2: Blockchain interface now returns BlockV5, convert to Block for legacy nonce/coinbase access
+        BlockV5 blockV5 = blockchain.getBlockByHash(hash, true);
+        if (blockV5 == null) {
+            log.debug("Can't find the block");
+            return -2;
+        }
+        // Convert to Block for legacy nonce/coinbase access (TODO Phase 9: migrate to BlockV5 structure)
+        Block block = kernel.getBlockStore().getBlockByHash(blockV5.getHash(), true);
         log.debug("Hash (legacy format) [{}]", hash.toHexString());
         if (block == null) {
-            log.debug("Can't find the block");
+            log.debug("Can't find the block as Block (legacy)");
             return -2;
         }
         // nonce = share(12 bytes) + pool wallet address(20 bytes)

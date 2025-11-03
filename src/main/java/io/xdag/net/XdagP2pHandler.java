@@ -431,21 +431,21 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
                 FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(XdagTime.xdagTimestampToMs(startTime)),
                 FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(XdagTime.xdagTimestampToMs(endTime)),
                 channel.getRemoteAddress());
-        List<Block> blocks = chain.getBlocksByTime(startTime, endTime);
+        // Phase 8.3.2: Blockchain interface now returns BlockV5
+        List<BlockV5> blocks = chain.getBlocksByTime(startTime, endTime);
 
         // Phase 7.3.0: Send BlockV5 messages only (no legacy fallback)
-        for (Block block : blocks) {
-            // Try to get BlockV5 version
+        for (BlockV5 blockV5 : blocks) {
+            // Already have BlockV5 from blockchain, send directly
             try {
-                BlockV5 blockV5 = kernel.getBlockStore().getBlockV5ByHash(block.getHash(), true);
                 if (blockV5 != null) {
                     SyncBlockV5Message blockMsg = new SyncBlockV5Message(blockV5, 1);
                     msgQueue.sendMessage(blockMsg);
                 } else {
-                    log.debug("Block {} not available as BlockV5, skipping", block.getHash().toHexString());
+                    log.debug("Block is null, skipping");
                 }
             } catch (Exception e) {
-                log.debug("Failed to get BlockV5 for hash {}: {}", block.getHash().toHexString(), e.getMessage());
+                log.debug("Failed to send BlockV5: {}", e.getMessage());
             }
         }
         msgQueue.sendMessage(new BlocksReplyMessage(startTime, endTime, random, chain.getXdagStats()));

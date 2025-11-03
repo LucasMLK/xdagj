@@ -26,6 +26,7 @@ package io.xdag.p2p;
 import io.xdag.Kernel;
 import io.xdag.consensus.SyncManager;
 import io.xdag.core.Block;
+import io.xdag.core.BlockV5;
 import io.xdag.core.Blockchain;
 import io.xdag.core.XdagStats;
 import io.xdag.net.message.MessageCode;
@@ -165,19 +166,18 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
                             .format(XdagTime.xdagTimestampToMs(endTime)),
                     channel.getRemoteAddress());
 
-            // Phase 7.3.0: Send BlockV5 messages only (no legacy fallback)
-            List<Block> blocks = blockchain.getBlocksByTime(startTime, endTime);
-            for (Block block : blocks) {
+            // Phase 8.3.2: Blockchain interface now returns BlockV5
+            List<BlockV5> blocks = blockchain.getBlocksByTime(startTime, endTime);
+            for (BlockV5 blockV5 : blocks) {
                 try {
-                    io.xdag.core.BlockV5 blockV5 = kernel.getBlockStore().getBlockV5ByHash(block.getHash(), true);
                     if (blockV5 != null) {
                         SyncBlockV5Message blockMsg = new SyncBlockV5Message(blockV5, 1);
                         channel.send(Bytes.wrap(blockMsg.getBody()));
                     } else {
-                        log.debug("Block {} not available as BlockV5, skipping", block.getHash().toHexString());
+                        log.debug("Block {} not available as BlockV5, skipping", blockV5.getHash().toHexString());
                     }
                 } catch (Exception e) {
-                    log.debug("Failed to get BlockV5 for hash {}", block.getHash().toHexString());
+                    log.debug("Failed to get BlockV5 for hash {}", blockV5.getHash().toHexString());
                 }
             }
 
@@ -400,8 +400,8 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
             BlockV5RequestMessage msg = new BlockV5RequestMessage(data.toArray());
             Bytes hash = msg.getHash();
 
-            // Look up BlockV5 by hash
-            io.xdag.core.BlockV5 block = blockchain.getBlockV5ByHash(Bytes32.wrap(hash), true);
+            // Phase 8.3.2: Use unified getBlockByHash() method
+            io.xdag.core.BlockV5 block = blockchain.getBlockByHash(Bytes32.wrap(hash), true);
             if (block != null) {
                 log.debug("Responding to BLOCKV5_REQUEST for {} from {}",
                         Bytes32.wrap(hash).toHexString(), channel.getRemoteAddress());

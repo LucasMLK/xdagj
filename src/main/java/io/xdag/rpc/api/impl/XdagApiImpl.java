@@ -142,7 +142,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
     @Override
     public String xdag_getBalanceByNumber(String bnOrId) {
-        Block block = blockchain.getBlockByHeight(Long.parseLong(bnOrId));
+        BlockV5 block = blockchain.getBlockByHeight(Long.parseLong(bnOrId));
         if (null == block) {
             return null;
         }
@@ -212,9 +212,9 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     @Override
     public List<BlockResponse> xdag_getBlocksByNumber(String bnOrId) {
         int number = bnOrId == null ? 20 : Integer.parseInt(bnOrId);// default 20
-        List<Block> blocks = blockchain.listMainBlocks(number);
+        List<BlockV5> blocks = blockchain.listMainBlocks(number);
         List<BlockResponse> resultDTOS = Lists.newArrayList();
-        for (Block block : blocks){
+        for (BlockV5 block : blocks){
             BlockResponse dto = transferBlockToBriefBlockResultDTO(blockchain.getBlockByHash(block.getHash(), false));
             if(dto != null){
                 resultDTOS.add(dto);
@@ -499,10 +499,22 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         return BlockResultDTOBuilder.build();
     }
 
-    private BlockResponse transferBlockInfoToBlockResultDTO(Block block, int page, Object... parameters) {
-        if (null == block) {
+    private BlockResponse transferBlockInfoToBlockResultDTO(BlockV5 blockV5, int page, Object... parameters) {
+        if (null == blockV5) {
             return null;
         }
+        // Phase 8.3.2: For now, convert to Block for legacy helper method compatibility
+        // TODO Phase 9: Refactor RPC layer to work directly with BlockV5 Link structure
+        Block block = kernel.getBlockStore().getBlockByHash(blockV5.getHash(), false);
+        if (block == null) {
+            // Fallback: create minimal response from BlockV5
+            BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
+            return builder.address(hash2Address(blockV5.getHash()))
+                    .hash(blockV5.getHash().toUnprefixedHexString())
+                    .balance(String.format("%s", blockV5.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
+                    .build();
+        }
+
         BlockResponse.BlockResponseBuilder BlockResultDTOBuilder = BlockResponse.builder();
         BlockResultDTOBuilder.address(hash2Address(block.getHash()))
                 .hash(block.getHash().toUnprefixedHexString())
@@ -531,7 +543,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         List<TxHistory> txHistories = blockchain.getBlockTxHistoryByAddress(pubAddress2Hash(address), page, parameters);
         List<BlockResponse.TxLink> txLinks = Lists.newArrayList();
         for (TxHistory txHistory : txHistories) {
-            Block b = blockchain.getBlockByHash(txHistory.getAddress().getAddress(), false);
+            BlockV5 b = blockchain.getBlockByHash(txHistory.getAddress().getAddress(), false);
             BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
             if (b != null) {
                 LegacyBlockInfo blockInfo = b.getInfo().toLegacy();
@@ -562,11 +574,11 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     }
 
     public BlockResponse getBlockByNumber(String bnOrId, int page, Object... parameters) {
-        Block blockFalse = blockchain.getBlockByHeight(Long.parseLong(bnOrId));
+        BlockV5 blockFalse = blockchain.getBlockByHeight(Long.parseLong(bnOrId));
         if (null == blockFalse) {
             return null;
         }
-        Block blockTrue = blockchain.getBlockByHash(blockFalse.getHash(), true);
+        BlockV5 blockTrue = blockchain.getBlockByHash(blockFalse.getHash(), true);
         if (blockTrue == null) {
             return transferBlockInfoToBlockResultDTO(blockFalse, page, parameters);
         }
@@ -584,7 +596,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             } else {
                 blockHash = BasicUtils.getHash(hash);
             }
-            Block block = blockchain.getBlockByHash(blockHash, true);
+            BlockV5 block = blockchain.getBlockByHash(blockHash, true);
             if (block == null) {
                 block = blockchain.getBlockByHash(blockHash, false);
                 return transferBlockInfoToBlockResultDTO(block, page, parameters);
@@ -684,10 +696,17 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         return links;
     }
 
-    private BlockResponse transferBlockToBlockResultDTO(Block block, int page, Object... parameters) {
-        if (null == block) {
+    private BlockResponse transferBlockToBlockResultDTO(BlockV5 blockV5, int page, Object... parameters) {
+        if (null == blockV5) {
             return null;
         }
+        // Phase 8.3.2: Convert to Block for legacy helper method compatibility
+        Block block = kernel.getBlockStore().getBlockByHash(blockV5.getHash(), true);
+        if (block == null) {
+            // Fallback: return minimal response
+            return transferBlockInfoToBlockResultDTO(blockV5, page, parameters);
+        }
+
         BlockResponse.BlockResponseBuilder BlockResultDTOBuilder = BlockResponse.builder();
         BlockResultDTOBuilder.address(hash2Address(block.getHash()))
                 .hash(block.getHash().toUnprefixedHexString())
@@ -710,10 +729,21 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         return BlockResultDTOBuilder.build();
     }
 
-    private BlockResponse transferBlockToBriefBlockResultDTO(Block block) {
-        if (null == block) {
+    private BlockResponse transferBlockToBriefBlockResultDTO(BlockV5 blockV5) {
+        if (null == blockV5) {
             return null;
         }
+        // Phase 8.3.2: Convert to Block for legacy helper method compatibility
+        Block block = kernel.getBlockStore().getBlockByHash(blockV5.getHash(), false);
+        if (block == null) {
+            // Fallback: create minimal response from BlockV5
+            BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
+            return builder.address(hash2Address(blockV5.getHash()))
+                    .hash(blockV5.getHash().toUnprefixedHexString())
+                    .balance(String.format("%s", blockV5.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
+                    .build();
+        }
+
         BlockResponse.BlockResponseBuilder BlockResponseBuilder = BlockResponse.builder();
         BlockResponseBuilder.address(hash2Address(block.getHash()))
                 .hash(block.getHash().toUnprefixedHexString())
