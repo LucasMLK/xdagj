@@ -417,69 +417,9 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         }
     }
 
-    @Override
-    public String xdag_sendRawTransaction(String rawData) {
-        // TODO v5.1: DELETED - Block, Address classes no longer exist
-        // Temporarily disabled - waiting for migration to BlockV5 + Transaction architecture
-        log.warn("xdag_sendRawTransaction() temporarily disabled - v5.1 migration in progress");
-        return "ERROR: xdag_sendRawTransaction temporarily disabled - v5.1 migration in progress";
-        /*
-        // 1. build transaction
-        // 2. try to add blockchain
-        // 3. check from address if valid.
-        Block block = new Block(new XdagBlock(Hex.decode(rawData)));
-        ImportResult result;
-        List<Address> inputs = block.getInputs();
-        int inputSize = inputs.size();
-        if (inputSize == 0) {
-            result = ImportResult.INVALID_BLOCK;
-            return "THE TX NEEDS INPUT " + result.getErrorInfo();
-        }
-        for (Address input : inputs) {
-            if (input.getType() == XDAG_FIELD_IN && block.getTxNonceField() != null) {
-                result = ImportResult.INVALID_BLOCK;
-                return "NO NONCE IS REQUIRED FOR MAIN BLOCK TRANSFER " + result.getErrorInfo();
-            } else if (input.getType() == XDAG_FIELD_INPUT) {
-                Bytes addr = BytesUtils.byte32ToArray(input.getAddress());
-                UInt64 legalNonce = kernel.getAddressStore().getTxQuantity(addr.toArray()).add(UInt64.ONE);
-                UInt64 blockNonce;
-                if (inputSize != 1) {
-                    result = ImportResult.INVALID_BLOCK;
-                    return "ACCOUNT TRANSFER IS LIMITED TO ONE INPUT ONLY " + result.getErrorInfo();
-                }
-                if (block.getTxNonceField() == null) {
-                    result = ImportResult.INVALID_BLOCK;
-                    return "PLEASE DOWNLOAD THE LATEST WALLET " + result.getErrorInfo();
-                }
-                blockNonce = block.getTxNonceField().getTransactionNonce();
-                if (blockNonce.compareTo(legalNonce) != 0) {
-                    result = ImportResult.INVALID_BLOCK;
-                    return "PLEASE FILL IN THE CORRECT NONCE " + result.getErrorInfo();
-                }
-            }
-        }
-        if (checkTransaction(block)) {
-            // v5.1: Create SyncBlock for import
-            io.xdag.consensus.SyncManager.SyncBlock syncBlock =
-                new io.xdag.consensus.SyncManager.SyncBlock(block, kernel.getConfig().getNodeSpec().getTTL());
-            result = kernel.getSyncMgr().importBlock(syncBlock);
-        } else {
-            result = ImportResult.INVALID_BLOCK;
-        }
-        if(result == ImportResult.IMPORTED_NOT_BEST && block.getTxNonceField() != null) {
-            List<Address> in = block.getInputs();
-            UInt64 blockNonce = block.getTxNonceField().getTransactionNonce();
-            for (Address input : in) {
-                if (input.getType() == XDAG_FIELD_INPUT) {
-                    Bytes addr = BytesUtils.byte32ToArray(input.getAddress());
-                    kernel.getAddressStore().updateTxQuantity(addr.toArray(), blockNonce);
-                }
-            }
-        }
-        return result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST ?
-                BasicUtils.hash2Address(block.getHash()) : "INVALID_BLOCK " + result.getErrorInfo();
-        */
-    }
+    // Phase 8.2.2: DELETED - xdag_sendRawTransaction()
+    // Obsolete: Replaced by doXfer() + xdag_personal_sendTransaction()
+    // v5.1 uses Transaction objects internally, not raw Block bytes
 
     @Override
     public List<NetConnResponse> xdag_netConnectionList() {
@@ -638,103 +578,14 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     }
 
 
-    // TODO v5.1: DELETED - Block, TxHistory, Address classes no longer exist
-    // Temporarily disabled - waiting for migration to BlockV5
-    /*
-    private List<BlockResponse.TxLink> getTxLinks(Block block, int page, Object... parameters) {
-        List<TxHistory> txHistories = blockchain.getBlockTxHistoryByAddress(block.getHash(), page, parameters);
-        List<BlockResponse.TxLink> txLinks = Lists.newArrayList();
-        // 1. earning info
-        if (getStateByFlags(block.getInfo().getFlags()).equals("Main") && block.getInfo().getHeight() > kernel.getConfig().getSnapshotSpec().getSnapshotHeight()) {
-            BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
-            String remark = "";
-            if (block.getInfo().getRemark() != null && block.getInfo().getRemark().size() != 0) {
-                remark = new String(block.getInfo().getRemark().toArray(), StandardCharsets.UTF_8).trim();
-            }
-            XAmount earnFee = kernel.getBlockStore().getBlockInfoByHash(block.getHash()).getFee();
-            // if (block.getInfo().getAmount().equals(XAmount.ZERO)){ earnFee = XAmount.ZERO;} //when block amount is zero, fee also should make zero.
-            txLinkBuilder.address(hash2Address(block.getHash()))
-                    .hash(block.getHash().toUnprefixedHexString())
-                    .amount(String.format("%s", blockchain.getReward(block.getInfo().getHeight()).add(earnFee).toDecimal(9, XUnit.XDAG).toPlainString()))
-                    .direction(2)
-                    .time(xdagTimestampToMs(block.getTimestamp()))
-                    .remark(remark);
-            txLinks.add(txLinkBuilder.build());
-        }
-        // 2. tx history info
-        for (TxHistory txHistory : txHistories) {
-            LegacyBlockInfo blockInfo = blockchain.getBlockByHash(txHistory.getAddress().getAddress(), false).getInfo().toLegacy();
-            if ((blockInfo.flags & BI_APPLIED) == 0) {
-                continue;
-            }
+    // Phase 8.2.2: DELETED - getTxLinks(Block block, int page, ...)
+    // Obsolete: Uses TxHistory, Address, BlockInfo.flags which no longer exist
+    // v5.1: Will need to query TransactionStore for transaction details
 
-            XAmount Amount = txHistory.getAddress().getAmount();
-            // Check if it's a transaction block, only subtract 0.1 if it has inputs
-            if (!block.getInputs().isEmpty() && txHistory.getAddress().getType().equals(XDAG_FIELD_OUTPUT)) {
-                Amount = Amount.subtract(MIN_GAS);
-            }
-            BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
-            txLinkBuilder.address(hash2Address(txHistory.getAddress().getAddress()))
-                    .hash(txHistory.getAddress().getAddress().toUnprefixedHexString())
-                    .amount(String.format("%s", Amount.toDecimal(9, XUnit.XDAG).toPlainString()))
-                    .direction(txHistory.getAddress().getType().equals(XDAG_FIELD_IN) ? 0 :
-                            txHistory.getAddress().getType().equals(XDAG_FIELD_OUT) ? 1 : 3)
-                    .time(txHistory.getTimestamp())
-                    .remark(txHistory.getRemark());
-            txLinks.add(txLinkBuilder.build());
-        }
-        return txLinks;
-    }
-    */
-
-    // TODO v5.1: DELETED - Block, Address classes no longer exist
-    // Temporarily disabled - waiting for migration to BlockV5
-    /*
-    private List<BlockResponse.Link> getLinks(Block block) {
-        List<Address> inputs = block.getInputs();
-        List<Address> outputs = block.getOutputs();
-        List<BlockResponse.Link> links = Lists.newArrayList();
-
-        // fee update
-        BlockResponse.Link.LinkBuilder fee = BlockResponse.Link.builder();
-        fee.address(block.getInfo().getRef() == null ? "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                        : hash2Address(Bytes32.wrap(block.getInfo().getRef())))
-                .hash(block.getInfo().getRef() == null ? "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
-                        : Bytes32.wrap(block.getInfo().getRef()).toUnprefixedHexString())
-                .amount(block.getInfo().getRef() == null ? String.format("%.9f", amount2xdag(0)) :
-                        (getStateByFlags(block.getInfo().getFlags()).equals("Main") ? kernel.getBlockStore().getBlockInfoByHash(block.getHash()).getFee().toDecimal(9, XUnit.XDAG).toPlainString() :
-                                (block.getInputs().isEmpty() ? XAmount.ZERO.toDecimal(9, XUnit.XDAG).toPlainString() :
-                                        MIN_GAS.multiply(block.getOutputs().size()).toDecimal(9, XUnit.XDAG).toPlainString())))// calculate the fee
-                .direction(2);
-        links.add(fee.build());
-
-
-        for (Address input : inputs) {
-            BlockResponse.Link.LinkBuilder linkBuilder = BlockResponse.Link.builder();
-            linkBuilder.address(input.getIsAddress() ? Base58.encodeCheck(hash2byte(input.getAddress())) : hash2Address(input.getAddress()))
-                    .hash(input.getAddress().toUnprefixedHexString())
-                    .amount(String.format("%s", input.getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
-                    .direction(0);
-            links.add(linkBuilder.build());
-        }
-
-        for (Address output : outputs) {
-            BlockResponse.Link.LinkBuilder linkBuilder = BlockResponse.Link.builder();
-            if (output.getType().equals(XDAG_FIELD_COINBASE)) continue;
-            XAmount Amount = output.getAmount();
-            if (!block.getInputs().isEmpty()) {
-                Amount = Amount.subtract(MIN_GAS);
-            }
-            linkBuilder.address(output.getIsAddress() ? Base58.encodeCheck(hash2byte(output.getAddress())) : hash2Address(output.getAddress()))
-                    .hash(output.getAddress().toUnprefixedHexString())
-                    .amount(String.format("%s", Amount.toDecimal(9, XUnit.XDAG).toPlainString()))
-                    .direction(1);
-            links.add(linkBuilder.build());
-        }
-
-        return links;
-    }
-    */
+    // Phase 8.2.2: DELETED - getLinks(Block block)
+    // Obsolete: Extracts Address objects from Block.getInputs()/getOutputs()
+    // v5.1: Link structure is 33-byte references to Transactions, not Address amounts
+    // v5.1: Will need new getLinksV5(BlockV5) implementation
 
     private BlockResponse transferBlockToBlockResultDTO(BlockV5 blockV5, int page, Object... parameters) {
         if (null == blockV5) {
@@ -824,23 +675,9 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         */
     }
 
-    // TODO v5.1: DELETED - Block class no longer exists
-    // Temporarily disabled - waiting for migration to BlockV5
-    /*
-    private String getType(Block block) {
-        if (getStateByFlags(block.getInfo().getFlags()).equals("Main")) {
-            return "Main";
-        } else if (block.getInsigs() == null || block.getInsigs().isEmpty()) {
-            if (CollectionUtils.isEmpty(block.getInputs()) && CollectionUtils.isEmpty(block.getOutputs())) {
-                return "Wallet";
-            } else {
-                return "Transaction";
-            }
-        } else {
-            return "Transaction";
-        }
-    }
-    */
+    // Phase 8.2.2: DELETED - getType(Block block)
+    // Obsolete: Uses Block.getInputs()/getOutputs()/getInsigs() which no longer exist
+    // v5.1: Type can be determined from BlockInfo.isMainBlock() and Link structure
 
     private void checkParam(String value, String remark, ProcessResponse processResponse) {
         try {
@@ -1255,24 +1092,10 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         return hash;
     }
 
-    // TODO v5.1: DELETED - Block class no longer exists
-    // Temporarily disabled - waiting for migration to BlockV5
-    /*
-    public boolean checkTransaction(Block block) {
-        //reject transaction without input. For link block attack.
-        if (block.getInputs().isEmpty()) {
-            return false;
-        }
+    // Phase 8.2.2: DELETED - checkTransaction(Block block)
+    // Obsolete: Validation moved to Transaction.isValid() and doXfer()
+    // v5.1 validates Transaction objects, not Block.getInputs()
 
-        //check from address if reject Address.
-        for (Address link : block.getInputs()) {
-            if (Base58.encodeCheck(link.getAddress().slice(8, 20)).equals(kernel.getConfig().getNodeSpec().getRejectAddress())) {
-                return false;
-            }
-        }
-        return true;
-    }
-    */
     @Override
     public Object xdag_syncing(){
         // Phase 7.3: Use ChainStats directly (XdagStats deleted)

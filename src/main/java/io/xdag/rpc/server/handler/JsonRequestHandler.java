@@ -48,7 +48,7 @@ public class JsonRequestHandler implements JsonRpcRequestHandler {
             "xdag_getStatus",
             "xdag_personal_sendTransaction",
             "xdag_personal_sendSafeTransaction",
-            "xdag_sendRawTransaction",
+            // Phase 8.2.2: DELETED - "xdag_sendRawTransaction" (obsolete, use xdag_personal_sendTransaction)
             "xdag_netConnectionList",
             "xdag_netType",
             "xdag_getRewardByNumber",
@@ -142,10 +142,8 @@ public class JsonRequestHandler implements JsonRpcRequestHandler {
                     validateParams(params, "Missing block number parameter");
                     yield xdagApi.xdag_getRewardByNumber(params[0].toString());
                 }
-                case "xdag_sendRawTransaction" -> {
-                    validateParams(params, "Missing raw data parameter");
-                    yield xdagApi.xdag_sendRawTransaction(params[0].toString());
-                }
+                // Phase 8.2.2: DELETED - case "xdag_sendRawTransaction"
+                // Obsolete: Replaced by xdag_personal_sendTransaction() and xdag_personal_sendSafeTransaction()
                 case "xdag_personal_sendTransaction" -> {
                     validateParams(params, "Missing transaction arguments or passphrase");
                     if (params.length < 2) {

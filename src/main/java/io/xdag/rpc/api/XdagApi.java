@@ -179,13 +179,9 @@ public interface XdagApi extends XdagLifecycle {
      */
     String xdag_getRewardByNumber(String bnOrId);
 
-    /**
-     * Send a raw transaction to the network.
-     *
-     * @param rawData Raw transaction data
-     * @return Transaction hash as string
-     */
-    String xdag_sendRawTransaction(String rawData);
+    // Phase 8.2.2: DELETED - xdag_sendRawTransaction(String rawData)
+    // Obsolete: Replaced by xdag_personal_sendTransaction() and xdag_personal_sendSafeTransaction()
+    // v5.1 uses doXfer() internally with Transaction objects, not raw Block bytes
 
     /**
      * Get the list of network connections.
