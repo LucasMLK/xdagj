@@ -49,9 +49,8 @@ public interface BlockStore extends XdagLifecycle {
 
     void reset();
 
-    void saveXdagTopStatus(XdagTopStatus status);
-
-    XdagTopStatus getXdagTopStatus();
+    // Phase 7.3.1: XdagTopStatus deleted - top block state merged into ChainStats
+    // Use saveChainStats/getChainStats instead (see Phase 7.3 section below)
 
     boolean hasBlock(Bytes32 hash);
 

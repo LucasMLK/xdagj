@@ -104,6 +104,28 @@ public class ChainStats implements Serializable {
      */
     XAmount balance;
 
+    // ========== Top Block State (Phase 7.3.1: Merged from XdagTopStatus) ==========
+
+    /**
+     * Current top block hash (highest difficulty)
+     */
+    Bytes32 topBlock;
+
+    /**
+     * Current top block difficulty
+     */
+    UInt256 topDifficulty;
+
+    /**
+     * Previous top block hash
+     */
+    Bytes32 preTopBlock;
+
+    /**
+     * Previous top block difficulty
+     */
+    UInt256 preTopDifficulty;
+
     // ========== Helper Methods ==========
 
     /**
@@ -121,6 +143,10 @@ public class ChainStats implements Serializable {
                 .noRefCount(0)
                 .extraCount(0)
                 .balance(XAmount.ZERO)
+                .topBlock(null)
+                .topDifficulty(UInt256.ZERO)
+                .preTopBlock(null)
+                .preTopDifficulty(UInt256.ZERO)
                 .build();
     }
 

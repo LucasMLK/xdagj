@@ -85,9 +85,9 @@ public class BlockchainImpl implements Blockchain {
     private final Map<Bytes, Integer> memOurBlocks = new ConcurrentHashMap<>();
 
     // Stats and status tracking (v5.1 immutable design)
+    // Phase 7.3.1: XdagTopStatus merged into ChainStats (deleted)
     private volatile ChainStats chainStats;  // Use volatile for thread-safe publication
     private final Kernel kernel;
-    private final XdagTopStatus xdagTopStatus;
 
     // Main chain checking components
     private final ScheduledExecutorService checkLoop;
@@ -125,20 +125,20 @@ public class BlockchainImpl implements Blockchain {
                 && !blockStore.isSnapshotBoot()) {
 
             this.chainStats = ChainStats.zero();
-            this.xdagTopStatus = new XdagTopStatus();
+            // Phase 7.3.1: XdagTopStatus merged into ChainStats (deleted)
 
             if (kernel.getConfig().getSnapshotSpec().isSnapshotJ()) {
                 initSnapshotJ();
             }
 
             // Save latest snapshot state
-            blockStore.saveXdagTopStatus(xdagTopStatus);
+            // Phase 7.3.1: XdagTopStatus merged into ChainStats (saves topBlock state too)
             blockStore.saveChainStats(chainStats);
 
         } else {
             // Load existing state
             ChainStats storedStats = blockStore.getChainStats();
-            XdagTopStatus storedTopStatus = blockStore.getXdagTopStatus();
+            // Phase 7.3.1: XdagTopStatus merged into ChainStats (topBlock fields now in ChainStats)
 
             if (storedStats != null) {
                 // Reset waiting sync count to 0 on startup
@@ -147,8 +147,6 @@ public class BlockchainImpl implements Blockchain {
                 this.chainStats = ChainStats.zero();
             }
 
-            this.xdagTopStatus = Objects.requireNonNullElseGet(storedTopStatus, XdagTopStatus::new);
-
             // Phase 7.3 continuation: Restore lastBlock initialization using BlockV5
             // Load last main block to initialize stats and top status
             BlockV5 lastBlock = getBlockByHeight(chainStats.getMainBlockCount());
@@ -156,9 +154,10 @@ public class BlockchainImpl implements Blockchain {
                 BigInteger lastDifficulty = lastBlock.getInfo().getDifficulty().toBigInteger();
                 chainStats = chainStats
                     .withMaxDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty))
-                    .withDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty));
-                xdagTopStatus.setTop(lastBlock.getHash().toArray());
-                xdagTopStatus.setTopDiff(lastDifficulty);
+                    .withDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty))
+                    // Phase 7.3.1: Set top block state (merged from XdagTopStatus)
+                    .withTopBlock(lastBlock.getHash())
+                    .withTopDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty));
                 log.debug("Initialized blockchain state from last main block at height {}: diff={}, hash={}",
                          chainStats.getMainBlockCount(), lastDifficulty, lastBlock.getHash().toHexString());
             } else if (chainStats.getMainBlockCount() > 0) {
@@ -205,11 +204,12 @@ public class BlockchainImpl implements Blockchain {
             BigInteger lastDifficulty = lastBlock.getInfo().getDifficulty().toBigInteger();
             chainStats = chainStats
                 .withMaxDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty))
-                .withDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty));
-            xdagTopStatus.setPreTop(lastBlock.getHash().toArray());
-            xdagTopStatus.setTop(lastBlock.getHash().toArray());
-            xdagTopStatus.setTopDiff(lastDifficulty);
-            xdagTopStatus.setPreTopDiff(lastDifficulty);
+                .withDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty))
+                // Phase 7.3.1: Set top block state (merged from XdagTopStatus)
+                .withPreTopBlock(lastBlock.getHash())
+                .withTopBlock(lastBlock.getHash())
+                .withTopDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty))
+                .withPreTopDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty));
             log.debug("Initialized snapshot state from block at height {}: diff={}, hash={}",
                      snapshotHeight, lastDifficulty, lastBlock.getHash().toHexString());
         } else {
@@ -1219,15 +1219,8 @@ public class BlockchainImpl implements Blockchain {
         return memOurBlocks;
     }
 
-    /**
-     * Get XDAG top status (Phase 7.3 stub)
-     *
-     * @return XdagTopStatus
-     */
-    @Override
-    public XdagTopStatus getXdagTopStatus() {
-        return xdagTopStatus;
-    }
+    // Phase 7.3.1: XdagTopStatus deleted - top block state merged into ChainStats
+    // Use getChainStats().getTopBlock(), getChainStats().getTopDifficulty(), etc.
 
     enum OrphanRemoveActions {
         ORPHAN_REMOVE_NORMAL, ORPHAN_REMOVE_REUSE, ORPHAN_REMOVE_EXTRA

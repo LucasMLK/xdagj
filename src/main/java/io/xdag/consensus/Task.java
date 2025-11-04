@@ -24,19 +24,24 @@
 
 package io.xdag.consensus;
 
-import io.xdag.core.XdagField;
 import io.xdag.crypto.hash.XdagSha256Digest;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.MutableBytes;
 
 /**
  * Task class represents a mining task in the XDAG consensus
+ *
+ * Phase 7.3 Continuation: Migrated from XdagField[] to Bytes[]
+ * - Removed dependency on deleted XdagField class
+ * - Simplified to use Bytes directly for task data
  */
 @Getter
 @Setter
 public class Task implements Cloneable {
-    // Array of XdagFields containing task data
-    private XdagField[] task;
+    // Array of Bytes containing task data (preHash and taskSeed)
+    private Bytes[] task;
     // Flag to identify task messages
     private static final int TASK_FLAG = 1;
     // Timestamp of when the task was created
@@ -61,8 +66,8 @@ public class Task implements Cloneable {
         String preHash = "";
         String taskSeed = "";
         if (task != null && task.length == 2) {
-            preHash = task[0].getData().toUnprefixedHexString();
-            taskSeed = task[1].getData().toUnprefixedHexString();
+            preHash = task[0].toUnprefixedHexString();
+            taskSeed = task[1].toUnprefixedHexString();
         }
         return "{\n" +
                 "  \"msgType\": " + TASK_FLAG + ",\n" +
@@ -86,11 +91,12 @@ public class Task implements Cloneable {
     protected Object clone() throws CloneNotSupportedException {
         Task t = (Task) super.clone();
         if (task != null && task.length > 0) {
-            XdagField[] xfArray = new XdagField[task.length];
-            for (int i = 0; i < t.getTask().length; i++) {
-                xfArray[i] = (XdagField) (t.getTask()[i]).clone();
+            // Bytes is immutable - no need to clone, just copy references
+            Bytes[] bytesArray = new Bytes[task.length];
+            for (int i = 0; i < task.length; i++) {
+                bytesArray[i] = task[i];
             }
-            t.setTask(xfArray);
+            t.setTask(bytesArray);
         }
         if (digest != null) {
             t.digest = new XdagSha256Digest(digest);

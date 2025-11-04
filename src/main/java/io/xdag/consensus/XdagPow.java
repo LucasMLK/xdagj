@@ -276,7 +276,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
         if (currentTask.get() == null) {
             log.info("Current task is empty");
         } else if (currentTask.get().getTaskIndex() == taskIndex && Objects.equals(hash,
-                currentTask.get().getTask()[0].getData().toUnprefixedHexString())) {
+                currentTask.get().getTask()[0].toUnprefixedHexString())) {
             onNewShare(Bytes32.wrap(Bytes.fromHexString(share)));
         } else {
             log.debug("Task index error or preHash error. Current task is {} ,but pool sends task index is {}",
@@ -306,7 +306,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
             if (kernel.getRandomx().isRandomxFork(task.getTaskTime())) {
                 MutableBytes taskData = MutableBytes.create(64);
 
-                taskData.set(0, task.getTask()[0].getData());// preHash
+                taskData.set(0, task.getTask()[0]);// preHash (Bytes directly)
                 taskData.set(32, share);// share
                 // Calculate hash
                 hash = Bytes32.wrap(kernel.getRandomx().randomXPoolCalcHash(taskData, task.getTaskTime()).reverse());
@@ -348,7 +348,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
             // Phase 5.5: Connect BlockV5 to blockchain
             kernel.getBlockchain().tryToConnect(blockV5);
 
-            Bytes32 currentPreHash = Bytes32.wrap(currentTask.get().getTask()[0].getData());
+            Bytes32 currentPreHash = Bytes32.wrap(currentTask.get().getTask()[0]);
             poolAwardManager.addAwardBlock(minShare.get(), currentPreHash, blockV5.getHash(), blockV5.getTimestamp());
 
             // Phase 7.7: Broadcast BlockV5 directly (no conversion needed)
@@ -367,10 +367,12 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
     /**
      * Create a RandomX task (Phase 5.5: BlockV5 version)
      *
+     * Phase 7.3 Continuation: Migrated from XdagField[] to Bytes[]
+     *
      * Key changes from legacy Block version:
      * 1. Accepts BlockV5 instead of Block
      * 2. Uses block.getRandomXPreHash() instead of SHA256(block.getXdagBlock().getData().slice(0, 480))
-     * 3. Task structure unchanged (still uses XdagField for pool compatibility)
+     * 3. Uses Bytes[] instead of XdagField[] (XdagField deleted)
      *
      * @param block BlockV5 mining candidate
      * @param sendTime mining timestamp
@@ -378,17 +380,17 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
      */
     private Task createTaskByRandomXBlock(BlockV5 block, long sendTime) {
         Task newTask = new Task();
-        XdagField[] task = new XdagField[2];
+        Bytes[] task = new Bytes[2];
 
         RandomXMemory memory = randomXUtils.getGlobalMemory()[(int) randomXUtils.getRandomXPoolMemIndex() & 1];
 
         // Phase 5.5: Use BlockV5.getRandomXPreHash() instead of legacy XdagBlock slicing
         Bytes32 preHash = block.getRandomXPreHash();
 
-        // task[0]=preHash
-        task[0] = new XdagField(preHash.mutableCopy());
+        // task[0]=preHash (Bytes32 is already Bytes)
+        task[0] = preHash;
         // task[1]=taskSeed
-        task[1] = new XdagField(MutableBytes.wrap(memory.getSeed()));
+        task[1] = Bytes.wrap(memory.getSeed());
 
         newTask.setTask(task);
         newTask.setTaskTime(XdagTime.getEpoch(sendTime));
@@ -400,10 +402,12 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
     /**
      * Create original task (Phase 5.5: BlockV5 version)
      *
+     * Phase 7.3 Continuation: Migrated from XdagField[] to Bytes[]
+     *
      * Key changes from legacy Block version:
      * 1. Accepts BlockV5 instead of Block
      * 2. Uses block.toBytes() to get serialized data for SHA256 digest
-     * 3. Task structure unchanged (still uses XdagField for pool compatibility)
+     * 3. Uses Bytes[] instead of XdagField[] (XdagField deleted)
      *
      * @param block BlockV5 mining candidate
      * @param sendTime mining timestamp
@@ -412,7 +416,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
     private Task createTaskByNewBlock(BlockV5 block, long sendTime) {
         Task newTask = new Task();
 
-        XdagField[] task = new XdagField[2];
+        Bytes[] task = new Bytes[2];
 
         // Phase 5.5: Use BlockV5 serialization
         // Get the nonce field (last 32 bytes of header, equivalent to field 14 in legacy format)
@@ -421,7 +425,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
         byte[] nonceBytes = new byte[32];
         // Nonce is at offset 72-104 in header (timestamp 8 + difficulty 32 + nonce 32)
         System.arraycopy(blockBytes, 72, nonceBytes, 0, 32);
-        task[1] = new XdagField(MutableBytes.wrap(nonceBytes));
+        task[1] = Bytes.wrap(nonceBytes);
 
         // Calculate SHA256 digest of first 448 bytes (equivalent to legacy format)
         MutableBytes data = MutableBytes.wrap(blockBytes, 0, Math.min(448, blockBytes.length));
@@ -430,7 +434,7 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
         try {
             currentTaskDigest.sha256Update(data);
             byte[] state = currentTaskDigest.getState();
-            task[0] = new XdagField(MutableBytes.wrap(state));
+            task[0] = Bytes.wrap(state);
             currentTaskDigest.sha256Update(MutableBytes.wrap(nonceBytes));
         } catch (IOException e) {
             log.error(e.getMessage(), e);

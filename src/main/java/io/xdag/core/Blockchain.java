@@ -236,8 +236,8 @@ public interface Blockchain {
      */
     void updateStatsFromRemote(ChainStats remoteStats);
 
-    // Get XDAG top status
-    XdagTopStatus getXdagTopStatus();
+    // Phase 7.3.1: XdagTopStatus deleted - top block state merged into ChainStats
+    // Use chainStats.getTopBlock(), chainStats.getTopDifficulty(), etc.
 
     // Calculate reward for given main block number
     XAmount getReward(long nmain);

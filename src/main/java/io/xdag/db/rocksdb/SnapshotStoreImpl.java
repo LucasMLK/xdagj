@@ -31,7 +31,7 @@ import com.esotericsoftware.kryo.util.DefaultInstantiatorStrategy;
 import io.xdag.core.SnapshotInfo;
 import io.xdag.core.XAmount;
 import io.xdag.core.XUnit;
-import io.xdag.core.XdagTopStatus;
+// Phase 7.3.1: XdagTopStatus import removed (class deleted, merged into ChainStats)
 import io.xdag.crypto.hash.HashUtils;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.crypto.keys.Signature;
@@ -354,7 +354,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
         // TODO v5.1: DELETED - LegacyBlockInfo class no longer exists
         // kryo.register(LegacyBlockInfo.class);
         // Phase 7.3: XdagStats registration removed (class deleted, using ChainStats + CompactSerializer)
-        kryo.register(XdagTopStatus.class);
+        // Phase 7.3.1: XdagTopStatus registration removed (class deleted, merged into ChainStats)
         kryo.register(SnapshotInfo.class);
         kryo.register(UInt64.class);
         kryo.register(XAmount.class);

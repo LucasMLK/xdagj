@@ -322,8 +322,8 @@ public class SyncManager extends AbstractXdagLifecycle {
         }
 
         // Phase 7.3: Use ChainStats directly (XdagStats deleted)
+        // Phase 7.3.1: XdagTopStatus merged into ChainStats (deleted)
         ChainStats chainStats = kernel.getBlockchain().getChainStats();
-        XdagTopStatus xdagTopStatus = kernel.getBlockchain().getXdagTopStatus();
         long lastTime = kernel.getSync().getLastTime();
         long curTime = msToXdagtimestamp(System.currentTimeMillis());
         long curHeight = chainStats.getMainBlockCount();
@@ -334,9 +334,10 @@ public class SyncManager extends AbstractXdagLifecycle {
             setSyncState();
         }
         // Confirm whether the synchronization is complete based on time and height.
-        if (curHeight >= maxHeight || xdagTopStatus.getTopDiff().compareTo(chainStats.getMaxDifficulty().toBigInteger()) >= 0) {
+        // Phase 7.3.1: Use chainStats.getTopDifficulty() instead of xdagTopStatus.getTopDiff()
+        if (curHeight >= maxHeight || chainStats.getTopDifficulty().toBigInteger().compareTo(chainStats.getMaxDifficulty().toBigInteger()) >= 0) {
             log.debug("our node height:{} the max height:{}, our diff:{} max diff:{}, make sync done",
-                    curHeight, maxHeight, xdagTopStatus.getTopDiff(), chainStats.getMaxDifficulty().toBigInteger());
+                    curHeight, maxHeight, chainStats.getTopDifficulty().toBigInteger(), chainStats.getMaxDifficulty().toBigInteger());
             makeSyncDone();
         }
 

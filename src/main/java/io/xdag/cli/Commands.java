@@ -93,32 +93,106 @@ public class Commands {
                 """;
     }
 
-    // TODO v5.1: DELETED - Block class no longer exists
-    // Temporarily disabled - waiting for migration to BlockV5
-    /*
-    public static String printBlock(Block block) {
-        return printBlock(block, false);
+    // ========== Phase 8.1: BlockV5 Display Methods ==========
+
+    /**
+     * Print BlockV5 in list format (v5.1 implementation)
+     *
+     * Phase 8.1: BlockV5 display for CLI commands.
+     * Shows minimal v5.1 BlockInfo fields (hash, height, timestamp).
+     *
+     * @param block BlockV5 to print
+     * @return Formatted string for block list display
+     */
+    public static String printBlockV5(BlockV5 block) {
+        return printBlockV5(block, false);
     }
 
-    public static String printBlock(Block block, boolean print_only_addresses) {
+    /**
+     * Print BlockV5 with optional address-only mode (v5.1 implementation)
+     *
+     * Phase 8.1: BlockV5 display for CLI commands.
+     * v5.1 minimal design: Only hash, height, timestamp, difficulty available.
+     * No flags, amount, fee, or remark in v5.1 BlockInfo.
+     *
+     * @param block BlockV5 to print
+     * @param print_only_addresses If true, print only address and height
+     * @return Formatted string for block list display
+     */
+    public static String printBlockV5(BlockV5 block, boolean print_only_addresses) {
         StringBuilder sbd = new StringBuilder();
+        BlockInfo info = block.getInfo();
+
+        if (info == null) {
+            return "Block info not available";
+        }
+
         long time = XdagTime.xdagTimestampToMs(block.getTimestamp());
+
         if (print_only_addresses) {
             sbd.append(String.format("%s   %08d",
                     hash2Address(block.getHash()),
-                    block.getInfo().getHeight()));
+                    info.getHeight()));
         } else {
-            Bytes remark = block.getInfo().getRemark();
+            // v5.1: Simplified state (Main if height > 0, Orphan if height = 0)
+            String state = info.isMainBlock() ? MAIN_STATE : "Orphan";
+
             sbd.append(String.format("%08d   %s   %s   %-8s  %-32s",
-                    block.getInfo().getHeight(),
+                    info.getHeight(),
                     hash2Address(block.getHash()),
                     FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(time),
-                    getStateByFlags(block.getInfo().getFlags()),
-                    new String(remark == null ? "".getBytes(StandardCharsets.UTF_8) : remark.toArray(), StandardCharsets.UTF_8)));
+                    state,
+                    ""));  // v5.1: No remark field in minimal BlockInfo
         }
         return sbd.toString();
     }
-    */
+
+    /**
+     * Print detailed BlockV5 info (v5.1 implementation)
+     *
+     * Phase 8.1: BlockV5 detailed display for block info command.
+     * v5.1 minimal design shows only available fields from BlockInfo.
+     *
+     * Note: Transaction details and history are NOT shown here because:
+     * - v5.1 uses Link-based references (not embedded amounts)
+     * - Transaction data stored separately in TransactionStore
+     * - Would require additional queries to show full transaction details
+     *
+     * @param block BlockV5 to display
+     * @return Formatted detailed block information
+     */
+    public static String printBlockInfoV5(BlockV5 block) {
+        BlockInfo info = block.getInfo();
+
+        if (info == null) {
+            return "Block info not available";
+        }
+
+        long time = XdagTime.xdagTimestampToMs(block.getTimestamp());
+        String state = info.isMainBlock() ? MAIN_STATE : "Orphan";
+
+        // v5.1 minimal info display (only BlockInfo fields)
+        String format = """
+                  height: %s
+                    time: %s
+               timestamp: %s
+                   state: %s
+                    hash: %s
+              difficulty: %s
+                   epoch: %d
+                   links: %d
+                """;
+
+        return String.format(format,
+                info.isMainBlock() ? String.format("%08d", info.getHeight()) : "N/A (orphan)",
+                FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(time),
+                Long.toHexString(block.getTimestamp()),
+                state,
+                Hex.toHexString(block.getHash().toArray()),
+                info.getDifficulty().toBigInteger().toString(16),
+                info.getEpoch(),
+                block.getLinks().size());
+    }
 
     /**
      * Get block state description from flags
@@ -252,11 +326,11 @@ public class Commands {
      */
     public String stats() {
         // Phase 7.3: Use ChainStats directly (XdagStats deleted)
+        // Phase 7.3.1: XdagTopStatus merged into ChainStats (deleted)
         ChainStats chainStats = kernel.getBlockchain().getChainStats();
-        XdagTopStatus xdagTopStatus = kernel.getBlockchain().getXdagTopStatus();
 
         // Calculate difficulties
-        BigInteger currentDiff = xdagTopStatus.getTopDiff() != null ? xdagTopStatus.getTopDiff() : BigInteger.ZERO;
+        BigInteger currentDiff = chainStats.getTopDifficulty() != null ? chainStats.getTopDifficulty().toBigInteger() : BigInteger.ZERO;
         BigInteger netDiff = chainStats.getMaxDifficulty().toBigInteger();
         BigInteger maxDiff = netDiff.max(currentDiff);
 
@@ -317,41 +391,39 @@ public class Commands {
     }
 
     /**
-     * Get block info by hash
+     * Get block info by hash (Phase 8.1: Restored using BlockV5)
      *
-     * TODO v5.1: DELETED - Block class no longer exists
-     * Temporarily disabled - waiting for migration to BlockV5
+     * Phase 8.1: Restored CLI command using BlockV5.
+     * Uses getBlockByHash() from Blockchain and printBlockInfoV5() for display.
+     *
+     * @param blockhash Block hash to lookup
+     * @return Formatted block information
      */
     public String block(Bytes32 blockhash) {
-        return "Block info lookup temporarily disabled - v5.1 migration in progress";
-        /*
         try {
-            MutableBytes32 hash = MutableBytes32.create();
-            hash.set(8, blockhash.slice(8, 24));
-            Block block = kernel.getBlockStore().getRawBlockByHash(hash);
+            BlockV5 block = kernel.getBlockchain().getBlockByHash(blockhash, true);
             if (block == null) {
-                block = kernel.getBlockStore().getBlockInfoByHash(hash);
-                return printBlockInfo(block, false);
-            } else {
-                return printBlockInfo(block, true);
+                return "Block not found";
             }
+            return printBlockInfoV5(block);
         } catch (Exception e) {
             log.error(e.getMessage(), e);
         }
         return "error, please check log";
-        */
     }
 
     /**
-     * Get block info by address
+     * Get block info by address (Phase 8.1: Restored using BlockV5)
      *
-     * TODO v5.1: DELETED - Block class no longer exists
-     * Temporarily disabled - waiting for migration to BlockV5
+     * Phase 8.1: Restored CLI command using BlockV5.
+     * Converts address to hash, then uses block(Bytes32).
+     *
+     * @param address Block address (various formats supported)
+     * @return Formatted block information
      */
     public String block(String address) {
-        return "Block info lookup temporarily disabled - v5.1 migration in progress";
-        // Bytes32 hash = address2Hash(address);
-        // return block(hash);
+        Bytes32 hash = address2Hash(address);
+        return block(hash);
     }
 
     // TODO v5.1: DELETED - Block, Address, TxHistory classes no longer exist
@@ -468,63 +540,43 @@ public class Commands {
     */
 
     /**
-     * List main blocks
-     * @param n Number of blocks to list
+     * List main blocks (Phase 8.1: Restored using BlockV5)
      *
-     * TODO v5.1: DELETED - Block class no longer exists
-     * Temporarily disabled - waiting for migration to BlockV5
+     * Phase 8.1: Restored CLI command using BlockV5 display.
+     * Uses listMainBlocks() from Blockchain and printBlockV5() for display.
+     *
+     * @param n Number of blocks to list
+     * @return Formatted list of main blocks
      */
     public String mainblocks(int n) {
-        return "Main blocks list temporarily disabled - v5.1 migration in progress";
-        /*
-        // Phase 8.3.2: Blockchain interface now returns BlockV5
         List<BlockV5> blockV5List = kernel.getBlockchain().listMainBlocks(n);
 
-        // Convert BlockV5 → Block for CLI display
-        List<Block> blocks = new ArrayList<>();
-        for (BlockV5 v5 : blockV5List) {
-            Block block = kernel.getBlockStore().getBlockByHash(v5.getHash(), false);
-            if (block != null) {
-                blocks.add(block);
-            }
-        }
-
-        if (CollectionUtils.isEmpty(blocks)) {
+        if (CollectionUtils.isEmpty(blockV5List)) {
             return "empty";
         }
+
         return printHeaderBlockList() +
-                blocks.stream().map(Commands::printBlock).collect(Collectors.joining("\n"));
-        */
+                blockV5List.stream().map(Commands::printBlockV5).collect(Collectors.joining("\n"));
     }
 
     /**
-     * List mined blocks
-     * @param n Number of blocks to list
+     * List mined blocks (Phase 8.1: Restored using BlockV5)
      *
-     * TODO v5.1: DELETED - Block class no longer exists
-     * Temporarily disabled - waiting for migration to BlockV5
+     * Phase 8.1: Restored CLI command using BlockV5 display.
+     * Uses listMinedBlocks() from Blockchain and printBlockV5() for display.
+     *
+     * @param n Number of blocks to list
+     * @return Formatted list of mined blocks
      */
     public String minedBlocks(int n) {
-        return "Mined blocks list temporarily disabled - v5.1 migration in progress";
-        /*
-        // Phase 8.3.2: Blockchain interface now returns BlockV5
         List<BlockV5> blockV5List = kernel.getBlockchain().listMinedBlocks(n);
 
-        // Convert BlockV5 → Block for CLI display
-        List<Block> blocks = new ArrayList<>();
-        for (BlockV5 v5 : blockV5List) {
-            Block block = kernel.getBlockStore().getBlockByHash(v5.getHash(), false);
-            if (block != null) {
-                blocks.add(block);
-            }
-        }
-
-        if (CollectionUtils.isEmpty(blocks)) {
+        if (CollectionUtils.isEmpty(blockV5List)) {
             return "empty";
         }
+
         return printHeaderBlockList() +
-                blocks.stream().map(Commands::printBlock).collect(Collectors.joining("\n"));
-        */
+                blockV5List.stream().map(Commands::printBlockV5).collect(Collectors.joining("\n"));
     }
 
     /**

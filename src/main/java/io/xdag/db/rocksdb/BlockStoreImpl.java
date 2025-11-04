@@ -101,7 +101,7 @@ public class BlockStoreImpl implements BlockStore {
         kryo.register(BigInteger.class);
         kryo.register(byte[].class);
         // Phase 7.3: XdagStats registration removed (class deleted, using ChainStats + CompactSerializer)
-        kryo.register(XdagTopStatus.class);
+        // Phase 7.3.1: XdagTopStatus registration removed (class deleted, merged into ChainStats)
         kryo.register(SnapshotInfo.class);
         kryo.register(UInt64.class);
         kryo.register(XAmount.class);
@@ -204,30 +204,8 @@ public class BlockStoreImpl implements BlockStore {
         }
     }
 
-    public void saveXdagTopStatus(XdagTopStatus status) {
-        byte[] value = null;
-        try {
-            value = serialize(status);
-        } catch (SerializationException e) {
-            log.error(e.getMessage(), e);
-        }
-        indexSource.put(new byte[]{SETTING_TOP_STATUS}, value);
-    }
-
-    // pretop状态
-    public XdagTopStatus getXdagTopStatus() {
-        XdagTopStatus status = null;
-        byte[] value = indexSource.get(new byte[]{SETTING_TOP_STATUS});
-        if (value == null) {
-            return null;
-        }
-        try {
-            status = (XdagTopStatus) deserialize(value, XdagTopStatus.class);
-        } catch (DeserializationException e) {
-            log.error(e.getMessage(), e);
-        }
-        return status;
-    }
+    // Phase 7.3.1: XdagTopStatus methods deleted - top block state merged into ChainStats
+    // Use saveChainStats/getChainStats instead (see Phase 7.3 section above)
 
     public void saveOurBlock(int index, byte[] hash) {
         // Use full hash (new architecture)

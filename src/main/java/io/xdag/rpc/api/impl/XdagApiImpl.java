@@ -68,7 +68,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static io.xdag.cli.Commands.getStateByFlags;
 import static io.xdag.config.Constants.*;
-import static io.xdag.core.XdagField.FieldType.*;
+// TODO v5.1: DELETED - XdagField class no longer exists
+// import static io.xdag.core.XdagField.FieldType.*;
 import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 import static io.xdag.db.mysql.TransactionHistoryStoreImpl.totalPage;
 import static io.xdag.rpc.error.JsonRpcError.*;
