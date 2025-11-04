@@ -236,8 +236,8 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
     @Override
     public String xdag_blockNumber() {
-        // Phase 7.3: Use getChainStats().toLegacy()
-        long b = blockchain.getChainStats().toLegacy().nmain;
+        // Phase 7.3: Use ChainStats directly (XdagStats deleted)
+        long b = blockchain.getChainStats().getMainBlockCount();
         log.debug("xdag_blockNumber(): {}", b);
         return Long.toString(b);
     }
@@ -282,28 +282,28 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
     @Override
     public String xdag_getTotalBalance() {
-        // Phase 7.3: Use getChainStats().toLegacy()
-        return String.format("%s", kernel.getBlockchain().getChainStats().toLegacy().getBalance().toDecimal(9, XUnit.XDAG).toPlainString());
+        // Phase 7.3: Use ChainStats directly (XdagStats deleted)
+        return String.format("%s", kernel.getBlockchain().getChainStats().getBalance().toDecimal(9, XUnit.XDAG).toPlainString());
     }
 
     @Override
     public XdagStatusResponse xdag_getStatus() {
-        // Phase 7.3: Use getChainStats().toLegacy()
-        XdagStats xdagStats = blockchain.getChainStats().toLegacy();
+        // Phase 7.3: Use ChainStats directly (XdagStats deleted)
+        ChainStats chainStats = blockchain.getChainStats();
         XdagExtStats xdagExtStats = blockchain.getXdagExtStats();
         double hashrateOurs = BasicUtils.xdagHashRate(xdagExtStats.getHashRateOurs());
         double hashrateTotal = BasicUtils.xdagHashRate(xdagExtStats.getHashRateTotal());
         XdagStatusResponse.XdagStatusResponseBuilder builder = XdagStatusResponse.builder();
-        builder.nblock(Long.toString(xdagStats.getNblocks()))
-                .totalNblocks(Long.toString(xdagStats.getTotalnblocks()))
-                .nmain(Long.toString(xdagStats.getNmain()))
-                .totalNmain(Long.toString(Math.max(xdagStats.getTotalnmain(), xdagStats.getNmain())))
-                .curDiff(toQuantityJsonHex(xdagStats.getDifficulty()))
-                .netDiff(toQuantityJsonHex(xdagStats.getMaxdifficulty()))
+        builder.nblock(Long.toString(chainStats.getTotalBlockCount()))
+                .totalNblocks(Long.toString(chainStats.getTotalBlockCount()))
+                .nmain(Long.toString(chainStats.getMainBlockCount()))
+                .totalNmain(Long.toString(Math.max(chainStats.getTotalMainBlockCount(), chainStats.getMainBlockCount())))
+                .curDiff(toQuantityJsonHex(chainStats.getDifficulty().toBigInteger()))
+                .netDiff(toQuantityJsonHex(chainStats.getMaxDifficulty().toBigInteger()))
                 .hashRateOurs(toQuantityJsonHex(hashrateOurs))
                 .hashRateTotal(toQuantityJsonHex(hashrateTotal))
-                .ourSupply(String.format("%s", blockchain.getSupply(xdagStats.nmain).toDecimal(9, XUnit.XDAG).toPlainString()))
-                .netSupply(String.format("%s", blockchain.getSupply(Math.max(xdagStats.nmain, xdagStats.totalnmain)).toDecimal(9, XUnit.XDAG).toPlainString()));
+                .ourSupply(String.format("%s", blockchain.getSupply(chainStats.getMainBlockCount()).toDecimal(9, XUnit.XDAG).toPlainString()))
+                .netSupply(String.format("%s", blockchain.getSupply(Math.max(chainStats.getMainBlockCount(), chainStats.getTotalMainBlockCount())).toDecimal(9, XUnit.XDAG).toPlainString()));
         return builder.build();
     }
 
@@ -1274,9 +1274,9 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     */
     @Override
     public Object xdag_syncing(){
-        // Phase 7.3: Use getChainStats().toLegacy()
-        long currentBlock = this.blockchain.getChainStats().toLegacy().nmain;
-        long highestBlock = Math.max(this.blockchain.getChainStats().toLegacy().totalnmain, currentBlock);
+        // Phase 7.3: Use ChainStats directly (XdagStats deleted)
+        long currentBlock = this.blockchain.getChainStats().getMainBlockCount();
+        long highestBlock = Math.max(this.blockchain.getChainStats().getTotalMainBlockCount(), currentBlock);
         SyncingResult s = new SyncingResult();
         s.isSyncDone = false;
 

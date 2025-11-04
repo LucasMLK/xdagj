@@ -271,10 +271,13 @@ public class CompactSerializer {
     // ========== ChainStats Serialization ==========
 
     /**
-     * Serialize ChainStats to bytes
+     * Serialize ChainStats to bytes (v5.1 optimized - removed 5 deprecated fields)
+     *
+     * Phase 7.3 Optimization: Removed blockCount, hostCount, mainBlockTime,
+     * globalMinerHash, ourLastBlockHash serialization for 33% size reduction.
      */
     public static byte[] serialize(ChainStats stats) throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream(150);
+        ByteArrayOutputStream out = new ByteArrayOutputStream(100);
 
         // difficulty: 32 bytes
         out.write(stats.getDifficulty().toBytes().toArray());
@@ -282,44 +285,28 @@ public class CompactSerializer {
         // maxDifficulty: 32 bytes
         out.write(stats.getMaxDifficulty().toBytes().toArray());
 
-        // Counts (all variable length)
-        writeVarLong(out, stats.getBlockCount());
-        writeVarLong(out, stats.getTotalBlockCount());
+        // Core counts (all variable length)
         writeVarLong(out, stats.getMainBlockCount());
         writeVarLong(out, stats.getTotalMainBlockCount());
-        writeVarInt(out, stats.getHostCount());
+        writeVarLong(out, stats.getTotalBlockCount());
         writeVarInt(out, stats.getTotalHostCount());
+
+        // Sync & orphan tracking
         writeVarLong(out, stats.getWaitingSyncCount());
         writeVarLong(out, stats.getNoRefCount());
         writeVarLong(out, stats.getExtraCount());
 
-        // mainBlockTime: 8 bytes
-        writeFixed64(out, stats.getMainBlockTime());
-
         // balance
         serializeXAmount(out, stats.getBalance());
-
-        // globalMinerHash: optional
-        if (stats.getGlobalMinerHash() != null) {
-            out.write(1);
-            out.write(stats.getGlobalMinerHash().toArray());
-        } else {
-            out.write(0);
-        }
-
-        // ourLastBlockHash: optional
-        if (stats.getOurLastBlockHash() != null) {
-            out.write(1);
-            out.write(stats.getOurLastBlockHash().toArray());
-        } else {
-            out.write(0);
-        }
 
         return out.toByteArray();
     }
 
     /**
-     * Deserialize ChainStats from bytes
+     * Deserialize ChainStats from bytes (v5.1 optimized)
+     *
+     * Phase 7.3 Optimization: Reads only the 10 core fields.
+     * Deprecated fields are set to defaults in fromLegacy() if needed.
      */
     public static ChainStats deserializeChainStats(byte[] data) throws IOException {
         ByteReader reader = new ByteReader(data);
@@ -327,46 +314,28 @@ public class CompactSerializer {
         UInt256 difficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
         UInt256 maxDifficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
 
-        long blockCount = reader.readVarLong();
-        long totalBlockCount = reader.readVarLong();
         long mainBlockCount = reader.readVarLong();
         long totalMainBlockCount = reader.readVarLong();
-        int hostCount = reader.readVarInt();
+        long totalBlockCount = reader.readVarLong();
         int totalHostCount = reader.readVarInt();
+
         long waitingSyncCount = reader.readVarLong();
         long noRefCount = reader.readVarLong();
         long extraCount = reader.readVarLong();
 
-        long mainBlockTime = reader.readFixed64();
-
         XAmount balance = deserializeXAmount(reader);
-
-        Bytes32 globalMinerHash = null;
-        if (reader.readByte() == 1) {
-            globalMinerHash = Bytes32.wrap(reader.readBytes(32));
-        }
-
-        Bytes32 ourLastBlockHash = null;
-        if (reader.readByte() == 1) {
-            ourLastBlockHash = Bytes32.wrap(reader.readBytes(32));
-        }
 
         return ChainStats.builder()
                 .difficulty(difficulty)
                 .maxDifficulty(maxDifficulty)
-                .blockCount(blockCount)
-                .totalBlockCount(totalBlockCount)
                 .mainBlockCount(mainBlockCount)
                 .totalMainBlockCount(totalMainBlockCount)
-                .hostCount(hostCount)
+                .totalBlockCount(totalBlockCount)
                 .totalHostCount(totalHostCount)
                 .waitingSyncCount(waitingSyncCount)
                 .noRefCount(noRefCount)
                 .extraCount(extraCount)
-                .mainBlockTime(mainBlockTime)
                 .balance(balance)
-                .globalMinerHash(globalMinerHash)
-                .ourLastBlockHash(ourLastBlockHash)
                 .build();
     }
 

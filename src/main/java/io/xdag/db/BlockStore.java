@@ -49,8 +49,6 @@ public interface BlockStore extends XdagLifecycle {
 
     void reset();
 
-    XdagStats getXdagStatus();
-
     void saveXdagTopStatus(XdagTopStatus status);
 
     XdagTopStatus getXdagTopStatus();
@@ -74,8 +72,6 @@ public interface BlockStore extends XdagLifecycle {
     void savePreSeed(byte[] preseed);
 
     byte[] getPreSeed();
-
-    void saveXdagStatus(XdagStats status);
 
     // ========== Phase 7.3 Continuation: ChainStats Support ==========
 

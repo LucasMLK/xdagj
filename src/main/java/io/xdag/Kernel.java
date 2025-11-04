@@ -259,12 +259,13 @@ public class Kernel {
 
         // Initialize blockchain
         blockchain = new BlockchainImpl(this);
-        // Phase 7.3: Use getChainStats().toLegacy()
-        XdagStats xdagStats = blockchain.getChainStats().toLegacy();
-        
+        // Phase 7.3: Use ChainStats directly (XdagStats deleted)
+        ChainStats chainStats = blockchain.getChainStats();
+
         // Create genesis block if first startup
         // Phase 7.5: Genesis BlockV5 creation restored
-        if (xdagStats.getOurLastBlockHash() == null) {
+        // Phase 7.3: Check mainBlockCount == 0 instead of ourLastBlockHash (field removed)
+        if (chainStats.getMainBlockCount() == 0) {
             firstAccount = toBytesAddress(wallet.getDefKey().getPublicKey());
 
             // Create genesis BlockV5
@@ -273,11 +274,8 @@ public class Kernel {
                 XdagTime.getCurrentTimestamp()
             );
 
-            // Set initial stats
-            xdagStats.setOurLastBlockHash(genesisBlock.getHash().toArray());
-            if (xdagStats.getGlobalMiner() == null) {
-                xdagStats.setGlobalMiner(firstAccount.toArray());
-            }
+            // Phase 7.3: ourLastBlockHash and globalMiner fields removed from ChainStats
+            // Genesis block tracking is now handled by mainBlockCount
 
             // Import genesis block to blockchain
             ImportResult result = blockchain.tryToConnect(genesisBlock);

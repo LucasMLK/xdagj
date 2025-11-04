@@ -321,22 +321,22 @@ public class SyncManager extends AbstractXdagLifecycle {
             return;
         }
 
-        // Phase 7.3: Use getChainStats().toLegacy()
-        XdagStats xdagStats = kernel.getBlockchain().getChainStats().toLegacy();
+        // Phase 7.3: Use ChainStats directly (XdagStats deleted)
+        ChainStats chainStats = kernel.getBlockchain().getChainStats();
         XdagTopStatus xdagTopStatus = kernel.getBlockchain().getXdagTopStatus();
         long lastTime = kernel.getSync().getLastTime();
         long curTime = msToXdagtimestamp(System.currentTimeMillis());
-        long curHeight = xdagStats.getNmain();
-        long maxHeight = xdagStats.getTotalnmain();
+        long curHeight = chainStats.getMainBlockCount();
+        long maxHeight = chainStats.getTotalMainBlockCount();
         // Exit the syncOld state based on time and height.
         if (!isSync() && (curHeight >= maxHeight - 512 || lastTime >= curTime - 32 * REQUEST_BLOCKS_MAX_TIME)) {
             log.debug("our node height:{} the max height:{}, set sync state", curHeight, maxHeight);
             setSyncState();
         }
         // Confirm whether the synchronization is complete based on time and height.
-        if (curHeight >= maxHeight || xdagTopStatus.getTopDiff().compareTo(xdagStats.maxdifficulty) >= 0) {
+        if (curHeight >= maxHeight || xdagTopStatus.getTopDiff().compareTo(chainStats.getMaxDifficulty().toBigInteger()) >= 0) {
             log.debug("our node height:{} the max height:{}, our diff:{} max diff:{}, make sync done",
-                    curHeight, maxHeight, xdagTopStatus.getTopDiff(), xdagStats.maxdifficulty);
+                    curHeight, maxHeight, xdagTopStatus.getTopDiff(), chainStats.getMaxDifficulty().toBigInteger());
             makeSyncDone();
         }
 
@@ -589,8 +589,8 @@ public class SyncManager extends AbstractXdagLifecycle {
                 }
             }
 
-            // Phase 7.3: Use getChainStats().toLegacy()
-            log.info("sync done, the last main block number = {}", blockchain.getChainStats().toLegacy().nmain);
+            // Phase 7.3: Use ChainStats directly (XdagStats deleted)
+            log.info("sync done, the last main block number = {}", blockchain.getChainStats().getMainBlockCount());
             kernel.getSync().setStatus(XdagSync.Status.SYNC_DONE);
             if (config.getEnableTxHistory() && txHistoryStore != null) {
                 // TODO v5.1: DELETED - TransactionHistoryStore.batchSaveTxHistory() no longer exists

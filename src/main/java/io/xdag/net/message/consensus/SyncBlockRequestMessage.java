@@ -26,14 +26,14 @@ package io.xdag.net.message.consensus;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
 
-import io.xdag.core.XdagStats;
+import io.xdag.core.ChainStats;
 import io.xdag.net.message.MessageCode;
 
 public class SyncBlockRequestMessage extends XdagMessage {
 
     // Phase 7.3.0: Updated to use SyncBlockV5Message.class (SyncBlockMessage deleted)
-    public SyncBlockRequestMessage(MutableBytes hash, XdagStats xdagStats) {
-        super(MessageCode.SYNCBLOCK_REQUEST, SyncBlockV5Message.class, 0, 0, Bytes32.wrap(hash), xdagStats);
+    public SyncBlockRequestMessage(MutableBytes hash, ChainStats chainStats) {
+        super(MessageCode.SYNCBLOCK_REQUEST, SyncBlockV5Message.class, 0, 0, Bytes32.wrap(hash), chainStats);
     }
 
     public SyncBlockRequestMessage(byte[] body) {

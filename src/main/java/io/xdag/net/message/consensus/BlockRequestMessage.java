@@ -28,13 +28,13 @@ package io.xdag.net.message.consensus;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
 
-import io.xdag.core.XdagStats;
+import io.xdag.core.ChainStats;
 import io.xdag.net.message.MessageCode;
 
 public class BlockRequestMessage extends XdagMessage {
 
-    public BlockRequestMessage(MutableBytes hash, XdagStats xdagStats) {
-        super(MessageCode.BLOCK_REQUEST, null, 0, 0, Bytes32.wrap(hash), xdagStats);
+    public BlockRequestMessage(MutableBytes hash, ChainStats chainStats) {
+        super(MessageCode.BLOCK_REQUEST, null, 0, 0, Bytes32.wrap(hash), chainStats);
     }
 
     public BlockRequestMessage(byte[] body) {

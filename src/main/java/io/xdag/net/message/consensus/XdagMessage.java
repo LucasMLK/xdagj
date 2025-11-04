@@ -27,7 +27,7 @@ import java.math.BigInteger;
 
 import org.apache.tuweni.bytes.Bytes32;
 
-import io.xdag.core.XdagStats;
+import io.xdag.core.ChainStats;
 import io.xdag.utils.SimpleEncoder;
 import io.xdag.net.message.Message;
 import io.xdag.net.message.MessageCode;
@@ -49,7 +49,7 @@ public abstract class XdagMessage extends Message  {
 
     protected Bytes32 hash;
 
-    protected XdagStats xdagStats;
+    protected ChainStats chainStats;
 
     public XdagMessage(MessageCode code, Class<?> responseMessageClass, byte[] body) {
         super(code, responseMessageClass);
@@ -57,26 +57,26 @@ public abstract class XdagMessage extends Message  {
         decode();
     }
 
-    public XdagMessage(MessageCode code, Class<?> responseMessageClass, long starttime, long endtime, long random, XdagStats xdagStats) {
+    public XdagMessage(MessageCode code, Class<?> responseMessageClass, long starttime, long endtime, long random, ChainStats chainStats) {
         super(code, responseMessageClass);
 
         this.starttime = starttime;
         this.endtime = endtime;
         this.random = random;
-        this.xdagStats = xdagStats;
+        this.chainStats = chainStats;
 
         this.hash = Bytes32.ZERO;
         SimpleEncoder enc = encode();
         this.body = enc.toBytes();
     }
 
-    public XdagMessage(MessageCode code, Class<?> responseMessageClass, long starttime, long endtime, Bytes32 hash, XdagStats xdagStats) {
+    public XdagMessage(MessageCode code, Class<?> responseMessageClass, long starttime, long endtime, Bytes32 hash, ChainStats chainStats) {
         super(code, responseMessageClass);
 
         this.starttime = starttime;
         this.endtime = endtime;
         this.hash = hash;
-        this.xdagStats = xdagStats;
+        this.chainStats = chainStats;
 
         SimpleEncoder enc = encode();
         this.body = enc.toBytes();
@@ -90,12 +90,13 @@ public abstract class XdagMessage extends Message  {
         enc.writeLong(random);
         enc.writeBytes(hash.toArray());
 
-        enc.writeBytes(BytesUtils.bigIntegerToBytes(xdagStats.maxdifficulty, 16, false));
+        // Encode ChainStats to network format (Phase 7.3: XdagStats deleted)
+        enc.writeBytes(BytesUtils.bigIntegerToBytes(chainStats.getMaxDifficulty().toBigInteger(), 16, false));
 
-        enc.writeLong(xdagStats.totalnblocks);
-        enc.writeLong(Math.max(xdagStats.totalnmain, xdagStats.nmain));
-        enc.writeInt(xdagStats.totalnhosts);
-        enc.writeLong(xdagStats.maintime);
+        enc.writeLong(chainStats.getTotalBlockCount());
+        enc.writeLong(Math.max(chainStats.getTotalMainBlockCount(), chainStats.getMainBlockCount()));
+        enc.writeInt(chainStats.getTotalHostCount());
+        enc.writeLong(0);  // maintime - deleted in Phase 7.3, write 0 for network compatibility
         return enc;
     }
 
@@ -107,13 +108,27 @@ public abstract class XdagMessage extends Message  {
         this.random = dec.readLong();
         this.hash = Bytes32.wrap(dec.readBytes());
 
+        // Decode network format to ChainStats (Phase 7.3: XdagStats deleted)
         BigInteger maxdifficulty = Numeric.toBigInt(dec.readBytes());
         long totalnblocks = dec.readLong();
         long totalnmains = dec.readLong();
         int totalnhosts = dec.readInt();
-        long maintime = dec.readLong();
+        long maintime = dec.readLong();  // Read but discard (deleted in Phase 7.3)
 
-        xdagStats = new XdagStats(maxdifficulty, totalnblocks, totalnmains, totalnhosts, maintime);
+        // Create ChainStats from network data
+        // Note: We only have network-wide stats from peers, so set local stats to same values
+        chainStats = ChainStats.builder()
+                .difficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(maxdifficulty))
+                .maxDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(maxdifficulty))
+                .mainBlockCount(totalnmains)
+                .totalMainBlockCount(totalnmains)
+                .totalBlockCount(totalnblocks)
+                .totalHostCount(totalnhosts)
+                .waitingSyncCount(0)  // Not transmitted in network protocol
+                .noRefCount(0)        // Not transmitted in network protocol
+                .extraCount(0)        // Not transmitted in network protocol
+                .balance(io.xdag.core.XAmount.ZERO)  // Not transmitted in network protocol
+                .build();
         return dec;
     }
 

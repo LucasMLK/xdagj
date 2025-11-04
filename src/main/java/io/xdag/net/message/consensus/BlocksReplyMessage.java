@@ -23,13 +23,13 @@
  */
 package io.xdag.net.message.consensus;
 
-import io.xdag.core.XdagStats;
+import io.xdag.core.ChainStats;
 import io.xdag.net.message.MessageCode;
 
 public class BlocksReplyMessage extends XdagMessage  {
 
-    public BlocksReplyMessage(long starttime, long endtime, long random, XdagStats xdagStats) {
-        super(MessageCode.BLOCKS_REPLY, null, starttime, endtime, random, xdagStats);
+    public BlocksReplyMessage(long starttime, long endtime, long random, ChainStats chainStats) {
+        super(MessageCode.BLOCKS_REPLY, null, starttime, endtime, random, chainStats);
     }
 
     public BlocksReplyMessage(byte[] body) {

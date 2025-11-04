@@ -23,7 +23,7 @@
  */
 package io.xdag.net.message.consensus;
 
-import io.xdag.core.XdagStats;
+import io.xdag.core.ChainStats;
 import io.xdag.net.message.MessageCode;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
@@ -52,10 +52,10 @@ public class BlockV5RequestMessage extends XdagMessage {
      * Constructor for sending BlockV5 request
      *
      * @param hash Hash of the requested BlockV5
-     * @param xdagStats Current node statistics
+     * @param chainStats Current node statistics (Phase 7.3: XdagStats deleted)
      */
-    public BlockV5RequestMessage(MutableBytes hash, XdagStats xdagStats) {
-        super(MessageCode.BLOCKV5_REQUEST, null, 0, 0, Bytes32.wrap(hash), xdagStats);
+    public BlockV5RequestMessage(MutableBytes hash, ChainStats chainStats) {
+        super(MessageCode.BLOCKV5_REQUEST, null, 0, 0, Bytes32.wrap(hash), chainStats);
     }
 
     /**

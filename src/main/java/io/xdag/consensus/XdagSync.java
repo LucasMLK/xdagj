@@ -264,7 +264,10 @@ public class XdagSync extends AbstractXdagLifecycle {
      * Temporarily disabled - waiting for migration to BlockV5
      */
     public long getLastTime() {
-        long height = blockStore.getXdagStatus().nmain;
+        // Phase 7.3: Use getChainStats() instead of getXdagStatus() (XdagStats deleted)
+        io.xdag.core.ChainStats stats = blockStore.getChainStats();
+        if (stats == null) return 0;
+        long height = stats.getMainBlockCount();
         if(height == 0) return 0;
         // TODO v5.1: Migrate to BlockV5 when available
         // Block lastBlock = blockStore.getBlockByHeight(height);

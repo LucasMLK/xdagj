@@ -100,7 +100,7 @@ public class BlockStoreImpl implements BlockStore {
         kryo.setInstantiatorStrategy(new DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
         kryo.register(BigInteger.class);
         kryo.register(byte[].class);
-        kryo.register(XdagStats.class);
+        // Phase 7.3: XdagStats registration removed (class deleted, using ChainStats + CompactSerializer)
         kryo.register(XdagTopStatus.class);
         kryo.register(SnapshotInfo.class);
         kryo.register(UInt64.class);
@@ -162,36 +162,35 @@ public class BlockStoreImpl implements BlockStore {
         txHistorySource.reset();
     }
 
-    public void saveXdagStatus(XdagStats status) {
-        byte[] value = null;
-        try {
-            value = serialize(status);
-        } catch (SerializationException e) {
-            log.error(e.getMessage(), e);
-        }
-        indexSource.put(new byte[]{SETTING_STATS}, value);
-    }
-
     // ========== Phase 7.3 Continuation: ChainStats Support ==========
 
     @Override
     public void saveChainStats(ChainStats stats) {
-        // v5.1: Persist ChainStats directly using Kryo
-        // Convert to legacy for backward compatibility with existing storage format
-        XdagStats legacy = stats.toLegacy();
-        saveXdagStatus(legacy);
-        log.debug("Saved ChainStats: mainBlocks={}, difficulty={}",
-                 stats.getMainBlockCount(), stats.getDifficulty().toDecimalString());
+        // v5.1: Persist ChainStats directly using CompactSerializer (XdagStats deleted)
+        try {
+            byte[] serialized = io.xdag.serialization.CompactSerializer.serialize(stats);
+            indexSource.put(new byte[]{SETTING_STATS}, serialized);
+            log.debug("Saved ChainStats using CompactSerializer: mainBlocks={}, difficulty={}, size={} bytes",
+                     stats.getMainBlockCount(), stats.getDifficulty().toDecimalString(), serialized.length);
+        } catch (Exception e) {
+            log.error("Failed to serialize ChainStats using CompactSerializer", e);
+        }
     }
 
     @Override
     public ChainStats getChainStats() {
-        // Load legacy XdagStats and convert to ChainStats
-        XdagStats legacy = getXdagStatus();
-        if (legacy == null) {
+        // Load ChainStats directly using CompactSerializer
+        byte[] serialized = indexSource.get(new byte[]{SETTING_STATS});
+        if (serialized == null) {
             return null;
         }
-        return ChainStats.fromLegacy(legacy);
+
+        try {
+            return io.xdag.serialization.CompactSerializer.deserializeChainStats(serialized);
+        } catch (Exception e) {
+            log.error("Failed to deserialize ChainStats using CompactSerializer", e);
+            return null;
+        }
     }
 
 
@@ -203,22 +202,6 @@ public class BlockStoreImpl implements BlockStore {
                 log.error(e.getMessage(), e);
             }
         }
-    }
-
-
-    // 状态也是存在区块里面的
-    public XdagStats getXdagStatus() {
-        XdagStats status = null;
-        byte[] value = indexSource.get(new byte[]{SETTING_STATS});
-        if (value == null) {
-            return null;
-        }
-        try {
-            status = (XdagStats) deserialize(value, XdagStats.class);
-        } catch (DeserializationException e) {
-            log.error(e.getMessage(), e);
-        }
-        return status;
     }
 
     public void saveXdagTopStatus(XdagTopStatus status) {

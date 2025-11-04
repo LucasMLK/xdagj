@@ -25,7 +25,7 @@ package io.xdag.net.message.consensus;
 
 import org.apache.tuweni.bytes.MutableBytes;
 
-import io.xdag.core.XdagStats;
+import io.xdag.core.ChainStats;
 import io.xdag.utils.SimpleEncoder;
 import io.xdag.net.message.MessageCode;
 import io.xdag.utils.SimpleDecoder;
@@ -38,8 +38,8 @@ public class SumReplyMessage extends XdagMessage {
 
     MutableBytes sum;
 
-    public SumReplyMessage(long endtime, long random, XdagStats xdagStats, MutableBytes sum) {
-        super(MessageCode.SUMS_REPLY, null, 1, endtime, random, xdagStats);
+    public SumReplyMessage(long endtime, long random, ChainStats chainStats, MutableBytes sum) {
+        super(MessageCode.SUMS_REPLY, null, 1, endtime, random, chainStats);
 
         SimpleEncoder enc = super.encode();
         enc.writeBytes(sum.toArray());

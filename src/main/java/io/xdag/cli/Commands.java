@@ -251,13 +251,13 @@ public class Commands {
      * Get current blockchain stats
      */
     public String stats() {
-        // Phase 7.3: Use getChainStats().toLegacy() instead of deprecated getXdagStats()
-        XdagStats xdagStats = kernel.getBlockchain().getChainStats().toLegacy();
+        // Phase 7.3: Use ChainStats directly (XdagStats deleted)
+        ChainStats chainStats = kernel.getBlockchain().getChainStats();
         XdagTopStatus xdagTopStatus = kernel.getBlockchain().getXdagTopStatus();
 
         // Calculate difficulties
         BigInteger currentDiff = xdagTopStatus.getTopDiff() != null ? xdagTopStatus.getTopDiff() : BigInteger.ZERO;
-        BigInteger netDiff = xdagStats.getMaxdifficulty() != null ? xdagStats.getMaxdifficulty() : BigInteger.ZERO;
+        BigInteger netDiff = chainStats.getMaxDifficulty().toBigInteger();
         BigInteger maxDiff = netDiff.max(currentDiff);
 
         // Get finalized store statistics (Phase 2 refactor)
@@ -292,15 +292,15 @@ public class Commands {
                         4 hr hashrate KHs: %.9f of %.9f
                         Number of Address: %d%s""",
                 kernel.getNetDB().getSize(), kernel.getNetDBMgr().getWhiteDB().getSize(),
-                xdagStats.getNblocks(), Math.max(xdagStats.getTotalnblocks(), xdagStats.getNblocks()),
-                xdagStats.getNmain(), Math.max(xdagStats.getTotalnmain(), xdagStats.getNmain()),
-                xdagStats.nextra,
-                xdagStats.nnoref,
-                xdagStats.nwaitsync,
+                chainStats.getTotalBlockCount(), Math.max(chainStats.getTotalBlockCount(), chainStats.getTotalBlockCount()),
+                chainStats.getMainBlockCount(), Math.max(chainStats.getTotalMainBlockCount(), chainStats.getMainBlockCount()),
+                chainStats.getExtraCount(),
+                chainStats.getNoRefCount(),
+                chainStats.getWaitingSyncCount(),
                 currentDiff.toString(16),
                 maxDiff.toString(16),
-                kernel.getBlockchain().getSupply(xdagStats.nmain).toDecimal(9, XUnit.XDAG).toPlainString(),
-                kernel.getBlockchain().getSupply(Math.max(xdagStats.nmain, xdagStats.totalnmain)).toDecimal(9, XUnit.XDAG).toPlainString(),
+                kernel.getBlockchain().getSupply(chainStats.getMainBlockCount()).toDecimal(9, XUnit.XDAG).toPlainString(),
+                kernel.getBlockchain().getSupply(Math.max(chainStats.getMainBlockCount(), chainStats.getTotalMainBlockCount())).toDecimal(9, XUnit.XDAG).toPlainString(),
                 kernel.getAddressStore().getAllBalance().toDecimal(9, XUnit.XDAG).toPlainString(),
                 xdagHashRate(kernel.getBlockchain().getXdagExtStats().getHashRateOurs()),
                 xdagHashRate(kernel.getBlockchain().getXdagExtStats().getHashRateTotal()),

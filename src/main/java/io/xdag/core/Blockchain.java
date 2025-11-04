@@ -231,10 +231,10 @@ public interface Blockchain {
      *
      * Values are updated to reflect the maximum seen across the network.
      *
-     * @param remoteStats Statistics from remote peer
+     * @param remoteStats Statistics from remote peer (now ChainStats, XdagStats deleted)
      * @since Phase 7.3 v5.1
      */
-    void updateStatsFromRemote(XdagStats remoteStats);
+    void updateStatsFromRemote(ChainStats remoteStats);
 
     // Get XDAG top status
     XdagTopStatus getXdagTopStatus();

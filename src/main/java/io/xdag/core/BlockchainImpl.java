@@ -224,7 +224,6 @@ public class BlockchainImpl implements Blockchain {
             .withNoRefCount(0)
             .withExtraCount(0)
             .withTotalBlockCount(0)
-            .withBlockCount(0)
             .withTotalMainBlockCount(snapshotHeight)
             .withMainBlockCount(snapshotHeight);
 
@@ -748,24 +747,23 @@ public class BlockchainImpl implements Blockchain {
      * Updates global network statistics based on data received from remote peers.
      * Takes the maximum of local and remote values for network-wide metrics.
      *
-     * @param remoteStats Statistics from remote peer
+     * @param remoteStats Statistics from remote peer (now ChainStats, XdagStats deleted)
      * @since Phase 7.3 v5.1
      */
     @Override
-    public synchronized void updateStatsFromRemote(XdagStats remoteStats) {
+    public synchronized void updateStatsFromRemote(ChainStats remoteStats) {
         // Update total hosts (take maximum)
-        int maxHosts = (int) Math.max(chainStats.getTotalHostCount(), remoteStats.totalnhosts);
+        int maxHosts = (int) Math.max(chainStats.getTotalHostCount(), remoteStats.getTotalHostCount());
 
         // Update total blocks (take maximum)
-        long maxBlocks = Math.max(chainStats.getTotalBlockCount(), remoteStats.totalnblocks);
+        long maxBlocks = Math.max(chainStats.getTotalBlockCount(), remoteStats.getTotalBlockCount());
 
         // Update total main blocks (take maximum)
-        long maxMain = Math.max(chainStats.getTotalMainBlockCount(), remoteStats.totalnmain);
+        long maxMain = Math.max(chainStats.getTotalMainBlockCount(), remoteStats.getTotalMainBlockCount());
 
         // Update max difficulty (take maximum)
         org.apache.tuweni.units.bigints.UInt256 localMaxDiff = chainStats.getMaxDifficulty();
-        org.apache.tuweni.units.bigints.UInt256 remoteMaxDiff =
-            org.apache.tuweni.units.bigints.UInt256.valueOf(remoteStats.maxdifficulty);
+        org.apache.tuweni.units.bigints.UInt256 remoteMaxDiff = remoteStats.getMaxDifficulty();
         org.apache.tuweni.units.bigints.UInt256 newMaxDiff =
             localMaxDiff.compareTo(remoteMaxDiff) > 0 ? localMaxDiff : remoteMaxDiff;
 

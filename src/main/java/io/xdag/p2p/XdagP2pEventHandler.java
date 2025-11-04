@@ -27,7 +27,7 @@ import io.xdag.Kernel;
 import io.xdag.consensus.SyncManager;
 import io.xdag.core.BlockV5;
 import io.xdag.core.Blockchain;
-import io.xdag.core.XdagStats;
+import io.xdag.core.ChainStats;
 import io.xdag.net.message.MessageCode;
 import io.xdag.net.message.consensus.*;
 import io.xdag.utils.XdagTime;
@@ -150,7 +150,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     private void handleBlocksRequest(io.xdag.p2p.channel.Channel channel, Bytes data) {
         try {
             BlocksRequestMessage msg = new BlocksRequestMessage(data.toArray());
-            updateXdagStats(msg);
+            updateChainStats(msg);
 
             long startTime = msg.getStarttime();
             long endTime = msg.getEndtime();
@@ -178,10 +178,10 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
                 }
             }
 
-            // Phase 7.3: Use getChainStats().toLegacy()
+            // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
             // Send reply
             BlocksReplyMessage reply = new BlocksReplyMessage(
-                    startTime, endTime, random, blockchain.getChainStats().toLegacy());
+                    startTime, endTime, random, blockchain.getChainStats());
             channel.send(Bytes.wrap(reply.getBody()));
         } catch (Exception e) {
             log.error("Error handling BLOCKS_REQUEST from {}: {}",
@@ -195,7 +195,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     private void handleBlocksReply(io.xdag.p2p.channel.Channel channel, Bytes data) {
         try {
             BlocksReplyMessage msg = new BlocksReplyMessage(data.toArray());
-            updateXdagStats(msg);
+            updateChainStats(msg);
 
             long randomSeq = msg.getRandom();
             var future = kernel.getSync().getBlocksRequestMap().get(randomSeq);
@@ -214,7 +214,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     private void handleSumsRequest(io.xdag.p2p.channel.Channel channel, Bytes data) {
         try {
             SumRequestMessage msg = new SumRequestMessage(data.toArray());
-            updateXdagStats(msg);
+            updateChainStats(msg);
 
             org.apache.tuweni.bytes.MutableBytes sums = org.apache.tuweni.bytes.MutableBytes.create(256);
             // TODO v5.1: DELETED - BlockStore.loadSum() method no longer exists
@@ -222,9 +222,9 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
             // kernel.getBlockStore().loadSum(msg.getStarttime(), msg.getEndtime(), sums);
             // For now, send empty sums (256 zero bytes)
 
-            // Phase 7.3: Use getChainStats().toLegacy()
+            // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
             SumReplyMessage reply = new SumReplyMessage(
-                    msg.getEndtime(), msg.getRandom(), blockchain.getChainStats().toLegacy(), sums);
+                    msg.getEndtime(), msg.getRandom(), blockchain.getChainStats(), sums);
             channel.send(Bytes.wrap(reply.getBody()));
         } catch (Exception e) {
             log.error("Error handling SUMS_REQUEST from {}: {}",
@@ -238,7 +238,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     private void handleSumsReply(io.xdag.p2p.channel.Channel channel, Bytes data) {
         try {
             SumReplyMessage msg = new SumReplyMessage(data.toArray());
-            updateXdagStats(msg);
+            updateChainStats(msg);
 
             long randomSeq = msg.getRandom();
             var future = kernel.getSync().getSumsRequestMap().get(randomSeq);
@@ -424,11 +424,11 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     /**
      * Update global network statistics from remote peer (Phase 7.3 ChainStats support)
      */
-    private void updateXdagStats(XdagMessage message) {
+    private void updateChainStats(XdagMessage message) {
         syncManager.getIsUpdateXdagStats().compareAndSet(false, true);
-        XdagStats remoteXdagStats = message.getXdagStats();
-        // Phase 7.3: Use new updateStatsFromRemote() method
-        blockchain.updateStatsFromRemote(remoteXdagStats);
+        ChainStats remoteChainStats = message.getChainStats();
+        // Phase 7.3: Use new updateStatsFromRemote() method with ChainStats
+        blockchain.updateStatsFromRemote(remoteChainStats);
     }
 
     /**
@@ -442,10 +442,10 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      * Send BLOCKS_REQUEST to request blocks in a time range
      * @return random sequence number for tracking the response
      */
-    // Phase 7.3: Use getChainStats().toLegacy()
+    // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
     public long sendGetBlocks(io.xdag.p2p.channel.Channel channel, long startTime, long endTime) {
         try {
-            BlocksRequestMessage msg = new BlocksRequestMessage(startTime, endTime, blockchain.getChainStats().toLegacy());
+            BlocksRequestMessage msg = new BlocksRequestMessage(startTime, endTime, blockchain.getChainStats());
             log.debug("Sending BLOCKS_REQUEST [{} - {}] to {}",
                     startTime, endTime, channel.getRemoteAddress());
             channel.send(Bytes.wrap(msg.getBody()));
@@ -461,10 +461,10 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      * Send SUMS_REQUEST to request block sums in a time range
      * @return random sequence number for tracking the response
      */
-    // Phase 7.3: Use getChainStats().toLegacy()
+    // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
     public long sendGetSums(io.xdag.p2p.channel.Channel channel, long startTime, long endTime) {
         try {
-            SumRequestMessage msg = new SumRequestMessage(startTime, endTime, blockchain.getChainStats().toLegacy());
+            SumRequestMessage msg = new SumRequestMessage(startTime, endTime, blockchain.getChainStats());
             log.debug("Sending SUMS_REQUEST [{} - {}] to {}",
                     startTime, endTime, channel.getRemoteAddress());
             channel.send(Bytes.wrap(msg.getBody()));
@@ -485,12 +485,12 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      * @param channel P2P channel to send request to
      * @param hash Hash of the requested BlockV5
      */
-    // Phase 7.3: Use getChainStats().toLegacy()
+    // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
     public void requestBlockV5ByHash(io.xdag.p2p.channel.Channel channel, Bytes32 hash) {
         try {
             BlockV5RequestMessage msg = new BlockV5RequestMessage(
                 org.apache.tuweni.bytes.MutableBytes.wrap(hash.toArray()),
-                blockchain.getChainStats().toLegacy()
+                blockchain.getChainStats()
             );
             log.debug("Sending BLOCKV5_REQUEST for {} to {}",
                     hash.toHexString(), channel.getRemoteAddress());

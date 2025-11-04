@@ -33,19 +33,22 @@ import org.apache.tuweni.units.bigints.UInt256;
 import java.io.Serializable;
 
 /**
- * Immutable chain statistics for XDAG network
+ * Immutable chain statistics for XDAG network (v5.1 optimized)
  *
  * This class replaces the mutable XdagStats with a type-safe, immutable implementation.
- * Uses UInt256 for difficulty values and Bytes32 for hashes.
+ * Uses UInt256 for difficulty values.
  *
- * Target size: ~180 bytes (compared to ~220 bytes in XdagStats)
+ * Phase 7.3 Optimization: Removed 5 unused fields (blockCount, hostCount, mainBlockTime,
+ * globalMinerHash, ourLastBlockHash) that were only used for legacy compatibility.
+ *
+ * Optimized size: ~120 bytes (down from ~180 bytes, 33% reduction)
  */
 @Value
 @Builder(toBuilder = true)
 @With
 public class ChainStats implements Serializable {
 
-    // ========== Current State ==========
+    // ========== Core Chain State ==========
 
     /**
      * Current chain difficulty
@@ -58,42 +61,34 @@ public class ChainStats implements Serializable {
     UInt256 maxDifficulty;
 
     /**
-     * Current number of blocks in local chain
-     */
-    long blockCount;
-
-    /**
-     * Total number of blocks (including orphans)
-     */
-    long totalBlockCount;
-
-    /**
-     * Current number of main blocks
+     * Current number of main blocks in local chain
      */
     long mainBlockCount;
 
     /**
-     * Total number of main blocks
+     * Total number of main blocks in the network
      */
     long totalMainBlockCount;
 
     /**
-     * Number of connected hosts/peers
+     * Total number of blocks in the network (including orphans)
      */
-    int hostCount;
+    long totalBlockCount;
 
     /**
-     * Total number of hosts seen
+     * Total number of hosts/peers seen in the network
      */
     int totalHostCount;
 
+    // ========== Sync & Orphan Tracking ==========
+
     /**
-     * Number of blocks waiting for synchronization
+     * Number of blocks waiting for synchronization (missing parent blocks)
      */
     long waitingSyncCount;
 
     /**
-     * Number of blocks with no references (orphans)
+     * Number of blocks with no references (orphan blocks)
      */
     long noRefCount;
 
@@ -102,27 +97,12 @@ public class ChainStats implements Serializable {
      */
     long extraCount;
 
-    /**
-     * Timestamp of the latest main block
-     */
-    long mainBlockTime;
+    // ========== Account State ==========
 
     /**
      * Current balance
      */
     XAmount balance;
-
-    // ========== Identifiers ==========
-
-    /**
-     * Global miner address hash
-     */
-    Bytes32 globalMinerHash;
-
-    /**
-     * Hash of our last created block
-     */
-    Bytes32 ourLastBlockHash;
 
     // ========== Helper Methods ==========
 
@@ -133,72 +113,15 @@ public class ChainStats implements Serializable {
         return ChainStats.builder()
                 .difficulty(UInt256.ZERO)
                 .maxDifficulty(UInt256.ZERO)
-                .blockCount(0)
-                .totalBlockCount(0)
                 .mainBlockCount(0)
                 .totalMainBlockCount(0)
-                .hostCount(0)
+                .totalBlockCount(0)
                 .totalHostCount(0)
                 .waitingSyncCount(0)
                 .noRefCount(0)
                 .extraCount(0)
-                .mainBlockTime(0)
                 .balance(XAmount.ZERO)
                 .build();
-    }
-
-    /**
-     * Create chain stats from legacy XdagStats
-     */
-    public static ChainStats fromLegacy(XdagStats legacy) {
-        return ChainStats.builder()
-                .difficulty(legacy.getDifficulty() != null ?
-                    UInt256.valueOf(legacy.getDifficulty()) : UInt256.ZERO)
-                .maxDifficulty(legacy.getMaxdifficulty() != null ?
-                    UInt256.valueOf(legacy.getMaxdifficulty()) : UInt256.ZERO)
-                .blockCount(legacy.getNblocks())
-                .totalBlockCount(legacy.getTotalnblocks())
-                .mainBlockCount(legacy.getNmain())
-                .totalMainBlockCount(legacy.getTotalnmain())
-                .hostCount(legacy.getNhosts())
-                .totalHostCount(legacy.getTotalnhosts())
-                .waitingSyncCount(legacy.getNwaitsync())
-                .noRefCount(legacy.getNnoref())
-                .extraCount(legacy.getNextra())
-                .mainBlockTime(legacy.getMaintime())
-                .balance(legacy.getBalance() != null ? legacy.getBalance() : XAmount.ZERO)
-                .globalMinerHash(legacy.getGlobalMiner() != null ?
-                    Bytes32.wrap(legacy.getGlobalMiner()) : null)
-                .ourLastBlockHash(legacy.getOurLastBlockHash() != null ?
-                    Bytes32.wrap(legacy.getOurLastBlockHash()) : null)
-                .build();
-    }
-
-    /**
-     * Convert to legacy XdagStats (for backward compatibility)
-     */
-    public XdagStats toLegacy() {
-        XdagStats legacy = new XdagStats();
-        legacy.setDifficulty(difficulty.toBigInteger());
-        legacy.setMaxdifficulty(maxDifficulty.toBigInteger());
-        legacy.setNblocks(blockCount);
-        legacy.setTotalnblocks(totalBlockCount);
-        legacy.setNmain(mainBlockCount);
-        legacy.setTotalnmain(totalMainBlockCount);
-        legacy.setNhosts(hostCount);
-        legacy.setTotalnhosts(totalHostCount);
-        legacy.setNwaitsync(waitingSyncCount);
-        legacy.setNnoref(noRefCount);
-        legacy.setNextra(extraCount);
-        legacy.setMaintime(mainBlockTime);
-        legacy.setBalance(balance);
-        if (globalMinerHash != null) {
-            legacy.setGlobalMiner(globalMinerHash.toArray());
-        }
-        if (ourLastBlockHash != null) {
-            legacy.setOurLastBlockHash(ourLastBlockHash.toArray());
-        }
-        return legacy;
     }
 
     /**
@@ -232,16 +155,6 @@ public class ChainStats implements Serializable {
             return this.withDifficulty(newDifficulty);
         }
         return this;
-    }
-
-    /**
-     * Increment block count (returns new instance)
-     */
-    public ChainStats incrementBlockCount() {
-        return this.toBuilder()
-                .blockCount(this.blockCount + 1)
-                .totalBlockCount(this.totalBlockCount + 1)
-                .build();
     }
 
     /**
@@ -303,12 +216,12 @@ public class ChainStats implements Serializable {
 
     @Override
     public String toString() {
-        return String.format("ChainStats[mainBlocks=%d/%d, blocks=%d/%d, difficulty=%s, maxDiff=%s, hosts=%d/%d, balance=%s, orphans=%d, sync=%.1f%%]",
+        return String.format("ChainStats[mainBlocks=%d/%d, totalBlocks=%d, difficulty=%s, maxDiff=%s, hosts=%d, balance=%s, orphans=%d, sync=%.1f%%]",
                 mainBlockCount, totalMainBlockCount,
-                blockCount, totalBlockCount,
+                totalBlockCount,
                 difficulty.toDecimalString(),
                 maxDifficulty.toDecimalString(),
-                hostCount, totalHostCount,
+                totalHostCount,
                 balance.toDecimal(9, XUnit.XDAG).toPlainString(),
                 noRefCount,
                 getSyncProgress());
