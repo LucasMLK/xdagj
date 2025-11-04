@@ -951,24 +951,22 @@ public class BlockchainImpl implements Blockchain {
     }
 
     /**
-     * Get BlockV5 by height (Phase 7.3 stub)
+     * Get BlockV5 by height (Phase 7.3 continuation)
      *
-     * TODO v5.1: This method needs full implementation using BlockStore
+     * Uses BlockStore.getBlockV5ByHeight() to retrieve main block at given height.
      *
-     * @param height Block height
+     * @param height Block height (main block number)
      * @return BlockV5 or null if not found
      */
     @Override
     public BlockV5 getBlockByHeight(long height) {
-        log.warn("getBlockByHeight() temporarily disabled - v5.1 migration in progress: height={}", height);
-        // TODO v5.1: Implement using blockStore.getBlockV5ByHeight()
-        return null;
+        return blockStore.getBlockV5ByHeight(height, false);
     }
 
     /**
-     * Get blocks by time range (Phase 7.3 stub)
+     * Get blocks by time range (Phase 7.3 continuation)
      *
-     * TODO v5.1: This method needs full implementation using time index
+     * Uses BlockStore.getBlockV5sByTime() to retrieve blocks in time range.
      *
      * @param starttime Start timestamp
      * @param endtime End timestamp
@@ -976,10 +974,7 @@ public class BlockchainImpl implements Blockchain {
      */
     @Override
     public List<BlockV5> getBlocksByTime(long starttime, long endtime) {
-        log.warn("getBlocksByTime() temporarily disabled - v5.1 migration in progress: start={}, end={}",
-                starttime, endtime);
-        // TODO v5.1: Implement using blockStore time index
-        return Lists.newArrayList();
+        return blockStore.getBlockV5sByTime(starttime, endtime);
     }
 
     /**

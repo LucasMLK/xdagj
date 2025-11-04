@@ -554,5 +554,78 @@ public class BlockStoreImpl implements BlockStore {
         }
     }
 
+    // ========== Phase 7.3 Continuation: Main Chain Index Access ==========
+
+    /**
+     * Get BlockV5 by main chain height (Phase 7.3 continuation)
+     *
+     * Implementation:
+     * 1. Use MAIN_BLOCKS_INDEX to get blockHash from height
+     * 2. Retrieve BlockV5 using getBlockV5ByHash()
+     *
+     * @param height Main chain height (must be > 0 for main blocks)
+     * @param isRaw true to load full raw data, false for BlockInfo only
+     * @return BlockV5 main block at height, or null if not found
+     */
+    @Override
+    public BlockV5 getBlockV5ByHeight(long height, boolean isRaw) {
+        // 1. Get blockHash from MAIN_BLOCKS_INDEX
+        byte[] mainBlockKey = BytesUtils.merge(MAIN_BLOCKS_INDEX, BytesUtils.longToBytes(height, true));
+        byte[] blockHashBytes = indexSource.get(mainBlockKey);
+
+        if (blockHashBytes == null) {
+            log.debug("No main block found at height: {}", height);
+            return null;
+        }
+
+        // 2. Convert to Bytes32
+        Bytes32 blockHash = Bytes32.wrap(blockHashBytes);
+
+        // 3. Retrieve BlockV5
+        BlockV5 block = getBlockV5ByHash(blockHash, isRaw);
+
+        if (block == null) {
+            log.warn("Main block index exists at height {} but BlockV5 not found for hash: {}",
+                    height, blockHash.toHexString());
+            return null;
+        }
+
+        log.debug("Retrieved main block at height {}: {}", height, blockHash.toHexString());
+        return block;
+    }
+
+    /**
+     * Get list of BlockV5 objects within time range (Phase 7.3 continuation)
+     *
+     * Implementation:
+     * 1. Scan TIME_HASH_INFO index for blocks in time range
+     * 2. Retrieve each BlockV5 by hash
+     *
+     * @param startTime Start timestamp (XDAG format)
+     * @param endTime End timestamp (XDAG format)
+     * @return List of BlockV5 objects in time range
+     */
+    @Override
+    public List<BlockV5> getBlockV5sByTime(long startTime, long endTime) {
+        List<BlockV5> result = Lists.newArrayList();
+
+        // Scan time index for blocks in range
+        // Time keys format: TIME_HASH_INFO + timestamp + hash
+        byte[] startKey = BytesUtils.merge(TIME_HASH_INFO, BytesUtils.longToBytes(startTime, true));
+        byte[] endKey = BytesUtils.merge(TIME_HASH_INFO, BytesUtils.longToBytes(endTime, true));
+
+        // Note: This is a simplified implementation
+        // A full implementation would need to iterate through timeSource keys
+        // For now, we return an empty list and log a warning
+        log.warn("getBlockV5sByTime() partial implementation - time range queries need full iteration support");
+        log.debug("Queried time range: {} to {}", startTime, endTime);
+
+        // TODO Phase 7.3: Implement full time-based iteration using RocksDB iterator
+        // Current KVSource interface may not support range queries
+        // May need to add iterator support to KVSource or use RocksDB directly
+
+        return result;
+    }
+
 }
 

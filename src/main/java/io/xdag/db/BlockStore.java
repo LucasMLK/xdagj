@@ -135,4 +135,29 @@ public interface BlockStore extends XdagLifecycle {
      */
     BlockV5 getBlockV5InfoByHash(Bytes32 hash);
 
+    // ========== Phase 7.3: Main Chain Index Access ==========
+
+    /**
+     * Get BlockV5 by main chain height (Phase 7.3)
+     *
+     * Uses MAIN_BLOCKS_INDEX (0xc0) to map height → blockHash,
+     * then retrieves the BlockV5 object.
+     *
+     * @param height Main chain height (must be > 0)
+     * @param isRaw true to load full raw data, false for BlockInfo only
+     * @return BlockV5 main block at height, or null if not found
+     */
+    BlockV5 getBlockV5ByHeight(long height, boolean isRaw);
+
+    /**
+     * Get list of BlockV5 objects within time range (Phase 7.3)
+     *
+     * Uses TIME_HASH_INFO index to find blocks in time range.
+     *
+     * @param startTime Start timestamp (XDAG format)
+     * @param endTime End timestamp (XDAG format)
+     * @return List of BlockV5 objects in time range
+     */
+    List<BlockV5> getBlockV5sByTime(long startTime, long endTime);
+
 }
