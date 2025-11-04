@@ -143,17 +143,21 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
     @Override
     public String xdag_getBalanceByNumber(String bnOrId) {
-        // TODO v5.1: DELETED - BlockInfo.getAmount() no longer exists in v5.1 minimal design
-        // Temporarily disabled - waiting for migration to v5.1
-        log.warn("xdag_getBalanceByNumber() temporarily disabled - v5.1 migration in progress");
-        return "0.0";
-        /*
+        // Phase 8.2.3: Restored using TransactionStore (v5.1 pattern from CLI balance())
         BlockV5 block = blockchain.getBlockByHeight(Long.parseLong(bnOrId));
-        if (null == block) {
-            return null;
+        if (block == null) {
+            return "0.0";
         }
-        return String.format("%s", block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString());
-        */
+
+        // v5.1: Calculate balance from Transactions
+        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(block.getHash());
+        XAmount totalAmount = XAmount.ZERO;
+
+        for (Transaction tx : transactions) {
+            totalAmount = totalAmount.add(tx.getAmount());
+        }
+
+        return totalAmount.toDecimal(9, XUnit.XDAG).toPlainString();
     }
 
     @Override
@@ -249,24 +253,37 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         MutableBytes32 key = MutableBytes32.create();
         String balance;
         if (WalletUtils.checkAddress(address)) {
+            // Account address (Base58 format) - unchanged
             hash = pubAddress2Hash(address);
             key.set(8, Objects.requireNonNull(hash).slice(8, 20));
             balance = String.format("%s", kernel.getAddressStore().getBalanceByAddress(fromBase58(address).toArray()).toDecimal(9, XUnit.XDAG).toPlainString());
         } else {
-            // TODO v5.1: DELETED - Block class and BlockInfo.getAmount() no longer exist
-            // Temporarily disabled - waiting for migration to v5.1
-            log.warn("xdag_getBalance() for block hash temporarily disabled - v5.1 migration in progress");
-            balance = "0.0";
-            /*
+            // Block address - Phase 8.2.3: Restored using TransactionStore
             if (StringUtils.length(address) == 32) {
                 hash = BasicUtils.address2Hash(address);
             } else {
                 hash = BasicUtils.getHash(address);
             }
-            key.set(8, Objects.requireNonNull(hash).slice(8, 24));
-            Block block = kernel.getBlockStore().getBlockInfoByHash(Bytes32.wrap(key));
-            balance = String.format("%s", block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString());
-            */
+
+            if (hash == null) {
+                return "0.0";
+            }
+
+            // Get BlockV5
+            BlockV5 block = blockchain.getBlockByHash(hash, false);
+            if (block == null) {
+                return "0.0";
+            }
+
+            // v5.1: Calculate balance from Transactions
+            List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(hash);
+            XAmount totalAmount = XAmount.ZERO;
+
+            for (Transaction tx : transactions) {
+                totalAmount = totalAmount.add(tx.getAmount());
+            }
+
+            balance = totalAmount.toDecimal(9, XUnit.XDAG).toPlainString();
         }
         return balance;
     }
@@ -465,84 +482,144 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         if (null == blockV5) {
             return null;
         }
-        // TODO v5.1: DELETED - Block class and BlockInfo.getAmount() no longer exist
-        // Temporarily disabled - waiting for migration to BlockV5
-        log.warn("transferBlockInfoToBlockResultDTO() temporarily disabled - v5.1 migration in progress");
 
-        // Return minimal response from BlockV5
-        BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
-        return builder.address(hash2Address(blockV5.getHash()))
-                .hash(blockV5.getHash().toUnprefixedHexString())
-                .balance("0.0") // TODO: Remove getAmount()
-                .build();
-        /*
-        // Phase 8.3.2: For now, convert to Block for legacy helper method compatibility
-        // TODO Phase 9: Refactor RPC layer to work directly with BlockV5 Link structure
-        Block block = kernel.getBlockStore().getBlockByHash(blockV5.getHash(), false);
-        if (block == null) {
-            // Fallback: create minimal response from BlockV5
-            BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
-            return builder.address(hash2Address(blockV5.getHash()))
-                    .hash(blockV5.getHash().toUnprefixedHexString())
-                    .balance(String.format("%s", blockV5.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
-                    .build();
+        // Phase 8.2.3: Restored using TransactionStore for balance calculation
+        BlockInfo info = blockV5.getInfo();
+        if (info == null) {
+            return null;
         }
 
-        BlockResponse.BlockResponseBuilder BlockResultDTOBuilder = BlockResponse.builder();
-        BlockResultDTOBuilder.address(hash2Address(block.getHash()))
-                .hash(block.getHash().toUnprefixedHexString())
-                .balance(String.format("%s", block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
-                .type("Snapshot")
-                .blockTime(xdagTimestampToMs(kernel.getConfig().getSnapshotSpec().getSnapshotTime()))
-                .timeStamp(kernel.getConfig().getSnapshotSpec().getSnapshotTime());
+        // Calculate balance from Transactions
+        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(blockV5.getHash());
+        XAmount balance = XAmount.ZERO;
+        for (Transaction tx : transactions) {
+            balance = balance.add(tx.getAmount());
+        }
+
+        // Build response
+        BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
+        builder.address(hash2Address(blockV5.getHash()))
+                .hash(blockV5.getHash().toUnprefixedHexString())
+                .balance(balance.toDecimal(9, XUnit.XDAG).toPlainString())
+                .type("Snapshot")  // BlockInfo only, no raw data
+                .blockTime(xdagTimestampToMs(info.getTimestamp()))
+                .timeStamp(info.getTimestamp())
+                .state(info.isMainBlock() ? "Main" : "Orphan");
+
+        // Add transaction history if page != 0
         if (page != 0) {
-            BlockResultDTOBuilder.transactions(getTxLinks(block, page, parameters))
+            builder.transactions(getTxHistoryV5(blockV5.getHash(), page, parameters))
                     .totalPage(totalPage);
         }
+
         totalPage = 1;
-        return BlockResultDTOBuilder.build();
-        */
+        return builder.build();
     }
 
     private List<BlockResponse.TxLink> getTxHistory(String address, int page, Object... parameters)
         throws AddressFormatException {
-        // TODO v5.1: DELETED - TxHistory, LegacyBlockInfo classes no longer exist
-        // Temporarily disabled - waiting for migration to BlockV5
-        log.warn("getTxHistory() temporarily disabled - v5.1 migration in progress");
-        return Lists.newArrayList();
-        /*
-        List<TxHistory> txHistories = blockchain.getBlockTxHistoryByAddress(pubAddress2Hash(address), page, parameters);
-        List<BlockResponse.TxLink> txLinks = Lists.newArrayList();
-        for (TxHistory txHistory : txHistories) {
-            BlockV5 b = blockchain.getBlockByHash(txHistory.getAddress().getAddress(), false);
-            BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
-            if (b != null) {
-                LegacyBlockInfo blockInfo = b.getInfo().toLegacy();
-                if ((blockInfo.flags & BI_APPLIED) == 0) {
-                    continue;
-                }
+        // Phase 8.2.3: Restored using TransactionStore (v5.1 pattern from CLI address())
+        Bytes32 hash = pubAddress2Hash(address);
+        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByAddress(hash);
 
-                txLinkBuilder.address(hash2Address(txHistory.getAddress().getAddress()))
-                        .hash(txHistory.getAddress().getAddress().toUnprefixedHexString())
-                        .amount(String.format("%s", txHistory.getAddress().getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
-                        .direction(txHistory.getAddress().getType().equals(XDAG_FIELD_INPUT) ? 0 :
-                                txHistory.getAddress().getType().equals(XDAG_FIELD_OUTPUT) ? 1 :
-                                        txHistory.getAddress().getType().equals(XDAG_FIELD_COINBASE) ? 2 : 3)
-                        .time(txHistory.getTimestamp())
-                        .remark(txHistory.getRemark());
+        List<BlockResponse.TxLink> txLinks = Lists.newArrayList();
+
+        for (Transaction tx : transactions) {
+            // Determine direction
+            int direction;
+            Bytes32 otherAddress;
+            if (tx.getFrom().equals(hash)) {
+                direction = 1;  // Output
+                otherAddress = tx.getTo();
             } else {
-                txLinkBuilder.address(Base58.encodeCheck(BytesUtils.byte32ToArray(txHistory.getAddress().getAddress())))
-                        .hash(txHistory.getAddress().getAddress().toUnprefixedHexString())
-                        .amount(String.format("%s", txHistory.getAddress().getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
-                        .direction(txHistory.getAddress().getType().equals(XDAG_FIELD_IN) ? 0 :
-                                txHistory.getAddress().getType().equals(XDAG_FIELD_OUT) ? 1 : 3)
-                        .time(xdagTimestampToMs(kernel.getConfig().getSnapshotSpec().getSnapshotTime()))
-                        .remark(txHistory.getRemark());
+                direction = 0;  // Input
+                otherAddress = tx.getFrom();
             }
+
+            // Build TxLink
+            BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
+            txLinkBuilder.address(otherAddress != null ? hash2Address(otherAddress) : "UNKNOWN")
+                    .hash(tx.getHash().toUnprefixedHexString())
+                    .amount(tx.getAmount().toDecimal(9, XUnit.XDAG).toPlainString())
+                    .direction(direction)
+                    .time(0L)  // TODO: Need reverse index (txHash -> blockHash) for timestamps
+                    .remark(tx.getData() != null && tx.getData().size() > 0 ?
+                            new String(tx.getData().toArray(), StandardCharsets.UTF_8).trim() : "");
+
             txLinks.add(txLinkBuilder.build());
         }
+
         return txLinks;
-        */
+    }
+
+    /**
+     * Get transaction history for a block (Phase 8.2.3 new method)
+     *
+     * @param blockHash Block hash to get transactions for
+     * @param page Page number (currently unused)
+     * @param parameters Additional parameters (currently unused)
+     * @return List of transaction links
+     */
+    private List<BlockResponse.TxLink> getTxHistoryV5(Bytes32 blockHash, int page, Object... parameters) {
+        // Phase 8.2.3: New method using TransactionStore
+        BlockV5 block = blockchain.getBlockByHash(blockHash, false);
+        if (block == null || block.getInfo() == null) {
+            return Lists.newArrayList();
+        }
+
+        List<BlockResponse.TxLink> txLinks = Lists.newArrayList();
+
+        // 1. Add earning info for Main blocks
+        if (block.getInfo().isMainBlock() &&
+            block.getInfo().getHeight() > kernel.getConfig().getSnapshotSpec().getSnapshotHeight()) {
+
+            XAmount reward = blockchain.getReward(block.getInfo().getHeight());
+            // TODO: Calculate fee from transactions (sum of tx fees)
+
+            BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
+            txLinkBuilder.address(hash2Address(blockHash))
+                    .hash(blockHash.toUnprefixedHexString())
+                    .amount(reward.toDecimal(9, XUnit.XDAG).toPlainString())
+                    .direction(2)  // Earning
+                    .time(xdagTimestampToMs(block.getTimestamp()))
+                    .remark("");
+
+            txLinks.add(txLinkBuilder.build());
+        }
+
+        // 2. Add transaction history
+        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(blockHash);
+
+        for (Transaction tx : transactions) {
+            // Determine direction relative to this block
+            int direction;
+            Bytes32 otherAddress;
+
+            if (tx.getFrom().equals(blockHash)) {
+                direction = 1;  // Output (block sends)
+                otherAddress = tx.getTo();
+            } else if (tx.getTo().equals(blockHash)) {
+                direction = 0;  // Input (block receives)
+                otherAddress = tx.getFrom();
+            } else {
+                direction = 3;  // Reference (block is neither sender nor receiver)
+                otherAddress = tx.getFrom();
+            }
+
+            // Build TxLink
+            BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
+            txLinkBuilder.address(otherAddress != null ? hash2Address(otherAddress) : "UNKNOWN")
+                    .hash(tx.getHash().toUnprefixedHexString())
+                    .amount(tx.getAmount().toDecimal(9, XUnit.XDAG).toPlainString())
+                    .direction(direction)
+                    .time(0L)  // TODO: Need reverse index (txHash -> blockHash) for timestamps
+                    .remark(tx.getData() != null && tx.getData().size() > 0 ?
+                            new String(tx.getData().toArray(), StandardCharsets.UTF_8).trim() : "");
+
+            txLinks.add(txLinkBuilder.build());
+        }
+
+        return txLinks;
     }
 
     public BlockResponse getBlockByNumber(String bnOrId, int page, Object... parameters) {
@@ -591,93 +668,105 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         if (null == blockV5) {
             return null;
         }
-        // TODO v5.1: DELETED - Block class no longer exists
-        // Temporarily disabled - waiting for migration to BlockV5
-        log.warn("transferBlockToBlockResultDTO() temporarily disabled - v5.1 migration in progress");
 
-        // Return minimal response from BlockV5
-        BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
-        return builder.address(hash2Address(blockV5.getHash()))
-                .hash(blockV5.getHash().toUnprefixedHexString())
-                .balance("0.0") // TODO: Remove getAmount()
-                .build();
-        /*
-        // Phase 8.3.2: Convert to Block for legacy helper method compatibility
-        Block block = kernel.getBlockStore().getBlockByHash(blockV5.getHash(), true);
-        if (block == null) {
-            // Fallback: return minimal response
-            return transferBlockInfoToBlockResultDTO(blockV5, page, parameters);
+        // Phase 8.2.3: Restored using TransactionStore for balance calculation
+        BlockInfo info = blockV5.getInfo();
+        if (info == null) {
+            return null;
         }
 
-        BlockResponse.BlockResponseBuilder BlockResultDTOBuilder = BlockResponse.builder();
-        BlockResultDTOBuilder.address(hash2Address(block.getHash()))
-                .hash(block.getHash().toUnprefixedHexString())
-                .balance(String.format("%s", block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
-                .blockTime(xdagTimestampToMs(block.getTimestamp()))
-                .timeStamp(block.getTimestamp())
-                .flags(Integer.toHexString(block.getInfo().getFlags()))
-                .diff(toQuantityJsonHex(block.getInfo().getDifficulty().toBigInteger()))
-                .remark(block.getInfo().getRemark() == null ? "" : new String(block.getInfo().getRemark().toArray(),
-                        StandardCharsets.UTF_8).trim())
-                .state(getStateByFlags(block.getInfo().getFlags()))
-                .type(getType(block))
-                .refs(getLinks(block))
-                .height(block.getInfo().getHeight());
+        // Calculate balance from Transactions
+        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(blockV5.getHash());
+        XAmount balance = XAmount.ZERO;
+        for (Transaction tx : transactions) {
+            balance = balance.add(tx.getAmount());
+        }
+
+        // Build response
+        BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
+        builder.address(hash2Address(blockV5.getHash()))
+                .hash(blockV5.getHash().toUnprefixedHexString())
+                .balance(balance.toDecimal(9, XUnit.XDAG).toPlainString())
+                .blockTime(xdagTimestampToMs(blockV5.getTimestamp()))
+                .timeStamp(blockV5.getTimestamp())
+                .diff(toQuantityJsonHex(info.getDifficulty().toBigInteger()))
+                .state(info.isMainBlock() ? "Main" : "Orphan")
+                .type(getTypeV5(blockV5))
+                .height(info.getHeight());
+
+        // Add transaction history if page != 0
         if (page != 0) {
-            BlockResultDTOBuilder.transactions(getTxLinks(block, page, parameters))
+            builder.transactions(getTxHistoryV5(blockV5.getHash(), page, parameters))
                     .totalPage(totalPage);
         }
+
         totalPage = 1;
-        return BlockResultDTOBuilder.build();
-        */
+        return builder.build();
     }
 
     private BlockResponse transferBlockToBriefBlockResultDTO(BlockV5 blockV5) {
         if (null == blockV5) {
             return null;
         }
-        // TODO v5.1: DELETED - Block class no longer exists
-        // Temporarily disabled - waiting for migration to BlockV5
-        log.warn("transferBlockToBriefBlockResultDTO() temporarily disabled - v5.1 migration in progress");
 
-        // Return minimal response from BlockV5
-        BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
-        return builder.address(hash2Address(blockV5.getHash()))
-                .hash(blockV5.getHash().toUnprefixedHexString())
-                .balance("0.0") // TODO: Remove getAmount()
-                .build();
-        /*
-        // Phase 8.3.2: Convert to Block for legacy helper method compatibility
-        Block block = kernel.getBlockStore().getBlockByHash(blockV5.getHash(), false);
-        if (block == null) {
-            // Fallback: create minimal response from BlockV5
-            BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
-            return builder.address(hash2Address(blockV5.getHash()))
-                    .hash(blockV5.getHash().toUnprefixedHexString())
-                    .balance(String.format("%s", blockV5.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
-                    .build();
+        // Phase 8.2.3: Restored using TransactionStore for balance calculation
+        BlockInfo info = blockV5.getInfo();
+        if (info == null) {
+            return null;
         }
 
-        BlockResponse.BlockResponseBuilder BlockResponseBuilder = BlockResponse.builder();
-        BlockResponseBuilder.address(hash2Address(block.getHash()))
-                .hash(block.getHash().toUnprefixedHexString())
-                .balance(String.format("%s", block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString()))
-                .blockTime(xdagTimestampToMs(block.getTimestamp()))
-                .timeStamp(block.getTimestamp())
-                .flags(Integer.toHexString(block.getInfo().getFlags()))
-                .diff(toQuantityJsonHex(block.getInfo().getDifficulty().toBigInteger()))
-                .remark(block.getInfo().getRemark() == null ? "" : new String(block.getInfo().getRemark().toArray(),
-                        StandardCharsets.UTF_8).trim())
-                .state(getStateByFlags(block.getInfo().getFlags()))
-                .type(getType(block))
-                .height(block.getInfo().getHeight());
-        return BlockResponseBuilder.build();
-        */
+        // Calculate balance from Transactions
+        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(blockV5.getHash());
+        XAmount balance = XAmount.ZERO;
+        for (Transaction tx : transactions) {
+            balance = balance.add(tx.getAmount());
+        }
+
+        // Build response
+        BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
+        builder.address(hash2Address(blockV5.getHash()))
+                .hash(blockV5.getHash().toUnprefixedHexString())
+                .balance(balance.toDecimal(9, XUnit.XDAG).toPlainString())
+                .blockTime(xdagTimestampToMs(info.getTimestamp()))
+                .timeStamp(info.getTimestamp())
+                .diff(toQuantityJsonHex(info.getDifficulty().toBigInteger()))
+                .state(info.isMainBlock() ? "Main" : "Orphan")
+                .type(getTypeV5(blockV5))
+                .height(info.getHeight());
+
+        return builder.build();
     }
 
-    // Phase 8.2.2: DELETED - getType(Block block)
+    // Phase 8.2.3: DELETED - getType(Block block)
     // Obsolete: Uses Block.getInputs()/getOutputs()/getInsigs() which no longer exist
     // v5.1: Type can be determined from BlockInfo.isMainBlock() and Link structure
+
+    /**
+     * Get block type for v5.1 BlockV5 (Phase 8.2.3 restoration)
+     *
+     * @param block BlockV5 to determine type for
+     * @return Block type string (Main/Transaction/Wallet)
+     */
+    private String getTypeV5(BlockV5 block) {
+        if (block == null || block.getInfo() == null) {
+            return "Unknown";
+        }
+
+        // Main blocks
+        if (block.getInfo().isMainBlock()) {
+            return "Main";
+        }
+
+        // Check links to determine Transaction vs Wallet
+        List<Link> links = block.getLinks();
+        if (links == null || links.isEmpty()) {
+            return "Wallet";
+        }
+
+        // If has transaction links, it's a Transaction block
+        boolean hasTransactionLinks = links.stream().anyMatch(Link::isTransaction);
+        return hasTransactionLinks ? "Transaction" : "Wallet";
+    }
 
     private void checkParam(String value, String remark, ProcessResponse processResponse) {
         try {
