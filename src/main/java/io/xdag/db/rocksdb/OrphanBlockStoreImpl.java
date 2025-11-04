@@ -24,7 +24,6 @@
 
 package io.xdag.db.rocksdb;
 
-import io.xdag.core.Block;
 import io.xdag.db.OrphanBlockStore;
 import io.xdag.utils.BytesUtils;
 import java.util.Comparator;
@@ -119,6 +118,9 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
         orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(currentsize - 1, false));
     }
 
+    // TODO v5.1: DELETED - Block class no longer exists
+    // Temporarily disabled - waiting for migration to BlockV5
+    /*
     public void addOrphan(Block block) {
         orphanSource.put(BytesUtils.merge(ORPHAN_PREFEX, block.getHash().toArray()),
                 BytesUtils.longToBytes(block.getTimestamp(), true));
@@ -127,6 +129,7 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
 //        log.debug(":" + Hex.toHexString(orphanSource.get(ORPHAN_SIZE)));
         orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(currentsize + 1, false));
     }
+    */
 
     public long getOrphanSize() {
         long currentsize = BytesUtils.bytesToLong(orphanSource.get(ORPHAN_SIZE), 0, false);

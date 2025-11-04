@@ -65,15 +65,24 @@ public class CompactSerializer {
         // height: variable length (typically 3-5 bytes)
         writeVarLong(out, blockInfo.getHeight());
 
+        // TODO v5.1: DELETED - BlockInfo legacy fields no longer exist in v5.1 minimal design
+        // Temporarily writing zeros for backward compatibility
+        /*
         // type: 8 bytes (fixed)
         writeFixed64(out, blockInfo.getType());
 
         // flags: 4 bytes (fixed)
         writeFixed32(out, blockInfo.getFlags());
+        */
+        writeFixed64(out, 0L); // type placeholder
+        writeFixed32(out, 0);  // flags placeholder
 
         // difficulty: 32 bytes (UInt256)
         out.write(blockInfo.getDifficulty().toBytes().toArray());
 
+        // TODO v5.1: DELETED - BlockInfo.ref field no longer exists in v5.1 minimal design
+        // Temporarily disabled - waiting for migration to v5.1
+        /*
         // ref: 32 bytes (optional)
         if (blockInfo.getRef() != null) {
             out.write(1); // present flag
@@ -81,7 +90,12 @@ public class CompactSerializer {
         } else {
             out.write(0); // absent flag
         }
+        */
+        out.write(0); // ref absent placeholder
 
+        // TODO v5.1: DELETED - BlockInfo.maxDiffLink field no longer exists in v5.1 minimal design
+        // Temporarily disabled - waiting for migration to v5.1
+        /*
         // maxDiffLink: 32 bytes (optional)
         if (blockInfo.getMaxDiffLink() != null) {
             out.write(1); // present flag
@@ -89,13 +103,28 @@ public class CompactSerializer {
         } else {
             out.write(0); // absent flag
         }
+        */
+        out.write(0); // maxDiffLink absent placeholder
 
+        // TODO v5.1: DELETED - BlockInfo.amount field no longer exists in v5.1 minimal design
+        // Temporarily disabled - waiting for migration to v5.1
+        /*
         // amount: XAmount (9 bytes typically)
         serializeXAmount(out, blockInfo.getAmount());
+        */
+        serializeXAmount(out, null); // amount placeholder
 
+        // TODO v5.1: DELETED - BlockInfo.fee field no longer exists in v5.1 minimal design
+        // Temporarily disabled - waiting for migration to v5.1
+        /*
         // fee: XAmount (9 bytes typically)
         serializeXAmount(out, blockInfo.getFee());
+        */
+        serializeXAmount(out, null); // fee placeholder
 
+        // TODO v5.1: DELETED - BlockInfo.remark field no longer exists in v5.1 minimal design
+        // Temporarily disabled - waiting for migration to v5.1
+        /*
         // remark: variable length (with length prefix)
         if (blockInfo.getRemark() != null && !blockInfo.getRemark().isEmpty()) {
             byte[] remarkBytes = blockInfo.getRemark().toArray();
@@ -104,10 +133,20 @@ public class CompactSerializer {
         } else {
             writeVarInt(out, 0);
         }
+        */
+        writeVarInt(out, 0); // remark length placeholder
 
+        // TODO v5.1: DELETED - BlockInfo.isSnapshot field no longer exists in v5.1 minimal design
+        // Temporarily disabled - waiting for migration to v5.1
+        /*
         // isSnapshot: 1 byte (boolean)
         out.write(blockInfo.isSnapshot() ? 1 : 0);
+        */
+        out.write(0); // isSnapshot placeholder
 
+        // TODO v5.1: DELETED - BlockInfo.snapshotInfo field no longer exists in v5.1 minimal design
+        // Temporarily disabled - waiting for migration to v5.1
+        /*
         // snapshotInfo: variable length (optional)
         if (blockInfo.getSnapshotInfo() != null) {
             out.write(1); // present flag
@@ -116,6 +155,8 @@ public class CompactSerializer {
         } else {
             out.write(0); // absent flag
         }
+        */
+        out.write(0); // snapshotInfo absent placeholder
 
         return out.toByteArray();
     }
@@ -135,63 +176,95 @@ public class CompactSerializer {
         // height: variable
         long height = reader.readVarLong();
 
+        // TODO v5.1: DELETED - BlockInfo legacy fields no longer exist in v5.1 minimal design
+        // Reading placeholder values for backward compatibility
+        /*
         // type: 8 bytes
         long type = reader.readFixed64();
 
         // flags: 4 bytes
         int flags = reader.readFixed32();
+        */
+        long type = reader.readFixed64(); // placeholder
+        int flags = reader.readFixed32(); // placeholder
 
         // difficulty: 32 bytes
         UInt256 difficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
 
+        // TODO v5.1: DELETED - BlockInfo.ref field no longer exists in v5.1 minimal design
+        // Reading placeholder values for backward compatibility
+        /*
         // ref: optional
         Bytes32 ref = null;
         if (reader.readByte() == 1) {
             ref = Bytes32.wrap(reader.readBytes(32));
         }
+        */
+        byte refFlag = reader.readByte(); // placeholder
 
+        // TODO v5.1: DELETED - BlockInfo.maxDiffLink field no longer exists in v5.1 minimal design
+        // Reading placeholder values for backward compatibility
+        /*
         // maxDiffLink: optional
         Bytes32 maxDiffLink = null;
         if (reader.readByte() == 1) {
             maxDiffLink = Bytes32.wrap(reader.readBytes(32));
         }
+        */
+        byte maxDiffLinkFlag = reader.readByte(); // placeholder
 
+        // TODO v5.1: DELETED - BlockInfo.amount field no longer exists in v5.1 minimal design
+        // Reading placeholder values for backward compatibility
+        /*
         // amount
         XAmount amount = deserializeXAmount(reader);
+        */
+        XAmount amount = deserializeXAmount(reader); // placeholder
 
+        // TODO v5.1: DELETED - BlockInfo.fee field no longer exists in v5.1 minimal design
+        // Reading placeholder values for backward compatibility
+        /*
         // fee
         XAmount fee = deserializeXAmount(reader);
+        */
+        XAmount fee = deserializeXAmount(reader); // placeholder
 
+        // TODO v5.1: DELETED - BlockInfo.remark field no longer exists in v5.1 minimal design
+        // Reading placeholder values for backward compatibility
+        /*
         // remark
         Bytes remark = null;
         int remarkLen = reader.readVarInt();
         if (remarkLen > 0) {
             remark = Bytes.wrap(reader.readBytes(remarkLen));
         }
+        */
+        int remarkLen = reader.readVarInt(); // placeholder
 
+        // TODO v5.1: DELETED - BlockInfo.isSnapshot field no longer exists in v5.1 minimal design
+        // Reading placeholder values for backward compatibility
+        /*
         // isSnapshot
         boolean isSnapshot = reader.readByte() == 1;
+        */
+        byte isSnapshotFlag = reader.readByte(); // placeholder
 
+        // TODO v5.1: DELETED - BlockInfo.snapshotInfo field no longer exists in v5.1 minimal design
+        // Reading placeholder values for backward compatibility
+        /*
         // snapshotInfo
         SnapshotInfo snapshotInfo = null;
         if (reader.readByte() == 1) {
             snapshotInfo = deserializeSnapshotInfo(reader);
         }
+        */
+        byte snapshotInfoFlag = reader.readByte(); // placeholder
 
         return BlockInfo.builder()
                 .hash(fullHash)  // Use full hash format, not hash
                 .timestamp(timestamp)
                 .height(height)
-                .type(type)
-                .flags(flags)
                 .difficulty(difficulty)
-                .ref(ref)
-                .maxDiffLink(maxDiffLink)
-                .amount(amount)
-                .fee(fee)
-                .remark(remark)
-                .isSnapshot(isSnapshot)
-                .snapshotInfo(snapshotInfo)
                 .build();
     }
 

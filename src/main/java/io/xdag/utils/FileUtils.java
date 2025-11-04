@@ -34,6 +34,9 @@ import org.bouncycastle.util.encoders.Hex;
  */
 public class FileUtils {
 
+    // TODO v5.1: DELETED - BlockStore.SUM_FILE_NAME constant no longer exists
+    // Temporarily disabled - waiting for migration to v5.1
+    /*
     /**
      * Generates a list of hierarchical file paths based on a timestamp
      * <p>
@@ -43,6 +46,7 @@ public class FileUtils {
      * @param time The timestamp to generate paths from
      * @return A list of file paths, including intermediate paths
      */
+    /*
     public static List<String> getFileName(long time) {
         List<String> files = Lists.newArrayList(BlockStore.SUM_FILE_NAME);
         StringBuilder stringBuffer = new StringBuilder(
@@ -57,5 +61,6 @@ public class FileUtils {
         files.add(stringBuffer + BlockStore.SUM_FILE_NAME);
         return files;
     }
+    */
 
 }

@@ -26,12 +26,10 @@ package io.xdag.db.store;
 
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
-import io.xdag.core.Block;
 import io.xdag.core.BlockInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Optional;
 
@@ -116,29 +114,10 @@ public class BloomFilterBlockStore implements FinalizedBlockStore {
     }
 
     @Override
-    public void saveBlock(Block block) {
-        delegate.saveBlock(block);
-        // Add to Bloom Filter
-        bloomFilter.put(block.getHash().toArray());
-    }
-
-    @Override
     public void saveBlockInfo(BlockInfo blockInfo) {
         delegate.saveBlockInfo(blockInfo);
         // Add to Bloom Filter
         bloomFilter.put(blockInfo.getHash().toArray());
-    }
-
-    @Override
-    public long saveBatch(List<Block> blocks) {
-        long saved = delegate.saveBatch(blocks);
-
-        // Add all to Bloom Filter
-        for (Block block : blocks) {
-            bloomFilter.put(block.getHash().toArray());
-        }
-
-        return saved;
     }
 
     // ========== Statistics ==========
@@ -182,28 +161,13 @@ public class BloomFilterBlockStore implements FinalizedBlockStore {
     // ========== Delegated Methods (unchanged) ==========
 
     @Override
-    public Optional<Block> getBlockByHash(Bytes32 hash) {
-        return delegate.getBlockByHash(hash);
-    }
-
-    @Override
     public Optional<BlockInfo> getBlockInfoByHash(Bytes32 hash) {
         return delegate.getBlockInfoByHash(hash);
     }
 
     @Override
-    public Optional<Block> getMainBlockByHeight(long height) {
-        return delegate.getMainBlockByHeight(height);
-    }
-
-    @Override
     public Optional<BlockInfo> getMainBlockInfoByHeight(long height) {
         return delegate.getMainBlockInfoByHeight(height);
-    }
-
-    @Override
-    public List<Block> getMainBlocksByHeightRange(long fromHeight, long toHeight) {
-        return delegate.getMainBlocksByHeightRange(fromHeight, toHeight);
     }
 
     @Override
@@ -227,18 +191,8 @@ public class BloomFilterBlockStore implements FinalizedBlockStore {
     }
 
     @Override
-    public List<Block> getBlocksByEpoch(long epoch) {
-        return delegate.getBlocksByEpoch(epoch);
-    }
-
-    @Override
     public List<BlockInfo> getBlockInfosByEpoch(long epoch) {
         return delegate.getBlockInfosByEpoch(epoch);
-    }
-
-    @Override
-    public List<Block> getBlocksByEpochRange(long fromEpoch, long toEpoch) {
-        return delegate.getBlocksByEpochRange(fromEpoch, toEpoch);
     }
 
     @Override

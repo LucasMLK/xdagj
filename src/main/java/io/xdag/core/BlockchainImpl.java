@@ -28,53 +28,32 @@ import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
 import io.xdag.Kernel;
 import io.xdag.Wallet;
-import io.xdag.config.MainnetConfig;
-import io.xdag.core.XdagField.FieldType;
 import io.xdag.consensus.RandomX;
 import io.xdag.crypto.core.CryptoProvider;
-import io.xdag.crypto.encoding.Base58;
-import io.xdag.crypto.hash.HashUtils;
 import io.xdag.crypto.keys.ECKeyPair;
-import io.xdag.crypto.keys.PublicKey;
-import io.xdag.crypto.keys.Signature;
-import io.xdag.crypto.keys.Signer;
 import io.xdag.db.*;
 import io.xdag.db.rocksdb.RocksdbKVSource;
 import io.xdag.db.rocksdb.SnapshotStoreImpl;
 import io.xdag.listener.BlockMessage;
 import io.xdag.listener.Listener;
-import io.xdag.listener.PretopMessage;
-import io.xdag.utils.BasicUtils;
-import io.xdag.utils.BytesUtils;
 import io.xdag.utils.XdagTime;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-import org.apache.tuweni.bytes.MutableBytes;
-import org.apache.tuweni.bytes.MutableBytes32;
-import org.apache.tuweni.units.bigints.UInt64;
-import org.bouncycastle.util.Arrays;
-import org.bouncycastle.util.encoders.Hex;
 
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
 
 import static io.xdag.config.Constants.*;
 import static io.xdag.config.Constants.MessageType.NEW_LINK;
-import static io.xdag.config.Constants.MessageType.PRE_TOP;
 import static io.xdag.core.ImportResult.IMPORTED_BEST;
 import static io.xdag.core.ImportResult.IMPORTED_NOT_BEST;
-import static io.xdag.core.XdagField.FieldType.*;
-import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 import static io.xdag.utils.BasicUtils.*;
 import static io.xdag.utils.BytesUtils.*;
-import static io.xdag.utils.WalletUtils.checkAddress;
 
 @Slf4j
 @Getter
@@ -102,7 +81,7 @@ public class BlockchainImpl implements Blockchain {
     private final OrphanBlockStore orphanBlockStore;
 
     // In-memory pools and maps
-    private final LinkedHashMap<Bytes, Block> memOrphanPool = new LinkedHashMap<>();
+    private final LinkedHashMap<Bytes, BlockV5> memOrphanPool = new LinkedHashMap<>();
     private final Map<Bytes, Integer> memOurBlocks = new ConcurrentHashMap<>();
     
     // Stats and status tracking
@@ -171,13 +150,15 @@ public class BlockchainImpl implements Blockchain {
             
             this.xdagTopStatus = Objects.requireNonNullElseGet(storedTopStatus, XdagTopStatus::new);
 
-            Block lastBlock = getBlockByHeightInternal(xdagStats.nmain);
-            if (lastBlock != null) {
-                xdagStats.setMaxdifficulty(lastBlock.getInfo().getDifficulty().toBigInteger());
-                xdagStats.setDifficulty(lastBlock.getInfo().getDifficulty().toBigInteger());
-                xdagTopStatus.setTop(lastBlock.getHash().toArray());
-                xdagTopStatus.setTopDiff(lastBlock.getInfo().getDifficulty().toBigInteger());
-            }
+            // TODO v5.1: DELETED - Block class no longer exists
+            // Temporarily disabled - waiting for migration to BlockV5
+            // Block lastBlock = getBlockByHeightInternal(xdagStats.nmain);
+            // if (lastBlock != null) {
+            //     xdagStats.setMaxdifficulty(lastBlock.getInfo().getDifficulty().toBigInteger());
+            //     xdagStats.setDifficulty(lastBlock.getInfo().getDifficulty().toBigInteger());
+            //     xdagTopStatus.setTop(lastBlock.getHash().toArray());
+            //     xdagTopStatus.setTopDiff(lastBlock.getInfo().getDifficulty().toBigInteger());
+            // }
             preSeed = blockStore.getPreSeed();
         }
 
@@ -210,7 +191,18 @@ public class BlockchainImpl implements Blockchain {
         snapshotSource.setConfig(kernel.getConfig());
         snapshotStore.init();
         snapshotStore.saveSnapshotToIndex(this.blockStore, this.txHistoryStore, kernel.getWallet().getAccounts(), kernel.getConfig().getSnapshotSpec().getSnapshotTime());
+
+        // TODO v5.1: DELETED - Block class no longer exists
+        // Temporarily disabled - waiting for migration to BlockV5
+        /*
         Block lastBlock = blockStore.getBlockByHeight(snapshotHeight);
+        xdagStats.setMaxdifficulty(lastBlock.getInfo().getDifficulty().toBigInteger());
+        xdagStats.setDifficulty(lastBlock.getInfo().getDifficulty().toBigInteger());
+        xdagTopStatus.setPreTop(lastBlock.getHash().toArray());
+        xdagTopStatus.setTop(lastBlock.getHash().toArray());
+        xdagTopStatus.setTopDiff(lastBlock.getInfo().getDifficulty().toBigInteger());
+        xdagTopStatus.setPreTopDiff(lastBlock.getInfo().getDifficulty().toBigInteger());
+        */
 
         // Initialize stats
         xdagStats.balance = snapshotStore.getOurBalance();
@@ -221,14 +213,6 @@ public class BlockchainImpl implements Blockchain {
         xdagStats.setNblocks(0);
         xdagStats.setTotalnmain(snapshotHeight);
         xdagStats.setNmain(snapshotHeight);
-        xdagStats.setMaxdifficulty(lastBlock.getInfo().getDifficulty().toBigInteger());
-        xdagStats.setDifficulty(lastBlock.getInfo().getDifficulty().toBigInteger());
-
-        // Initialize top status
-        xdagTopStatus.setPreTop(lastBlock.getHash().toArray());
-        xdagTopStatus.setTop(lastBlock.getHash().toArray());
-        xdagTopStatus.setTopDiff(lastBlock.getInfo().getDifficulty().toBigInteger());
-        xdagTopStatus.setPreTopDiff(lastBlock.getInfo().getDifficulty().toBigInteger());
 
         // Calculate total balance
         XAmount allBalance = snapshotStore.getAllBalance().add(snapshotAddressStore.getAllBalance());
@@ -348,7 +332,7 @@ public class BlockchainImpl implements Blockchain {
 
                 } else {
                     // Block link validation
-                    Block refBlock = getBlockByHashInternal(link.getTargetHash(), false);
+                  BlockV5 refBlock = getBlockByHash(link.getTargetHash(), false);
                     if (refBlock == null) {
                         result = ImportResult.NO_PARENT;
                         result.setHash(link.getTargetHash());
@@ -390,37 +374,20 @@ public class BlockchainImpl implements Blockchain {
                         // Phase 8.2: Index transaction to block for efficient block transaction queries
                         // This enables transactionStore.getTransactionsByBlock() to work
                         transactionStore.indexTransactionToBlock(block.getHash(), tx.getHash());
-
-                        // Record transaction history for sender (from)
-                        onNewTxHistoryV2(tx.getFrom(), block.getHash(), tx.getAmount(),
-                                        block.getTimestamp(), true /* isFrom */);
-
-                        // Record transaction history for receiver (to)
-                        onNewTxHistoryV2(tx.getTo(), block.getHash(), tx.getAmount(),
-                                        block.getTimestamp(), false /* isFrom */);
                     }
                 }
             }
 
             // ====================
-            // Phase 5: Initialize BlockInfo (Phase 4 Step 2.3 Part 2)
+            // Phase 5: Initialize BlockInfo (v5.1 minimal design)
             // ====================
-            // For BlockV5, we need to initialize BlockInfo with basic values
-            // This enables applyBlockV2() and other BlockInfo-dependent operations
+            // v5.1: BlockInfo only has 4 fields (hash, height, difficulty, timestamp)
+            // Removed: type, flags, ref, maxDiffLink, amount, fee, remark, isSnapshot, snapshotInfo
             BlockInfo initialInfo = BlockInfo.builder()
                     .hash(block.getHash())
                     .timestamp(block.getTimestamp())
-                    .type(0L)  // Default type
-                    .flags(0)  // No flags initially
-                    .height(0L)  // Will be set when block becomes main
+                    .height(0L)  // 0 = orphan block initially
                     .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)  // Will be calculated
-                    .ref(null)  // Will be set during applyBlock
-                    .maxDiffLink(null)  // Will be calculated
-                    .amount(XAmount.ZERO)  // Initial amount
-                    .fee(XAmount.ZERO)  // Initial fee
-                    .remark(null)  // No remark
-                    .isSnapshot(false)  // Not a snapshot block
-                    .snapshotInfo(null)  // No snapshot info
                     .build();
 
             // Save initial BlockInfo to database
@@ -444,189 +411,6 @@ public class BlockchainImpl implements Blockchain {
         }
     }
 
-
-    public boolean isAccountTx(Block block) {
-        List<Address> inputs = block.getInputs();
-        if ( inputs != null ) {
-            for (Address ref : inputs) {
-                if (ref.getType() == XDAG_FIELD_INPUT) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        return false;
-    }
-
-    public boolean isTxBlock(Block block) {
-        List<Address> inputs = block.getInputs();
-        if ( inputs != null ) {
-            for (Address ref : inputs) {
-                if (ref.getType() == XDAG_FIELD_INPUT || ref.getType() == XDAG_FIELD_IN) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        return false;
-    }
-
-    // Record transaction history
-    public void onNewTxHistory(Bytes32 addressHash, Bytes32 txHash, XdagField.FieldType type,
-                               XAmount amount, long time, byte[] remark, boolean isAddress, int id) {
-        if (txHistoryStore != null) {
-            Address address = new Address(addressHash, type, amount, isAddress);
-            TxHistory txHistory = new TxHistory();
-            txHistory.setAddress(address);
-            txHistory.setHash(BasicUtils.hash2Address(txHash));
-            if (remark != null) {
-                txHistory.setRemark(new String(remark, StandardCharsets.UTF_8));
-            }
-            txHistory.setTimestamp(time);
-            try {
-                if (kernel.getXdagState() == XdagState.CDST || kernel.getXdagState() == XdagState.CTST || kernel.getXdagState() == XdagState.CONN
-                        || kernel.getXdagState() == XdagState.CDSTP || kernel.getXdagState() == XdagState.CTSTP || kernel.getXdagState() == XdagState.CONNP) {
-                    txHistoryStore.batchSaveTxHistory(txHistory);
-                } else {
-                    if (!txHistoryStore.saveTxHistory(txHistory)) {
-                        log.warn("tx history write to mysql fail:{}", txHistory);
-                        // Mysql exception, transaction history transferred to Rocksdb
-                        blockStore.saveTxHistoryToRocksdb(txHistory, id);
-                    } else {
-                        List<TxHistory> txHistoriesInRocksdb = blockStore.getAllTxHistoryFromRocksdb();
-                        if (!txHistoriesInRocksdb.isEmpty()) {
-                            for (TxHistory txHistoryInRocksdb : txHistoriesInRocksdb) {
-                                txHistoryStore.batchSaveTxHistory(txHistoryInRocksdb, txHistoriesInRocksdb.size());
-                            }
-                            if (txHistoryStore.batchSaveTxHistory(null)) {
-                                blockStore.deleteAllTxHistoryFromRocksdb();
-                            }
-                        }
-                    }
-                }
-
-            } catch (Exception e) {
-                log.error(e.getMessage(), e);
-            }
-        }
-    }
-
-    /**
-     * Record transaction history (v5.1 version for Transaction objects)
-     *
-     * Phase 4 Step 2.1: This version works with Transaction objects instead of Address objects.
-     * Simplified design that records sender/receiver transaction history without block-level complexity.
-     *
-     * @param address Account address (from or to)
-     * @param blockHash Block hash that includes this transaction
-     * @param amount Transaction amount
-     * @param timestamp Block timestamp
-     * @param isFrom true if this is the sender (from), false if receiver (to)
-     */
-    private void onNewTxHistoryV2(Bytes32 address, Bytes32 blockHash, XAmount amount,
-                                   long timestamp, boolean isFrom) {
-        if (txHistoryStore == null) {
-            return;
-        }
-
-        try {
-            // Create transaction history record
-            // For v5.1, we use a simplified model:
-            // - isFrom=true → sender (similar to XDAG_FIELD_OUTPUT for V1 - money going out)
-            // - isFrom=false → receiver (similar to XDAG_FIELD_INPUT for V1 - money coming in)
-            XdagField.FieldType fieldType = isFrom ? XDAG_FIELD_OUTPUT : XDAG_FIELD_INPUT;
-
-            // Create Address wrapper for TxHistory (temporary compatibility layer)
-            // TODO Phase 4 Step 2.4: Update TxHistory to use Bytes32 addresses directly
-            Address addressWrapper = new Address(address, fieldType, amount, true);
-
-            TxHistory txHistory = new TxHistory();
-            txHistory.setAddress(addressWrapper);
-            txHistory.setHash(BasicUtils.hash2Address(blockHash));
-            txHistory.setTimestamp(timestamp);
-            // No remark for Transaction-based history (remark is block-level, not tx-level)
-
-            // Save transaction history (same logic as V1)
-            if (kernel.getXdagState() == XdagState.CDST || kernel.getXdagState() == XdagState.CTST ||
-                kernel.getXdagState() == XdagState.CONN || kernel.getXdagState() == XdagState.CDSTP ||
-                kernel.getXdagState() == XdagState.CTSTP || kernel.getXdagState() == XdagState.CONNP) {
-                // Batch mode during sync
-                txHistoryStore.batchSaveTxHistory(txHistory);
-            } else {
-                // Normal mode with fallback to RocksDB
-                if (!txHistoryStore.saveTxHistory(txHistory)) {
-                    log.warn("tx history write to mysql fail (V2): {}", txHistory);
-                    // MySQL exception, fall back to RocksDB
-                    // Note: For V2, we don't have an ID field, so we use 0 as placeholder
-                    blockStore.saveTxHistoryToRocksdb(txHistory, 0);
-                } else {
-                    // Check if there are pending entries in RocksDB and flush them
-                    List<TxHistory> txHistoriesInRocksdb = blockStore.getAllTxHistoryFromRocksdb();
-                    if (!txHistoriesInRocksdb.isEmpty()) {
-                        for (TxHistory txHistoryInRocksdb : txHistoriesInRocksdb) {
-                            txHistoryStore.batchSaveTxHistory(txHistoryInRocksdb, txHistoriesInRocksdb.size());
-                        }
-                        if (txHistoryStore.batchSaveTxHistory(null)) {
-                            blockStore.deleteAllTxHistoryFromRocksdb();
-                        }
-                    }
-                }
-            }
-
-        } catch (Exception e) {
-            log.error("Error recording transaction history (V2): " + e.getMessage(), e);
-        }
-    }
-
-    // Get transaction history by address
-    public List<TxHistory> getBlockTxHistoryByAddress(Bytes32 addressHash, int page, Object... parameters) {
-        List<TxHistory> txHistory = Lists.newArrayList();
-        if (txHistoryStore != null) {
-            try {
-                txHistory.addAll(txHistoryStore.listTxHistoryByAddress(checkAddress(addressHash) ?
-                        BasicUtils.hash2PubAddress(addressHash) : BasicUtils.hash2Address(addressHash), page, parameters));
-            } catch (Exception e) {
-                log.error(e.getMessage(), e);
-            }
-        }
-        return txHistory;
-    }
-
-    // Check if should use sync fix fork
-    public boolean isSyncFixFork(long currentHeight) {
-        long syncFixHeight = SYNC_FIX_HEIGHT;
-        return currentHeight >= syncFixHeight;
-    }
-
-    // Process extra blocks
-    public void processExtraBlock() {
-        if (memOrphanPool.size() > MAX_ALLOWED_EXTRA) {
-            Block reuse = memOrphanPool.entrySet().iterator().next().getValue();
-            log.debug("Remove when extra too big");
-            removeOrphan(reuse.getHash(), OrphanRemoveActions.ORPHAN_REMOVE_REUSE);
-            xdagStats.nblocks--;
-            xdagStats.totalnblocks = Math.max(xdagStats.nblocks, xdagStats.totalnblocks);
-
-            if ((reuse.getInfo().getFlags() & BI_OURS) != 0) {
-                removeOurBlock(reuse);
-            }
-        }
-    }
-
-    // Notify listeners of new pretop
-    protected void onNewPretop() {
-        for (Listener listener : listeners) {
-            listener.onMessage(new PretopMessage(Bytes.wrap(xdagTopStatus.getTop()), PRE_TOP));
-        }
-    }
-
-    // Notify listeners of new block
-    protected void onNewBlock(Block block) {
-        for (Listener listener : listeners) {
-            listener.onMessage(new BlockMessage(Bytes.wrap(block.getXdagBlock().getData()), NEW_LINK));
-        }
-    }
-
     /**
      * Notify listeners of new BlockV5 (v5.1 implementation)
      *
@@ -643,275 +427,14 @@ public class BlockchainImpl implements Blockchain {
         }
     }
 
-    // Check and update main chain
-    // Phase 8.3.3: Main Chain Consensus - Internal Implementation
-    //
-    // Design Decision: checkNewMain() and related consensus methods (setMain, unSetMain,
-    // findAncestor, unWindMain) continue to use Block objects internally. This is intentional:
-    //
-    // 1. These are private/protected methods, not public API
-    // 2. Phase 8.3.2 completed public API migration (Blockchain interface uses BlockV5)
-    // 3. Internal consensus logic can use Block for:
-    //    - Stability: Complex consensus logic remains unchanged
-    //    - Compatibility: Works with existing BlockInfo and difficulty calculation
-    //    - Efficiency: Avoids unnecessary Block<->BlockV5 conversions
-    //
-    // 4. BlockV5 import path (tryToConnectV2) doesn't use these fork resolution methods yet
-    // 5. Future phases will gradually migrate internal methods as needed
-    //
-    // Helper methods added in Phase 8.3.3:
-    // - getMaxDiffLinkV5(BlockV5, boolean) - Get maxDiffLink for BlockV5
-    @Override
-    public synchronized void checkNewMain() {
-        Block p = null;
-        int i = 0;
-
-        log.debug("checkNewMain: top={}, nmain={}",
-                 xdagTopStatus.getTop() == null ? "null" : Bytes32.wrap(xdagTopStatus.getTop()).toHexString(),
-                 xdagStats.nmain);
-
-        // If it's a snapshot point main block, return directly since data before snapshot is already determined
-        if (xdagTopStatus.getTop() != null) {
-            Block topBlock = getBlockByHashInternal(Bytes32.wrap(xdagTopStatus.getTop()), false);
-
-            for (Block block = topBlock; block != null
-                    && ((block.getInfo().getFlags() & BI_MAIN) == 0);
-                 block = getMaxDiffLink(getBlockByHashInternal(block.getHash(), true), true)) {
-
-                long epoch = XdagTime.getEpoch(block.getTimestamp());
-                log.debug("checkNewMain: checking block={}, epoch={}, flags={}, hasMainChain={}",
-                         block.getHash().toHexString(),
-                         epoch,
-                         block.getInfo().getFlags(),
-                         (block.getInfo().getFlags() & BI_MAIN_CHAIN) != 0);
-
-                if ((block.getInfo().getFlags() & BI_MAIN_CHAIN) != 0) {
-                    p = block;
-                    ++i;
-                }
-            }
-        }
-        long ct = XdagTime.getCurrentTimestamp();
-
-        log.debug("checkNewMain: found {} candidates, p={}, BI_REF={}, time check={}",
-                 i,
-                 p == null ? "null" : p.getHash().toHexString(),
-                 p != null && ((p.getInfo().getFlags() & BI_REF) != 0),
-                 p != null && (ct >= p.getTimestamp() + 2 * 1024));
-
-        if (p != null
-                && ((p.getInfo().getFlags() & BI_REF) != 0)
-                && i > 1
-                && ct >= p.getTimestamp() + 2 * 1024) {
-            log.info("setMain success block:{}", p.getHash().toHexString());
-            setMain(p);
-        }
-    }
-
     @Override
     public long getLatestMainBlockNumber() {
         return xdagStats.nmain;
     }
 
-
-    private boolean blockEqual(Block block1, Block block2) {
-        if (block1 == null) {
-            return block2 == null;
-        } else {
-            return block2.equals(block1);
-        }
-    }
-
-    // ========== Phase 4 Step 2.2/2.3: BlockV5 applyBlock() Support ==========
-
-    /**
-     * Execute BlockV5 and return gas fee (v5.1 implementation)
-     *
-     * Phase 4 Step 2.2: Transaction execution (Complete)
-     * Phase 4 Step 2.3 Part 2: Block link recursive processing (Complete)
-     *
-     * Key differences from V1:
-     * 1. Uses List<Link> instead of List<Address>
-     * 2. Transaction amount/fee retrieved from TransactionStore
-     * 3. Handles from/to balance updates for Transactions
-     * 4. BlockV5 is immutable, so BlockInfo updates are done in database directly
-     *
-     * @param flag true if this is the main block, false for recursive calls
-     * @param block BlockV5 to execute
-     * @return collected gas fees (or -1 if already processed)
-     */
-    private XAmount applyBlockV2(boolean flag, BlockV5 block) {
-        XAmount gas = XAmount.ZERO;
-
-        // Phase 4 Step 2.3 Part 2: Check if already processed (BI_MAIN_REF flag)
-        BlockInfo blockInfo = loadBlockInfo(block);
-        if (blockInfo != null && (blockInfo.getFlags() & BI_MAIN_REF) != 0) {
-            return XAmount.ZERO.subtract(XAmount.ONE);  // -1 indicates already processed
-        }
-
-        // Mark as BI_MAIN_REF (processing started)
-        updateBlockV5Flag(block, BI_MAIN_REF, true);
-
-        List<Link> links = block.getLinks();
-        if (links == null || links.isEmpty()) {
-            // No links to process, mark as applied
-            updateBlockV5Flag(block, BI_APPLIED, true);
-            return XAmount.ZERO;
-        }
-
-        // Phase 1: Process Block links recursively first
-        for (Link link : links) {
-            if (link.isBlock()) {
-                // Block link: Recursive processing
-                Block refBlock = getBlockByHashInternal(link.getTargetHash(), false);
-                if (refBlock == null) {
-                    log.error("Block not found during apply: {}", link.getTargetHash().toHexString());
-                    return XAmount.ZERO;
-                }
-
-                XAmount ret;
-                BlockInfo refInfo = refBlock.getInfo();
-
-                // Check if already processed
-                if (refInfo != null && (refInfo.getFlags() & BI_MAIN_REF) != 0) {
-                    ret = XAmount.ZERO.subtract(XAmount.ONE);  // -1 indicates already processed
-                } else {
-                    // Recursively process (need full data)
-                    refBlock = getBlockByHashInternal(link.getTargetHash(), true);
-
-                    // For Phase 4 Step 2.3 Part 2: Referenced blocks are legacy Block objects
-                    // Once all blocks are migrated to BlockV5, this can call applyBlockV2() recursively
-                    ret = applyBlock(false, refBlock);
-                }
-
-                // Skip if already processed
-                if (ret.equals(XAmount.ZERO.subtract(XAmount.ONE))) {
-                    continue;
-                }
-
-                // Accumulate gas from recursively processed blocks
-                sumGas = sumGas.add(ret);
-
-                // Update ref field (only for top-level mainBlock)
-                if (flag) {
-                    updateBlockV5Ref(refBlock, block.getHash());
-                }
-
-                // Add collected gas to mainBlock's fee (only for top-level mainBlock)
-                if (flag && sumGas.compareTo(XAmount.ZERO) != 0) {
-                    // For BlockV5, we can't modify the block, but we update BlockInfo in database
-                    BlockInfo mainInfo = loadBlockInfo(block);
-                    if (mainInfo != null) {
-                        BlockInfo updatedInfo = mainInfo.toBuilder()
-                            .fee(mainInfo.getFee().add(sumGas))
-                            .amount(mainInfo.getAmount().add(sumGas))
-                            .build();
-                        saveBlockInfo(updatedInfo);
-                    }
-                    sumGas = XAmount.ZERO;
-                }
-            }
-        }
-
-        // Phase 2: Process Transaction links
-        for (Link link : links) {
-            if (link.isTransaction()) {
-                // Transaction execution
-                Transaction tx = transactionStore.getTransaction(link.getTargetHash());
-                if (tx == null) {
-                    log.error("Transaction not found during apply: {}", link.getTargetHash().toHexString());
-                    return XAmount.ZERO;
-                }
-
-                // Subtract from sender (from address)
-                XAmount fromBalance = addressStore.getBalanceByAddress(tx.getFrom().toArray());
-                XAmount totalDeduction = tx.getAmount().add(tx.getFee());
-
-                if (fromBalance.compareTo(totalDeduction) < 0) {
-                    log.debug("Insufficient balance for tx {}: balance={}, need={}",
-                             tx.getHash().toHexString(), fromBalance, totalDeduction);
-                    return XAmount.ZERO;
-                }
-
-                addressStore.updateBalance(tx.getFrom().toArray(), fromBalance.subtract(totalDeduction));
-                log.debug("applyBlockV2: Subtract from={}, amount={}, fee={}",
-                         tx.getFrom().toHexString(), tx.getAmount(), tx.getFee());
-
-                // Add to receiver (to address)
-                XAmount toBalance = addressStore.getBalanceByAddress(tx.getTo().toArray());
-                addressStore.updateBalance(tx.getTo().toArray(), toBalance.add(tx.getAmount()));
-                log.debug("applyBlockV2: Add to={}, amount={}",
-                         tx.getTo().toHexString(), tx.getAmount());
-
-                // Collect gas fee
-                gas = gas.add(tx.getFee());
-            }
-        }
-
-        // Mark block as BI_APPLIED (processing complete)
-        updateBlockV5Flag(block, BI_APPLIED, true);
-
-        log.debug("applyBlockV2: Completed with gas={}", gas);
-        return gas;
-    }
-
-    // ========== Phase 4 Step 2.3: BlockV5 BlockInfo Helper Methods ==========
-
-    /**
-     * Load BlockInfo for BlockV5 (from block or database)
-     *
-     * Phase 4 Step 2.3 Part 2: Helper method to get BlockInfo for immutable BlockV5.
-     * Since BlockV5 is immutable and info field might be null, we need to load from database.
-     *
-     * @param block BlockV5 instance
-     * @return BlockInfo (may be null if not found)
-     */
-    private BlockInfo loadBlockInfo(BlockV5 block) {
-        // First try to get from block itself
-        if (block.getInfo() != null) {
-            return block.getInfo();
-        }
-
-        // Load from database
-        Block blockFromStore = blockStore.getBlockInfoByHash(block.getHash());
-        if (blockFromStore != null) {
-            return blockFromStore.getInfo();
-        }
-
-        return null;
-    }
-
-    /**
-     * Update BlockV5 flag in database
-     *
-     * Phase 4 Step 2.3 Part 2: Update BlockInfo flags for immutable BlockV5.
-     * Since we can't modify BlockV5 directly, we update BlockInfo in database.
-     *
-     * @param block BlockV5 instance
-     * @param flag Flag to update (BI_MAIN_REF, BI_APPLIED, etc.)
-     * @param direction true to set flag, false to clear flag
-     */
-    private void updateBlockV5Flag(BlockV5 block, byte flag, boolean direction) {
-        BlockInfo info = loadBlockInfo(block);
-        if (info == null) {
-            log.warn("BlockInfo not found for BlockV5: {}", block.getHash().toHexString());
-            return;
-        }
-
-        int newFlags;
-        if (direction) {
-            newFlags = info.getFlags() | flag;
-        } else {
-            newFlags = info.getFlags() & ~flag;
-        }
-
-        BlockInfo updatedInfo = info.toBuilder()
-            .flags(newFlags)
-            .build();
-
-        saveBlockInfo(updatedInfo);
-    }
-
+    // TODO v5.1: DELETED - BlockInfo.ref field no longer exists in v5.1 minimal design
+    // Temporarily disabled - waiting for migration to v5.1 architecture
+    /*
     /**
      * Update BlockV5 ref field in database
      *
@@ -920,7 +443,8 @@ public class BlockchainImpl implements Blockchain {
      * @param refBlock Referenced block (can be Block or BlockV5)
      * @param mainBlockHash Hash of the main block that references this block
      */
-    private void updateBlockV5Ref(Block refBlock, Bytes32 mainBlockHash) {
+    /*
+    private void updateBlockV5Ref(BlockV5 refBlock, Bytes32 mainBlockHash) {
         BlockInfo refInfo = refBlock.getInfo();
         if (refInfo == null) {
             log.warn("BlockInfo not found for ref block: {}", refBlock.getHash().toHexString());
@@ -933,6 +457,7 @@ public class BlockchainImpl implements Blockchain {
 
         saveBlockInfo(updatedInfo);
     }
+    */
 
     /**
      * Save BlockInfo to database (v5.1 version)
@@ -943,434 +468,6 @@ public class BlockchainImpl implements Blockchain {
      */
     private void saveBlockInfo(BlockInfo info) {
         blockStore.saveBlockInfoV2(info);
-    }
-
-    /**
-     * Execute block and return gas fee
-     */
-    private XAmount applyBlock(boolean flag, Block block) {
-        XAmount gas = XAmount.ZERO;
-        XAmount sumIn = XAmount.ZERO;
-        XAmount sumOut = XAmount.ZERO; // sumOut is used to pay gas fee for other blocks linking to this one, currently set to 0
-        // Block already processed
-        if ((block.getInfo().getFlags() & BI_MAIN_REF) != 0) {
-            return XAmount.ZERO.subtract(XAmount.ONE);
-        }
-        // TX block created by wallet or pool will not set fee = minGas, set here
-        if (!block.getInputs().isEmpty() && block.getFee().equals(XAmount.ZERO)) {
-            block.setInfo(block.getInfo().withFee(MIN_GAS));
-        }
-        // Mark as processed
-        Bytes32 blockHash = block.getHash();
-
-        updateBlockFlag(block, BI_MAIN_REF, true);
-
-        List<Address> links = block.getLinks();
-        if (links == null || links.isEmpty()) {
-            updateBlockFlag(block, BI_APPLIED, true);
-            return XAmount.ZERO;
-        }
-
-        for (Address link : links) {
-            if (!link.isAddress) {
-                // No need to get full data during pre-processing
-                Block ref = getBlockByHashInternal(link.getAddress(), false);
-                XAmount ret;
-                // If already processed
-                if ((ref.getInfo().getFlags() & BI_MAIN_REF) != 0) {
-                    ret = XAmount.ZERO.subtract(XAmount.ONE);
-                } else {
-                    // Check if this is the first time this block is being processed by main chain
-                    boolean wasUnreferenced = (ref.getInfo().getFlags() & BI_REF) != 0 && (ref.getInfo().getFlags() & BI_EXTRA) == 0;
-
-                    ref = getBlockByHashInternal(link.getAddress(), true);
-                    ret = applyBlock(false, ref);
-
-                    // If this non-EXTRA block was referenced by an EXTRA block (BI_REF=true)
-                    // and is now being processed by main chain for the first time,
-                    // decrement nnoref and remove from orphanBlockStore
-                    if (wasUnreferenced && (ref.getInfo().getFlags() & BI_EXTRA) == 0) {
-                        orphanBlockStore.deleteByHash(ref.getHash().toArray());
-                        xdagStats.nnoref--;
-                    }
-                }
-                if (ret.equals(XAmount.ZERO.subtract(XAmount.ONE))) {
-                    continue;
-                }
-                sumGas = sumGas.add(ret);
-                // CRITICAL FIX: Only set ref field for top-level mainBlock (flag==true)
-                // During recursive calls (flag==false), the 'block' parameter is NOT the mainBlock
-                // but rather the recursively processed block itself, which would incorrectly set ref to itself
-                if (flag) {
-                    updateBlockRef(ref, new Address(block));
-                }
-                if (flag && sumGas != XAmount.ZERO) {// Check if block is mainBlock, if true: add fee!
-                    block.setInfo(block.getInfo().withFee(block.getFee().add(sumGas)));
-                    addAndAccept(block, sumGas);
-                    sumGas = XAmount.ZERO;
-                }
-            }
-        }
-
-        for (Address link : links) {
-            MutableBytes32 linkAddress = link.getAddress();
-            if (link.getType() == XDAG_FIELD_IN) {
-                /*
-                 * Compatible with two transfer modes.
-                 * When input is a block, use original processing method.
-                 * When input is an address, get balance from database for verification.
-                 */
-                if (!link.isAddress) {
-                    Block ref = getBlockByHashInternal(linkAddress, false);
-                    if (compareAmountTo(ref.getInfo().getAmount(), link.getAmount()) < 0) {
-                        log.debug("This input ref doesn't have enough amount,hash:{},amount:{},need:{}",
-                                Hex.toHexString(ref.getInfo().getHash().toArray()), ref.getInfo().getAmount(),
-                                link.getAmount());
-                        return XAmount.ZERO;
-                    }
-                } else {
-                    log.debug("Type error");
-                    return XAmount.ZERO;
-                }
-
-                // Verify in advance that Address amount is not negative
-                if (compareAmountTo(sumIn.add(link.getAmount()), sumIn) < 0) {
-                    log.debug("This input ref's amount less than 0");
-                    return XAmount.ZERO;
-                }
-                sumIn = sumIn.add(link.getAmount());
-            } else if (link.getType() == XDAG_FIELD_INPUT) {
-                XAmount balance = addressStore.getBalanceByAddress(hash2byte(link.getAddress()).toArray());
-                UInt64 executedNonce = addressStore.getExecutedNonceNum(BytesUtils.byte32ToArray(link.getAddress()).toArray());
-                UInt64 blockNonce = block.getTxNonceField().getTransactionNonce();
-
-                if (blockNonce.compareTo(executedNonce.add(UInt64.ONE)) > 0) {
-                    addressStore.updateTxQuantity(BytesUtils.byte32ToArray(link.getAddress()).toArray(), executedNonce);
-                    log.debug("The current situation belongs to a nonce fault, and nonce is rolled back to the current number of executed nonce {}",executedNonce.toLong());
-                    return XAmount.ZERO.subtract(XAmount.ONE);
-                }
-
-                if(blockNonce.compareTo(executedNonce) <= 0) {
-                    if (blockNonce.compareTo(executedNonce) == 0) {
-                        log.debug("The sending transaction speed is too fast, resulting in multiple transactions corresponding to the same nonce, " +
-                                "and another faster transaction of the nonce has already been executed. Please avoid sending transactions continuously so quickly, " +
-                                "which may cause transaction execution failure");
-                    } else {
-                        log.debug("The current network computing power fluctuates greatly, it is recommended to wait for a period of time before sending transactions");
-                    }
-
-                    return XAmount.ZERO.subtract(XAmount.ONE);
-                }
-
-                if (compareAmountTo(balance, link.amount) < 0) {
-                    log.debug("This input ref doesn't have enough amount,hash:{},amount:{},need:{}",
-                            hash2byte(link.getAddress()).toHexString(), balance,
-                            link.getAmount());
-                    processNonceAfterTransactionExecution(link);
-                    return XAmount.ZERO;
-                }
-                // Verify in advance that Address amount is not negative
-                if (compareAmountTo(sumIn.add(link.getAmount()), sumIn) < 0) {
-                    log.debug("This input ref's:{} amount less than 0", linkAddress.toHexString());
-                    processNonceAfterTransactionExecution(link);
-                    return XAmount.ZERO;
-                }
-                sumIn = sumIn.add(link.getAmount());
-            } else {
-                // Verify in advance that Address amount is not negative
-                if (compareAmountTo(sumOut.add(link.getAmount()), sumOut) < 0) {
-                    log.debug("This output ref's:{} amount less than 0", linkAddress.toHexString());
-                    for(Address checkINlink : links){
-                        if (checkINlink.getType() == XDAG_FIELD_INPUT){
-                            Bytes address = BytesUtils.byte32ToArray(checkINlink.getAddress());
-                            UInt64 currentExeNonce = addressStore.getExecutedNonceNum(address.toArray());
-                            UInt64 nonceInTx = block.getTxNonceField().getTransactionNonce();
-                            if (nonceInTx.compareTo(currentExeNonce.add(UInt64.ONE)) == 0) {
-                                log.debug("The amount given by account {} to the transferring party is negative, resulting in the failure of the {} - th transaction execution of this account",
-                                        hash2PubAddress(checkINlink.getAddress()),nonceInTx.intValue()
-                                );
-                                processNonceAfterTransactionExecution(checkINlink);
-                            }
-                        }
-                    }
-                    return XAmount.ZERO;
-                }
-                sumOut = sumOut.add(link.getAmount());
-            }
-        }
-        if (compareAmountTo(block.getInfo().getAmount().add(sumIn), sumOut) < 0 ||
-                compareAmountTo(block.getInfo().getAmount().add(sumIn), sumIn) < 0
-        ) {
-            log.debug("block:{} exec fail!", blockHash.toHexString());
-            if (block.getInputs() != null) processNonceAfterTransactionExecution(block.getInputs().getFirst());
-            return XAmount.ZERO;
-        }
-
-        for (Address link : links) {
-            MutableBytes32 linkAddress = link.addressHash;
-            if (!link.isAddress) {
-                Block ref = getBlockByHashInternal(linkAddress, false);
-                if (link.getType() == XDAG_FIELD_IN) {
-                    subtractAndAccept(ref, link.getAmount());
-                    XAmount allBalance = addressStore.getAllBalance();
-                    allBalance = allBalance.add(link.getAmount().subtract(block.getFee()));
-                    addressStore.updateAllBalance(allBalance);
-                } else if (!flag) {// When recursively returning to first layer, ref is previous main block (output) type, deduction not allowed
-                    addAndAccept(ref, link.getAmount().subtract(block.getFee()));
-                    gas = gas.add(block.getFee()); // Mark the output for Fee
-                }
-            } else {
-                if (link.getType() == XDAG_FIELD_INPUT) {
-                    subtractAmount(BasicUtils.hash2byte(linkAddress), link.getAmount(), block);
-                    processNonceAfterTransactionExecution(link);
-                } else if (link.getType() == XDAG_FIELD_OUTPUT) {
-                    addAmount(BasicUtils.hash2byte(linkAddress), link.getAmount().subtract(block.getFee()), block);
-                    gas = gas.add(block.getFee()); // Mark the output for Fee
-                }
-            }
-        }
-
-        // Not necessarily greater than 0 since some amount may be deducted
-        updateBlockFlag(block, BI_APPLIED, true);
-        return gas;
-    }
-
-    // TODO: unapply block which in snapshot
-    public XAmount unApplyBlock(Block block) {
-        List<Address> links = block.getLinks();
-        Collections.reverse(links); // must be reverse
-        XAmount sum = XAmount.ZERO;  // Initialize sum at method level to track all reverted amounts
-
-        if ((block.getInfo().getFlags() & BI_APPLIED) != 0) {
-            // TX block created by wallet or pool will not set fee = minGas, set here
-            if (!block.getInputs().isEmpty() && block.getFee().equals(XAmount.ZERO)) {
-                block.setInfo(block.getInfo().withFee(MIN_GAS));
-            }
-
-            for (Address link : links) {
-                if (!link.isAddress) {
-                    Block ref = getBlockByHashInternal(link.getAddress(), false);
-                    if (link.getType() == XDAG_FIELD_IN) {
-                        addAndAccept(ref, link.getAmount());
-                        sum = sum.subtract(link.getAmount());
-                        XAmount allBalance = addressStore.getAllBalance();
-                        // allBalance = allBalance.subtract(link.getAmount()); //fix subtract twice.
-                        try {
-                            allBalance = allBalance.subtract(link.getAmount().subtract(block.getFee()));
-                        } catch (Exception e) {
-                            log.debug("allBalance rollback");
-                        }
-                        addressStore.updateAllBalance(allBalance);
-                    } else if (link.getType() == XDAG_FIELD_OUT) {
-                        // When add amount in 'Apply' subtract fee, so unApply also subtract fee
-                        subtractAndAccept(ref, link.getAmount().subtract(block.getFee()));
-                        sum = sum.add(link.getAmount());
-                    }
-                } else {
-                    if (link.getType() == XDAG_FIELD_INPUT) {
-                        addAmount(BasicUtils.hash2byte(link.getAddress()), link.getAmount(), block);
-                        sum = sum.subtract(link.getAmount());
-                        Bytes address = byte32ToArray(link.getAddress());
-                        UInt64 exeNonce = addressStore.getExecutedNonceNum(address.toArray());
-                        addressStore.updateExcutedNonceNum(address.toArray(), false);
-                        addressStore.updateTxQuantity(address.toArray(), exeNonce.subtract(UInt64.ONE));
-                    } else {
-                        // When add amount in 'Apply' subtract fee, so unApply also subtract fee
-                        subtractAmount(BasicUtils.hash2byte(link.getAddress()), link.getAmount().subtract(block.getFee()), block);
-                        sum = sum.add(link.getAmount());
-                    }
-                }
-
-            }
-            updateBlockFlag(block, BI_APPLIED, false);
-        } else {
-            //When rolling back, the unaccepted transactions in the main block need to be processed, which is the number of confirmed transactions sent corresponding to their account addresses, nonce, needs to be reduced by one
-            for(Address link : links) {
-                if (link.isAddress && link.getType() == XDAG_FIELD_INPUT){
-                    Bytes address = byte32ToArray(link.getAddress());
-                    UInt64 blockNonce = block.getTxNonceField().getTransactionNonce();
-                    UInt64 exeNonce = addressStore.getExecutedNonceNum(address.toArray());
-                    if (blockNonce.compareTo(exeNonce) == 0) {
-                        addressStore.updateExcutedNonceNum(address.toArray(), false);
-                        addressStore.updateTxQuantity(address.toArray(), exeNonce.subtract(UInt64.ONE));
-                        log.debug("The transaction processed quantity of account {} is reduced by one, and the number of transactions processed now is nonce = {}",
-                            Base58.encodeCheck(BytesUtils.byte32ToArray(link.getAddress())), addressStore.getExecutedNonceNum(address.toArray()).intValue()
-                        );
-                    }
-
-                }
-            }
-        }
-        updateBlockFlag(block, BI_MAIN_REF, false);
-        updateBlockRef(block, null);
-
-        for (Address link : links) {
-            if (!link.isAddress) {
-                Block ref = getBlockByHashInternal(link.getAddress(), false);
-                // Even if mainBlock duplicate links the TX_block which other mainBlock handled, we can check if this TX ref is this mainBlock
-                if (ref.getInfo().getRef() != null
-                        && equalBytes(ref.getInfo().getRef().toArray(), block.getHash().toArray())
-                        && ((ref.getInfo().getFlags() & BI_MAIN_REF) != 0)) {
-                    XAmount recursiveAmount = unApplyBlock(getBlockByHashInternal(ref.getHash(), true));
-                    addAndAccept(block, recursiveAmount);
-                    sum = sum.add(recursiveAmount);
-                }
-            }
-        }
-        return sum;  // Return the accumulated sum instead of ZERO
-    }
-
-    /**
-     * Set the main chain with block as the main block - either fork or extend (legacy v1.0 implementation).
-     *
-     * @deprecated As of v5.1 refactor, this method operates on legacy Block objects. After complete
-     *             refactor and system restart with BlockV5-only storage, all main chain management
-     *             should work with BlockV5 structures.
-     *
-     *             <p><b>Migration Path:</b>
-     *             <ul>
-     *               <li>Phase 5.3 (Current): Mark as @Deprecated</li>
-     *               <li>Post-Restart: After fresh start, all blocks in storage are BlockV5,
-     *                   making this Block-based method obsolete</li>
-     *               <li>Future: May need BlockV5-specific version if significant refactoring is required</li>
-     *             </ul>
-     *
-     *             <p><b>Replacement Strategy:</b>
-     *             After complete refactor, this method will process BlockV5 objects from storage.
-     *             No code changes needed if Block/BlockV5 interface is compatible. May require
-     *             BlockV5-specific version if chain management logic differs significantly.
-     *
-     *             <p><b>Impact:</b>
-     *             This method is critical for blockchain main chain management. It sets a block as
-     *             the main block (either extending or forking the chain), accepts block reward,
-     *             applies transactions recursively, and collects fees. Used by {@link #checkNewMain()}
-     *             during main chain consensus.
-     *
-     * @param block The block to set as main block
-     * @see #checkNewMain()
-     * @see #unSetMain(Block)
-     * @see #applyBlock(boolean, Block)
-     */
-    @Deprecated(since = "0.8.1", forRemoval = true)
-    public void setMain(Block block) {
-
-        synchronized (this) {
-            // Remove from memOrphanPool if it's an EXTRA block
-            if ((block.getInfo().getFlags() & BI_EXTRA) != 0) {
-                memOrphanPool.remove(block.getHash());
-                updateBlockFlag(block, BI_EXTRA, false);
-                xdagStats.nextra--;
-            }
-
-            // Set reward
-            long mainNumber = xdagStats.nmain + 1;
-            log.debug("mainNumber = {},hash = {}", mainNumber, Hex.toHexString(block.getInfo().getHash().toArray()));
-            XAmount reward = getReward(mainNumber);
-            block.setInfo(block.getInfo().withHeight(mainNumber));
-            updateBlockFlag(block, BI_MAIN, true);
-
-            // Accept reward
-            acceptAmount(block, reward);
-            xdagStats.nmain++;
-
-            // Recursively execute blocks referenced by main block and get fees
-            XAmount mainBlockFee = applyBlock(true, block); //the mainBlock may have tx, return the fee to itself.
-            if (!mainBlockFee.equals(XAmount.ZERO)) {// normal mainBlock will not go into this
-                acceptAmount(block, mainBlockFee); //add the fee
-                block.setInfo(block.getInfo().withFee(mainBlockFee));
-            }
-            // Main block REF points to itself
-            // TODO: Add fee
-            updateBlockRef(block, new Address(block));
-
-            if (randomx != null) {
-                // Phase 8.3.2: Convert Block to BlockV5 for RandomX call
-                try {
-                    BlockV5 blockV5 = blockStore.getBlockV5ByHash(block.getHash(), false);
-                    if (blockV5 != null) {
-                        randomx.randomXSetForkTime(blockV5);
-                    }
-                } catch (Exception e) {
-                    log.debug("Failed to get BlockV5 for RandomX fork time: {}", block.getHash().toHexString());
-                }
-            }
-        }
-
-    }
-
-    /**
-     * Cancel Block main block status (legacy v1.0 implementation).
-     *
-     * @deprecated As of v5.1 refactor, this method operates on legacy Block objects. After complete
-     *             refactor and system restart with BlockV5-only storage, all main chain management
-     *             should work with BlockV5 structures.
-     *
-     *             <p><b>Migration Path:</b>
-     *             <ul>
-     *               <li>Phase 5.3 (Current): Mark as @Deprecated</li>
-     *               <li>Post-Restart: After fresh start, all blocks in storage are BlockV5,
-     *                   making this Block-based method obsolete</li>
-     *               <li>Future: May need BlockV5-specific version if significant refactoring is required</li>
-     *             </ul>
-     *
-     *             <p><b>Replacement Strategy:</b>
-     *             After complete refactor, this method will process BlockV5 objects from storage.
-     *             No code changes needed if Block/BlockV5 interface is compatible. May require
-     *             BlockV5-specific version if chain management logic differs significantly.
-     *
-     *             <p><b>Impact:</b>
-     *             This method is critical for blockchain fork resolution. It cancels a block's main
-     *             block status during chain reorganization, removing rewards and unapplying all
-     *             transactions. Used by {@link #unWindMain(Block)} during fork handling.
-     *
-     * @param block The block to unset as main block
-     * @see #unWindMain(Block)
-     * @see #setMain(Block)
-     * @see #unApplyBlock(Block)
-     */
-    @Deprecated(since = "0.8.1", forRemoval = true)
-    // TODO: Change to new way to cancel main block reward
-    public void unSetMain(Block block) {
-
-        synchronized (this) {
-
-            log.debug("UnSet main,{}, mainnumber = {}", block.getHash().toHexString(), xdagStats.nmain);
-
-            XAmount amount = block.getInfo().getAmount();// mainBlock's balance will have fee, subtract all balance.
-            block.setInfo(block.getInfo().withFee(XAmount.ZERO));// set the mainBlock's zero.
-            updateBlockFlag(block, BI_MAIN, false);
-
-            xdagStats.nmain--;
-
-            // Remove reward and referenced block fees
-            acceptAmount(block, XAmount.ZERO.subtract(amount));
-            XAmount unAppliedAmount = unApplyBlock(block);
-            acceptAmount(block, unAppliedAmount);
-
-            if (randomx != null) {
-                // Phase 8.3.2: Convert Block to BlockV5 for RandomX call
-                try {
-                    BlockV5 blockV5 = blockStore.getBlockV5ByHash(block.getHash(), false);
-                    if (blockV5 != null) {
-                        randomx.randomXUnsetForkTime(blockV5);
-                    }
-                } catch (Exception e) {
-                    log.debug("Failed to get BlockV5 for RandomX unset fork time: {}", block.getHash().toHexString());
-                }
-            }
-            block.setInfo(block.getInfo().withHeight(0));
-        }
-    }
-
-    public void processNonceAfterTransactionExecution(Address link) {
-        if (link.getType() != XDAG_FIELD_INPUT) {
-            return;
-        }
-        Bytes address = BytesUtils.byte32ToArray(link.getAddress());
-        addressStore.updateExcutedNonceNum(address.toArray(), true);
-        UInt64 currentTxNonce = addressStore.getTxQuantity(address.toArray());
-        UInt64 currentExeNonce = addressStore.getExecutedNonceNum(address.toArray());
-        addressStore.updateTxQuantity(address.toArray(), currentTxNonce, currentExeNonce);
     }
 
     /**
@@ -1519,73 +616,6 @@ public class BlockchainImpl implements Blockchain {
     }
 
     /**
-     * Create a BlockV5 mining main block (v5.1 implementation)
-     *
-     * Phase 5.5: This is the NEW implementation for BlockV5 mining blocks.
-     * Replaces the deprecated createMainBlock() method.
-     *
-     * Key differences from legacy createMainBlock():
-     * 1. Uses Link.toBlock() instead of Address objects for block references
-     * 2. Coinbase stored in BlockHeader (not as a link)
-     * 3. Returns BlockV5 with Link-based DAG structure
-     * 4. Uses current network difficulty from xdagStats
-     * 5. Creates candidate block (nonce = 0, ready for POW mining)
-     *
-     * Block structure:
-     * - Header: timestamp, difficulty, nonce=0, coinbase
-     * - Links: [pretop_block (if exists), orphan_blocks...]
-     * - Max block links: 16 (from BlockV5.MAX_BLOCK_LINKS)
-     *
-     * @return BlockV5 candidate block for mining (nonce = 0, needs POW)
-     * @see BlockV5#createCandidate(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, List)
-     * @see Link#toBlock(Bytes32)
-     */
-    public BlockV5 createMainBlockV5() {
-        // Get mining timestamp (aligned to 64-second epoch)
-        long timestamp = XdagTime.getMainTime();
-
-        // Get current network difficulty target
-        BigInteger networkDiff = xdagStats.getDifficulty();
-        org.apache.tuweni.units.bigints.UInt256 difficulty =
-            org.apache.tuweni.units.bigints.UInt256.valueOf(networkDiff);
-
-        // Get coinbase address (miner reward address)
-        // In BlockV5, coinbase is stored in BlockHeader, not as a Link
-        Bytes32 coinbase = keyPair2Hash(wallet.getDefKey());
-
-        // Build DAG links (only block references, no coinbase link)
-        List<Link> links = new ArrayList<>();
-
-        // 1. Add pretop block reference (if exists)
-        Bytes32 pretopHash = getPreTopMainBlockForLink(timestamp);
-        if (pretopHash != null) {
-            links.add(Link.toBlock(pretopHash));
-        }
-
-        // 2. Add orphan block references
-        // Calculate available space: MAX=16, used: pretop(1 if exists)
-        int maxOrphans = BlockV5.MAX_BLOCK_LINKS - links.size();
-        long[] sendTime = new long[2];
-        sendTime[0] = timestamp;
-
-        List<Bytes32> orphans = orphanBlockStore.getOrphan(maxOrphans, sendTime);
-        for (Bytes32 orphan : orphans) {
-            links.add(Link.toBlock(orphan));
-        }
-
-        // Create candidate block (nonce = ZERO, will be set by mining)
-        BlockV5 candidateBlock = BlockV5.createCandidate(timestamp, difficulty, coinbase, links);
-
-        log.debug("Created BlockV5 mining candidate: epoch={}, links={} (pretop={}, orphans={})",
-                 XdagTime.getEpoch(timestamp),
-                 links.size(),
-                 pretopHash != null ? 1 : 0,
-                 orphans.size());
-
-        return candidateBlock;
-    }
-
-    /**
      * Create a link BlockV5 for network health (v5.1 implementation - Phase 8.3.1)
      *
      * Phase 8.3.1: Orphan health system migration to BlockV5.
@@ -1635,283 +665,6 @@ public class BlockchainImpl implements Blockchain {
         return linkBlock;
     }
 
-    /**
-     * Get a certain number of orphan blocks from orphan pool for linking
-     */
-    public List<Address> getBlockFromOrphanPool(int num, long[] sendtime) {
-        // v5.1: Convert Bytes32 to Address for backward compatibility
-        List<Bytes32> orphans = orphanBlockStore.getOrphan(num, sendtime);
-        List<Address> addresses = new ArrayList<>();
-        for (Bytes32 orphan : orphans) {
-            addresses.add(new Address(orphan, false));
-        }
-        return addresses;
-    }
-
-    public Bytes32 getPreTopMainBlockForLink(long sendTime) {
-        long mainTime = XdagTime.getEpoch(sendTime);
-        Block topInfo;
-        if (xdagTopStatus.getTop() == null) {
-            return null;
-        }
-
-        topInfo = getBlockByHashInternal(Bytes32.wrap(xdagTopStatus.getTop()), false);
-        if (topInfo == null) {
-            return null;
-        }
-        if (XdagTime.getEpoch(topInfo.getTimestamp()) == mainTime) {
-            log.debug("use pretop:{}", Bytes32.wrap(xdagTopStatus.getPreTop()).toHexString());
-            return Bytes32.wrap(xdagTopStatus.getPreTop());
-        } else {
-            log.debug("use top:{}", Bytes32.wrap(xdagTopStatus.getTop()).toHexString());
-            return Bytes32.wrap(xdagTopStatus.getTop());
-        }
-    }
-
-    /**
-     * Update pretop
-     *
-     * @param target     target block
-     * @param targetDiff difficulty of block
-     */
-    public void setPreTop(Block target, BigInteger targetDiff) {
-        if (target == null) {
-            return;
-        }
-
-        // Make sure the target's epoch is earlier than current top's epoch
-        Block block = getBlockByHashInternal(xdagTopStatus.getTop() == null ? null :
-                Bytes32.wrap(xdagTopStatus.getTop()), false);
-        if (block != null) {
-            if (XdagTime.getEpoch(target.getTimestamp()) >= XdagTime.getEpoch(block.getTimestamp())) {
-                return;
-            }
-        }
-
-        // If pretop is null, then update pretop to target
-        if (xdagTopStatus.getPreTop() == null) {
-            xdagTopStatus.setPreTop(target.getHash().toArray());
-            xdagTopStatus.setPreTopDiff(targetDiff);
-            target.setPretopCandidate(true);
-            target.setPretopCandidateDiff(targetDiff);
-            return;
-        }
-
-        // If targetDiff greater than pretop diff, then update pretop to target
-        if (targetDiff.compareTo(xdagTopStatus.getPreTopDiff()) > 0) {
-            log.debug("update pretop:{}", Bytes32.wrap(target.getHash()).toHexString());
-            xdagTopStatus.setPreTop(target.getHash().toArray());
-            xdagTopStatus.setPreTopDiff(targetDiff);
-            target.setPretopCandidate(true);
-            target.setPretopCandidateDiff(targetDiff);
-        }
-    }
-
-    /**
-     * Calculate current block difficulty
-     */
-    public BigInteger calculateCurrentBlockDiff(Block block) {
-        if (block == null) {
-            return BigInteger.ZERO;
-        }
-        // Only return existing difficulty if it's both non-null AND non-zero
-        if (block.getInfo().getDifficulty() != null && !block.getInfo().getDifficulty().isZero()) {
-            return block.getInfo().getDifficulty().toBigInteger();
-        }
-        //TX block would not set diff, fix a diff = 1;
-        if (!block.getInputs().isEmpty()) {
-            return BigInteger.ONE;
-        }
-
-        BigInteger blockDiff;
-        // Set initial block difficulty
-        if (randomx != null && randomx.isRandomxFork(XdagTime.getEpoch(block.getTimestamp()))
-                && XdagTime.isEndOfEpoch(block.getTimestamp())) {
-            blockDiff = getDiffByRandomXHash(block);
-        } else {
-            blockDiff = getDiffByRawHash(block.getHash());
-        }
-
-        return blockDiff;
-    }
-
-    /**
-     * Set block difficulty and max difficulty connection and return block difficulty
-     */
-    public BigInteger calculateBlockDiff(Block block, BigInteger cuDiff) {
-        if (block == null) {
-            return BigInteger.ZERO;
-        }
-        // Only return existing difficulty if it's both non-null AND non-zero
-        if (block.getInfo().getDifficulty() != null && !block.getInfo().getDifficulty().isZero()) {
-            return block.getInfo().getDifficulty().toBigInteger();
-        }
-
-        block.setInfo(block.getInfo().withDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(cuDiff)));
-
-        BigInteger maxDiff = cuDiff;
-        Address maxDiffLink = null;
-
-        // Temporary block
-        Block tmpBlock;
-        if (block.getLinks().isEmpty()) {
-            return cuDiff;
-        }
-
-        // Traverse all links to find maxLink
-        List<Address> links = block.getLinks();
-        for (Address ref : links) {
-            /*
-             * Only Blocks have difficulty
-             */
-            if (!ref.isAddress) {
-                Block refBlock = getBlockByHashInternal(ref.getAddress(), false);
-                if (refBlock == null) {
-                    break;
-                }
-
-                // If the referenced block's epoch is less than current block's round
-                if (XdagTime.getEpoch(refBlock.getTimestamp()) < XdagTime.getEpoch(block.getTimestamp())) {
-                    // If difficulty is greater than current max difficulty
-                    BigInteger refDifficulty = refBlock.getInfo().getDifficulty() != null ? refBlock.getInfo().getDifficulty().toBigInteger() : BigInteger.ZERO;
-                    BigInteger curDiff = refDifficulty.add(cuDiff);
-                    if (curDiff.compareTo(maxDiff) > 0) {
-                        maxDiff = curDiff;
-                        maxDiffLink = ref;
-                    }
-                } else {
-                    // Calculated diff
-                    // 1. maxDiff+diff0 for different epochs
-                    // 2. maxDiff for same epoch
-                    tmpBlock = refBlock; // tmpBlock is from link
-                    BigInteger curDiff = refBlock.getInfo().getDifficulty() != null ? refBlock.getInfo().getDifficulty().toBigInteger() : BigInteger.ZERO;
-                    while ((tmpBlock != null)
-                            && XdagTime.getEpoch(tmpBlock.getTimestamp()) == XdagTime.getEpoch(block.getTimestamp())) {
-                        tmpBlock = getMaxDiffLink(tmpBlock, false);
-                    }
-                    if (tmpBlock != null
-                            && (XdagTime.getEpoch(tmpBlock.getTimestamp()) < XdagTime.getEpoch(block.getTimestamp()))
-                            && tmpBlock.getInfo().getDifficulty().toBigInteger().add(cuDiff).compareTo(curDiff) > 0
-                    ) {
-                        curDiff = tmpBlock.getInfo().getDifficulty().toBigInteger().add(cuDiff);
-                    }
-                    if (curDiff == null) {
-                        curDiff = BigInteger.ZERO;
-                    }
-                    if (curDiff.compareTo(maxDiff) > 0) {
-                        maxDiff = curDiff;
-                        maxDiffLink = ref;
-                    }
-                }
-            }
-        }
-
-        block.setInfo(block.getInfo().withDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(maxDiff)));
-
-        if (maxDiffLink != null) {
-            block.setInfo(block.getInfo().withMaxDiffLink(Bytes32.wrap(maxDiffLink.getAddress().toArray())));
-        }
-        return maxDiff;
-    }
-
-    public BigInteger getDiffByRandomXHash(Block block) {
-        long epoch = XdagTime.getEpoch(block.getTimestamp());
-        MutableBytes data = MutableBytes.create(64);
-        Bytes32 rxHash = HashUtils.sha256(block.getXdagBlock().getData().slice(0, 512 - 32));
-        data.set(0, rxHash);
-        data.set(32, block.getXdagBlock().getField(15).getData());
-        byte[] blockHash = randomx.randomXBlockHash(data.toArray(), epoch);
-        BigInteger diff;
-        if (blockHash != null) {
-            Bytes32 hash = Bytes32.wrap(Arrays.reverse(blockHash));
-            diff = getDiffByRawHash(hash);
-        } else {
-            diff = getDiffByRawHash(block.getHash());
-        }
-        log.debug("block diff:{}, ", diff);
-        return diff;
-    }
-
-    public BigInteger getDiffByRawHash(Bytes32 hash) {
-        return getDiffByHash(hash);
-    }
-
-    // ADD: Get block by height using new version
-    public Block getBlockByHeightNew(long height) {
-        // TODO: if snapshot enabled, need height > snapshotHeight - 128
-        if (kernel.getConfig().getSnapshotSpec().isSnapshotEnabled() && (height < snapshotHeight - 128)
-                && !kernel.getConfig().getSnapshotSpec().isSnapshotJ()) {
-            return null;
-        }
-        // Return null if height is less than 0
-        if (height > xdagStats.nmain || height <= 0) {
-            return null;
-        }
-        return blockStore.getBlockByHeight(height);
-    }
-
-    /**
-     * Get Block by height - Internal helper (Phase 8.3.2)
-     *
-     * This is the internal implementation that returns Block for legacy compatibility.
-     * Public interface method delegates to this and converts to BlockV5.
-     */
-    private Block getBlockByHeightInternal(long height) {
-        return getBlockByHeightNew(height);
-    }
-
-    /**
-     * Get Block by hash - Internal helper (Phase 8.3.2)
-     *
-     * This is the internal implementation that returns Block for legacy compatibility.
-     * Public interface method delegates to this and converts to BlockV5.
-     */
-    private Block getBlockByHashInternal(Bytes32 hash, boolean isRaw) {
-        if (hash == null) {
-            return null;
-        }
-
-        // Phase 2: Use full 32-byte hash directly (no more legacy 24-byte conversion)
-        // 1. Check memory pool first
-        Block b = memOrphanPool.get(hash);
-
-        // 2. Check main block store
-        if (b == null) {
-            b = blockStore.getBlockByHash(hash, isRaw);
-        }
-
-        // 3. Check finalized block store (Phase 2 refactor)
-        if (b == null && kernel.getFinalizedBlockStore() != null) {
-            b = kernel.getFinalizedBlockStore().getBlockByHash(hash)
-                    .orElse(null);
-        }
-
-        return b;
-    }
-
-    @Override
-    public BlockV5 getBlockByHeight(long height) {
-        // Phase 8.3.2: Use BlockV5 version from blockStore
-        // For now, try to get BlockV5, fall back to Block if needed
-        Block block = getBlockByHeightInternal(height);
-        if (block == null) {
-            return null;
-        }
-
-        // Try to get BlockV5 version
-        try {
-            BlockV5 blockV5 = blockStore.getBlockV5ByHash(block.getHash(), false);
-            if (blockV5 != null) {
-                return blockV5;
-            }
-        } catch (Exception e) {
-            log.debug("Failed to get BlockV5, block may be legacy only: {}", block.getHash().toHexString());
-        }
-
-        // If no BlockV5 found, return null (legacy blocks not supported in v5.1 interface)
-        return null;
-    }
-
     @Override
     public BlockV5 getBlockByHash(Bytes32 hash, boolean isRaw) {
         if (hash == null) {
@@ -1927,14 +680,9 @@ public class BlockchainImpl implements Blockchain {
         }
     }
 
-    public Block getMaxDiffLink(Block block, boolean isRaw) {
-        if (block.getInfo().getMaxDiffLink() != null) {
-            Bytes32 maxDiffLinkHash = Bytes32.wrap(block.getInfo().getMaxDiffLink());
-            return getBlockByHashInternal(maxDiffLinkHash, isRaw);
-        }
-        return null;
-    }
-
+    // TODO v5.1: DELETED - BlockInfo.maxDiffLink field no longer exists in v5.1 minimal design
+    // Temporarily disabled - waiting for migration to v5.1 architecture
+    /*
     /**
      * Get max difficulty link for BlockV5 (Phase 8.3.3)
      *
@@ -1945,273 +693,56 @@ public class BlockchainImpl implements Blockchain {
      * @param isRaw Whether to load raw block data
      * @return Block with max difficulty (legacy, for internal use)
      */
-    private Block getMaxDiffLinkV5(BlockV5 block, boolean isRaw) {
+    /*
+    private BlockV5 getMaxDiffLinkV5(BlockV5 block, boolean isRaw) {
         BlockInfo info = loadBlockInfo(block);
         if (info != null && info.getMaxDiffLink() != null) {
             Bytes32 maxDiffLinkHash = info.getMaxDiffLink();
-            return getBlockByHashInternal(maxDiffLinkHash, isRaw);
+            return getBlockByHash(maxDiffLinkHash, isRaw);
         }
         return null;
     }
+    */
 
-    public void removeOrphan(Bytes32 hash, OrphanRemoveActions action) {
-        Block b = getBlockByHashInternal(hash, false);
-
-        // Skip if block is snapshot
-        if (b != null && b.getInfo() != null && b.getInfo().isSnapshot()) {
-            return;
-        }
-
-        // Skip if block already has BI_REF flag
-        if (b == null || (b.getInfo().getFlags() & BI_REF) != 0) {
-            return;
-        }
-
-        // Handle EXTRA blocks
-        if ((b.getInfo().getFlags() & BI_EXTRA) != 0) {
-
-            if (action == OrphanRemoveActions.ORPHAN_REMOVE_EXTRA) {
-                // Extra block referenced by another extra block - just mark as referenced, don't remove from memOrphanPool
-                updateBlockFlag(b, BI_REF, true);
-                return;
-            }
-
-            // Extra block being removed (not just referenced)
-            // Remove from MemOrphanPool
-            Bytes key = b.getHash();
-            Block removeBlockRaw = memOrphanPool.get(key);
-            memOrphanPool.remove(key);
-            if (action != OrphanRemoveActions.ORPHAN_REMOVE_REUSE) {
-                // Save block to disk
-                saveBlock(removeBlockRaw);
-                // Remove all blocks linked by EXTRA block
-                if (removeBlockRaw != null) {
-                    List<Address> all = removeBlockRaw.getLinks();
-                    for (Address addr : all) {
-                        removeOrphan(addr.getAddress(), OrphanRemoveActions.ORPHAN_REMOVE_NORMAL);
-                    }
-                }
-            }
-            // Update removeBlockRaw flag and decrement nextra
-            updateBlockFlag(removeBlockRaw, BI_EXTRA, false);
-            xdagStats.nextra--;
-        } else {
-            // Non-EXTRA block being removed from orphanBlockStore
-
-            // Only decrement nnoref if this is a NORMAL removal (referenced by non-EXTRA block)
-            // When referenced by EXTRA block (ORPHAN_REMOVE_EXTRA), keep nnoref count until
-            // the EXTRA block becomes main and processes this block via applyBlock()
-            if (action == OrphanRemoveActions.ORPHAN_REMOVE_NORMAL) {
-                orphanBlockStore.deleteByHash(b.getHash().toArray());
-                xdagStats.nnoref--;
-            } else {
-                // Keep in orphanBlockStore, will be removed when the EXTRA block becomes main
-            }
-        }
-
-        // Always set BI_REF flag for any block that's been referenced
-        updateBlockFlag(b, BI_REF, true);
-    }
-
-    public void updateBlockFlag(Block block, byte flag, boolean direction) {
-        if (block == null) {
-            return;
-        }
-        if (direction) {
-            block.setInfo(block.getInfo().withFlags(block.getInfo().getFlags() | flag));
-        } else {
-            block.setInfo(block.getInfo().withFlags(block.getInfo().getFlags() & ~flag));
-        }
-        // Always save BlockInfo to database using V2 method (Phase 2 architecture)
-        // This ensures flags are persisted with the new CompactSerializer format
-        blockStore.saveBlockInfoV2(block.getInfo());
-    }
-
-    public void updateBlockRef(Block block, Address ref) {
-        if (ref == null) {
-            block.setInfo(block.getInfo().withRef(null));
-        } else {
-            block.setInfo(block.getInfo().withRef(Bytes32.wrap(ref.getAddress().toArray())));
-        }
-        // CRITICAL FIX: Use saveBlockInfoV2 instead of legacy saveBlockInfo
-        // The block was originally saved with CompactSerializer (V2), so we must use the same format
-        // Otherwise the hash key won't match and we'll create a duplicate entry
-        blockStore.saveBlockInfoV2(block.getInfo());
-    }
-
-    public void saveBlock(Block block) {
-        if (block == null) {
-            return;
-        }
-        block.isSaved = true;
-        blockStore.saveBlock(block);
-        // If it's our account
-        if (memOurBlocks.containsKey(block.getHash())) {
-//            log.info("new account:{}", Hex.toHexString(block.getHash()));
-            if (xdagStats.getOurLastBlockHash() == null) {
-                blockStore.saveXdagStatus(xdagStats);
-            }
-            addOurBlock(memOurBlocks.get(block.getHash()), block);
-            memOurBlocks.remove(block.getHash());
-        }
-
-        if (block.isPretopCandidate()) {
-            xdagTopStatus.setPreTop(block.getHash().toArray());
-            xdagTopStatus.setPreTopDiff(block.getPretopCandidateDiff());
-            blockStore.saveXdagTopStatus(xdagTopStatus);
-        }
-
-    }
-
-    public boolean isExtraBlock(Block block) {
-        return (block.getTimestamp() & 0xffff) == 0xffff && block.getNonce() != null && !block.isSaved();
-    }
-
-    @Override
+    /**
+     * Legacy XdagStats accessor (Phase 7.3 - Backward compatibility)
+     *
+     * NOTE: This method is NOT in the Blockchain interface.
+     * The interface uses getChainStats() which returns ChainStats.
+     * This method is kept for internal backward compatibility only.
+     *
+     * @deprecated Use getChainStats().toLegacy() for external callers
+     * @return XdagStats mutable stats object (for internal use)
+     */
+    @Deprecated
     public XdagStats getXdagStats() {
         return this.xdagStats;
     }
 
-    public boolean canUseInput(Block block) {
-        List<PublicKey> keys = block.verifiedKeys();
-        List<Address> inputs = block.getInputs();
-        if (inputs == null || inputs.isEmpty()) {
-            return true;
-        }
-        /*
-         * While "in" isn't address, need to verify signature
-         */
-        // TODO: Verify signature for non-address inputs
-        for (Address in : inputs) {
-            if (!in.isAddress) {
-                if (!verifySignature(in, keys)) {
-                    return false;
-                }
-            } else {
-                if (!verifyBlockSignature(in, keys)) {
-                    return false;
-                }
-            }
-        }
-        return true;
+    /**
+     * Get blockchain statistics as immutable ChainStats (Phase 7.3)
+     *
+     * Phase 7.3: Public API uses ChainStats (immutable) instead of XdagStats (mutable).
+     * Converts internal XdagStats to ChainStats for external callers.
+     *
+     * @return ChainStats containing current blockchain statistics
+     */
+    @Override
+    public ChainStats getChainStats() {
+        return ChainStats.fromLegacy(this.xdagStats);
     }
 
-    private boolean verifyBlockSignature(Address in, List<PublicKey> keys) {
-        Bytes pubHash = in.getAddress().mutableCopy().slice(8, 20);
-        for (PublicKey key : keys) {
-            if (pubHash.equals(toBytesAddress(key))) return true;
-        }
-        return false;
-    }
-
-    private boolean verifySignature(Address in, List<PublicKey> publicKeys) {
-        // TODO: Check if block is in snapshot, get blockinfo with isRaw=false
-        Block block = getBlockByHashInternal(in.getAddress(), false);
-        boolean isSnapshotBlock = block.getInfo().isSnapshot();
-        if (isSnapshotBlock) {
-            return verifySignatureFromSnapshot(in, publicKeys);
-        } else {
-            Block inBlock = getBlockByHashInternal(in.getAddress(), true);
-            MutableBytes subdata = inBlock.getSubRawData(inBlock.getOutsigIndex() - 2);
-//            log.debug("verify encoded:{}", Hex.toHexString(subdata));
-            Signature sig = inBlock.getOutsig();
-            return verifySignature(subdata, sig, publicKeys, block.getInfo().toLegacy());
-        }
-    }
-
-    // TODO: When input is a block in snapshot, need to verify snapshot's public key or signature data
-    private boolean verifySignatureFromSnapshot(Address in, List<PublicKey> publicKeys) {
-        LegacyBlockInfo blockInfo = blockStore.getBlockInfoByHash(in.getAddress()).getInfo().toLegacy();
-        SnapshotInfo snapshotInfo = blockInfo.getSnapshotInfo();
-        if (snapshotInfo.getType()) {
-            // snapshotInfo.getData() contains 33-byte compressed public key format
-            try {
-                PublicKey targetPublicKey = PublicKey.fromBytes(snapshotInfo.getData());
-            for (PublicKey publicKey : publicKeys) {
-                if (publicKey.equals(targetPublicKey)) {
-                    return true;
-                }
-            }
-            return false;
-            } catch (Exception e) {
-                // If public key parsing fails, verification fails
-                return false;
-            }
-        } else {
-            Block block = getBlockByHashInternal(in.getAddress(), false);
-            block.setXdagBlock(new XdagBlock(snapshotInfo.getData()));
-            block.setParsed(false);
-            block.parse();
-            MutableBytes subdata = block.getSubRawData(block.getOutsigIndex() - 2);
-            Signature sig = block.getOutsig();
-            // Check if signature is canonical to prevent signature malleability attacks
-            if (!sig.isCanonical()) {
-                return false; // Reject non-canonical signatures
-            }
-            return verifySignature(subdata, sig, publicKeys, blockInfo);
-        }
-
-
-    }
-
-    private boolean verifySignature(MutableBytes subdata, Signature sig, List<PublicKey> publicKeys, LegacyBlockInfo blockInfo) {
-        for (PublicKey publicKey : publicKeys) {
-            byte[] publicKeyBytes = publicKey.toBytes().toArray();
-            Bytes digest = Bytes.wrap(subdata, Bytes.wrap(publicKeyBytes));
-//            log.debug("verify encoded:{}", Hex.toHexString(digest));
-            Bytes32 hash = HashUtils.doubleSha256(digest);
-            if (Signer.verify(hash, sig, publicKey)) {
-                SnapshotInfo snapshotInfo = blockInfo.getSnapshotInfo();
-                byte[] pubkeyBytes = publicKey.toBytes().toArray();
-                if (snapshotInfo != null) {
-                    snapshotInfo.setData(pubkeyBytes);
-                    snapshotInfo.setType(true);
-                } else {
-                    blockInfo.setSnapshotInfo(new SnapshotInfo(true, pubkeyBytes));
-                }
-                blockStore.saveBlockInfo(blockInfo);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public boolean checkMineAndAdd(Block block) {
-        List<ECKeyPair> ourkeys = wallet.getAccounts();
-        // Only one output signature
-        Signature signature = block.getOutsig();
-        // Iterate through all keys
-        for (int i = 0; i < ourkeys.size(); i++) {
-            ECKeyPair ecKey = ourkeys.get(i);
-            // TODO: Optimize
-            byte[] publicKeyBytes = ecKey.getPublicKey().toBytes().toArray();
-            Bytes digest = Bytes.wrap(block.getSubRawData(block.getOutsigIndex() - 2), Bytes.wrap(publicKeyBytes));
-            Bytes32 hash = HashUtils.doubleSha256(Bytes.wrap(digest));
-            // Use hyperledger besu crypto native secp256k1
-            if (Signer.verify(hash, signature, ecKey.getPublicKey())) {
-                log.debug("verify block success hash={}.", hash.toHexString());
-                addOurBlock(i, block);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    public void addOurBlock(int keyIndex, Block block) {
-        xdagStats.setOurLastBlockHash(block.getHash().toArray());
-        if (!block.isSaved()) {
-            memOurBlocks.put(block.getHash(), keyIndex);
-        } else {
-            blockStore.saveOurBlock(keyIndex, block.getInfo().getHash().toArray());
-        }
-    }
-
-    public void removeOurBlock(Block block) {
-        if (!block.isSaved) {
-            memOurBlocks.remove(block.getHash());
-        } else {
-            blockStore.removeOurBlock(block.getHash().toArray());
-        }
+    /**
+     * Get extended blockchain statistics (Phase 7.3)
+     *
+     * Phase 7.3: XdagExtStats provides detailed hash rate tracking.
+     * This includes historical hash rate data for network and local node.
+     *
+     * @return XdagExtStats containing hash rate history
+     */
+    @Override
+    public XdagExtStats getXdagExtStats() {
+        return this.xdagExtStats;
     }
 
     public XAmount getReward(long nmain) {
@@ -2240,29 +771,6 @@ public class BlockchainImpl implements Blockchain {
             res = res.plus(long2UnsignedLong(fork_height - 1).times(long2UnsignedLong(nanoDiffAmount)));
         }
         return XAmount.ofXAmount(res.longValue());
-    }
-
-    @Override
-    public List<BlockV5> getBlocksByTime(long starttime, long endtime) {
-        // Phase 8.3.2: Convert Block list to BlockV5 list
-        List<Block> blocks = blockStore.getBlocksUsedTime(starttime, endtime);
-        List<BlockV5> blockV5List = new ArrayList<>();
-
-        for (Block block : blocks) {
-            try {
-                // Try to get BlockV5 version from storage
-                BlockV5 blockV5 = blockStore.getBlockV5ByHash(block.getHash(), true);
-                if (blockV5 != null) {
-                    blockV5List.add(blockV5);
-                }
-                // If BlockV5 not found, skip this block (legacy Block only)
-            } catch (Exception e) {
-                log.debug("Failed to get BlockV5 for hash {}: {}",
-                         block.getHash().toHexString(), e.getMessage());
-            }
-        }
-
-        return blockV5List;
     }
 
     /**
@@ -2363,110 +871,6 @@ public class BlockchainImpl implements Blockchain {
     }
 
     /**
-     * Add amount to block
-     */
-    // TODO: Accept amount to block which in snapshot
-    private void addAndAccept(Block block, XAmount amount) {
-        XAmount oldAmount = block.getInfo().getAmount();
-        try {
-            block.setInfo(block.getInfo().withAmount(block.getInfo().getAmount().add(amount)));
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-            log.debug("balance {}  amount {}  block {}", oldAmount, amount, block.getHash().toHexString());
-        }
-        if (block.isSaved) {
-            blockStore.saveBlockInfo(block.getInfo().toLegacy());
-        }
-        if ((block.getInfo().getFlags() & BI_OURS) != 0) {
-            xdagStats.setBalance(amount.add(xdagStats.getBalance()));
-        }
-        XAmount finalAmount = blockStore.getBlockInfoByHash(block.getHash()).getInfo().getAmount();
-        log.debug("Balance checker —— block:{} [old:{} add:{} fin:{}]",
-                block.getHash().toHexString(),
-                oldAmount.toDecimal(9, XUnit.XDAG).toPlainString(),
-                amount.toDecimal(9, XUnit.XDAG).toPlainString(),
-                finalAmount.toDecimal(9, XUnit.XDAG).toPlainString());
-    }
-
-    private void subtractAndAccept(Block block, XAmount amount) {
-        XAmount oldAmount = block.getInfo().getAmount();
-        try {
-            block.setInfo(block.getInfo().withAmount(block.getInfo().getAmount().subtract(amount)));
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-            log.debug("balance {}  amount {}  block {}", oldAmount, amount, block.getHash().toHexString());
-        }
-        if (block.isSaved) {
-            blockStore.saveBlockInfo(block.getInfo().toLegacy());
-        }
-        if ((block.getInfo().getFlags() & BI_OURS) != 0) {
-            xdagStats.setBalance(xdagStats.getBalance().subtract(amount));
-        }
-        XAmount finalAmount = blockStore.getBlockInfoByHash(block.getHash()).getInfo().getAmount();
-        log.debug("Balance checker —— block:{} [old:{} sub:{} fin:{}]",
-                block.getHash().toHexString(),
-                oldAmount.toDecimal(9, XUnit.XDAG).toPlainString(),
-                amount.toDecimal(9, XUnit.XDAG).toPlainString(),
-                finalAmount.toDecimal(9, XUnit.XDAG).toPlainString());
-    }
-
-    private void subtractAmount(Bytes addressHash, XAmount amount, Block block) {
-        XAmount balance = addressStore.getBalanceByAddress(addressHash.toArray());
-        try {
-            addressStore.updateBalance(addressHash.toArray(), balance.subtract(amount));
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-            log.debug("balance {}  amount {}  addressHsh {}  block {}", balance, amount, Base58.encodeCheck(addressHash), block.getHash());
-        }
-        XAmount finalAmount = addressStore.getBalanceByAddress(addressHash.toArray());
-        log.debug("Balance checker —— Address:{} [old:{} sub:{} fin:{}]",
-                Base58.encodeCheck(addressHash),
-                balance.toDecimal(9, XUnit.XDAG).toPlainString(),
-                amount.toDecimal(9, XUnit.XDAG).toPlainString(),
-                finalAmount.toDecimal(9, XUnit.XDAG).toPlainString());
-        if ((block.getInfo().getFlags() & BI_OURS) != 0) {
-            xdagStats.setBalance(xdagStats.getBalance().subtract(amount));
-        }
-    }
-
-    private void addAmount(Bytes addressHash, XAmount amount, Block block) {
-        XAmount balance = addressStore.getBalanceByAddress(addressHash.toArray());
-        try {
-            addressStore.updateBalance(addressHash.toArray(), balance.add(amount));
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-            log.debug("balance {}  amount {}  addressHsh {}  block {}", balance, amount, Base58.encodeCheck(addressHash), block.getHash());
-        }
-        XAmount finalAmount = addressStore.getBalanceByAddress(addressHash.toArray());
-        log.warn("Balance checker —— Address:{} [old:{} add:{} fin:{}]",
-                Base58.encodeCheck(addressHash),
-                balance.toDecimal(9, XUnit.XDAG).toPlainString(),
-                amount.toDecimal(9, XUnit.XDAG).toPlainString(),
-                finalAmount.toDecimal(9, XUnit.XDAG).toPlainString());
-        if ((block.getInfo().getFlags() & BI_OURS) != 0) {
-            xdagStats.setBalance(amount.add(xdagStats.getBalance()));
-        }
-    }
-
-    // TODO: Accept amount to block which in snapshot
-    private void acceptAmount(Block block, XAmount amount) {
-        XAmount oldAmount = block.getInfo().getAmount();
-        block.setInfo(block.getInfo().withAmount(block.getInfo().getAmount().add(amount)));
-        if (block.isSaved) {
-            blockStore.saveBlockInfo(block.getInfo().toLegacy());
-        }
-        XAmount finalAmount = blockStore.getBlockByHash(block.getHash(), false).getInfo().getAmount();
-        log.warn("Balance checker —— Block:{} [old:{} acc:{} fin:{}]",
-                block.getHash().toHexString(),
-                oldAmount.toDecimal(9, XUnit.XDAG).toPlainString(),
-                amount.toDecimal(9, XUnit.XDAG).toPlainString(),
-                finalAmount.toDecimal(9, XUnit.XDAG).toPlainString());
-        if ((block.getInfo().getFlags() & BI_OURS) != 0) {
-            xdagStats.setBalance(amount.add(xdagStats.getBalance()));
-        }
-    }
-
-    /**
      * Check if block already exists
      */
     public boolean isExist(Bytes32 hash) {
@@ -2505,84 +909,141 @@ public class BlockchainImpl implements Blockchain {
         }
     }
 
+    // ========== Phase 7.3 Fix: Missing Interface Methods ==========
 
-    // ADD: Get main blocks using new version method
-    public List<Block> listMainBlocksByHeight(int count) {
-        List<Block> res = new ArrayList<>();
-        long currentHeight = xdagStats.nmain;
-        for (int i = 0; i < count; i++) {
-            Block block = getBlockByHeightNew(currentHeight - i);
-            if (block != null) {
-                res.add(block);
-            }
-        }
-        return res;
+    /**
+     * Remove orphan block from pool (Phase 7.3 stub)
+     *
+     * TODO v5.1: This method was in legacy code but needs proper BlockV5 implementation
+     *
+     * @param hash Block hash to remove from orphan pool
+     * @param action Type of orphan removal action
+     */
+    public void removeOrphan(Bytes32 hash, OrphanRemoveActions action) {
+        log.warn("removeOrphan() temporarily disabled - v5.1 migration in progress: hash={}",
+                hash.toHexString());
+        // TODO v5.1: Implement proper orphan removal for BlockV5 architecture
     }
 
+    /**
+     * Check for new main chain (Phase 7.3 stub)
+     *
+     * TODO v5.1: This method needs full BlockV5 main chain checking implementation
+     */
+    @Override
+    public void checkNewMain() {
+        log.warn("checkNewMain() temporarily disabled - v5.1 migration in progress");
+        // TODO v5.1: Implement BlockV5-based main chain checking logic
+    }
+
+    /**
+     * Load BlockInfo from database (Phase 7.3 stub)
+     *
+     * TODO v5.1: This method needs BlockV5-aware implementation
+     *
+     * @param block BlockV5 to load info for
+     * @return BlockInfo or null if not found
+     */
+    public BlockInfo loadBlockInfo(BlockV5 block) {
+        log.warn("loadBlockInfo() temporarily disabled - v5.1 migration in progress");
+        // TODO v5.1: Implement proper BlockInfo loading for BlockV5
+        return null;
+    }
+
+    /**
+     * Get BlockV5 by height (Phase 7.3 stub)
+     *
+     * TODO v5.1: This method needs full implementation using BlockStore
+     *
+     * @param height Block height
+     * @return BlockV5 or null if not found
+     */
+    @Override
+    public BlockV5 getBlockByHeight(long height) {
+        log.warn("getBlockByHeight() temporarily disabled - v5.1 migration in progress: height={}", height);
+        // TODO v5.1: Implement using blockStore.getBlockV5ByHeight()
+        return null;
+    }
+
+    /**
+     * Get blocks by time range (Phase 7.3 stub)
+     *
+     * TODO v5.1: This method needs full implementation using time index
+     *
+     * @param starttime Start timestamp
+     * @param endtime End timestamp
+     * @return List of BlockV5 in time range
+     */
+    @Override
+    public List<BlockV5> getBlocksByTime(long starttime, long endtime) {
+        log.warn("getBlocksByTime() temporarily disabled - v5.1 migration in progress: start={}, end={}",
+                starttime, endtime);
+        // TODO v5.1: Implement using blockStore time index
+        return Lists.newArrayList();
+    }
+
+    /**
+     * List main blocks (Phase 7.3 stub)
+     *
+     * TODO v5.1: This method needs full implementation
+     *
+     * @param count Number of blocks to list
+     * @return List of main BlockV5s
+     */
     @Override
     public List<BlockV5> listMainBlocks(int count) {
-        // Phase 8.3.2: Convert Block list to BlockV5 list
-        List<Block> blocks = listMainBlocksByHeight(count);
-        List<BlockV5> blockV5List = new ArrayList<>();
-
-        for (Block block : blocks) {
-            try {
-                // Try to get BlockV5 version from storage
-                BlockV5 blockV5 = blockStore.getBlockV5ByHash(block.getHash(), false);
-                if (blockV5 != null) {
-                    blockV5List.add(blockV5);
-                }
-                // If BlockV5 not found, skip this block (legacy Block only)
-            } catch (Exception e) {
-                log.debug("Failed to get BlockV5 for hash {}: {}",
-                         block.getHash().toHexString(), e.getMessage());
-            }
-        }
-
-        return blockV5List;
+        log.warn("listMainBlocks() temporarily disabled - v5.1 migration in progress: count={}", count);
+        // TODO v5.1: Implement main block listing
+        return Lists.newArrayList();
     }
 
-    // TODO: List main blocks generated by this pool. If pool only generated blocks early or never generated blocks,
-    // need to traverse all block data which needs optimization
+    /**
+     * List mined blocks (Phase 7.3 stub)
+     *
+     * TODO v5.1: This method needs full implementation
+     *
+     * @param count Number of blocks to list
+     * @return List of mined BlockV5s
+     */
     @Override
     public List<BlockV5> listMinedBlocks(int count) {
-        // Phase 8.3.2: Use internal helper to traverse chain with Block objects
-        Block temp = getBlockByHashInternal(Bytes32.wrap(xdagTopStatus.getTop()), false);
-        if (temp == null) {
-            temp = getBlockByHashInternal(Bytes32.wrap(xdagTopStatus.getPreTop()), false);
-        }
-        List<Block> blockList = Lists.newArrayList();
-        while (count > 0) {
-            if (temp == null) {
-                break;
-            }
-            if ((temp.getInfo().getFlags() & BI_MAIN) != 0 && (temp.getInfo().getFlags() & BI_OURS) != 0) {
-                count--;
-                blockList.add((Block) temp.clone());
-            }
-            if (temp.getInfo().getMaxDiffLink() == null) {
-                break;
-            }
-            temp = getBlockByHashInternal(Bytes32.wrap(temp.getInfo().getMaxDiffLink()), false);
-        }
+        log.warn("listMinedBlocks() temporarily disabled - v5.1 migration in progress: count={}", count);
+        // TODO v5.1: Implement mined block listing
+        return Lists.newArrayList();
+    }
 
-        // Convert Block list to BlockV5 list
-        List<BlockV5> blockV5List = new ArrayList<>();
-        for (Block block : blockList) {
-            try {
-                // Try to get BlockV5 version from storage
-                BlockV5 blockV5 = blockStore.getBlockV5ByHash(block.getHash(), false);
-                if (blockV5 != null) {
-                    blockV5List.add(blockV5);
-                }
-                // If BlockV5 not found, skip this block (legacy Block only)
-            } catch (Exception e) {
-                log.debug("Failed to get BlockV5 for hash {}: {}",
-                         block.getHash().toHexString(), e.getMessage());
-            }
-        }
+    /**
+     * Create main BlockV5 (Phase 7.3 stub)
+     *
+     * TODO v5.1: This method needs full mining block creation implementation
+     *
+     * @return BlockV5 candidate for mining
+     */
+    @Override
+    public BlockV5 createMainBlockV5() {
+        log.warn("createMainBlockV5() temporarily disabled - v5.1 migration in progress");
+        // TODO v5.1: Implement main block creation with proper link selection
+        return null;
+    }
 
-        return blockV5List;
+    /**
+     * Get memory our blocks (Phase 7.3 stub)
+     *
+     * @return Map of our blocks
+     */
+    @Override
+    public Map<Bytes, Integer> getMemOurBlocks() {
+        return memOurBlocks;
+    }
+
+    /**
+     * Get XDAG top status (Phase 7.3 stub)
+     *
+     * @return XdagTopStatus
+     */
+    @Override
+    public XdagTopStatus getXdagTopStatus() {
+        return xdagTopStatus;
     }
 
     enum OrphanRemoveActions {

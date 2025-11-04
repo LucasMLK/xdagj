@@ -24,7 +24,6 @@
 package io.xdag.db;
 
 import io.xdag.core.XdagLifecycle;
-import io.xdag.core.Block;
 import java.util.List;
 
 import org.apache.tuweni.bytes.Bytes32;
@@ -57,7 +56,9 @@ public interface OrphanBlockStore extends XdagLifecycle {
 
     void deleteByHash(byte[] hash);
 
-    void addOrphan(Block block);
+    // TODO v5.1: DELETED - Block class no longer exists
+    // Temporarily disabled - waiting for migration to BlockV5
+    // void addOrphan(Block block);
 
     long getOrphanSize();
 

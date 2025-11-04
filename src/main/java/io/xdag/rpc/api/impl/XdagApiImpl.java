@@ -142,11 +142,17 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
     @Override
     public String xdag_getBalanceByNumber(String bnOrId) {
+        // TODO v5.1: DELETED - BlockInfo.getAmount() no longer exists in v5.1 minimal design
+        // Temporarily disabled - waiting for migration to v5.1
+        log.warn("xdag_getBalanceByNumber() temporarily disabled - v5.1 migration in progress");
+        return "0.0";
+        /*
         BlockV5 block = blockchain.getBlockByHeight(Long.parseLong(bnOrId));
         if (null == block) {
             return null;
         }
         return String.format("%s", block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString());
+        */
     }
 
     @Override
@@ -230,7 +236,8 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
     @Override
     public String xdag_blockNumber() {
-        long b = blockchain.getXdagStats().nmain;
+        // Phase 7.3: Use getChainStats().toLegacy()
+        long b = blockchain.getChainStats().toLegacy().nmain;
         log.debug("xdag_blockNumber(): {}", b);
         return Long.toString(b);
     }
@@ -245,6 +252,11 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             key.set(8, Objects.requireNonNull(hash).slice(8, 20));
             balance = String.format("%s", kernel.getAddressStore().getBalanceByAddress(fromBase58(address).toArray()).toDecimal(9, XUnit.XDAG).toPlainString());
         } else {
+            // TODO v5.1: DELETED - Block class and BlockInfo.getAmount() no longer exist
+            // Temporarily disabled - waiting for migration to v5.1
+            log.warn("xdag_getBalance() for block hash temporarily disabled - v5.1 migration in progress");
+            balance = "0.0";
+            /*
             if (StringUtils.length(address) == 32) {
                 hash = BasicUtils.address2Hash(address);
             } else {
@@ -253,6 +265,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             key.set(8, Objects.requireNonNull(hash).slice(8, 24));
             Block block = kernel.getBlockStore().getBlockInfoByHash(Bytes32.wrap(key));
             balance = String.format("%s", block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString());
+            */
         }
         return balance;
     }
@@ -269,12 +282,14 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
     @Override
     public String xdag_getTotalBalance() {
-        return String.format("%s", kernel.getBlockchain().getXdagStats().getBalance().toDecimal(9, XUnit.XDAG).toPlainString());
+        // Phase 7.3: Use getChainStats().toLegacy()
+        return String.format("%s", kernel.getBlockchain().getChainStats().toLegacy().getBalance().toDecimal(9, XUnit.XDAG).toPlainString());
     }
 
     @Override
     public XdagStatusResponse xdag_getStatus() {
-        XdagStats xdagStats = blockchain.getXdagStats();
+        // Phase 7.3: Use getChainStats().toLegacy()
+        XdagStats xdagStats = blockchain.getChainStats().toLegacy();
         XdagExtStats xdagExtStats = blockchain.getXdagExtStats();
         double hashrateOurs = BasicUtils.xdagHashRate(xdagExtStats.getHashRateOurs());
         double hashrateTotal = BasicUtils.xdagHashRate(xdagExtStats.getHashRateTotal());
@@ -403,6 +418,11 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
     @Override
     public String xdag_sendRawTransaction(String rawData) {
+        // TODO v5.1: DELETED - Block, Address classes no longer exist
+        // Temporarily disabled - waiting for migration to BlockV5 + Transaction architecture
+        log.warn("xdag_sendRawTransaction() temporarily disabled - v5.1 migration in progress");
+        return "ERROR: xdag_sendRawTransaction temporarily disabled - v5.1 migration in progress";
+        /*
         // 1. build transaction
         // 2. try to add blockchain
         // 3. check from address if valid.
@@ -457,6 +477,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         }
         return result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST ?
                 BasicUtils.hash2Address(block.getHash()) : "INVALID_BLOCK " + result.getErrorInfo();
+        */
     }
 
     @Override
@@ -503,6 +524,17 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         if (null == blockV5) {
             return null;
         }
+        // TODO v5.1: DELETED - Block class and BlockInfo.getAmount() no longer exist
+        // Temporarily disabled - waiting for migration to BlockV5
+        log.warn("transferBlockInfoToBlockResultDTO() temporarily disabled - v5.1 migration in progress");
+
+        // Return minimal response from BlockV5
+        BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
+        return builder.address(hash2Address(blockV5.getHash()))
+                .hash(blockV5.getHash().toUnprefixedHexString())
+                .balance("0.0") // TODO: Remove getAmount()
+                .build();
+        /*
         // Phase 8.3.2: For now, convert to Block for legacy helper method compatibility
         // TODO Phase 9: Refactor RPC layer to work directly with BlockV5 Link structure
         Block block = kernel.getBlockStore().getBlockByHash(blockV5.getHash(), false);
@@ -522,24 +554,22 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                 .type("Snapshot")
                 .blockTime(xdagTimestampToMs(kernel.getConfig().getSnapshotSpec().getSnapshotTime()))
                 .timeStamp(kernel.getConfig().getSnapshotSpec().getSnapshotTime());
-//                .flags(Integer.toHexString(block.getInfo().getFlags()))
-//                .diff(toQuantityJsonHex(block.getInfo().getDifficulty()))
-//                .remark(block.getInfo().getRemark() == null ? "" : new String(block.getInfo().getRemark(),
-//                        StandardCharsets.UTF_8).trim())
-//                .state(getStateByFlags(block.getInfo().getFlags()))
-//                .type(getType(block))
-//                .refs(getLinks(block))
-//                .height(block.getInfo().getHeight())
         if (page != 0) {
             BlockResultDTOBuilder.transactions(getTxLinks(block, page, parameters))
                     .totalPage(totalPage);
         }
         totalPage = 1;
         return BlockResultDTOBuilder.build();
+        */
     }
 
     private List<BlockResponse.TxLink> getTxHistory(String address, int page, Object... parameters)
         throws AddressFormatException {
+        // TODO v5.1: DELETED - TxHistory, LegacyBlockInfo classes no longer exist
+        // Temporarily disabled - waiting for migration to BlockV5
+        log.warn("getTxHistory() temporarily disabled - v5.1 migration in progress");
+        return Lists.newArrayList();
+        /*
         List<TxHistory> txHistories = blockchain.getBlockTxHistoryByAddress(pubAddress2Hash(address), page, parameters);
         List<BlockResponse.TxLink> txLinks = Lists.newArrayList();
         for (TxHistory txHistory : txHistories) {
@@ -571,6 +601,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             txLinks.add(txLinkBuilder.build());
         }
         return txLinks;
+        */
     }
 
     public BlockResponse getBlockByNumber(String bnOrId, int page, Object... parameters) {
@@ -606,6 +637,9 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     }
 
 
+    // TODO v5.1: DELETED - Block, TxHistory, Address classes no longer exist
+    // Temporarily disabled - waiting for migration to BlockV5
+    /*
     private List<BlockResponse.TxLink> getTxLinks(Block block, int page, Object... parameters) {
         List<TxHistory> txHistories = blockchain.getBlockTxHistoryByAddress(block.getHash(), page, parameters);
         List<BlockResponse.TxLink> txLinks = Lists.newArrayList();
@@ -650,7 +684,11 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         }
         return txLinks;
     }
+    */
 
+    // TODO v5.1: DELETED - Block, Address classes no longer exist
+    // Temporarily disabled - waiting for migration to BlockV5
+    /*
     private List<BlockResponse.Link> getLinks(Block block) {
         List<Address> inputs = block.getInputs();
         List<Address> outputs = block.getOutputs();
@@ -695,11 +733,23 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
         return links;
     }
+    */
 
     private BlockResponse transferBlockToBlockResultDTO(BlockV5 blockV5, int page, Object... parameters) {
         if (null == blockV5) {
             return null;
         }
+        // TODO v5.1: DELETED - Block class no longer exists
+        // Temporarily disabled - waiting for migration to BlockV5
+        log.warn("transferBlockToBlockResultDTO() temporarily disabled - v5.1 migration in progress");
+
+        // Return minimal response from BlockV5
+        BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
+        return builder.address(hash2Address(blockV5.getHash()))
+                .hash(blockV5.getHash().toUnprefixedHexString())
+                .balance("0.0") // TODO: Remove getAmount()
+                .build();
+        /*
         // Phase 8.3.2: Convert to Block for legacy helper method compatibility
         Block block = kernel.getBlockStore().getBlockByHash(blockV5.getHash(), true);
         if (block == null) {
@@ -727,12 +777,24 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         }
         totalPage = 1;
         return BlockResultDTOBuilder.build();
+        */
     }
 
     private BlockResponse transferBlockToBriefBlockResultDTO(BlockV5 blockV5) {
         if (null == blockV5) {
             return null;
         }
+        // TODO v5.1: DELETED - Block class no longer exists
+        // Temporarily disabled - waiting for migration to BlockV5
+        log.warn("transferBlockToBriefBlockResultDTO() temporarily disabled - v5.1 migration in progress");
+
+        // Return minimal response from BlockV5
+        BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
+        return builder.address(hash2Address(blockV5.getHash()))
+                .hash(blockV5.getHash().toUnprefixedHexString())
+                .balance("0.0") // TODO: Remove getAmount()
+                .build();
+        /*
         // Phase 8.3.2: Convert to Block for legacy helper method compatibility
         Block block = kernel.getBlockStore().getBlockByHash(blockV5.getHash(), false);
         if (block == null) {
@@ -758,8 +820,12 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                 .type(getType(block))
                 .height(block.getInfo().getHeight());
         return BlockResponseBuilder.build();
+        */
     }
 
+    // TODO v5.1: DELETED - Block class no longer exists
+    // Temporarily disabled - waiting for migration to BlockV5
+    /*
     private String getType(Block block) {
         if (getStateByFlags(block.getInfo().getFlags()).equals("Main")) {
             return "Main";
@@ -773,6 +839,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             return "Transaction";
         }
     }
+    */
 
     private void checkParam(String value, String remark, ProcessResponse processResponse) {
         try {
@@ -1187,6 +1254,9 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         return hash;
     }
 
+    // TODO v5.1: DELETED - Block class no longer exists
+    // Temporarily disabled - waiting for migration to BlockV5
+    /*
     public boolean checkTransaction(Block block) {
         //reject transaction without input. For link block attack.
         if (block.getInputs().isEmpty()) {
@@ -1201,10 +1271,12 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         }
         return true;
     }
+    */
     @Override
     public Object xdag_syncing(){
-        long currentBlock = this.blockchain.getXdagStats().nmain;
-        long highestBlock = Math.max(this.blockchain.getXdagStats().totalnmain, currentBlock);
+        // Phase 7.3: Use getChainStats().toLegacy()
+        long currentBlock = this.blockchain.getChainStats().toLegacy().nmain;
+        long highestBlock = Math.max(this.blockchain.getChainStats().toLegacy().totalnmain, currentBlock);
         SyncingResult s = new SyncingResult();
         s.isSyncDone = false;
 

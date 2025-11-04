@@ -26,12 +26,9 @@ package io.xdag.db.store;
 
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
-import io.xdag.core.Block;
 import io.xdag.core.BlockInfo;
 import io.xdag.core.XAmount;
 import io.xdag.core.XUnit;
-import io.xdag.core.XdagBlock;
-import io.xdag.core.XdagStats;
 import io.xdag.db.BlockStore;
 import io.xdag.db.rocksdb.*;
 import org.apache.tuweni.bytes.MutableBytes;

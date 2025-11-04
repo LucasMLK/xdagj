@@ -27,8 +27,8 @@ import java.math.BigInteger;
 
 import org.apache.tuweni.bytes.Bytes32;
 
-import io.xdag.utils.SimpleEncoder;
 import io.xdag.core.XdagStats;
+import io.xdag.utils.SimpleEncoder;
 import io.xdag.net.message.Message;
 import io.xdag.net.message.MessageCode;
 import io.xdag.utils.BytesUtils;

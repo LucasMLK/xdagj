@@ -24,11 +24,8 @@
 
 package io.xdag.db.store;
 
-import com.google.common.collect.Lists;
-import io.xdag.core.Block;
 import io.xdag.core.BlockInfo;
 import io.xdag.serialization.CompactSerializer;
-import io.xdag.utils.BytesUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
 import org.rocksdb.*;
@@ -159,39 +156,6 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
     }
 
     // ========== Basic Operations ==========
-
-    @Override
-    public void saveBlock(Block block) {
-        try {
-            // Get BlockInfo directly (already new type)
-            BlockInfo blockInfo = block.getInfo();
-
-            byte[] hashKey = block.getHash().toArray();
-
-            // Save complete block data
-            db.put(blocksCF, hashKey, block.getXdagBlock().getData().toArray());
-
-            // Save block info (handles IOException internally)
-            byte[] serialized = CompactSerializer.serialize(blockInfo);
-            db.put(blockInfoCF, hashKey, serialized);
-
-            // Update main chain index if this is a main block
-            if (blockInfo.isMainBlock()) {
-                updateMainChainIndex(blockInfo.getHeight(), block.getHash());
-                totalMainBlockCount.incrementAndGet();
-            }
-
-            // Update epoch index
-            updateEpochIndex(blockInfo.getEpoch(), block.getHash());
-
-            totalBlockCount.incrementAndGet();
-
-        } catch (RocksDBException | IOException e) {
-            log.error("Failed to save block: {}", block.getHash().toHexString(), e);
-            throw new RuntimeException("Failed to save block", e);
-        }
-    }
-
     @Override
     public void saveBlockInfo(BlockInfo blockInfo) {
         try {
@@ -206,65 +170,6 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
     }
 
     @Override
-    public long saveBatch(List<Block> blocks) {
-        long savedCount = 0;
-
-        try (WriteBatch batch = new WriteBatch();
-             WriteOptions writeOptions = new WriteOptions()) {
-
-            for (Block block : blocks) {
-                try {
-                    // Get BlockInfo directly (already new type)
-                    BlockInfo blockInfo = block.getInfo();
-
-                    byte[] hashKey = block.getHash().toArray();
-
-                    // Add block data to batch
-                    batch.put(blocksCF, hashKey, block.getXdagBlock().getData().toArray());
-
-                    // Add block info to batch
-                    byte[] serialized = CompactSerializer.serialize(blockInfo);
-                    batch.put(blockInfoCF, hashKey, serialized);
-
-                    // Add main chain index
-                    if (blockInfo.isMainBlock()) {
-                        byte[] heightKey = longToBytes(blockInfo.getHeight());
-                        batch.put(mainChainCF, heightKey, hashKey);
-                    }
-
-                    // Add epoch index
-                    updateEpochIndexBatch(batch, blockInfo.getEpoch(), block.getHash());
-
-                    savedCount++;
-
-                } catch (IOException e) {
-                    log.error("Failed to serialize block in batch: {}", block.getHash().toHexString(), e);
-                }
-            }
-
-            // Commit batch
-            db.write(writeOptions, batch);
-
-            // Update statistics
-            totalBlockCount.addAndGet(savedCount);
-
-            long mainBlockCount = blocks.stream()
-                    .map(Block::getInfo)
-                    .filter(BlockInfo::isMainBlock)
-                    .count();
-            totalMainBlockCount.addAndGet(mainBlockCount);
-
-            log.info("Batch saved {} blocks ({} main blocks)", savedCount, mainBlockCount);
-
-        } catch (RocksDBException e) {
-            log.error("Failed to save batch", e);
-            throw new RuntimeException("Failed to save batch", e);
-        }
-
-        return savedCount;
-    }
-
-    @Override
     public boolean hasBlock(Bytes32 hash) {
         try {
             byte[] value = db.get(blockInfoCF, hash.toArray());
@@ -272,39 +177,6 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
         } catch (RocksDBException e) {
             log.error("Failed to check block existence: {}", hash.toHexString(), e);
             return false;
-        }
-    }
-
-    @Override
-    public Optional<Block> getBlockByHash(Bytes32 hash) {
-        try {
-            // Get block data
-            byte[] blockData = db.get(blocksCF, hash.toArray());
-            if (blockData == null) {
-                return Optional.empty();
-            }
-
-            // Get block info
-            Optional<BlockInfo> infoOpt = getBlockInfoByHash(hash);
-            if (infoOpt.isEmpty()) {
-                log.warn("Block data exists but BlockInfo missing for: {}", hash.toHexString());
-                return Optional.empty();
-            }
-
-            // Construct Block with XdagBlock and parse it to populate links/signatures
-            Block block = new Block(new io.xdag.core.XdagBlock(blockData));
-
-            // After parsing, restore the persisted BlockInfo (which has height, flags, etc.)
-            // The parse() method created a new BlockInfo from XdagBlock data, but we need
-            // to use the persisted BlockInfo which contains the saved height and other metadata
-            block.setInfo(infoOpt.get());
-            block.setSaved(true);
-
-            return Optional.of(block);
-
-        } catch (RocksDBException e) {
-            log.error("Failed to get block: {}", hash.toHexString(), e);
-            return Optional.empty();
         }
     }
 
@@ -328,23 +200,6 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
     // ========== Main Chain Index ==========
 
     @Override
-    public Optional<Block> getMainBlockByHeight(long height) {
-        try {
-            byte[] hashBytes = db.get(mainChainCF, longToBytes(height));
-            if (hashBytes == null) {
-                return Optional.empty();
-            }
-
-            Bytes32 hash = Bytes32.wrap(hashBytes);
-            return getBlockByHash(hash);
-
-        } catch (RocksDBException e) {
-            log.error("Failed to get main block by height: {}", height, e);
-            return Optional.empty();
-        }
-    }
-
-    @Override
     public Optional<BlockInfo> getMainBlockInfoByHeight(long height) {
         try {
             byte[] hashBytes = db.get(mainChainCF, longToBytes(height));
@@ -359,17 +214,6 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
             log.error("Failed to get main block info by height: {}", height, e);
             return Optional.empty();
         }
-    }
-
-    @Override
-    public List<Block> getMainBlocksByHeightRange(long fromHeight, long toHeight) {
-        List<Block> blocks = new ArrayList<>();
-
-        for (long h = fromHeight; h <= toHeight; h++) {
-            getMainBlockByHeight(h).ifPresent(blocks::add);
-        }
-
-        return blocks;
     }
 
     @Override
@@ -415,6 +259,9 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
 
                 BlockInfo info = infoOpt.get();
 
+                // TODO v5.1: DELETED - BlockInfo.maxDiffLink field no longer exists in v5.1 minimal design
+                // Temporarily disabled - waiting for migration to v5.1
+                /*
                 // Check if this block points to previous block
                 if (prevHash != null && info.getMaxDiffLink() != null) {
                     if (!info.getMaxDiffLink().equals(prevHash)) {
@@ -423,6 +270,7 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
                         return false;
                     }
                 }
+                */
 
                 prevHash = info.getHash();
             }
@@ -454,18 +302,6 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
     }
 
     @Override
-    public List<Block> getBlocksByEpoch(long epoch) {
-        List<Bytes32> hashes = getBlockHashesByEpoch(epoch);
-        List<Block> blocks = new ArrayList<>();
-
-        for (Bytes32 hash : hashes) {
-            getBlockByHash(hash).ifPresent(blocks::add);
-        }
-
-        return blocks;
-    }
-
-    @Override
     public List<BlockInfo> getBlockInfosByEpoch(long epoch) {
         List<Bytes32> hashes = getBlockHashesByEpoch(epoch);
         List<BlockInfo> infos = new ArrayList<>();
@@ -475,17 +311,6 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
         }
 
         return infos;
-    }
-
-    @Override
-    public List<Block> getBlocksByEpochRange(long fromEpoch, long toEpoch) {
-        List<Block> blocks = new ArrayList<>();
-
-        for (long e = fromEpoch; e <= toEpoch; e++) {
-            blocks.addAll(getBlocksByEpoch(e));
-        }
-
-        return blocks;
     }
 
     @Override

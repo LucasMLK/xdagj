@@ -77,6 +77,9 @@ public class SyncManager extends AbstractXdagLifecycle {
      *             After complete BlockV5 migration, sync will work directly with BlockV5 objects
      *             without needing a wrapper class.
      *
+     * TODO v5.1: DELETED - Block class no longer exists (Phase 7.1)
+     * This wrapper is no longer usable. Use SyncBlockV5 instead.
+     *
      *             <p><b>Migration Path:</b>
      *             <ul>
      *               <li>Phase 5.5 Part 3 (Current): Mark as @Deprecated</li>
@@ -110,6 +113,7 @@ public class SyncManager extends AbstractXdagLifecycle {
      * @see io.xdag.net.message.consensus.SyncBlockV5Message
      * @see io.xdag.core.Blockchain#tryToConnect(BlockV5)
      */
+    /*
     @Deprecated(since = "0.8.1", forRemoval = true)
     @Getter
     @Setter
@@ -134,6 +138,7 @@ public class SyncManager extends AbstractXdagLifecycle {
             this.time = System.currentTimeMillis();
         }
     }
+    */
 
     /**
      * SyncBlockV5 - BlockV5 wrapper for sync process (v5.1)
@@ -235,23 +240,29 @@ public class SyncManager extends AbstractXdagLifecycle {
     /**
      * Queue with validated blocks to be added to the blockchain (legacy Block)
      * @deprecated Use blockQueueV5 for BlockV5 objects
+     *
+     * TODO v5.1: DELETED - SyncBlock class no longer exists
      */
-    @Deprecated(since = "0.8.1", forRemoval = true)
-    private Queue<SyncBlock> blockQueue = new ConcurrentLinkedQueue<>();
+    // @Deprecated(since = "0.8.1", forRemoval = true)
+    // private Queue<SyncBlock> blockQueue = new ConcurrentLinkedQueue<>();
 
     /**
      * Queue for blocks with missing links (legacy Block)
      * @deprecated Use syncMapV5 for BlockV5 objects
+     *
+     * TODO v5.1: DELETED - SyncBlock class no longer exists
      */
-    @Deprecated(since = "0.8.1", forRemoval = true)
-    private ConcurrentHashMap<Bytes32, Queue<SyncBlock>> syncMap = new ConcurrentHashMap<>();
+    // @Deprecated(since = "0.8.1", forRemoval = true)
+    // private ConcurrentHashMap<Bytes32, Queue<SyncBlock>> syncMap = new ConcurrentHashMap<>();
 
     /**
      * Queue for polling oldest blocks (legacy)
      * @deprecated Use syncQueueV5 for BlockV5 objects
+     *
+     * TODO v5.1: DELETED - SyncBlock class no longer exists
      */
-    @Deprecated(since = "0.8.1", forRemoval = true)
-    private ConcurrentLinkedQueue<Bytes32> syncQueue = new ConcurrentLinkedQueue<>();
+    // @Deprecated(since = "0.8.1", forRemoval = true)
+    // private ConcurrentLinkedQueue<Bytes32> syncQueue = new ConcurrentLinkedQueue<>();
 
     // ========== BlockV5 Data Structures (Phase 7.2) ==========
 
@@ -310,7 +321,8 @@ public class SyncManager extends AbstractXdagLifecycle {
             return;
         }
 
-        XdagStats xdagStats = kernel.getBlockchain().getXdagStats();
+        // Phase 7.3: Use getChainStats().toLegacy()
+        XdagStats xdagStats = kernel.getBlockchain().getChainStats().toLegacy();
         XdagTopStatus xdagTopStatus = kernel.getBlockchain().getXdagTopStatus();
         long lastTime = kernel.getSync().getLastTime();
         long curTime = msToXdagtimestamp(System.currentTimeMillis());
@@ -353,6 +365,9 @@ public class SyncManager extends AbstractXdagLifecycle {
      *             wrappers containing Block objects. Uses deprecated blockchain.tryToConnect(Block).
      *             After BlockV5 migration, sync will import BlockV5 objects directly.
      *
+     * TODO v5.1: DELETED - SyncBlock class and Block class no longer exist
+     * This method cannot be used. Use importBlockV5() for BlockV5 objects instead.
+     *
      *             <p><b>Migration Path:</b>
      *             <ul>
      *               <li>Phase 5.5 Part 3 (Current): Mark as @Deprecated</li>
@@ -386,6 +401,7 @@ public class SyncManager extends AbstractXdagLifecycle {
      * @see io.xdag.core.Blockchain#tryToConnect(BlockV5)
      * @see SyncBlock
      */
+    /*
     @Deprecated(since = "0.8.1", forRemoval = true)
     // TODO: Modify consensus
     public ImportResult importBlock(SyncBlock syncBlock) {
@@ -407,11 +423,9 @@ public class SyncManager extends AbstractXdagLifecycle {
         ImportResult importResult = ImportResult.INVALID_BLOCK;
         importResult.setErrorInfo("Legacy Block import not supported after Phase 7.1 cleanup");
 
-        /*
         // ORIGINAL CODE - DISABLED after tryToConnect(Block) deletion:
-        ImportResult importResult = blockchain
-                .tryToConnect(new Block(new XdagBlock(syncBlock.getBlock().getXdagBlock().getData().toArray())));
-        */
+        // ImportResult importResult = blockchain
+        //         .tryToConnect(new Block(new XdagBlock(syncBlock.getBlock().getXdagBlock().getData().toArray())));
 
         if (importResult == EXIST) {
             log.debug("Block have exist:{}", syncBlock.getBlock().getHash());
@@ -428,7 +442,13 @@ public class SyncManager extends AbstractXdagLifecycle {
         }
         return importResult;
     }
+    */
 
+    /**
+     * TODO v5.1: DELETED - SyncBlock class no longer exists
+     * Use validateAndAddNewBlockV5() for BlockV5 objects instead.
+     */
+    /*
     public synchronized ImportResult validateAndAddNewBlock(SyncBlock syncBlock) {
         syncBlock.getBlock().parse();
         ImportResult result = importBlock(syncBlock);
@@ -456,13 +476,18 @@ public class SyncManager extends AbstractXdagLifecycle {
         }
     }
   }
+    */
 
   /**
      * Synchronize missing blocks
      *
      * @param syncBlock New block
      * @param hash Hash of missing parent block
+     *
+     * TODO v5.1: DELETED - SyncBlock class no longer exists
+     * Use syncPushBlockV5() for BlockV5 objects instead.
      */
+    /*
     public boolean syncPushBlock(SyncBlock syncBlock, Bytes32 hash) {
         if (syncMap.size() >= MAX_SIZE) {
             for (int j = 0; j < DELETE_NUM; j++) {
@@ -470,7 +495,8 @@ public class SyncManager extends AbstractXdagLifecycle {
 
                 Bytes32 key = keyList.get(CryptoProvider.nextInt(0, keyList.size()));
                 assert key != null;
-                if (syncMap.remove(key) != null) blockchain.getXdagStats().nwaitsync--;
+                // Phase 7.3: Use getChainStats().toLegacy()
+                if (syncMap.remove(key) != null) blockchain.getChainStats().toLegacy().nwaitsync--;
             }
         }
         AtomicBoolean r = new AtomicBoolean(true);
@@ -479,11 +505,13 @@ public class SyncManager extends AbstractXdagLifecycle {
         Queue<SyncBlock> newQueue = Queues.newConcurrentLinkedQueue();
         syncBlock.setTime(now);
         newQueue.add(syncBlock);
-        blockchain.getXdagStats().nwaitsync++;
+        // Phase 7.3: Use getChainStats().toLegacy()
+        blockchain.getChainStats().toLegacy().nwaitsync++;
 
         syncMap.merge(hash, newQueue,
                 (oldQ, newQ) -> {
-                    blockchain.getXdagStats().nwaitsync--;
+                    // Phase 7.3: Use getChainStats().toLegacy()
+                    blockchain.getChainStats().toLegacy().nwaitsync--;
                     for (SyncBlock b : oldQ) {
                         if (b.getBlock().getHash().equals(syncBlock.getBlock().getHash())) {
                             // after 64 sec must resend block request
@@ -503,10 +531,15 @@ public class SyncManager extends AbstractXdagLifecycle {
                 });
         return r.get();
     }
+    */
 
     /**
      * Release child blocks based on received block
+     *
+     * TODO v5.1: DELETED - SyncBlock class no longer exists
+     * Use syncPopBlockV5() for BlockV5 objects instead.
      */
+    /*
     public void syncPopBlock(SyncBlock syncBlock) {
         Block block = syncBlock.getBlock();
 
@@ -534,6 +567,7 @@ public class SyncManager extends AbstractXdagLifecycle {
     log.debug("push block:{}, NO_PARENT {}", bw.getBlock().getHash(),
             importResult.getHash().toHexString());
   }
+    */
 
   // TODO: Currently stays in sync by default, not responsible for block generation
     public void makeSyncDone() {
@@ -555,11 +589,13 @@ public class SyncManager extends AbstractXdagLifecycle {
                 }
             }
 
-            log.info("sync done, the last main block number = {}", blockchain.getXdagStats().nmain);
+            // Phase 7.3: Use getChainStats().toLegacy()
+            log.info("sync done, the last main block number = {}", blockchain.getChainStats().toLegacy().nmain);
             kernel.getSync().setStatus(XdagSync.Status.SYNC_DONE);
             if (config.getEnableTxHistory() && txHistoryStore != null) {
+                // TODO v5.1: DELETED - TransactionHistoryStore.batchSaveTxHistory() no longer exists
                 // Sync done, batch write remaining history
-                txHistoryStore.batchSaveTxHistory(null);
+                // txHistoryStore.batchSaveTxHistory(null);
             }
 
             if (config.getEnableGenerateBlock()) {
@@ -610,7 +646,11 @@ public class SyncManager extends AbstractXdagLifecycle {
      * which was stubbed out in Phase 7.1. Legacy Block broadcasting is no longer supported.
      *
      * @deprecated This method is non-functional after Phase 7.3.0 cleanup
+     *
+     * TODO v5.1: DELETED - SyncBlock class no longer exists
+     * Use distributeBlockV5() for BlockV5 objects instead.
      */
+    /*
     @Deprecated(since = "0.8.1", forRemoval = true)
     public void distributeBlock(SyncBlock syncBlock) {
         // Phase 7.3.0: kernel.broadcastBlock() deleted - NEW_BLOCK messages no longer supported
@@ -618,6 +658,7 @@ public class SyncManager extends AbstractXdagLifecycle {
         log.warn("distributeBlock() called but legacy Block broadcasting no longer supported. " +
                 "Block hash: {}", syncBlock.getBlock().getHash().toHexString());
     }
+    */
 
     // ========== BlockV5 Sync Methods (Phase 7.2) ==========
 
@@ -790,7 +831,8 @@ public class SyncManager extends AbstractXdagLifecycle {
 
                 Bytes32 key = keyList.get(CryptoProvider.nextInt(0, keyList.size()));
                 if (syncMapV5.remove(key) != null) {
-                    blockchain.getXdagStats().nwaitsync--;
+                    // Phase 7.3: Use getChainStats().toLegacy()
+                    blockchain.getChainStats().toLegacy().nwaitsync--;
                 }
             }
         }
@@ -802,11 +844,13 @@ public class SyncManager extends AbstractXdagLifecycle {
         Queue<SyncBlockV5> newQueue = Queues.newConcurrentLinkedQueue();
         syncBlock.setTime(now);
         newQueue.add(syncBlock);
-        blockchain.getXdagStats().nwaitsync++;
+        // Phase 7.3: Use getChainStats().toLegacy()
+        blockchain.getChainStats().toLegacy().nwaitsync++;
 
         // Merge with existing queue (if any)
         syncMapV5.merge(parentHash, newQueue, (oldQueue, newQ) -> {
-            blockchain.getXdagStats().nwaitsync--;  // Undo increment since merging
+            // Phase 7.3: Use getChainStats().toLegacy()
+            blockchain.getChainStats().toLegacy().nwaitsync--;  // Undo increment since merging
 
             // Check if this block is already in the queue
             for (SyncBlockV5 existing : oldQueue) {
@@ -848,7 +892,8 @@ public class SyncManager extends AbstractXdagLifecycle {
         Queue<SyncBlockV5> queue = syncMapV5.getOrDefault(block.getHash(), null);
         if (queue != null) {
             syncMapV5.remove(block.getHash());
-            blockchain.getXdagStats().nwaitsync--;
+            // Phase 7.3: Use getChainStats().toLegacy()
+            blockchain.getChainStats().toLegacy().nwaitsync--;
 
             log.debug("Processing {} child BlockV5 objects waiting for parent: {}",
                      queue.size(), block.getHash().toHexString());

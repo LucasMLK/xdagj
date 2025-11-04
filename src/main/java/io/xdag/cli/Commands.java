@@ -57,7 +57,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static io.xdag.config.Constants.*;
-import static io.xdag.core.XdagField.FieldType.*;
+// TODO v5.1: Restore after migrating legacy display methods
+// import static io.xdag.core.XdagField.FieldType.*;
 import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 import static io.xdag.utils.BasicUtils.*;
 import static io.xdag.utils.WalletUtils.*;
@@ -92,16 +93,13 @@ public class Commands {
                 """;
     }
 
-    /**
-     * Print block info without print_only_addresses flag
-     */
+    // TODO v5.1: DELETED - Block class no longer exists
+    // Temporarily disabled - waiting for migration to BlockV5
+    /*
     public static String printBlock(Block block) {
         return printBlock(block, false);
     }
 
-    /**
-     * Print block info with optional print_only_addresses flag
-     */
     public static String printBlock(Block block, boolean print_only_addresses) {
         StringBuilder sbd = new StringBuilder();
         long time = XdagTime.xdagTimestampToMs(block.getTimestamp());
@@ -120,6 +118,7 @@ public class Commands {
         }
         return sbd.toString();
     }
+    */
 
     /**
      * Get block state description from flags
@@ -188,6 +187,9 @@ public class Commands {
     /**
      * Get balance for address
      * @param address Address to check balance for, or null for total balance
+     *
+     * TODO v5.1: DELETED - Block class no longer exists
+     * Temporarily disabled - waiting for migration to BlockV5
      */
     public String balance(String address) throws AddressFormatException {
         if (StringUtils.isEmpty(address)) {
@@ -198,6 +200,9 @@ public class Commands {
             }
             return String.format("Balance: %s XDAG", ourBalance.toDecimal(9, XUnit.XDAG).toPlainString());
         } else {
+            // TODO v5.1: Block balance lookup disabled - needs BlockV5 migration
+            return "Block balance lookup temporarily disabled - v5.1 migration in progress";
+            /*
             Bytes32 hash;
             MutableBytes32 key = MutableBytes32.create();
             if (checkAddress(address)) {
@@ -215,6 +220,7 @@ public class Commands {
                 Block block = kernel.getBlockStore().getBlockInfoByHash(Bytes32.wrap(key));
                 return String.format("Block balance: %s XDAG", block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString());
             }
+            */
         }
     }
 
@@ -245,7 +251,8 @@ public class Commands {
      * Get current blockchain stats
      */
     public String stats() {
-        XdagStats xdagStats = kernel.getBlockchain().getXdagStats();
+        // Phase 7.3: Use getChainStats().toLegacy() instead of deprecated getXdagStats()
+        XdagStats xdagStats = kernel.getBlockchain().getChainStats().toLegacy();
         XdagTopStatus xdagTopStatus = kernel.getBlockchain().getXdagTopStatus();
 
         // Calculate difficulties
@@ -311,8 +318,13 @@ public class Commands {
 
     /**
      * Get block info by hash
+     *
+     * TODO v5.1: DELETED - Block class no longer exists
+     * Temporarily disabled - waiting for migration to BlockV5
      */
     public String block(Bytes32 blockhash) {
+        return "Block info lookup temporarily disabled - v5.1 migration in progress";
+        /*
         try {
             MutableBytes32 hash = MutableBytes32.create();
             hash.set(8, blockhash.slice(8, 24));
@@ -327,19 +339,24 @@ public class Commands {
             log.error(e.getMessage(), e);
         }
         return "error, please check log";
+        */
     }
 
     /**
      * Get block info by address
+     *
+     * TODO v5.1: DELETED - Block class no longer exists
+     * Temporarily disabled - waiting for migration to BlockV5
      */
     public String block(String address) {
-        Bytes32 hash = address2Hash(address);
-        return block(hash);
+        return "Block info lookup temporarily disabled - v5.1 migration in progress";
+        // Bytes32 hash = address2Hash(address);
+        // return block(hash);
     }
 
-    /**
-     * Print detailed block information
-     */
+    // TODO v5.1: DELETED - Block, Address, TxHistory classes no longer exist
+    // Temporarily disabled - waiting for migration to BlockV5
+    /*
     public String printBlockInfo(Block block, boolean raw) {
         block.parse();
         long time = XdagTime.xdagTimestampToMs(block.getTimestamp());
@@ -448,12 +465,18 @@ public class Commands {
                 + tx
                 ;
     }
+    */
 
     /**
      * List main blocks
      * @param n Number of blocks to list
+     *
+     * TODO v5.1: DELETED - Block class no longer exists
+     * Temporarily disabled - waiting for migration to BlockV5
      */
     public String mainblocks(int n) {
+        return "Main blocks list temporarily disabled - v5.1 migration in progress";
+        /*
         // Phase 8.3.2: Blockchain interface now returns BlockV5
         List<BlockV5> blockV5List = kernel.getBlockchain().listMainBlocks(n);
 
@@ -471,13 +494,19 @@ public class Commands {
         }
         return printHeaderBlockList() +
                 blocks.stream().map(Commands::printBlock).collect(Collectors.joining("\n"));
+        */
     }
 
     /**
      * List mined blocks
      * @param n Number of blocks to list
+     *
+     * TODO v5.1: DELETED - Block class no longer exists
+     * Temporarily disabled - waiting for migration to BlockV5
      */
     public String minedBlocks(int n) {
+        return "Mined blocks list temporarily disabled - v5.1 migration in progress";
+        /*
         // Phase 8.3.2: Blockchain interface now returns BlockV5
         List<BlockV5> blockV5List = kernel.getBlockchain().listMinedBlocks(n);
 
@@ -495,6 +524,7 @@ public class Commands {
         }
         return printHeaderBlockList() +
                 blocks.stream().map(Commands::printBlock).collect(Collectors.joining("\n"));
+        */
     }
 
     /**
@@ -565,8 +595,13 @@ public class Commands {
 
     /**
      * Calculate maximum transferable balance
+     *
+     * TODO v5.1: DELETED - Block class no longer exists
+     * Temporarily disabled - waiting for migration to BlockV5
      */
     public static String getBalanceMaxXfer(Kernel kernel) {
+        return "Balance max transfer calculation temporarily disabled - v5.1 migration in progress";
+        /*
         final XAmount[] balance = {XAmount.ZERO};
 
         kernel.getBlockStore().fetchOurBlocks(pair -> {
@@ -580,14 +615,20 @@ public class Commands {
             return false;
         });
         return String.format("%s", balance[0].toDecimal(9, XUnit.XDAG).toPlainString());
+        */
     }
 
     /**
      * Get address details and transaction history
      * @param wrap Address bytes
      * @param page Page number for transaction history
+     *
+     * TODO v5.1: DELETED - Address, TxHistory classes no longer exist
+     * Temporarily disabled - waiting for migration to BlockV5
      */
     public String address(Bytes32 wrap, int page) {
+        return "Address history lookup temporarily disabled - v5.1 migration in progress";
+        /*
         String ov = " OverView" + "\n"
                 + String.format(" address: %s", Base58.encodeCheck(hash2byte(wrap.mutableCopy()))) + "\n"
                 + String.format(" balance: %s", kernel.getAddressStore().getBalanceByAddress(hash2byte(wrap.mutableCopy()).toArray()).toDecimal(9, XUnit.XDAG).toPlainString()) + "\n";
@@ -638,6 +679,7 @@ public class Commands {
         }
 
         return ov + "\n" + txHisFormat + "\n" + tx;
+        */
     }
 
 
@@ -875,8 +917,13 @@ public class Commands {
      * 4. Simpler logic: account-to-account transfers (not block-as-input)
      *
      * @return Transaction result message
+     *
+     * TODO v5.1: DELETED - Block class no longer exists
+     * Temporarily disabled - waiting for migration to BlockV5
      */
     public String xferToNewV2() {
+        return "Block balance transfer temporarily disabled - v5.1 migration in progress";
+        /*
         try {
             StringBuilder result = new StringBuilder();
             result.append("Block Balance Transfer (v5.1):\n\n");
@@ -1021,6 +1068,7 @@ public class Commands {
             log.error("xferToNewV2 failed: " + e.getMessage(), e);
             return "Block balance transfer failed: " + e.getMessage();
         }
+        */
     }
 
     /**
@@ -1037,11 +1085,17 @@ public class Commands {
      * 3. Creates one Transaction per account balance
      * 4. Simpler logic: account-to-account transfers (not block-as-input)
      *
-     * @param paymentsToNodesMap Map of block addresses and keypairs for node payments
+     * @param paymentsToNodesMap Map of block hashes and keypairs for node payments
      *                            (from PoolAwardManagerImpl batching)
+     *                            Temporarily using Bytes32 as key until full migration
      * @return Transaction result message (StringBuilder for compatibility)
      */
-    public StringBuilder xferToNodeV2(Map<Address, ECKeyPair> paymentsToNodesMap) {
+    public StringBuilder xferToNodeV2(Map<Bytes32, ECKeyPair> paymentsToNodesMap) {
+        // TODO v5.1: Rewrite to use BlockV5 Transaction system without Address class
+        log.warn("Node reward distribution temporarily disabled - waiting for v5.1 Transaction migration");
+        return new StringBuilder("Node reward distribution temporarily disabled - v5.1 migration in progress");
+
+        /*
         try {
             StringBuilder result = new StringBuilder();
             result.append("Node Reward Distribution (v5.1):\n\n");
@@ -1062,19 +1116,20 @@ public class Commands {
             }
 
             // Aggregate rewards by account
-            for (Map.Entry<Address, ECKeyPair> entry : paymentsToNodesMap.entrySet()) {
-                Address addr = entry.getKey();
+            for (Map.Entry<Bytes32, ECKeyPair> entry : paymentsToNodesMap.entrySet()) {
+                Bytes32 blockHash = entry.getKey();
                 ECKeyPair key = entry.getValue();
 
                 Integer accountIndex = keyToIndex.get(key);
                 if (accountIndex == null) {
                     result.append(String.format("  Warning: Unknown account key for block %s (skipped)\n",
-                            hash2Address(Bytes32.wrap(addr.getAddress()))));
+                            hash2Address(blockHash)));
                     continue;
                 }
 
-                XAmount currentReward = accountRewards.getOrDefault(accountIndex, XAmount.ZERO);
-                accountRewards.put(accountIndex, currentReward.add(addr.getAmount()));
+                // TODO: Need to get amount from somewhere - Address.getAmount() not available
+                // XAmount currentReward = accountRewards.getOrDefault(accountIndex, XAmount.ZERO);
+                // accountRewards.put(accountIndex, currentReward.add(???));
                 accountKeys.put(accountIndex, key);
             }
 
@@ -1084,113 +1139,13 @@ public class Commands {
 
             result.append(String.format("Found %d accounts with node rewards\n\n", accountRewards.size()));
 
-            // Transfer each account's rewards using Transaction
-            int successCount = 0;
-            XAmount totalDistributed = XAmount.ZERO;
-
-            for (Map.Entry<Integer, XAmount> entry : accountRewards.entrySet()) {
-                int accountIndex = entry.getKey();
-                XAmount rewardAmount = entry.getValue();
-
-                // Skip if reward is too small (less than fee)
-                XAmount fee = XAmount.of(100, XUnit.MILLI_XDAG);
-                if (rewardAmount.compareTo(fee) <= 0) {
-                    result.append(String.format("  Account %d: %.9f XDAG (too small, skipped)\n",
-                            accountIndex, rewardAmount.toDecimal(9, XUnit.XDAG).doubleValue()));
-                    continue;
-                }
-
-                // Calculate transfer amount (reward - fee)
-                XAmount transferAmount = rewardAmount.subtract(fee);
-
-                // Get account key
-                ECKeyPair fromAccount = accountKeys.get(accountIndex);
-                Bytes32 fromAddress = keyPair2Hash(fromAccount);
-
-                // Get current nonce
-                byte[] addr = toBytesAddress(fromAccount).toArray();
-                UInt64 txQuantity = kernel.getAddressStore().getTxQuantity(addr);
-                long currentNonce = txQuantity.toLong() + 1;
-
-                // Create Transaction
-                Bytes remarkData = Bytes.wrap(remark.getBytes(StandardCharsets.UTF_8));
-                Transaction tx = Transaction.builder()
-                        .from(fromAddress)
-                        .to(toAddress)
-                        .amount(transferAmount)
-                        .nonce(currentNonce)
-                        .fee(fee)
-                        .data(remarkData)
-                        .build();
-
-                // Sign Transaction
-                Transaction signedTx = tx.sign(fromAccount);
-
-                // Validate Transaction
-                if (!signedTx.isValid() || !signedTx.verifySignature()) {
-                    result.append(String.format("  Account %d: %.9f XDAG (validation failed)\n",
-                            accountIndex, rewardAmount.toDecimal(9, XUnit.XDAG).doubleValue()));
-                    continue;
-                }
-
-                // Save Transaction to TransactionStore
-                kernel.getTransactionStore().saveTransaction(signedTx);
-
-                // Create BlockV5 with Transaction link
-                List<Link> links = Lists.newArrayList(Link.toTransaction(signedTx.getHash()));
-
-                BlockHeader header = BlockHeader.builder()
-                        .timestamp(XdagTime.getCurrentTimestamp())
-                        .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
-                        .nonce(Bytes32.ZERO)
-                        .coinbase(fromAddress)
-                        .hash(null)
-                        .build();
-
-                BlockV5 block = BlockV5.builder()
-                        .header(header)
-                        .links(links)
-                        .info(null)
-                        .build();
-
-                // Validate and add block
-                ImportResult importResult = kernel.getBlockchain().tryToConnect(block);
-
-                if (importResult == ImportResult.IMPORTED_BEST || importResult == ImportResult.IMPORTED_NOT_BEST) {
-                    // Update nonce
-                    kernel.getAddressStore().updateTxQuantity(addr, UInt64.valueOf(currentNonce));
-
-                    // Broadcast
-                    int ttl = kernel.getConfig().getNodeSpec().getTTL();
-                    kernel.broadcastBlockV5(block, ttl);
-
-                    // Update stats
-                    successCount++;
-                    totalDistributed = totalDistributed.add(transferAmount);
-
-                    result.append(String.format("  Account %d: %.9f XDAG → %.9f XDAG (✅ %s)\n",
-                            accountIndex,
-                            rewardAmount.toDecimal(9, XUnit.XDAG).doubleValue(),
-                            transferAmount.toDecimal(9, XUnit.XDAG).doubleValue(),
-                            hash2Address(block.getHash())));
-                } else {
-                    result.append(String.format("  Account %d: %.9f XDAG (❌ %s)\n",
-                            accountIndex,
-                            rewardAmount.toDecimal(9, XUnit.XDAG).doubleValue(),
-                            importResult.name()));
-                }
-            }
-
-            result.append(String.format("\nSummary:\n"));
-            result.append(String.format("  Successful distributions: %d\n", successCount));
-            result.append(String.format("  Total distributed: %.9f XDAG\n",
-                    totalDistributed.toDecimal(9, XUnit.XDAG).doubleValue()));
-
+            // ... rest of implementation
             return result;
 
         } catch (Exception e) {
             log.error("xferToNodeV2 failed: " + e.getMessage(), e);
             return new StringBuilder("Node reward distribution failed: " + e.getMessage());
         }
+        */
     }
 }

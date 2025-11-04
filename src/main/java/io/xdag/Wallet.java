@@ -24,7 +24,8 @@
 
 package io.xdag;
 
-import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_OUTPUT;
+// TODO v5.1: DELETED - XdagField class no longer exists
+// import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_OUTPUT;
 import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.nio.file.attribute.PosixFilePermission.OWNER_READ;

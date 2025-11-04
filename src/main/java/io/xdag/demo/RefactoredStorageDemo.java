@@ -40,6 +40,9 @@ import java.nio.file.Path;
 /**
  * End-to-end demonstration of the new refactored storage system
  *
+ * TODO v5.1: DELETED - Block and LegacyBlockInfo classes no longer exist
+ * This demo is temporarily disabled - waiting for migration to BlockV5
+ *
  * This demo shows:
  * 1. Creating blocks with the new BlockInfo structure
  * 2. Serializing with CompactSerializer
@@ -49,6 +52,8 @@ import java.nio.file.Path;
  */
 public class RefactoredStorageDemo {
 
+    // TODO v5.1: Restore after migrating to BlockV5
+    /*
     public static void main(String[] args) throws IOException {
         System.out.println("=".repeat(80));
         System.out.println("XDAG Refactored Storage System - End-to-End Demo");
@@ -88,97 +93,7 @@ public class RefactoredStorageDemo {
             System.out.println("Demo 2: Storage Statistics");
             System.out.println("-".repeat(80));
 
-            long totalCount = store.getTotalBlockCount();
-            long mainCount = store.getTotalMainBlockCount();
-            long storageSize = store.getStorageSize();
-            long maxHeight = store.getMaxFinalizedHeight();
-
-            System.out.printf("  Total blocks:      %,d%n", totalCount);
-            System.out.printf("  Main blocks:       %,d%n", mainCount);
-            System.out.printf("  Storage size:      %,d bytes%n", storageSize);
-            System.out.printf("  Max height:        %,d%n", maxHeight);
-            System.out.println();
-
-            // ========== Demo 3: Query by Height ==========
-            System.out.println("Demo 3: Query Main Blocks by Height");
-            System.out.println("-".repeat(80));
-
-            startTime = System.currentTimeMillis();
-            for (int h = 0; h < 100; h += 10) {
-                var infoOpt = store.getMainBlockInfoByHeight(h);
-                if (infoOpt.isPresent()) {
-                    BlockInfo info = infoOpt.get();
-                    System.out.printf("  Height %d: hash=%s, time=%d%n",
-                            h,
-                            info.getHash().toHexString().substring(0, 16) + "...",
-                            info.getTimestamp());
-                }
-            }
-            long queryTime = System.currentTimeMillis() - startTime;
-            System.out.printf("  ✓ Queried 10 blocks in %d ms (%.2f ms/block)%n",
-                    queryTime, queryTime / 10.0);
-            System.out.println();
-
-            // ========== Demo 4: Query by Epoch ==========
-            System.out.println("Demo 4: Query Blocks by Epoch");
-            System.out.println("-".repeat(80));
-
-            long epoch = 100; // Epoch for blocks around height 100
-            var epochBlocks = store.getBlockHashesByEpoch(epoch);
-            System.out.printf("  Epoch %d contains %d blocks%n", epoch, epochBlocks.size());
-
-            if (!epochBlocks.isEmpty()) {
-                System.out.println("  First 5 blocks in this epoch:");
-                for (int i = 0; i < Math.min(5, epochBlocks.size()); i++) {
-                    System.out.printf("    - %s%n",
-                            epochBlocks.get(i).toHexString().substring(0, 16) + "...");
-                }
-            }
-            System.out.println();
-
-            // ========== Demo 5: Range Query ==========
-            System.out.println("Demo 5: Range Query (Height 50-59)");
-            System.out.println("-".repeat(80));
-
-            var rangeBlocks = store.getMainBlockInfosByHeightRange(50, 59);
-            System.out.printf("  Retrieved %d main blocks%n", rangeBlocks.size());
-            for (BlockInfo info : rangeBlocks) {
-                System.out.printf("    Height %d: difficulty=%s%n",
-                        info.getHeight(),
-                        info.getDifficulty().toDecimalString());
-            }
-            System.out.println();
-
-            // ========== Demo 6: Serialization Comparison ==========
-            System.out.println("Demo 6: Serialization Size Comparison");
-            System.out.println("-".repeat(80));
-
-            Block sampleBlock = createDemoBlock(500, true);
-            BlockInfo sampleInfo = sampleBlock.getInfo();
-
-            byte[] compactSerialized = CompactSerializer.serialize(sampleInfo);
-            System.out.printf("  CompactSerializer size: %d bytes%n", compactSerialized.length);
-            System.out.printf("  Target size:            ~180 bytes%n");
-            System.out.printf("  Size efficiency:        %.1f%%%n",
-                    (180.0 / compactSerialized.length) * 100);
-            System.out.println();
-
-            // ========== Demo 7: Verify Data Integrity ==========
-            System.out.println("Demo 7: Verify Data Integrity");
-            System.out.println("-".repeat(80));
-
-            boolean integrity = store.verifyIntegrity();
-            System.out.printf("  Integrity check: %s%n", integrity ? "✓ PASSED" : "✗ FAILED");
-            System.out.println();
-
-            // ========== Demo 8: Main Chain Continuity ==========
-            System.out.println("Demo 8: Verify Main Chain Continuity");
-            System.out.println("-".repeat(80));
-
-            boolean continuity = store.verifyMainChainContinuity(0, 50);
-            System.out.printf("  Main chain continuity (0-50): %s%n",
-                    continuity ? "✓ CONTINUOUS" : "✗ BROKEN");
-            System.out.println();
+            // ... rest of demos commented out ...
 
         } finally {
             // Cleanup
@@ -192,43 +107,11 @@ public class RefactoredStorageDemo {
         System.out.println("=".repeat(80));
     }
 
-    /**
-     * Create a demo block with deterministic properties
-     */
     private static Block createDemoBlock(long height, boolean isMainBlock) {
-        long timestamp = height * 64; // Each height = one epoch
-
-        // Create LegacyBlockInfo
-        LegacyBlockInfo legacyInfo = new LegacyBlockInfo();
-
-        // Generate deterministic hash
-        byte[] hashBytes = new byte[32];
-        for (int i = 0; i < 8; i++) {
-            hashBytes[i] = (byte) (height >> (i * 8));
-        }
-        for (int i = 8; i < 32; i++) {
-            hashBytes[i] = (byte) ((height * 31 + i) & 0xFF);
-        }
-
-        legacyInfo.setHashlow(hashBytes);
-        legacyInfo.setTimestamp(timestamp);
-        legacyInfo.setHeight(height);
-        legacyInfo.type = 0x01;
-        legacyInfo.flags = isMainBlock ? Constants.BI_MAIN : 0;
-        legacyInfo.setDifficulty(java.math.BigInteger.valueOf(1000 + height));
-        legacyInfo.setAmount(XAmount.of(100, XUnit.XDAG));
-        legacyInfo.setFee(XAmount.of(1, XUnit.XDAG));
-
-        // Create block
-        Block block = new Block(legacyInfo);
-
-        // Create minimal XdagBlock data
-        byte[] blockData = new byte[512];
-        System.arraycopy(hashBytes, 0, blockData, 0, 32);
-        block.setXdagBlock(new XdagBlock(blockData));
-
-        return block;
+        // ... implementation commented out ...
+        return null;
     }
+    */
 
     /**
      * Recursively delete directory

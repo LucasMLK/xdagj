@@ -25,8 +25,8 @@ package io.xdag.net.message.consensus;
 
 import org.apache.tuweni.bytes.MutableBytes;
 
-import io.xdag.utils.SimpleEncoder;
 import io.xdag.core.XdagStats;
+import io.xdag.utils.SimpleEncoder;
 import io.xdag.net.message.MessageCode;
 import io.xdag.utils.SimpleDecoder;
 import lombok.Getter;

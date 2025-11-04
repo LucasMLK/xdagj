@@ -187,8 +187,17 @@ public interface Blockchain {
     // Get memory blocks created by current node
     Map<Bytes, Integer> getMemOurBlocks();
 
-    // Get XDAG network statistics
-    XdagStats getXdagStats();
+    /**
+     * Get blockchain statistics (v5.1 unified interface - Phase 7.3)
+     *
+     * Phase 7.3: XdagStats was refactored into immutable ChainStats.
+     * ChainStats provides blockchain statistics without mutable state.
+     *
+     * @return ChainStats containing current blockchain statistics
+     * @see ChainStats#toLegacy() for backward compatibility
+     * @since Phase 7.3 v5.1
+     */
+    ChainStats getChainStats();
 
     // Get XDAG top status
     XdagTopStatus getXdagTopStatus();
@@ -221,9 +230,14 @@ public interface Blockchain {
     // Register blockchain event listener
     void registerListener(Listener listener);
 
-    // Get transaction history for given address
-    List<TxHistory> getBlockTxHistoryByAddress(Bytes32 addressHash, int page, Object... parameters);
-
-    // Get extended XDAG network statistics
+    /**
+     * Get extended blockchain statistics (hashrate tracking)
+     *
+     * Phase 7.3: XdagExtStats tracks hash rate history for network monitoring.
+     * This provides detailed performance metrics beyond basic ChainStats.
+     *
+     * @return XdagExtStats containing hash rate history
+     * @since Phase 7.3 v5.1
+     */
     XdagExtStats getXdagExtStats();
 }

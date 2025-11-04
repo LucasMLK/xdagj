@@ -54,16 +54,10 @@ import io.xdag.consensus.SyncManager;
 import io.xdag.BlockBuilder;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
-import io.xdag.core.Address;
-import io.xdag.core.Block;
-import io.xdag.core.LegacyBlockInfo;
 import io.xdag.core.Blockchain;
-import io.xdag.core.TxHistory;
 import io.xdag.core.XAmount;
 import io.xdag.core.XUnit;
-import io.xdag.core.XdagExtStats;
 import io.xdag.core.XdagState;
-import io.xdag.core.XdagStats;
 import io.xdag.core.XdagTopStatus;
 import io.xdag.db.AddressStore;
 import io.xdag.db.BlockStore;
@@ -72,9 +66,6 @@ import io.xdag.utils.BytesUtils;
 import io.xdag.utils.XdagTime;
 
 public class CommandsTest {
-
-    Block mainblock;
-
     Config config = new DevnetConfig();
 
     BigInteger private_1 = new BigInteger("c85ef7d79691fe79573b1a7064c19c1a9819ebdbd1faaab1a8ec92344438aaf4", 16);

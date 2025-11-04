@@ -126,12 +126,16 @@ public class BlockFinalizationService {
         }
     }
 
+    // TODO v5.1: DELETED - Block class no longer exists
+    // Temporarily disabled - waiting for migration to BlockV5
+    /*
     /**
      * Finalize blocks older than the threshold
      * <p>
      * This method is called periodically to migrate old blocks from BlockStore
      * to FinalizedBlockStore.
      */
+    /*
     private void finalizeOldBlocks() {
         if (!isRunning.get()) {
             return;
@@ -226,6 +230,14 @@ public class BlockFinalizationService {
         } catch (Exception e) {
             log.error("Error during block finalization", e);
         }
+    }
+    */
+
+    /**
+     * Stub method for Phase 7.3 - Block finalization temporarily disabled
+     */
+    private void finalizeOldBlocks() {
+        log.debug("Block finalization temporarily disabled - waiting for BlockV5 migration");
     }
 
     /**

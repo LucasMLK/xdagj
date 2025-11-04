@@ -28,7 +28,6 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.Kernel;
 import io.xdag.core.AbstractXdagLifecycle;
-import io.xdag.core.Block;
 import io.xdag.core.BlockV5;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -48,7 +47,11 @@ public class ChannelManager extends AbstractXdagLifecycle {
     /**
      * Simple tuple for block + TTL (v5.1)
      * Replaces BlockWrapper for network distribution
+     *
+     * TODO v5.1: DELETED - Block class no longer exists (Phase 7.1)
+     * This was used for legacy Block distribution. Use BlockV5 directly instead.
      */
+    /*
     private static class BlockDistribution {
         final Block block;
         final int ttl;
@@ -57,14 +60,19 @@ public class ChannelManager extends AbstractXdagLifecycle {
             this.ttl = ttl;
         }
     }
+    */
 
     private final Kernel kernel;
     /**
      * Queue with new blocks from other peers
+     *
+     * TODO v5.1: DELETED - BlockDistribution class no longer exists
+     * Use BlockV5 foreign block queue instead
      */
-    private final BlockingQueue<BlockDistribution> newForeignBlocks = new LinkedBlockingQueue<>();
+    // private final BlockingQueue<BlockDistribution> newForeignBlocks = new LinkedBlockingQueue<>();
     // Thread for block distribution
-    private final Thread blockDistributeThread;
+    // TODO v5.1: Legacy block distribution thread deleted
+    // private final Thread blockDistributeThread;
     private final Set<InetSocketAddress> addressSet = new HashSet<>();
     protected ConcurrentHashMap<InetSocketAddress, Channel> channels = new ConcurrentHashMap<>();
     protected ConcurrentHashMap<String, Channel> activeChannels = new ConcurrentHashMap<>();
@@ -77,22 +85,27 @@ public class ChannelManager extends AbstractXdagLifecycle {
     public ChannelManager(Kernel kernel) {
         this.kernel = kernel;
         // Resending new blocks to network in loop
-        this.blockDistributeThread = new Thread(this::newBlocksDistributeLoop, "NewSyncThreadBlocks");
+        // TODO v5.1: Legacy Block distribution thread deleted
+        // this.blockDistributeThread = new Thread(this::newBlocksDistributeLoop, "NewSyncThreadBlocks");
         initWhiteIPs();
     }
 
     @Override
     protected void doStart() {
-        blockDistributeThread.start();
+        // TODO v5.1: Legacy Block distribution thread deleted
+        // blockDistributeThread.start();
     }
 
     @Override
     protected void doStop() {
         log.debug("Channel Manager stop...");
+        // TODO v5.1: Legacy Block distribution thread deleted
+        /*
         if (blockDistributeThread != null) {
             // Interrupt the thread
             blockDistributeThread.interrupt();
         }
+        */
         // Close all connections
         for (Channel channel : activeChannels.values()) {
             channel.close();
@@ -154,7 +167,11 @@ public class ChannelManager extends AbstractXdagLifecycle {
 
     /**
      * Processing new blocks received from other peers from queue
+     *
+     * TODO v5.1: DELETED - Block class and BlockDistribution no longer exist
+     * This method was used for legacy Block distribution. Use BlockV5 methods instead.
      */
+    /*
     private void newBlocksDistributeLoop() {
         while (!Thread.currentThread().isInterrupted()) {
             BlockDistribution distribution = null;
@@ -175,6 +192,7 @@ public class ChannelManager extends AbstractXdagLifecycle {
             }
         }
     }
+    */
 
     /**
      * Phase 7.3.0: sendNewBlock() deleted - use sendNewBlockV5() instead
@@ -193,9 +211,15 @@ public class ChannelManager extends AbstractXdagLifecycle {
         }
     }
 
+    /**
+     * TODO v5.1: DELETED - Block class no longer exists
+     * This method was used for legacy Block foreign block queueing. Use onNewForeignBlockV5() instead.
+     */
+    /*
     public void onNewForeignBlock(Block block, int ttl) {
         newForeignBlocks.add(new BlockDistribution(block, ttl));
     }
+    */
 
     /**
      * Phase 3.2: Queue BlockV5 from other peers for broadcast

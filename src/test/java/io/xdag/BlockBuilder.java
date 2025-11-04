@@ -30,8 +30,6 @@ import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_OUTPUT;
 
 import com.google.common.collect.Lists;
 import io.xdag.config.Config;
-import io.xdag.core.Address;
-import io.xdag.core.Block;
 import io.xdag.core.XAmount;
 import io.xdag.core.XUnit;
 import java.util.List;

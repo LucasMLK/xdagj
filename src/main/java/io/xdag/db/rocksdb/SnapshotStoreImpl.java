@@ -28,16 +28,9 @@ import com.esotericsoftware.kryo.KryoException;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.util.DefaultInstantiatorStrategy;
-import io.xdag.core.Address;
-import io.xdag.core.Block;
-import io.xdag.core.LegacyBlockInfo;
 import io.xdag.core.SnapshotInfo;
-import io.xdag.core.TxHistory;
 import io.xdag.core.XAmount;
 import io.xdag.core.XUnit;
-import io.xdag.core.XdagBlock;
-import io.xdag.core.XdagExtStats;
-import io.xdag.core.XdagField;
 import io.xdag.core.XdagStats;
 import io.xdag.core.XdagTopStatus;
 import io.xdag.crypto.hash.HashUtils;
@@ -106,8 +99,26 @@ public class SnapshotStoreImpl implements SnapshotStore {
         snapshotSource.reset();
     }
 
+    @Override
+    public void makeSnapshot(RocksdbKVSource blockSource, RocksdbKVSource indexSource) {
+        log.warn("makeSnapshot() temporarily disabled - v5.1 migration in progress");
+        // TODO v5.1: DELETED - LegacyBlockInfo class no longer exists
+        // Temporarily disabled - waiting for migration to BlockV5
+    }
+
+    @Override
+    public void saveSnapshotToIndex(BlockStore blockStore, TransactionHistoryStore txHistoryStore,
+                                     List<ECKeyPair> keys, long snapshotTime) {
+        log.warn("saveSnapshotToIndex() temporarily disabled - v5.1 migration in progress");
+        // TODO v5.1: DELETED - Block, Address, TxHistory, LegacyBlockInfo classes no longer exist
+        // Temporarily disabled - waiting for migration to BlockV5
+    }
+
     // Phase 7.1.2: Removed setBlockInfo() method - PreBlockInfo deleted, use LegacyBlockInfo directly
 
+    // TODO v5.1: DELETED - LegacyBlockInfo class no longer exists
+    // Temporarily disabled - waiting for migration to BlockV5
+    /*
     // Phase 7.1.2: Removed boolean parameter - always deserialize to LegacyBlockInfo directly
     public void makeSnapshot(RocksdbKVSource blockSource, RocksdbKVSource indexSource) {
         try (RocksIterator iter = indexSource.getDb().newIterator()) {
@@ -153,7 +164,11 @@ public class SnapshotStoreImpl implements SnapshotStore {
         byte[] preSeed = snapshotSource.get(new byte[]{SNAPSHOT_PRESEED});
         snapshotSource.put(new byte[]{SNAPSHOT_PRESEED}, preSeed);
     }
+    */
 
+    // TODO v5.1: DELETED - Block, Address, TxHistory, LegacyBlockInfo classes no longer exist
+    // Temporarily disabled - waiting for migration to BlockV5
+    /*
     public void saveSnapshotToIndex(BlockStore blockStore, TransactionHistoryStore txHistoryStore, List<ECKeyPair> keys,long snapshotTime) {
         try (RocksIterator iter = snapshotSource.getDb().newIterator()) {
             for (iter.seekToFirst(); iter.isValid(); iter.next()) {
@@ -237,6 +252,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
             log.error(e.getMessage(), e);
         }
     }
+    */
 
 
     @Override
@@ -260,6 +276,9 @@ public class SnapshotStoreImpl implements SnapshotStore {
                         }
                         allBalance = allBalance.add(balance); //calculate the address balance
                         addressStore.snapshotAddress(address, balance);
+                        // TODO v5.1: DELETED - Address and TxHistory classes no longer exist
+                        // Temporarily disabled - waiting for migration to BlockV5
+                        /*
                         if (txHistoryStore != null) {
                             XdagField.FieldType fieldType = XdagField.FieldType.XDAG_FIELD_SNAPSHOT;
                             Address addr = new Address(BytesUtils.arrayToByte32(Arrays.copyOfRange(address, 1, 21)),
@@ -271,6 +290,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
                             txHistory.setTimestamp(snapshotTime);
                             txHistoryStore.saveTxHistory(txHistory);
                         }
+                        */
                     } // TODO: Restore the transaction quantity for each address from the snapshot.
                     else if (Hex.toHexString(address).startsWith("50")) {
                         UInt64 exeTxNonceNum = UInt64.fromBytes(Bytes.wrap(iter.value())).toUInt64();
@@ -286,6 +306,9 @@ public class SnapshotStoreImpl implements SnapshotStore {
         }
     }
 
+    // TODO v5.1: DELETED - LegacyBlockInfo class no longer exists
+    // Temporarily disabled - waiting for migration to BlockV5
+    /*
     public void save(RocksIterator iter, LegacyBlockInfo blockInfo) {
         byte[] value = null;
         try {
@@ -295,6 +318,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
         }
         snapshotSource.put(iter.key(), value);
     }
+    */
 
     public Object deserialize(final byte[] bytes, Class<?> type) throws DeserializationException {
         synchronized (kryo) {
@@ -328,7 +352,8 @@ public class SnapshotStoreImpl implements SnapshotStore {
         kryo.setInstantiatorStrategy(new DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
         kryo.register(BigInteger.class);
         kryo.register(byte[].class);
-        kryo.register(LegacyBlockInfo.class);
+        // TODO v5.1: DELETED - LegacyBlockInfo class no longer exists
+        // kryo.register(LegacyBlockInfo.class);
         kryo.register(XdagStats.class);
         kryo.register(XdagTopStatus.class);
         kryo.register(SnapshotInfo.class);

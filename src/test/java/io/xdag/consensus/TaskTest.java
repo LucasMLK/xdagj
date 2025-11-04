@@ -31,7 +31,6 @@ import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.core.XAmount;
-import io.xdag.core.XdagField;
 import io.xdag.crypto.SampleKeys;
 import io.xdag.crypto.core.CryptoProvider;
 import io.xdag.crypto.hash.XdagSha256Digest;

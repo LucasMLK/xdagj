@@ -26,7 +26,6 @@ package io.xdag.config;
 
 import io.xdag.config.spec.*;
 import io.xdag.core.XAmount;
-import io.xdag.core.XdagField;
 import io.xdag.net.CapabilityTreeSet;
 
 import java.util.List;
@@ -94,8 +93,11 @@ public interface Config {
 
     /**
      * Get the XDAG field header type
+     *
+     * TODO v5.1: DELETED - XdagField class no longer exists
+     * This configuration was never used in v5.1 architecture
      */
-    XdagField.FieldType getXdagFieldHeader();
+    // XdagField.FieldType getXdagFieldHeader();
 
     /**
      * Change parameters based on command line arguments

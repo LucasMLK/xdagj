@@ -23,10 +23,7 @@
  */
 package io.xdag.db.mysql;
 
-import io.xdag.core.Address;
-import io.xdag.core.TxHistory;
 import io.xdag.core.XAmount;
-import io.xdag.core.XdagField;
 import io.xdag.crypto.encoding.Base58;
 import io.xdag.db.TransactionHistoryStore;
 import io.xdag.utils.BasicUtils;

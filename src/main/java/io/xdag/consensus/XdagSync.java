@@ -28,7 +28,6 @@ import com.google.common.util.concurrent.SettableFuture;
 import io.xdag.Kernel;
 import io.xdag.config.*;
 import io.xdag.core.AbstractXdagLifecycle;
-import io.xdag.core.Block;
 import io.xdag.core.XdagState;
 import io.xdag.crypto.core.CryptoProvider;
 import io.xdag.db.BlockStore;
@@ -211,9 +210,12 @@ public class XdagSync extends AbstractXdagLifecycle {
     private void findGetBlocks(io.xdag.p2p.channel.Channel xc, long t, long dt, SettableFuture<Bytes> sf) {
         MutableBytes lSums = MutableBytes.create(256);
         Bytes rSums;
-        if (blockStore.loadSum(t, t + dt, lSums) <= 0) {
-            return;
-        }
+        // TODO v5.1: DELETED - BlockStore.loadSum() method no longer exists
+        // Temporarily disabled - sum file system removed in v5.1
+        // if (blockStore.loadSum(t, t + dt, lSums) <= 0) {
+        //     return;
+        // }
+        // For now, skip sum checking and continue with sync
         long randomSeq = kernel.getP2pEventHandler().sendGetSums(xc, t, t + dt);
         sumsRequestMap.put(randomSeq, sf);
         try {
@@ -257,14 +259,18 @@ public class XdagSync extends AbstractXdagLifecycle {
 
     /**
      * Get timestamp of latest confirmed main block
+     *
+     * TODO v5.1: DELETED - Block class no longer exists
+     * Temporarily disabled - waiting for migration to BlockV5
      */
     public long getLastTime() {
         long height = blockStore.getXdagStatus().nmain;
         if(height == 0) return 0;
-        Block lastBlock = blockStore.getBlockByHeight(height);
-        if (lastBlock != null) {
-            return lastBlock.getTimestamp();
-        }
+        // TODO v5.1: Migrate to BlockV5 when available
+        // Block lastBlock = blockStore.getBlockByHeight(height);
+        // if (lastBlock != null) {
+        //     return lastBlock.getTimestamp();
+        // }
         return 0;
     }
 

@@ -26,7 +26,6 @@ package io.xdag.db.store;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
-import io.xdag.core.Block;
 import io.xdag.core.BlockInfo;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
@@ -59,14 +58,11 @@ public class CachedBlockStore implements FinalizedBlockStore {
 
     private final FinalizedBlockStore delegate;
     private final Cache<Bytes32, BlockInfo> blockInfoCache;
-    private final Cache<Bytes32, Block> blockCache;
     private final Cache<Long, Bytes32> heightCache; // height → hash
 
     // Statistics
     private long blockInfoCacheHits = 0;
     private long blockInfoCacheMisses = 0;
-    private long blockCacheHits = 0;
-    private long blockCacheMisses = 0;
     private long heightCacheHits = 0;
     private long heightCacheMisses = 0;
 
@@ -75,12 +71,10 @@ public class CachedBlockStore implements FinalizedBlockStore {
      *
      * @param delegate Underlying store
      * @param blockInfoCacheSize Max number of BlockInfo entries
-     * @param blockCacheSize Max number of Block entries
      * @param heightCacheSize Max number of height index entries
      */
     public CachedBlockStore(FinalizedBlockStore delegate,
                              long blockInfoCacheSize,
-                             long blockCacheSize,
                              long heightCacheSize) {
         this.delegate = delegate;
 
@@ -91,13 +85,6 @@ public class CachedBlockStore implements FinalizedBlockStore {
                 .recordStats()
                 .build();
 
-        // Block cache: full block data
-        this.blockCache = CacheBuilder.newBuilder()
-                .maximumSize(blockCacheSize)
-                .expireAfterAccess(5, TimeUnit.MINUTES)
-                .recordStats()
-                .build();
-
         // Height index cache
         this.heightCache = CacheBuilder.newBuilder()
                 .maximumSize(heightCacheSize)
@@ -105,18 +92,17 @@ public class CachedBlockStore implements FinalizedBlockStore {
                 .recordStats()
                 .build();
 
-        log.info("Created CachedBlockStore: blockInfo={}, blocks={}, height={}",
-                blockInfoCacheSize, blockCacheSize, heightCacheSize);
+        log.info("Created CachedBlockStore: blockInfo={}, height={}",
+                blockInfoCacheSize, heightCacheSize);
     }
 
     /**
      * Create with default cache sizes:
      * - BlockInfo: 100,000 entries (~10 MB)
-     * - Blocks: 10,000 entries (~50 MB)
      * - Height index: 50,000 entries (~1 MB)
      */
     public CachedBlockStore(FinalizedBlockStore delegate) {
-        this(delegate, 100_000, 10_000, 50_000);
+        this(delegate, 100_000, 50_000);
     }
 
     // ========== Cached Methods ==========
@@ -136,29 +122,6 @@ public class CachedBlockStore implements FinalizedBlockStore {
 
         // Cache result
         result.ifPresent(info -> blockInfoCache.put(hash, info));
-
-        return result;
-    }
-
-    @Override
-    public Optional<Block> getBlockByHash(Bytes32 hash) {
-        // Check cache first
-        Block cached = blockCache.getIfPresent(hash);
-        if (cached != null) {
-            blockCacheHits++;
-            return Optional.of(cached);
-        }
-
-        // Cache miss, query database
-        blockCacheMisses++;
-        Optional<Block> result = delegate.getBlockByHash(hash);
-
-        // Cache result
-        result.ifPresent(block -> {
-            blockCache.put(hash, block);
-            // Also cache BlockInfo
-            blockInfoCache.put(hash, block.getInfo());
-        });
 
         return result;
     }
@@ -186,46 +149,6 @@ public class CachedBlockStore implements FinalizedBlockStore {
     }
 
     @Override
-    public Optional<Block> getMainBlockByHeight(long height) {
-        // Check height cache first
-        Bytes32 cachedHash = heightCache.getIfPresent(height);
-        if (cachedHash != null) {
-            heightCacheHits++;
-            return getBlockByHash(cachedHash);
-        }
-
-        // Cache miss, query database
-        heightCacheMisses++;
-        Optional<Block> result = delegate.getMainBlockByHeight(height);
-
-        // Cache result
-        result.ifPresent(block -> {
-            Bytes32 hash = block.getHash();
-            heightCache.put(height, hash);
-            blockCache.put(hash, block);
-            blockInfoCache.put(hash, block.getInfo());
-        });
-
-        return result;
-    }
-
-    @Override
-    public void saveBlock(Block block) {
-        delegate.saveBlock(block);
-
-        // Update cache
-        Bytes32 hash = block.getHash();
-        blockCache.put(hash, block);
-
-        BlockInfo info = block.getInfo();
-        blockInfoCache.put(hash, info);
-
-        if (info.isMainBlock()) {
-            heightCache.put(info.getHeight(), hash);
-        }
-    }
-
-    @Override
     public void saveBlockInfo(BlockInfo blockInfo) {
         delegate.saveBlockInfo(blockInfo);
 
@@ -237,26 +160,6 @@ public class CachedBlockStore implements FinalizedBlockStore {
         }
     }
 
-    @Override
-    public long saveBatch(List<Block> blocks) {
-        long saved = delegate.saveBatch(blocks);
-
-        // Update cache for all saved blocks
-        for (Block block : blocks) {
-            Bytes32 hash = block.getHash();
-            blockCache.put(hash, block);
-
-            BlockInfo info = block.getInfo();
-            blockInfoCache.put(hash, info);
-
-            if (info.isMainBlock()) {
-                heightCache.put(info.getHeight(), hash);
-            }
-        }
-
-        return saved;
-    }
-
     // ========== Statistics ==========
 
     /**
@@ -265,14 +168,6 @@ public class CachedBlockStore implements FinalizedBlockStore {
     public double getBlockInfoCacheHitRate() {
         long total = blockInfoCacheHits + blockInfoCacheMisses;
         return total > 0 ? (double) blockInfoCacheHits / total * 100 : 0;
-    }
-
-    /**
-     * Get Block cache hit rate
-     */
-    public double getBlockCacheHitRate() {
-        long total = blockCacheHits + blockCacheMisses;
-        return total > 0 ? (double) blockCacheHits / total * 100 : 0;
     }
 
     /**
@@ -289,10 +184,8 @@ public class CachedBlockStore implements FinalizedBlockStore {
     public CacheStats getCacheStats() {
         return new CacheStats(
                 blockInfoCache.size(),
-                blockCache.size(),
                 heightCache.size(),
                 getBlockInfoCacheHitRate(),
-                getBlockCacheHitRate(),
                 getHeightCacheHitRate()
         );
     }
@@ -303,8 +196,6 @@ public class CachedBlockStore implements FinalizedBlockStore {
     public void resetStatistics() {
         blockInfoCacheHits = 0;
         blockInfoCacheMisses = 0;
-        blockCacheHits = 0;
-        blockCacheMisses = 0;
         heightCacheHits = 0;
         heightCacheMisses = 0;
     }
@@ -314,7 +205,6 @@ public class CachedBlockStore implements FinalizedBlockStore {
      */
     public void clearCaches() {
         blockInfoCache.invalidateAll();
-        blockCache.invalidateAll();
         heightCache.invalidateAll();
         log.info("All caches cleared");
     }
@@ -327,9 +217,6 @@ public class CachedBlockStore implements FinalizedBlockStore {
         System.out.printf("  BlockInfo Cache:%n");
         System.out.printf("    Size:      %,d entries%n", blockInfoCache.size());
         System.out.printf("    Hit rate:  %.1f%%%n", getBlockInfoCacheHitRate());
-        System.out.printf("  Block Cache:%n");
-        System.out.printf("    Size:      %,d entries%n", blockCache.size());
-        System.out.printf("    Hit rate:  %.1f%%%n", getBlockCacheHitRate());
         System.out.printf("  Height Cache:%n");
         System.out.printf("    Size:      %,d entries%n", heightCache.size());
         System.out.printf("    Hit rate:  %.1f%%%n", getHeightCacheHitRate());
@@ -344,12 +231,6 @@ public class CachedBlockStore implements FinalizedBlockStore {
             return true;
         }
         return delegate.hasBlock(hash);
-    }
-
-    @Override
-    public List<Block> getMainBlocksByHeightRange(long fromHeight, long toHeight) {
-        // Don't cache range queries (too many entries)
-        return delegate.getMainBlocksByHeightRange(fromHeight, toHeight);
     }
 
     @Override
@@ -373,18 +254,8 @@ public class CachedBlockStore implements FinalizedBlockStore {
     }
 
     @Override
-    public List<Block> getBlocksByEpoch(long epoch) {
-        return delegate.getBlocksByEpoch(epoch);
-    }
-
-    @Override
     public List<BlockInfo> getBlockInfosByEpoch(long epoch) {
         return delegate.getBlockInfosByEpoch(epoch);
-    }
-
-    @Override
-    public List<Block> getBlocksByEpochRange(long fromEpoch, long toEpoch) {
-        return delegate.getBlocksByEpochRange(fromEpoch, toEpoch);
     }
 
     @Override
@@ -442,10 +313,8 @@ public class CachedBlockStore implements FinalizedBlockStore {
      */
     public record CacheStats(
             long blockInfoCacheSize,
-            long blockCacheSize,
             long heightCacheSize,
             double blockInfoHitRate,
-            double blockHitRate,
             double heightHitRate
     ) {}
 }

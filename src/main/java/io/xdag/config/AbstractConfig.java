@@ -29,7 +29,6 @@ import com.typesafe.config.ConfigFactory;
 import io.xdag.Network;
 import io.xdag.config.spec.*;
 import io.xdag.core.XAmount;
-import io.xdag.core.XdagField;
 import io.xdag.net.Capability;
 import io.xdag.net.CapabilityTreeSet;
 import io.xdag.net.message.MessageCode;
@@ -119,7 +118,8 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
 
     // XDAG configuration
     protected long xdagEra;
-    protected XdagField.FieldType xdagFieldHeader;
+    // TODO v5.1: DELETED - XdagField class no longer exists
+    // protected XdagField.FieldType xdagFieldHeader;
     protected XAmount mainStartAmount;
     protected long apolloForkHeight;
     protected XAmount apolloForkAmount;

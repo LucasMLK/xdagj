@@ -29,7 +29,6 @@ import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.config.RandomXConstants;
-import io.xdag.core.Block;
 import io.xdag.core.BlockchainImpl;
 import io.xdag.crypto.SampleKeys;
 import io.xdag.crypto.keys.ECKeyPair;

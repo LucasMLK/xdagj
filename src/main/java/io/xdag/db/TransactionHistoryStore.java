@@ -23,15 +23,20 @@
  */
 package io.xdag.db;
 
-import io.xdag.core.TxHistory;
-
 import java.util.List;
 
+/**
+ * TransactionHistoryStore interface
+ *
+ * TODO v5.1: DELETED - TxHistory class no longer exists
+ * All methods temporarily disabled - waiting for migration to BlockV5 Transaction system
+ */
 public interface TransactionHistoryStore {
 
-    boolean saveTxHistory(TxHistory txHistory);
-    boolean batchSaveTxHistory(TxHistory txHistory,int... cacheNum);
-    List<TxHistory> listTxHistoryByAddress(String address, int page, Object... parameters);
+    // TODO v5.1: Restore after migrating to BlockV5 Transaction system
+    // boolean saveTxHistory(TxHistory txHistory);
+    // boolean batchSaveTxHistory(TxHistory txHistory,int... cacheNum);
+    // List<TxHistory> listTxHistoryByAddress(String address, int page, Object... parameters);
 
     int getTxHistoryCount(String address);
 

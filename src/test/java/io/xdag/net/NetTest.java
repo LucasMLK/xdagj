@@ -28,7 +28,6 @@ import static org.junit.Assert.assertEquals;
 
 import java.math.BigInteger;
 
-import io.xdag.core.XdagStats;
 import io.xdag.net.message.consensus.SumRequestMessage;
 import io.xdag.utils.BytesUtils;
 import org.apache.tuweni.bytes.Bytes;

@@ -31,7 +31,6 @@ import com.esotericsoftware.kryo.KryoException;
 import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.util.DefaultInstantiatorStrategy;
-import io.xdag.core.LegacyBlockInfo;
 import io.xdag.core.SnapshotBalanceData;
 import io.xdag.db.execption.DeserializationException;
 import io.xdag.db.execption.SerializationException;

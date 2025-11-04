@@ -48,7 +48,6 @@ import io.xdag.Kernel;
 import io.xdag.config.Config;
 import io.xdag.config.spec.NodeSpec;
 import io.xdag.consensus.SyncManager;
-import io.xdag.core.Block;
 import io.xdag.core.BlockV5;
 import io.xdag.core.Blockchain;
 import io.xdag.core.XdagStats;
@@ -448,7 +447,8 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
                 log.debug("Failed to send BlockV5: {}", e.getMessage());
             }
         }
-        msgQueue.sendMessage(new BlocksReplyMessage(startTime, endTime, random, chain.getXdagStats()));
+        // Phase 7.3: Use getChainStats().toLegacy()
+        msgQueue.sendMessage(new BlocksReplyMessage(startTime, endTime, random, chain.getChainStats().toLegacy()));
     }
 
     protected void processBlocksReply(BlocksReplyMessage msg) {
@@ -466,10 +466,13 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     protected void processSumsRequest(SumRequestMessage msg) {
         updateXdagStats(msg);
         MutableBytes sums = MutableBytes.create(256);
-        // TODO: paulochen 处理sum请求
-        kernel.getBlockStore().loadSum(msg.getStarttime(),msg.getEndtime(),sums);
+        // TODO v5.1: DELETED - BlockStore.loadSum() method no longer exists
+        // Temporarily disabled - sum file system removed in v5.1
+        // kernel.getBlockStore().loadSum(msg.getStarttime(),msg.getEndtime(),sums);
+        // For now, send empty sums (256 zero bytes)
+        // Phase 7.3: Use getChainStats().toLegacy()
         SumReplyMessage reply = new SumReplyMessage(msg.getEndtime(), msg.getRandom(),
-                chain.getXdagStats(), sums);
+                chain.getChainStats().toLegacy(), sums);
         msgQueue.sendMessage(reply);
     }
 
@@ -580,7 +583,8 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
                 FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(XdagTime.xdagTimestampToMs(startTime)),
                 FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(XdagTime.xdagTimestampToMs(endTime)),
                 channel.getRemoteAddress());
-        BlocksRequestMessage msg = new BlocksRequestMessage(startTime, endTime, chain.getXdagStats());
+        // Phase 7.3: Use getChainStats().toLegacy()
+        BlocksRequestMessage msg = new BlocksRequestMessage(startTime, endTime, chain.getChainStats().toLegacy());
         sendMessage(msg);
         return msg.getRandom();
     }
@@ -588,15 +592,17 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     public long sendGetBlock(MutableBytes32 hash, boolean isOld) {
         XdagMessage msg;
         //        log.debug("sendGetBlock:[{}]", Hex.toHexString(hash));
-        msg = isOld ? new SyncBlockRequestMessage(hash, kernel.getBlockchain().getXdagStats())
-                : new BlockRequestMessage(hash, kernel.getBlockchain().getXdagStats());
+        // Phase 7.3: Use getChainStats().toLegacy()
+        msg = isOld ? new SyncBlockRequestMessage(hash, kernel.getBlockchain().getChainStats().toLegacy())
+                : new BlockRequestMessage(hash, kernel.getBlockchain().getChainStats().toLegacy());
         log.debug("Request block {} isold: {} from node {}", hash, isOld,channel.getRemoteAddress());
         sendMessage(msg);
         return msg.getRandom();
     }
 
     public long sendGetSums(long startTime, long endTime) {
-        SumRequestMessage msg = new SumRequestMessage(startTime, endTime, chain.getXdagStats());
+        // Phase 7.3: Use getChainStats().toLegacy()
+        SumRequestMessage msg = new SumRequestMessage(startTime, endTime, chain.getChainStats().toLegacy());
         sendMessage(msg);
         return msg.getRandom();
     }
@@ -608,8 +614,9 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     public void updateXdagStats(XdagMessage message) {
         // Confirm that the remote stats has been updated, used to check local state.
         syncMgr.getIsUpdateXdagStats().compareAndSet(false, true);
+        // Phase 7.3: Use getChainStats().toLegacy()
         XdagStats remoteXdagStats = message.getXdagStats();
-        chain.getXdagStats().update(remoteXdagStats);
+        chain.getChainStats().toLegacy().update(remoteXdagStats);
     }
 
 }

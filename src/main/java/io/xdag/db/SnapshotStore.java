@@ -23,7 +23,6 @@
  */
 package io.xdag.db;
 
-import io.xdag.core.LegacyBlockInfo;
 import io.xdag.core.XAmount;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.db.rocksdb.RocksdbKVSource;
@@ -43,7 +42,9 @@ public interface SnapshotStore {
 
     void saveAddress(BlockStore blockStore,AddressStore addressStore, TransactionHistoryStore txHistoryStore, List<ECKeyPair> keys,long snapshotTime);
 
-    void save(RocksIterator iter, LegacyBlockInfo blockInfo);
+    // TODO v5.1: DELETED - LegacyBlockInfo class no longer exists
+    // Temporarily disabled - waiting for migration to BlockV5
+    // void save(RocksIterator iter, LegacyBlockInfo blockInfo);
 
     // Phase 7.1.2: Removed setBlockInfo() method - PreBlockInfo deleted
 

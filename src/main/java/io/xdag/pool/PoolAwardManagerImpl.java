@@ -45,8 +45,9 @@ import java.util.Map;
 import java.util.concurrent.*;
 
 import static io.xdag.config.Constants.MIN_GAS;
-import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_IN;
-import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_OUTPUT;
+// TODO v5.1: Restore after migrating to BlockV5 Transaction system
+// import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_IN;
+// import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_OUTPUT;
 import static io.xdag.pool.PoolAwardManagerImpl.BlockRewardHistorySender.awardMessageHistoryQueue;
 import static io.xdag.utils.BasicUtils.*;
 import static io.xdag.utils.BytesUtils.compareTo;
@@ -69,7 +70,9 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
     protected List<Bytes32> blockPreHashs = new CopyOnWriteArrayList<>(new ArrayList<>(16));
     protected List<Bytes32> blockHashs = new CopyOnWriteArrayList<>(new ArrayList<>(16));
     protected List<Bytes32> minShares = new CopyOnWriteArrayList<>(new ArrayList<>(16));
-    private final Map<Address, ECKeyPair> paymentsToNodesMap = new HashMap<>(10);
+    // TODO v5.1: Restore after migrating to BlockV5 Transaction system
+    // private final Map<Address, ECKeyPair> paymentsToNodesMap = new HashMap<>(10);
+    private final Map<Bytes32, ECKeyPair> paymentsToNodesMap = new HashMap<>(10); // Temporary: use Bytes32 as key
     private static final BlockingQueue<AwardBlock> awardBlockBlockingQueue = new LinkedBlockingQueue<>();
 
     private final ExecutorService workExecutor = Executors.newSingleThreadExecutor(BasicThreadFactory.builder()
@@ -147,7 +150,14 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
         minShares.set(awardBlockIndex, awardBlock.share);
     }
 
+    /**
+     * TODO v5.1: DELETED - Block class no longer exists
+     * Pool payment distribution temporarily disabled - waiting for migration to BlockV5
+     */
     public int payPools(long time) {
+        log.warn("Pool payment distribution temporarily disabled - waiting for v5.1 migration");
+        return -8;  // Return special code indicating disabled functionality
+        /*
         // Obtain the corresponding +1 position of the current task and delay it for 16 rounds
         int paidBlockIndex = (int) (((time >> 16) + 1) & config.getNodeSpec().getAwardEpoch());
         log.info("Index of the block paid to the pool:{} ", paidBlockIndex);
@@ -221,11 +231,16 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
         throw new RuntimeException(e);
       }
       return 0;
+      */
     }
 
     public void doPayments(Bytes32 hash, XAmount allAmount, Bytes32 poolWalletAddress, int keyPos,
                            TransactionInfoSender transactionInfoSender)
         throws AddressFormatException {
+        // TODO v5.1: DELETED - Block class no longer exists
+        // Pool reward distribution temporarily disabled - waiting for v5.1 Transaction migration
+        log.warn("Pool reward distribution temporarily disabled - waiting for v5.1 Transaction migration");
+        /*
         if (paymentsToNodesMap.size() == 10) {
             // Phase 4 Layer 3 Task 4.2: Use v5.1 xferToNodeV2() for node reward distribution
             StringBuilder txHash = commands.xferToNodeV2(paymentsToNodesMap);
@@ -247,6 +262,11 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
             return;
         }
         // Amount output: community, pool and node
+        // TODO v5.1: Restore after migrating to BlockV5 Transaction system
+        // The following code uses the deleted Address class - needs to be rewritten for v5.1
+        log.warn("Pool reward distribution temporarily disabled - waiting for v5.1 Transaction migration");
+        */
+        /*
         ArrayList<Address> receipt = new ArrayList<>(2);
         if (sendAmount.compareTo(MIN_GAS.multiply(2)) >= 0) {
             receipt.add(new Address(pubAddress2Hash(fundAddress), XDAG_FIELD_OUTPUT, fundAmount, true));
@@ -267,8 +287,12 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
                     hash.toHexString(), sendAmount.toDecimal(9, XUnit.XDAG).toPlainString());
         }
         receipt.clear();
+        */
     }
 
+    // TODO v5.1: Restore after migrating to BlockV5 Transaction system
+    // Method temporarily commented out - uses deleted Address class
+    /*
     public void transaction(Bytes32 hash, ArrayList<Address> receipt, XAmount sendAmount, int keyPos,
                             TransactionInfoSender transactionInfoSender) {
         log.debug("Total balance pending transfer: {}", sendAmount);
@@ -324,6 +348,7 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
         log.debug("The reward for block {} has been distributed to {} recipients",
                  hash.toHexString(), recipients.size());
     }
+    */
 
 
     /**

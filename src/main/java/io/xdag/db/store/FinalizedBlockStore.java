@@ -24,7 +24,6 @@
 
 package io.xdag.db.store;
 
-import io.xdag.core.Block;
 import io.xdag.core.BlockInfo;
 import org.apache.tuweni.bytes.Bytes32;
 
@@ -53,29 +52,12 @@ public interface FinalizedBlockStore extends AutoCloseable {
     // ========== Basic Operations ==========
 
     /**
-     * Save a finalized block
-     *
-     * @param block Complete block with all DAG links
-     * @throws IllegalStateException if block is not marked as finalized
-     */
-    void saveBlock(Block block);
-
-    /**
      * Save finalized block metadata only
      * Used for fast lookups without loading full block data
      *
      * @param blockInfo Block metadata
      */
     void saveBlockInfo(BlockInfo blockInfo);
-
-    /**
-     * Batch save multiple finalized blocks
-     * Optimized for bulk operations (e.g., during initial sync)
-     *
-     * @param blocks List of blocks to save
-     * @return Number of blocks successfully saved
-     */
-    long saveBatch(List<Block> blocks);
 
     /**
      * Check if a block exists in finalized storage
@@ -87,14 +69,6 @@ public interface FinalizedBlockStore extends AutoCloseable {
     boolean hasBlock(Bytes32 hash);
 
     /**
-     * Get a finalized block by hash
-     *
-     * @param hash Block hash
-     * @return Complete block with all DAG links, or empty if not found
-     */
-    Optional<Block> getBlockByHash(Bytes32 hash);
-
-    /**
      * Get finalized block metadata by hash
      * Faster than getBlockByHash() if only metadata is needed
      *
@@ -104,15 +78,6 @@ public interface FinalizedBlockStore extends AutoCloseable {
     Optional<BlockInfo> getBlockInfoByHash(Bytes32 hash);
 
     // ========== Main Chain Index ==========
-
-    /**
-     * Get a main block by height
-     *
-     * @param height Block height
-     * @return Main block at this height, or empty if not finalized yet
-     */
-    Optional<Block> getMainBlockByHeight(long height);
-
     /**
      * Get main block metadata by height
      *
@@ -120,16 +85,6 @@ public interface FinalizedBlockStore extends AutoCloseable {
      * @return Main block metadata, or empty if not finalized yet
      */
     Optional<BlockInfo> getMainBlockInfoByHeight(long height);
-
-    /**
-     * Get a range of main blocks by height
-     * Optimized for batch sync operations
-     *
-     * @param fromHeight Start height (inclusive)
-     * @param toHeight End height (inclusive)
-     * @return List of main blocks in order
-     */
-    List<Block> getMainBlocksByHeightRange(long fromHeight, long toHeight);
 
     /**
      * Get a range of main block metadata by height
@@ -167,30 +122,12 @@ public interface FinalizedBlockStore extends AutoCloseable {
     List<Bytes32> getBlockHashesByEpoch(long epoch);
 
     /**
-     * Get all blocks in an epoch
-     *
-     * @param epoch Epoch number
-     * @return List of complete blocks in this epoch
-     */
-    List<Block> getBlocksByEpoch(long epoch);
-
-    /**
      * Get all block metadata in an epoch
      *
      * @param epoch Epoch number
      * @return List of block metadata in this epoch
      */
     List<BlockInfo> getBlockInfosByEpoch(long epoch);
-
-    /**
-     * Get blocks from multiple epochs
-     * Optimized for batch operations
-     *
-     * @param fromEpoch Start epoch (inclusive)
-     * @param toEpoch End epoch (inclusive)
-     * @return List of all blocks in the epoch range
-     */
-    List<Block> getBlocksByEpochRange(long fromEpoch, long toEpoch);
 
     /**
      * Count blocks in an epoch

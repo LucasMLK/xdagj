@@ -42,7 +42,8 @@ import java.util.Date;
 import java.util.List;
 
 import static io.xdag.config.Constants.MIN_GAS;
-import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_INPUT;
+// TODO v5.1: DELETED - TxHistory class and Address class no longer exist
+// import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_INPUT;
 import static io.xdag.utils.BasicUtils.hash2Address;
 import static io.xdag.utils.BasicUtils.hash2byte;
 import static io.xdag.utils.WalletUtils.checkAddress;
@@ -73,180 +74,24 @@ public class TransactionHistoryStoreImpl implements TransactionHistoryStore {
         this.TX_PAGE_SIZE_LIMIT = txPageSizeLimit;
     }
 
+    // TODO v5.1: DELETED - TxHistory class no longer exists
+    // All TX history save/list methods temporarily disabled - interface methods commented out
+    /*
     @Override
     public boolean saveTxHistory(TxHistory txHistory) {
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-
-        boolean result = false;
-        try {
-            conn = DruidUtils.getConnection();
-            if (conn != null) {
-                pstmt = conn.prepareStatement(SQL_INSERT);
-
-                Address address = txHistory.getAddress();
-                String addr = address.getIsAddress() ? Base58.encodeCheck(hash2byte(address.getAddress())) : hash2Address(address.getAddress());
-                pstmt.setString(1, addr);
-                pstmt.setInt(2, address.getIsAddress() ? WALLET_ADDRESS_FLAG : BLOCK_ADDRESS_FLAG);
-                pstmt.setString(3, txHistory.getHash());
-                pstmt.setBigDecimal(4, address.getType().equals(XDAG_FIELD_INPUT) ? address.getAmount().subtract(MIN_GAS).toDecimal(9, XUnit.XDAG) :
-                        address.getAmount().toDecimal(9, XUnit.XDAG));
-                pstmt.setInt(5, address.getType().asByte());
-                pstmt.setString(6, txHistory.getRemark() != null ? txHistory.getRemark().trim() : "");
-                pstmt.setTimestamp(7,
-                        new java.sql.Timestamp(XdagTime.xdagTimestampToMs(txHistory.getTimestamp())));
-                result = pstmt.executeUpdate() == 1;
-            }
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-        } finally {
-            DruidUtils.close(conn, pstmt);
-        }
-        return result;
+        // implementation commented out
     }
 
     @Override
     public boolean batchSaveTxHistory(TxHistory txHistory, int... cacheNum) {
-        boolean result = false;
-        try {
-            if (connBatch == null) {
-                connBatch = DruidUtils.getConnection();
-                if (connBatch != null) {
-                    connBatch.setAutoCommit(false);
-                }
-            }
-            if (pstmtBatch == null) {
-                if (connBatch != null) {
-                    pstmtBatch = connBatch.prepareStatement(SQL_INSERT);
-                }
-            }
-            if (txHistory != null) {
-                Address address = txHistory.getAddress();
-                String addr = address.getIsAddress() ? Base58.encodeCheck(hash2byte(address.getAddress())) : hash2Address(address.getAddress());
-                pstmtBatch.setString(1, addr);
-                pstmtBatch.setInt(2, address.getIsAddress() ? WALLET_ADDRESS_FLAG : BLOCK_ADDRESS_FLAG);
-                pstmtBatch.setString(3, txHistory.getHash());
-                pstmtBatch.setBigDecimal(4, address.getType().equals(XDAG_FIELD_INPUT) ? address.getAmount().subtract(MIN_GAS).toDecimal(9, XUnit.XDAG) :
-                        address.getAmount().toDecimal(9, XUnit.XDAG));
-                pstmtBatch.setInt(5, address.getType().asByte());
-                pstmtBatch.setString(6, txHistory.getRemark() != null ? txHistory.getRemark().trim() : "");
-                pstmtBatch.setTimestamp(7,
-                        new java.sql.Timestamp(XdagTime.xdagTimestampToMs(txHistory.getTimestamp())));
-                pstmtBatch.addBatch();
-                count++;
-            }
-            if (count == (cacheNum.length == 0 ? DEFAULT_CACHE_SIZE : (cacheNum[0] + 1)) || txHistory == null) {
-                if (pstmtBatch != null) {
-                    pstmtBatch.executeBatch();
-                }
-                if (connBatch != null) {
-                    connBatch.commit();
-                }
-                result = true;
-                count = 0;
-            }
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-        } finally {
-            if (connBatch != null && txHistory == null) {
-                try {
-                    connBatch.close();
-                    pstmtBatch.close();
-                    log.info("The loading is complete, close mysql.");
-                } catch (SQLException e) {
-                    log.error(e.getMessage(), e);
-                }
-                connBatch = null;
-                pstmtBatch = null;
-            }
-        }
-        return result;
+        // implementation commented out
     }
 
     @Override
     public List<TxHistory> listTxHistoryByAddress(String address, int page, Object... parameters) {
-        Connection conn = null;
-        PreparedStatement pstmt = null;
-        ResultSet rs = null;
-        List<TxHistory> txHistoryList = Lists.newArrayList();
-        int totalcount = 0;
-        int PAGE_SIZE = DEFAULT_PAGE_SIZE;
-        long start = new Date(0).getTime();
-        long end = System.currentTimeMillis();
-        switch (parameters.length) {
-            case 1 -> {
-                    int pageSize = Integer.parseInt(parameters[0].toString());
-                    PAGE_SIZE = (pageSize > 0 && pageSize <= TX_PAGE_SIZE_LIMIT) ? pageSize : PAGE_SIZE;
-                }
-            case 2 -> {
-                try {
-                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                    start = sdf.parse(parameters[0].toString()).getTime();
-                    end = sdf.parse(parameters[1].toString()).getTime();
-                } catch (ParseException e) {
-                    start = Long.parseLong(parameters[0].toString());
-                    end = Long.parseLong(parameters[1].toString());
-                }
-            }
-            case 3 -> {
-                try {
-                    SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                    start = sdf.parse(parameters[0].toString()).getTime();
-                    end = sdf.parse(parameters[1].toString()).getTime();
-                } catch (ParseException e) {
-                    start = Long.parseLong(parameters[0].toString());
-                    end = Long.parseLong(parameters[1].toString());
-                }
-                int page_size = Integer.parseInt(parameters[2].toString());
-                PAGE_SIZE = (page_size > 0 && page_size <= TX_PAGE_SIZE_LIMIT) ? page_size : PAGE_SIZE;
-            }
-            default -> {
-            }
-        }
-        try {
-            conn = DruidUtils.getConnection();
-            if (conn != null) {
-                pstmt = conn.prepareStatement(SQL_QUERY_TXHISTORY_COUNT_WITH_TIME);
-                pstmt.setString(1, address);
-                pstmt.setTimestamp(2, new java.sql.Timestamp(start));
-                pstmt.setTimestamp(3, new java.sql.Timestamp(end));
-                rs = pstmt.executeQuery();
-                if (rs.next()) {
-                    totalcount = rs.getInt(1);
-                }
-                totalPage = totalcount < PAGE_SIZE ? 1 : (int) Math.ceil((double) totalcount / PAGE_SIZE);
-
-                pstmt = conn.prepareStatement(SQL_QUERY_TXHISTORY_BY_ADDRESS_WITH_TIME);
-                pstmt.setString(1, address);
-                pstmt.setTimestamp(2, new java.sql.Timestamp(start));
-                pstmt.setTimestamp(3, new java.sql.Timestamp(end));
-                pstmt.setInt(4, (page - 1) * PAGE_SIZE);
-                pstmt.setInt(5, PAGE_SIZE);
-                rs = pstmt.executeQuery();
-                while (rs.next()) {
-                    TxHistory txHistory = new TxHistory();
-                    // Convert address from hash to Bytes32 format
-                    String hash = rs.getString(3);
-                    txHistory.setHash(hash);
-                    XAmount amount = XAmount.of(rs.getBigDecimal(4), XUnit.XDAG);
-                    int fType = rs.getInt(5);
-                    Address addrObj =
-                            new Address(checkAddress(hash) ? BasicUtils.pubAddress2Hash(hash) :
-                                    BasicUtils.address2Hash(hash),
-                                    XdagField.FieldType.fromByte((byte) fType), amount, checkAddress(hash));
-                    txHistory.setAddress(addrObj);
-                    txHistory.setRemark(rs.getString(6));
-                    txHistory.setTimestamp(rs.getTimestamp(7).getTime());
-                    txHistoryList.add(txHistory);
-                }
-            }
-        } catch (Exception e) {
-            log.error(e.getMessage(), e);
-        } finally {
-            DruidUtils.close(conn, pstmt, rs);
-        }
-        return txHistoryList;
+        // implementation commented out
     }
+    */
 
     @Override
     public int getTxHistoryCount(String address) {

@@ -244,17 +244,22 @@ public Block createNewBlock(...) {
 #### P2P Messages (5 files)
 
 **1. NewBlockMessage.java**
+
 ```java
-import io.xdag.core.Block;
+
 
 private XdagBlock xdagBlock;  // Line 39 - Legacy 512-byte format
 private Block block;           // Line 40
 
 // Deserialization (Line 50)
-this.block = new Block(this.xdagBlock);
+this.block =new
+
+Block(this.xdagBlock);
 
 // Serialization (Line 66)
-enc.writeBytes(this.block.toBytes());
+enc.
+
+writeBytes(this.block.toBytes());
 ```
 
 **2. SyncBlockMessage.java**
@@ -262,49 +267,51 @@ enc.writeBytes(this.block.toBytes());
 - Uses legacy Block format
 
 **3. XdagP2pHandler.java** (Lines 51, 352-462)
+
 ```java
-import io.xdag.core.Block;  // Line 51
+
 
 // Process new block from network (Lines 351-362)
+
 protected void processNewBlock(NewBlockMessage msg) {
-    Block block = msg.getBlock();  // Legacy Block
+  Block block = msg.getBlock();  // Legacy Block
 
-    // v5.1: Wrap in SyncBlock
-    SyncManager.SyncBlock syncBlock = new SyncManager.SyncBlock(
-        block, msg.getTtl() - 1, channel.getRemotePeer(), false);
-    syncMgr.validateAndAddNewBlock(syncBlock);
+  // v5.1: Wrap in SyncBlock
+  SyncManager.SyncBlock syncBlock = new SyncManager.SyncBlock(
+      block, msg.getTtl() - 1, channel.getRemotePeer(), false);
+  syncMgr.validateAndAddNewBlock(syncBlock);
 }
 
-// Process sync block (Lines 364-372)
-protected void processSyncBlock(SyncBlockMessage msg) {
-    Block block = msg.getBlock();  // Legacy Block
+    // Process sync block (Lines 364-372)
+    protected void processSyncBlock(SyncBlockMessage msg) {
+      Block block = msg.getBlock();  // Legacy Block
 
-    SyncManager.SyncBlock syncBlock = new SyncManager.SyncBlock(
-        block, msg.getTtl() - 1, channel.getRemotePeer(), true);
-    syncMgr.validateAndAddNewBlock(syncBlock);
-}
+      SyncManager.SyncBlock syncBlock = new SyncManager.SyncBlock(
+          block, msg.getTtl() - 1, channel.getRemotePeer(), true);
+      syncMgr.validateAndAddNewBlock(syncBlock);
+    }
 
-// Send blocks (Lines 392-396)
-protected void processBlocksRequest(BlocksRequestMessage msg) {
-    List<Block> blocks = chain.getBlocksByTime(startTime, endTime);  // Legacy
-    for (Block block : blocks) {
+    // Send blocks (Lines 392-396)
+    protected void processBlocksRequest(BlocksRequestMessage msg) {
+      List<Block> blocks = chain.getBlocksByTime(startTime, endTime);  // Legacy
+      for (Block block : blocks) {
         SyncBlockMessage blockMsg = new SyncBlockMessage(block, 1);
         msgQueue.sendMessage(blockMsg);
+      }
     }
-}
 
-// Request block response (Lines 436-442)
-protected void processBlockRequest(BlockRequestMessage msg) {
-    Block block = chain.getBlockByHash(hash, true);  // Legacy
-    NewBlockMessage message = new NewBlockMessage(block, ttl);
-    msgQueue.sendMessage(message);
-}
+    // Request block response (Lines 436-442)
+    protected void processBlockRequest(BlockRequestMessage msg) {
+      Block block = chain.getBlockByHash(hash, true);  // Legacy
+      NewBlockMessage message = new NewBlockMessage(block, ttl);
+      msgQueue.sendMessage(message);
+    }
 
-// Send new block to peers (Lines 458-462)
-public void sendNewBlock(Block newBlock, int TTL) {
-    NewBlockMessage msg = new NewBlockMessage(newBlock, TTL);
-    sendMessage(msg);
-}
+    // Send new block to peers (Lines 458-462)
+    public void sendNewBlock(Block newBlock, int TTL) {
+      NewBlockMessage msg = new NewBlockMessage(newBlock, TTL);
+      sendMessage(msg);
+    }
 ```
 
 **4. ChannelManager.java**
@@ -317,15 +324,17 @@ public void sendNewBlock(Block newBlock, int TTL) {
 #### Sync/Consensus (2 files)
 
 **6. XdagSync.java**
+
 ```java
-import io.xdag.core.Block;
+
 
 // Synchronization logic uses legacy Block
 ```
 
 **7. RandomX.java**
+
 ```java
-import io.xdag.core.Block;
+
 
 // Mining PoW uses legacy Block
 ```
@@ -343,35 +352,41 @@ import io.xdag.core.Block;
 #### Orphan Block Storage (2 files)
 
 **1. OrphanBlockStore.java** (Interface)
+
 ```java
-import io.xdag.core.Block;  // Line 27
+
 
 void addOrphan(Block block);  // Line 60 - Takes legacy Block
 ```
 
 **2. OrphanBlockStoreImpl.java**
+
 ```java
-import io.xdag.core.Block;
+
 
 // Implementation uses legacy Block
+
 public void addOrphan(Block block) {
-    // Store block in RocksDB
+  // Store block in RocksDB
 }
 ```
 
 #### Finalized Block Storage (2 files)
 
 **3. FinalizedBlockStore.java** (Interface)
+
 ```java
-import io.xdag.core.Block;
+
 
 Block getBlockByHash(Bytes32 hash, boolean isRaw);
+
 void saveBlock(Block block);
 ```
 
 **4. FinalizedBlockStoreImpl.java**
+
 ```java
-import io.xdag.core.Block;
+
 
 // RocksDB storage implementation for legacy Block
 ```
@@ -379,15 +394,17 @@ import io.xdag.core.Block;
 #### Cache/Filter Layer (2 files)
 
 **5. CachedBlockStore.java**
+
 ```java
-import io.xdag.core.Block;
+
 
 // In-memory cache for legacy Blocks
 ```
 
 **6. BloomFilterBlockStore.java**
+
 ```java
-import io.xdag.core.Block;
+
 
 // Bloom filter for legacy Block lookups
 ```

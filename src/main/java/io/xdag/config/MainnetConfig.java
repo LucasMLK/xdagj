@@ -24,7 +24,8 @@
 
 package io.xdag.config;
 
-import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_HEAD;
+// TODO v5.1: DELETED - XdagField class no longer exists
+// import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_HEAD;
 
 import org.apache.tuweni.units.bigints.UInt64;
 
@@ -55,7 +56,8 @@ public class MainnetConfig extends AbstractConfig {
         this.mainStartAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 42).toLong());
         this.apolloForkHeight = 1017323;
         this.apolloForkAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 39).toLong());
-        this.xdagFieldHeader = XDAG_FIELD_HEAD;
+        // TODO v5.1: DELETED - XdagField class no longer exists
+        // this.xdagFieldHeader = XDAG_FIELD_HEAD;
         this.walletKeyFile = this.rootDir + "/wallet.dat";
         this.walletFilePath = this.rootDir + "/wallet/" + Constants.WALLET_FILE_NAME;
     }

@@ -97,38 +97,6 @@ public class Kernel {
     protected io.xdag.p2p.P2pService p2pService;
     protected XdagP2pEventHandler p2pEventHandler;
 
-    /**
-     * Phase 7.3.0: Deleted broadcastBlock(Block, int) method
-     *
-     * Legacy Block broadcasting was removed when NEW_BLOCK message support was deleted.
-     * All block broadcasting should now use broadcastBlockV5(BlockV5, int).
-     *
-     * Callers that still use legacy Block objects need migration:
-     * - XdagPow.onMessage() - Listener system needs BlockV5 migration
-     * - SyncManager.distributeBlock() - Only called from deprecated importBlock()
-     * - XdagApiImpl.doXfer() - RPC transaction system needs BlockV5 migration
-     */
-
-    /**
-     * Broadcast a new BlockV5 to all connected peers (Phase 4 Layer 3 Task 1.2)
-     *
-     * TEMPORARY IMPLEMENTATION:
-     * This is a transitional implementation that directly serializes BlockV5.
-     *
-     * TODO Phase 4: Full network layer migration
-     * - Create NewBlockV5Message class for proper message encapsulation
-     * - Update receiving logic to handle BlockV5 deserialization
-     * - Add BlockV5-specific message code for version negotiation
-     * - Implement backward compatibility with legacy Block messages
-     *
-     * Current limitations:
-     * - Uses same NEW_BLOCK message code (receiving nodes may not understand BlockV5 format)
-     * - No version negotiation (assumes all nodes support BlockV5)
-     * - Simplified serialization (may need protocol updates for production)
-     *
-     * @param block BlockV5 to broadcast
-     * @param ttl Time-to-live for broadcast propagation
-     */
     public void broadcastBlockV5(BlockV5 block, int ttl) {
         if (p2pService == null || p2pEventHandler == null) {
             log.warn("P2P service not initialized, cannot broadcast BlockV5");
@@ -173,18 +141,6 @@ public class Kernel {
     }
 
     /**
-     * Get active P2P channels count
-     */
-    public int getActiveChannelsCount() {
-        if (p2pService == null) {
-            return 0;
-        }
-        return (int) p2pService.getChannelManager().getChannels().values().stream()
-                .filter(io.xdag.p2p.channel.Channel::isFinishHandshake)
-                .count();
-    }
-
-    /**
      * Get list of active P2P channels (for sync protocol)
      */
     public java.util.List<io.xdag.p2p.channel.Channel> getActiveP2pChannels() {
@@ -201,7 +157,7 @@ public class Kernel {
     private SyncManager syncMgr;
 
     protected Bytes firstAccount;
-    protected Block firstBlock;
+//    protected Block firstBlock;
     protected WebSocketServer webSocketServer;
     protected PoolAwardManagerImpl poolAwardManager;
     protected XdagState xdagState;
@@ -303,7 +259,8 @@ public class Kernel {
 
         // Initialize blockchain
         blockchain = new BlockchainImpl(this);
-        XdagStats xdagStats = blockchain.getXdagStats();
+        // Phase 7.3: Use getChainStats().toLegacy()
+        XdagStats xdagStats = blockchain.getChainStats().toLegacy();
         
         // Create genesis block if first startup
         // Phase 7.5: Genesis BlockV5 creation restored
@@ -327,7 +284,7 @@ public class Kernel {
             log.info("Genesis BlockV5 import result: {}", result);
 
             // Store the genesis block reference
-            firstBlock = null;  // No legacy Block for genesis (BlockV5 only)
+//            firstBlock = null;  // No legacy Block for genesis (BlockV5 only)
         } else {
             firstAccount = toBytesAddress(wallet.getDefKey().getPublicKey());
         }
