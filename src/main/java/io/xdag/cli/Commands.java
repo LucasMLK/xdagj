@@ -259,14 +259,19 @@ public class Commands {
     }
 
     /**
-     * Get balance for address
-     * @param address Address to check balance for, or null for total balance
+     * Get balance for address (Phase 8.1: Fully restored using Transaction APIs)
      *
-     * TODO v5.1: DELETED - Block class no longer exists
-     * Temporarily disabled - waiting for migration to BlockV5
+     * Phase 8.1: Restored both account and block balance lookups.
+     * - Account balance: Uses AddressStore (unchanged)
+     * - Block balance: Calculates from Transactions using TransactionStore
+     *
+     * @param address Address to check balance for, or null for total balance
+     * @return Formatted balance string
+     * @throws AddressFormatException if address format is invalid
      */
     public String balance(String address) throws AddressFormatException {
         if (StringUtils.isEmpty(address)) {
+            // Account balance lookup (unchanged from v1)
             XAmount ourBalance = XAmount.ZERO;
             List<ECKeyPair> list = kernel.getWallet().getAccounts();
             for (ECKeyPair k : list) {
@@ -274,27 +279,43 @@ public class Commands {
             }
             return String.format("Balance: %s XDAG", ourBalance.toDecimal(9, XUnit.XDAG).toPlainString());
         } else {
-            // TODO v5.1: Block balance lookup disabled - needs BlockV5 migration
-            return "Block balance lookup temporarily disabled - v5.1 migration in progress";
-            /*
-            Bytes32 hash;
-            MutableBytes32 key = MutableBytes32.create();
+            // Check if it's an account address or block address
             if (checkAddress(address)) {
-                hash = pubAddress2Hash(address);
-                key.set(8, Objects.requireNonNull(hash).slice(8, 20));
+                // Account address (Base58 format)
                 XAmount balance = kernel.getAddressStore().getBalanceByAddress(fromBase58(address).toArray());
                 return String.format("Account balance: %s XDAG", balance.toDecimal(9, XUnit.XDAG).toPlainString());
             } else {
+                // Block address - calculate balance from Transactions
+                Bytes32 hash;
                 if (StringUtils.length(address) == 32) {
                     hash = address2Hash(address);
                 } else {
                     hash = getHash(address);
                 }
-                key.set(8, Objects.requireNonNull(hash).slice(8, 24));
-                Block block = kernel.getBlockStore().getBlockInfoByHash(Bytes32.wrap(key));
-                return String.format("Block balance: %s XDAG", block.getInfo().getAmount().toDecimal(9, XUnit.XDAG).toPlainString());
+
+                if (hash == null) {
+                    return "Invalid address format";
+                }
+
+                // Get BlockV5
+                BlockV5 block = kernel.getBlockchain().getBlockByHash(hash, false);
+                if (block == null) {
+                    return "Block not found";
+                }
+
+                // v5.1: Calculate balance from Transactions
+                List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(hash);
+                XAmount totalAmount = XAmount.ZERO;
+
+                for (Transaction tx : transactions) {
+                    // Sum up transaction amounts
+                    totalAmount = totalAmount.add(tx.getAmount());
+                }
+
+                return String.format("Block balance: %s XDAG (from %d transactions)",
+                        totalAmount.toDecimal(9, XUnit.XDAG).toPlainString(),
+                        transactions.size());
             }
-            */
         }
     }
 
@@ -646,92 +667,93 @@ public class Commands {
     }
 
     /**
-     * Calculate maximum transferable balance
+     * Calculate maximum transferable balance (Phase 8.1: Restored using AddressStore)
      *
-     * TODO v5.1: DELETED - Block class no longer exists
-     * Temporarily disabled - waiting for migration to BlockV5
+     * Phase 8.1: Simplified v5.1 implementation using address balances.
+     * In v5.1, balances are tracked by addresses (not blocks), so we sum
+     * confirmed address balances instead of iterating block balances.
+     *
+     * Note: AddressStore already handles balance confirmation logic,
+     * so we don't need to check block timestamps manually.
+     *
+     * @param kernel Kernel instance
+     * @return Formatted maximum transferable balance
      */
     public static String getBalanceMaxXfer(Kernel kernel) {
-        return "Balance max transfer calculation temporarily disabled - v5.1 migration in progress";
-        /*
-        final XAmount[] balance = {XAmount.ZERO};
+        // v5.1: Sum up all account balances (already confirmed by AddressStore)
+        XAmount totalBalance = XAmount.ZERO;
+        List<ECKeyPair> accounts = kernel.getWallet().getAccounts();
 
-        kernel.getBlockStore().fetchOurBlocks(pair -> {
-            Block block = pair.getValue();
-            if (XdagTime.getCurrentEpoch() < XdagTime.getEpoch(block.getTimestamp()) + 2 * CONFIRMATIONS_COUNT) {
-                return false;
-            }
-            if (compareAmountTo(block.getInfo().getAmount(), XAmount.ZERO) > 0) {
-                balance[0] = balance[0].add(block.getInfo().getAmount());
-            }
-            return false;
-        });
-        return String.format("%s", balance[0].toDecimal(9, XUnit.XDAG).toPlainString());
-        */
+        for (ECKeyPair account : accounts) {
+            byte[] addressBytes = toBytesAddress(account).toArray();
+            XAmount balance = kernel.getAddressStore().getBalanceByAddress(addressBytes);
+            totalBalance = totalBalance.add(balance);
+        }
+
+        return String.format("%s", totalBalance.toDecimal(9, XUnit.XDAG).toPlainString());
     }
 
     /**
-     * Get address details and transaction history
-     * @param wrap Address bytes
-     * @param page Page number for transaction history
+     * Get address transaction history (Phase 8.1: Restored using Transaction APIs)
      *
-     * TODO v5.1: DELETED - Address, TxHistory classes no longer exist
-     * Temporarily disabled - waiting for migration to BlockV5
+     * Phase 8.1: Restored address transaction history using TransactionStore.
+     * Shows all transactions involving the address (sent or received).
+     *
+     * Note: Pagination not yet implemented in v5.1 TransactionStore.
+     * Future enhancement: Add paging support to TransactionStore.getTransactionsByAddress()
+     *
+     * @param wrap Address bytes
+     * @param page Page number (currently unused - shows all transactions)
+     * @return Formatted transaction history
      */
     public String address(Bytes32 wrap, int page) {
-        return "Address history lookup temporarily disabled - v5.1 migration in progress";
-        /*
-        String ov = " OverView" + "\n"
-                + String.format(" address: %s", Base58.encodeCheck(hash2byte(wrap.mutableCopy()))) + "\n"
-                + String.format(" balance: %s", kernel.getAddressStore().getBalanceByAddress(hash2byte(wrap.mutableCopy()).toArray()).toDecimal(9, XUnit.XDAG).toPlainString()) + "\n";
+        // Get address balance
+        byte[] addressBytes = hash2byte(wrap.mutableCopy()).toArray();
+        XAmount balance = kernel.getAddressStore().getBalanceByAddress(addressBytes);
 
-        String txHisFormat = """
-                -----------------------------------------------------------------------------------------------------------------------------
-                                               histories of address: details
-                 direction  address                                    amount                 time
-                """;
-        StringBuilder tx = new StringBuilder();
+        String overview = " OverView\n" +
+                String.format(" address: %s\n", Base58.encodeCheck(addressBytes)) +
+                String.format(" balance: %s\n", balance.toDecimal(9, XUnit.XDAG).toPlainString());
 
-        for (TxHistory txHistory : kernel.getBlockchain().getBlockTxHistoryByAddress(wrap, page)) {
-            Address address = txHistory.getAddress();
-            // Phase 8.3.2: Blockchain interface now returns BlockV5
-            BlockV5 blockV5 = kernel.getBlockchain().getBlockByHash(address.getAddress(), false);
-            if (blockV5 != null) {
-                BlockInfo blockInfo = blockV5.getInfo();
-                if ((blockInfo.getFlags() & BI_APPLIED) == 0) {
-                    continue;
-                }
-                if (address.getType().equals(XDAG_FIELD_INPUT)) {
-                    tx.append(String.format("    input: %s           %s   %s%n", hash2Address(address.getAddress()),
-                            address.getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
-                            FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS")
-                                    .format(txHistory.getTimestamp())));
-                } else if (address.getType().equals(XDAG_FIELD_OUTPUT)) {
-                    tx.append(String.format("   output: %s           %s   %s%n", hash2Address(address.getAddress()),
-                            address.getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
-                            FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS")
-                                    .format(txHistory.getTimestamp())));
-                } else if (address.getType().equals(XDAG_FIELD_COINBASE) && (blockInfo.getFlags() & BI_MAIN) != 0) {
-                    tx.append(String.format(" coinbase: %s           %s   %s%n", hash2Address(address.getAddress()),
-                            address.getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
-                            FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS")
-                                    .format(txHistory.getTimestamp())));
-                } else {
-                    tx.append(String.format(" snapshot: %s           %s  %s%n", hash2Address(address.getAddress()),
-                            address.getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
-                            FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS")
-                                    .format(txHistory.getTimestamp())));
-                }
-            } else {
-                tx.append(String.format(" snapshot: %s           %s   %s%n", (Base58.encodeCheck(BytesUtils.byte32ToArray(address.getAddress()))),
-                        address.getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
-                        FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS")
-                                .format(txHistory.getTimestamp())));
-            }
+        // Get transaction history
+        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByAddress(wrap);
+
+        if (transactions.isEmpty()) {
+            return overview + "\nNo transaction history found.";
         }
 
-        return ov + "\n" + txHisFormat + "\n" + tx;
-        */
+        StringBuilder txHistory = new StringBuilder();
+        txHistory.append("-----------------------------------------------------------------------------------------------------------------------------\n");
+        txHistory.append("                               histories of address: details\n");
+        txHistory.append(" direction  address                                    amount                 time\n");
+        txHistory.append("-----------------------------------------------------------------------------------------------------------------------------\n");
+
+        for (Transaction tx : transactions) {
+            // Determine direction
+            String direction;
+            Bytes32 otherAddress;
+            if (tx.getFrom().equals(wrap)) {
+                direction = "   output";
+                otherAddress = tx.getTo();
+            } else {
+                direction = "    input";
+                otherAddress = tx.getFrom();
+            }
+
+            // Get transaction timestamp (from block containing this transaction)
+            // Note: Transaction doesn't have timestamp, need to find containing block
+            // For now, show hash as identifier
+            String addressStr = otherAddress != null ? hash2Address(otherAddress) : "UNKNOWN";
+
+            txHistory.append(String.format("%s: %s           %s   %s\n",
+                    direction,
+                    addressStr,
+                    tx.getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
+                    tx.getHash().toHexString().substring(0, 16) + "..."));  // Show tx hash instead of time for now
+        }
+
+        // TODO v5.1: Add transaction timestamp lookup (requires reverse index: txHash -> blockHash)
+        return overview + "\n" + txHistory.toString();
     }
 
 
@@ -955,58 +977,44 @@ public class Commands {
     }
 
     /**
-     * Transfer block balance to a new address using v5.1 Transaction architecture
+     * Transfer account balances to default address (Phase 8.1: Fully restored)
      *
-     * Phase 4 Layer 3 Phase 3: Block balance transfer migration using v5.1 design.
+     * Phase 8.1: v5.1 implementation using address balances and Transaction architecture.
+     * Transfers all account balances to the default key address.
      *
-     * This method transfers all confirmed block balances to the default key address.
-     * Unlike legacy xferToNew(), this uses Transaction objects for each transfer.
-     *
-     * Key differences from xferToNew():
-     * 1. Uses Transaction instead of Address
-     * 2. Uses BlockV5 instead of Block
-     * 3. Creates one Transaction per account balance
-     * 4. Simpler logic: account-to-account transfers (not block-as-input)
+     * v5.1 Simplifications:
+     * 1. Uses address balances (not block balances)
+     * 2. AddressStore handles confirmation logic automatically
+     * 3. Creates Transaction objects for each transfer
+     * 4. Uses BlockV5 for transaction broadcast
      *
      * @return Transaction result message
-     *
-     * TODO v5.1: DELETED - Block class no longer exists
-     * Temporarily disabled - waiting for migration to BlockV5
      */
     public String xferToNewV2() {
-        return "Block balance transfer temporarily disabled - v5.1 migration in progress";
-        /*
         try {
             StringBuilder result = new StringBuilder();
-            result.append("Block Balance Transfer (v5.1):\n\n");
+            result.append("Account Balance Transfer (v5.1):\n\n");
 
             // Target address (default key)
             Bytes32 toAddress = keyPair2Hash(kernel.getWallet().getDefKey());
-            String remark = "block balance to new address";
+            String remark = "account balance to new address";
 
-            // Collect all confirmed block balances by account
+            // v5.1: Collect address balances directly (no block iteration needed)
             Map<Integer, XAmount> accountBalances = new HashMap<>();
+            List<ECKeyPair> accounts = kernel.getWallet().getAccounts();
 
-            kernel.getBlockStore().fetchOurBlocks(pair -> {
-                int index = pair.getKey();
-                Block block = pair.getValue();
+            for (int i = 0; i < accounts.size(); i++) {
+                ECKeyPair account = accounts.get(i);
+                byte[] addressBytes = toBytesAddress(account).toArray();
+                XAmount balance = kernel.getAddressStore().getBalanceByAddress(addressBytes);
 
-                // Skip if block is too recent (less than 2 * CONFIRMATIONS_COUNT epochs old)
-                if (XdagTime.getCurrentEpoch() < XdagTime.getEpoch(block.getTimestamp()) + 2 * CONFIRMATIONS_COUNT) {
-                    return false;
+                if (balance.compareTo(XAmount.ZERO) > 0) {
+                    accountBalances.put(i, balance);
                 }
-
-                // Add block balance to account total
-                if (compareAmountTo(XAmount.ZERO, block.getInfo().getAmount()) < 0) {
-                    XAmount currentBalance = accountBalances.getOrDefault(index, XAmount.ZERO);
-                    accountBalances.put(index, currentBalance.add(block.getInfo().getAmount()));
-                }
-
-                return false;
-            });
+            }
 
             if (accountBalances.isEmpty()) {
-                return "No confirmed block balances available for transfer.";
+                return "No account balances available for transfer.";
             }
 
             result.append(String.format("Found %d accounts with confirmed balances\n\n", accountBalances.size()));
@@ -1120,7 +1128,6 @@ public class Commands {
             log.error("xferToNewV2 failed: " + e.getMessage(), e);
             return "Block balance transfer failed: " + e.getMessage();
         }
-        */
     }
 
     /**
