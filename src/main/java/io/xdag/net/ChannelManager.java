@@ -68,8 +68,7 @@ public class ChannelManager extends AbstractXdagLifecycle {
      * Use BlockV5 foreign block queue instead
      */
     // private final BlockingQueue<BlockDistribution> newForeignBlocks = new LinkedBlockingQueue<>();
-    // Thread for block distribution
-    // TODO v5.1: Legacy block distribution thread deleted
+    // Thread for block distribution (deleted in v5.1)
     // private final Thread blockDistributeThread;
     private final Set<InetSocketAddress> addressSet = new HashSet<>();
     protected ConcurrentHashMap<InetSocketAddress, Channel> channels = new ConcurrentHashMap<>();
@@ -82,22 +81,21 @@ public class ChannelManager extends AbstractXdagLifecycle {
 
     public ChannelManager(Kernel kernel) {
         this.kernel = kernel;
-        // Resending new blocks to network in loop
-        // TODO v5.1: Legacy Block distribution thread deleted
+        // Resending new blocks to network in loop (deleted in v5.1)
         // this.blockDistributeThread = new Thread(this::newBlocksDistributeLoop, "NewSyncThreadBlocks");
         initWhiteIPs();
     }
 
     @Override
     protected void doStart() {
-        // TODO v5.1: Legacy Block distribution thread deleted
+        // Block distribution thread deleted in v5.1
         // blockDistributeThread.start();
     }
 
     @Override
     protected void doStop() {
         log.debug("Channel Manager stop...");
-        // TODO v5.1: Legacy Block distribution thread deleted
+        // Block distribution thread deleted in v5.1
         /*
         if (blockDistributeThread != null) {
             // Interrupt the thread
