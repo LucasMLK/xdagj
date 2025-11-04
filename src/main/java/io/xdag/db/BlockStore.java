@@ -77,6 +77,22 @@ public interface BlockStore extends XdagLifecycle {
 
     void saveXdagStatus(XdagStats status);
 
+    // ========== Phase 7.3 Continuation: ChainStats Support ==========
+
+    /**
+     * Save chain statistics (v5.1 immutable design)
+     *
+     * @param stats ChainStats to save
+     */
+    void saveChainStats(ChainStats stats);
+
+    /**
+     * Get chain statistics (v5.1 immutable design)
+     *
+     * @return ChainStats or null if not found
+     */
+    ChainStats getChainStats();
+
     // ========== Phase 2 Core Refactor: New Methods ==========
     // These methods use the new BlockInfo (immutable, type-safe)
 

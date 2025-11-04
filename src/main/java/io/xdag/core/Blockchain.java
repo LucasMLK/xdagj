@@ -199,6 +199,43 @@ public interface Blockchain {
      */
     ChainStats getChainStats();
 
+    /**
+     * Increment waiting sync count (Phase 7.3 ChainStats support)
+     *
+     * Increments the count of blocks waiting for parent blocks during sync.
+     * Used by SyncManager when adding blocks to the waiting queue.
+     *
+     * @since Phase 7.3 v5.1
+     */
+    void incrementWaitingSyncCount();
+
+    /**
+     * Decrement waiting sync count (Phase 7.3 ChainStats support)
+     *
+     * Decrements the count of blocks waiting for parent blocks during sync.
+     * Used by SyncManager when removing blocks from the waiting queue.
+     *
+     * @since Phase 7.3 v5.1
+     */
+    void decrementWaitingSyncCount();
+
+    /**
+     * Update blockchain stats from remote peer statistics (Phase 7.3 ChainStats support)
+     *
+     * Updates global network statistics based on data received from remote peers.
+     * This includes:
+     * - Total network hosts
+     * - Total network blocks
+     * - Total network main blocks
+     * - Maximum network difficulty
+     *
+     * Values are updated to reflect the maximum seen across the network.
+     *
+     * @param remoteStats Statistics from remote peer
+     * @since Phase 7.3 v5.1
+     */
+    void updateStatsFromRemote(XdagStats remoteStats);
+
     // Get XDAG top status
     XdagTopStatus getXdagTopStatus();
 

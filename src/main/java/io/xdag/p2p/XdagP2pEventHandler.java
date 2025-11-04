@@ -422,13 +422,13 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Update global network statistics from remote peer
+     * Update global network statistics from remote peer (Phase 7.3 ChainStats support)
      */
-    // Phase 7.3: Use getChainStats().toLegacy()
     private void updateXdagStats(XdagMessage message) {
         syncManager.getIsUpdateXdagStats().compareAndSet(false, true);
         XdagStats remoteXdagStats = message.getXdagStats();
-        blockchain.getChainStats().toLegacy().update(remoteXdagStats);
+        // Phase 7.3: Use new updateStatsFromRemote() method
+        blockchain.updateStatsFromRemote(remoteXdagStats);
     }
 
     /**

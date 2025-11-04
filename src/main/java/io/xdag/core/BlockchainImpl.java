@@ -83,9 +83,9 @@ public class BlockchainImpl implements Blockchain {
     // In-memory pools and maps
     private final LinkedHashMap<Bytes, BlockV5> memOrphanPool = new LinkedHashMap<>();
     private final Map<Bytes, Integer> memOurBlocks = new ConcurrentHashMap<>();
-    
-    // Stats and status tracking
-    private final XdagStats xdagStats;
+
+    // Stats and status tracking (v5.1 immutable design)
+    private volatile ChainStats chainStats;  // Use volatile for thread-safe publication
     private final Kernel kernel;
     private final XdagTopStatus xdagTopStatus;
 
@@ -123,8 +123,8 @@ public class BlockchainImpl implements Blockchain {
         if (kernel.getConfig().getSnapshotSpec().isSnapshotEnabled()
                 && kernel.getConfig().getSnapshotSpec().getSnapshotHeight() > 0
                 && !blockStore.isSnapshotBoot()) {
-            
-            this.xdagStats = new XdagStats();
+
+            this.chainStats = ChainStats.zero();
             this.xdagTopStatus = new XdagTopStatus();
 
             if (kernel.getConfig().getSnapshotSpec().isSnapshotJ()) {
@@ -133,36 +133,37 @@ public class BlockchainImpl implements Blockchain {
 
             // Save latest snapshot state
             blockStore.saveXdagTopStatus(xdagTopStatus);
-            blockStore.saveXdagStatus(xdagStats);
-            
+            blockStore.saveChainStats(chainStats);
+
         } else {
             // Load existing state
-            XdagStats storedStats = blockStore.getXdagStatus();
+            ChainStats storedStats = blockStore.getChainStats();
             XdagTopStatus storedTopStatus = blockStore.getXdagTopStatus();
-            
+
             if (storedStats != null) {
-                storedStats.setNwaitsync(0);
-                this.xdagStats = storedStats;
-                this.xdagStats.nextra = 0;
+                // Reset waiting sync count to 0 on startup
+                this.chainStats = storedStats.withWaitingSyncCount(0).withExtraCount(0);
             } else {
-                this.xdagStats = new XdagStats();
+                this.chainStats = ChainStats.zero();
             }
-            
+
             this.xdagTopStatus = Objects.requireNonNullElseGet(storedTopStatus, XdagTopStatus::new);
 
             // Phase 7.3 continuation: Restore lastBlock initialization using BlockV5
             // Load last main block to initialize stats and top status
-            BlockV5 lastBlock = getBlockByHeight(xdagStats.nmain);
+            BlockV5 lastBlock = getBlockByHeight(chainStats.getMainBlockCount());
             if (lastBlock != null && lastBlock.getInfo() != null) {
                 BigInteger lastDifficulty = lastBlock.getInfo().getDifficulty().toBigInteger();
-                xdagStats.setMaxdifficulty(lastDifficulty);
-                xdagStats.setDifficulty(lastDifficulty);
+                chainStats = chainStats
+                    .withMaxDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty))
+                    .withDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty));
                 xdagTopStatus.setTop(lastBlock.getHash().toArray());
                 xdagTopStatus.setTopDiff(lastDifficulty);
                 log.debug("Initialized blockchain state from last main block at height {}: diff={}, hash={}",
-                         xdagStats.nmain, lastDifficulty, lastBlock.getHash().toHexString());
-            } else if (xdagStats.nmain > 0) {
-                log.warn("Last main block not found at height {}, blockchain state may be incomplete", xdagStats.nmain);
+                         chainStats.getMainBlockCount(), lastDifficulty, lastBlock.getHash().toHexString());
+            } else if (chainStats.getMainBlockCount() > 0) {
+                log.warn("Last main block not found at height {}, blockchain state may be incomplete",
+                        chainStats.getMainBlockCount());
             }
             preSeed = blockStore.getPreSeed();
         }
@@ -202,8 +203,9 @@ public class BlockchainImpl implements Blockchain {
         BlockV5 lastBlock = getBlockByHeight(snapshotHeight);
         if (lastBlock != null && lastBlock.getInfo() != null) {
             BigInteger lastDifficulty = lastBlock.getInfo().getDifficulty().toBigInteger();
-            xdagStats.setMaxdifficulty(lastDifficulty);
-            xdagStats.setDifficulty(lastDifficulty);
+            chainStats = chainStats
+                .withMaxDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty))
+                .withDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty));
             xdagTopStatus.setPreTop(lastBlock.getHash().toArray());
             xdagTopStatus.setTop(lastBlock.getHash().toArray());
             xdagTopStatus.setTopDiff(lastDifficulty);
@@ -215,14 +217,16 @@ public class BlockchainImpl implements Blockchain {
         }
 
         // Initialize stats
-        xdagStats.balance = snapshotStore.getOurBalance();
-        xdagStats.setNwaitsync(0);
-        xdagStats.setNnoref(0);
-        xdagStats.setNextra(0);
-        xdagStats.setTotalnblocks(0);
-        xdagStats.setNblocks(0);
-        xdagStats.setTotalnmain(snapshotHeight);
-        xdagStats.setNmain(snapshotHeight);
+        XAmount ourBalance = snapshotStore.getOurBalance();
+        chainStats = chainStats
+            .withBalance(ourBalance)
+            .withWaitingSyncCount(0)
+            .withNoRefCount(0)
+            .withExtraCount(0)
+            .withTotalBlockCount(0)
+            .withBlockCount(0)
+            .withTotalMainBlockCount(snapshotHeight)
+            .withMainBlockCount(snapshotHeight);
 
         // Calculate total balance
         XAmount allBalance = snapshotStore.getAllBalance().add(snapshotAddressStore.getAllBalance());
@@ -439,7 +443,7 @@ public class BlockchainImpl implements Blockchain {
 
     @Override
     public long getLatestMainBlockNumber() {
-        return xdagStats.nmain;
+        return chainStats.getMainBlockCount();
     }
 
     // TODO v5.1: DELETED - BlockInfo.ref field no longer exists in v5.1 minimal design
@@ -468,17 +472,6 @@ public class BlockchainImpl implements Blockchain {
         saveBlockInfo(updatedInfo);
     }
     */
-
-    /**
-     * Save BlockInfo to database (v5.1 version)
-     *
-     * Phase 4 Step 2.3 Part 2: Save BlockInfo using V2 serialization.
-     *
-     * @param info BlockInfo to save
-     */
-    private void saveBlockInfo(BlockInfo info) {
-        blockStore.saveBlockInfoV2(info);
-    }
 
     /**
      * Create a reward BlockV5 for pool distribution (v5.1 implementation - Phase 7.6)
@@ -561,9 +554,7 @@ public class BlockchainImpl implements Blockchain {
 
         // Create BlockV5 with current difficulty
         long timestamp = XdagTime.getCurrentTimestamp();
-        BigInteger networkDiff = xdagStats.getDifficulty();
-        org.apache.tuweni.units.bigints.UInt256 difficulty =
-            org.apache.tuweni.units.bigints.UInt256.valueOf(networkDiff);
+        org.apache.tuweni.units.bigints.UInt256 difficulty = chainStats.getDifficulty();
 
         // Coinbase = wallet default key (reward block creator)
         Bytes32 coinbase = keyPair2Hash(wallet.getDefKey());
@@ -649,9 +640,7 @@ public class BlockchainImpl implements Blockchain {
         long timestamp = XdagTime.getCurrentTimestamp();
 
         // Get current network difficulty
-        BigInteger networkDiff = xdagStats.getDifficulty();
-        org.apache.tuweni.units.bigints.UInt256 difficulty =
-            org.apache.tuweni.units.bigints.UInt256.valueOf(networkDiff);
+        org.apache.tuweni.units.bigints.UInt256 difficulty = chainStats.getDifficulty();
 
         // Get coinbase address (link block creator)
         Bytes32 coinbase = keyPair2Hash(wallet.getDefKey());
@@ -715,31 +704,80 @@ public class BlockchainImpl implements Blockchain {
     */
 
     /**
-     * Legacy XdagStats accessor (Phase 7.3 - Backward compatibility)
-     *
-     * NOTE: This method is NOT in the Blockchain interface.
-     * The interface uses getChainStats() which returns ChainStats.
-     * This method is kept for internal backward compatibility only.
-     *
-     * @deprecated Use getChainStats().toLegacy() for external callers
-     * @return XdagStats mutable stats object (for internal use)
-     */
-    @Deprecated
-    public XdagStats getXdagStats() {
-        return this.xdagStats;
-    }
-
-    /**
      * Get blockchain statistics as immutable ChainStats (Phase 7.3)
      *
-     * Phase 7.3: Public API uses ChainStats (immutable) instead of XdagStats (mutable).
-     * Converts internal XdagStats to ChainStats for external callers.
+     * Phase 7.3: Public API uses ChainStats (immutable) directly.
+     * No conversion needed - chainStats is already ChainStats.
      *
      * @return ChainStats containing current blockchain statistics
      */
     @Override
     public ChainStats getChainStats() {
-        return ChainStats.fromLegacy(this.xdagStats);
+        return this.chainStats;
+    }
+
+    /**
+     * Increment waiting sync count (Phase 7.3 ChainStats support)
+     *
+     * Atomically increments the count of blocks waiting for parent blocks.
+     * Used by SyncManager when adding blocks to the waiting queue.
+     *
+     * @since Phase 7.3 v5.1
+     */
+    @Override
+    public synchronized void incrementWaitingSyncCount() {
+        chainStats = chainStats.withWaitingSyncCount(chainStats.getWaitingSyncCount() + 1);
+    }
+
+    /**
+     * Decrement waiting sync count (Phase 7.3 ChainStats support)
+     *
+     * Atomically decrements the count of blocks waiting for parent blocks.
+     * Used by SyncManager when removing blocks from the waiting queue.
+     *
+     * @since Phase 7.3 v5.1
+     */
+    @Override
+    public synchronized void decrementWaitingSyncCount() {
+        chainStats = chainStats.withWaitingSyncCount(chainStats.getWaitingSyncCount() - 1);
+    }
+
+    /**
+     * Update blockchain stats from remote peer statistics (Phase 7.3 ChainStats support)
+     *
+     * Updates global network statistics based on data received from remote peers.
+     * Takes the maximum of local and remote values for network-wide metrics.
+     *
+     * @param remoteStats Statistics from remote peer
+     * @since Phase 7.3 v5.1
+     */
+    @Override
+    public synchronized void updateStatsFromRemote(XdagStats remoteStats) {
+        // Update total hosts (take maximum)
+        int maxHosts = (int) Math.max(chainStats.getTotalHostCount(), remoteStats.totalnhosts);
+
+        // Update total blocks (take maximum)
+        long maxBlocks = Math.max(chainStats.getTotalBlockCount(), remoteStats.totalnblocks);
+
+        // Update total main blocks (take maximum)
+        long maxMain = Math.max(chainStats.getTotalMainBlockCount(), remoteStats.totalnmain);
+
+        // Update max difficulty (take maximum)
+        org.apache.tuweni.units.bigints.UInt256 localMaxDiff = chainStats.getMaxDifficulty();
+        org.apache.tuweni.units.bigints.UInt256 remoteMaxDiff =
+            org.apache.tuweni.units.bigints.UInt256.valueOf(remoteStats.maxdifficulty);
+        org.apache.tuweni.units.bigints.UInt256 newMaxDiff =
+            localMaxDiff.compareTo(remoteMaxDiff) > 0 ? localMaxDiff : remoteMaxDiff;
+
+        // Apply updates
+        chainStats = chainStats
+            .withTotalHostCount(maxHosts)
+            .withTotalBlockCount(maxBlocks)
+            .withTotalMainBlockCount(maxMain)
+            .withMaxDifficulty(newMaxDiff);
+
+        log.debug("Updated stats from remote: hosts={}, blocks={}, main={}, maxDiff={}",
+                 maxHosts, maxBlocks, maxMain, newMaxDiff.toDecimalString());
     }
 
     /**
@@ -825,7 +863,7 @@ public class BlockchainImpl implements Blockchain {
     }
 
     public void checkOrphan() {
-        long nblk = xdagStats.nnoref / 11;
+        long nblk = chainStats.getNoRefCount() / 11;
         if (nblk > 0) {
             boolean b = (nblk % 61) > CryptoProvider.nextLong(0, 61);
             nblk = nblk / 61 + (b ? 1 : 0);
@@ -846,8 +884,8 @@ public class BlockchainImpl implements Blockchain {
     public void checkMain() {
         try {
             checkNewMain();
-            // xdagStats state will change after checkNewMain
-            blockStore.saveXdagStatus(xdagStats);
+            // Save updated chain stats
+            blockStore.saveChainStats(chainStats);
         } catch (Throwable e) {
             log.error(e.getMessage(), e);
         }
@@ -935,29 +973,29 @@ public class BlockchainImpl implements Blockchain {
             // Remove from orphan store
             orphanBlockStore.deleteByHash(hash.toArray());
 
-            // Update stats based on action type
+            // Update stats based on action type (immutable update)
             switch (action) {
                 case ORPHAN_REMOVE_NORMAL:
                     // Normal removal - block got referenced, no longer orphan
-                    xdagStats.nnoref--;
+                    chainStats = chainStats.withNoRefCount(chainStats.getNoRefCount() - 1);
                     log.debug("Removed orphan block (normal): {}", hash.toHexString());
                     break;
 
                 case ORPHAN_REMOVE_REUSE:
                     // Block reused in chain - decrease orphan count
-                    xdagStats.nnoref--;
+                    chainStats = chainStats.withNoRefCount(chainStats.getNoRefCount() - 1);
                     log.debug("Removed orphan block (reuse): {}", hash.toHexString());
                     break;
 
                 case ORPHAN_REMOVE_EXTRA:
                     // Extra block removal - update extra count
-                    xdagStats.nextra--;
+                    chainStats = chainStats.withExtraCount(chainStats.getExtraCount() - 1);
                     log.debug("Removed orphan block (extra): {}", hash.toHexString());
                     break;
 
                 default:
                     log.warn("Unknown orphan removal action: {}", action);
-                    xdagStats.nnoref--;
+                    chainStats = chainStats.withNoRefCount(chainStats.getNoRefCount() - 1);
             }
 
         } catch (Exception e) {
@@ -1055,7 +1093,7 @@ public class BlockchainImpl implements Blockchain {
     public List<BlockV5> listMainBlocks(int count) {
         List<BlockV5> result = Lists.newArrayList();
 
-        long currentHeight = xdagStats.nmain;
+        long currentHeight = chainStats.getMainBlockCount();
         long startHeight = Math.max(1, currentHeight - count + 1);
 
         // Retrieve blocks from latest to oldest (or oldest to latest, depending on requirement)
@@ -1122,7 +1160,7 @@ public class BlockchainImpl implements Blockchain {
     @Override
     public BlockV5 createMainBlockV5() {
         // 1. Get previous main block (last confirmed main block)
-        long currentMainHeight = xdagStats.nmain;
+        long currentMainHeight = chainStats.getMainBlockCount();
         BlockV5 prevMainBlock = null;
 
         if (currentMainHeight > 0) {
@@ -1137,9 +1175,7 @@ public class BlockchainImpl implements Blockchain {
         long timestamp = XdagTime.getCurrentTimestamp();
 
         // 3. Get current network difficulty
-        BigInteger networkDiff = xdagStats.getDifficulty();
-        org.apache.tuweni.units.bigints.UInt256 difficulty =
-            org.apache.tuweni.units.bigints.UInt256.valueOf(networkDiff);
+        org.apache.tuweni.units.bigints.UInt256 difficulty = chainStats.getDifficulty();
 
         // 4. Get coinbase address (our mining address)
         Bytes32 coinbase = keyPair2Hash(wallet.getDefKey());

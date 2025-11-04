@@ -172,6 +172,28 @@ public class BlockStoreImpl implements BlockStore {
         indexSource.put(new byte[]{SETTING_STATS}, value);
     }
 
+    // ========== Phase 7.3 Continuation: ChainStats Support ==========
+
+    @Override
+    public void saveChainStats(ChainStats stats) {
+        // v5.1: Persist ChainStats directly using Kryo
+        // Convert to legacy for backward compatibility with existing storage format
+        XdagStats legacy = stats.toLegacy();
+        saveXdagStatus(legacy);
+        log.debug("Saved ChainStats: mainBlocks={}, difficulty={}",
+                 stats.getMainBlockCount(), stats.getDifficulty().toDecimalString());
+    }
+
+    @Override
+    public ChainStats getChainStats() {
+        // Load legacy XdagStats and convert to ChainStats
+        XdagStats legacy = getXdagStatus();
+        if (legacy == null) {
+            return null;
+        }
+        return ChainStats.fromLegacy(legacy);
+    }
+
 
     public void deleteAllTxHistoryFromRocksdb() {
         for (byte[] key : txHistorySource.keys()) {

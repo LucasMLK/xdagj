@@ -831,8 +831,8 @@ public class SyncManager extends AbstractXdagLifecycle {
 
                 Bytes32 key = keyList.get(CryptoProvider.nextInt(0, keyList.size()));
                 if (syncMapV5.remove(key) != null) {
-                    // Phase 7.3: Use getChainStats().toLegacy()
-                    blockchain.getChainStats().toLegacy().nwaitsync--;
+                    // Phase 7.3: Use new ChainStats decrement method
+                    blockchain.decrementWaitingSyncCount();
                 }
             }
         }
@@ -844,13 +844,13 @@ public class SyncManager extends AbstractXdagLifecycle {
         Queue<SyncBlockV5> newQueue = Queues.newConcurrentLinkedQueue();
         syncBlock.setTime(now);
         newQueue.add(syncBlock);
-        // Phase 7.3: Use getChainStats().toLegacy()
-        blockchain.getChainStats().toLegacy().nwaitsync++;
+        // Phase 7.3: Use new ChainStats increment method
+        blockchain.incrementWaitingSyncCount();
 
         // Merge with existing queue (if any)
         syncMapV5.merge(parentHash, newQueue, (oldQueue, newQ) -> {
-            // Phase 7.3: Use getChainStats().toLegacy()
-            blockchain.getChainStats().toLegacy().nwaitsync--;  // Undo increment since merging
+            // Phase 7.3: Undo increment since merging
+            blockchain.decrementWaitingSyncCount();
 
             // Check if this block is already in the queue
             for (SyncBlockV5 existing : oldQueue) {
@@ -892,8 +892,8 @@ public class SyncManager extends AbstractXdagLifecycle {
         Queue<SyncBlockV5> queue = syncMapV5.getOrDefault(block.getHash(), null);
         if (queue != null) {
             syncMapV5.remove(block.getHash());
-            // Phase 7.3: Use getChainStats().toLegacy()
-            blockchain.getChainStats().toLegacy().nwaitsync--;
+            // Phase 7.3: Use new ChainStats decrement method
+            blockchain.decrementWaitingSyncCount();
 
             log.debug("Processing {} child BlockV5 objects waiting for parent: {}",
                      queue.size(), block.getHash().toHexString());
