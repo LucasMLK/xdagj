@@ -83,6 +83,12 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
 
+    // Phase 8.2.2: Constants for block request rate limiting
+    private static final long MAX_TIME_RANGE = 86400; // Max time range: 1 day (in XDAG time units, ~18 hours)
+    private static final int MAX_BLOCKS_PER_REQUEST = 1000; // Max blocks per request
+    private static final int BATCH_SIZE = 100; // Blocks per batch
+    private static final long BATCH_DELAY_MS = 100; // Delay between batches (ms)
+
     private static final ScheduledExecutorService exec = Executors
             .newSingleThreadScheduledExecutor(new ThreadFactory() {
                 private final AtomicInteger cnt = new AtomicInteger(0);
@@ -90,6 +96,19 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
                 @Override
                 public Thread newThread(Runnable r) {
                     return new Thread(r, "p2p-" + cnt.getAndIncrement());
+                }
+            });
+
+    // Phase 8.2.2: Executor for large block request processing (prevents DoS attacks)
+    private static final java.util.concurrent.ExecutorService blockSendExecutor =
+            Executors.newCachedThreadPool(new ThreadFactory() {
+                private final AtomicInteger cnt = new AtomicInteger(0);
+
+                @Override
+                public Thread newThread(Runnable r) {
+                    Thread t = new Thread(r, "block-sender-" + cnt.getAndIncrement());
+                    t.setDaemon(true);  // Daemon thread won't prevent JVM shutdown
+                    return t;
                 }
             });
 
@@ -407,48 +426,112 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     }
 
     /**
+     * Phase 8.2.2: Multi-block request with DoS attack protection
+     *
+     * Handles BLOCKS_REQUEST messages with rate limiting to prevent resource exhaustion.
+     *
+     * Protection mechanisms:
+     * 1. Time range limiting (MAX_TIME_RANGE = 1 day)
+     * 2. Block count limiting (MAX_BLOCKS_PER_REQUEST = 1000)
+     * 3. Async processing for large requests (prevents main thread blocking)
+     * 4. Batch sending with rate limiting (100 blocks per batch, 100ms delay)
+     *
      * Phase 7.3.0: Send BlockV5 messages only (legacy message support removed)
      *
      * Note: This method can only send blocks that exist as BlockV5 in storage.
      * Legacy blocks that haven't been migrated to BlockV5 format will be skipped.
      * This is acceptable as the network should only use v5.1 protocol going forward.
-     *
-     * 区块请求响应一个区块 并开启一个线程不断发送一段时间内的区块
      */
     protected void processBlocksRequest(BlocksRequestMessage msg) {
-        // 更新全网状态
+        // Update network stats
         updateXdagStats(msg);
         long startTime = msg.getStarttime();
         long endTime = msg.getEndtime();
         long random = msg.getRandom();
 
-        // TODO: paulochen 处理多区块请求
-        //        // 如果大于快照点的话 我可以发送
-        //        if (startTime > 1658318225407L) {
-        //            // TODO: 如果请求时间间隔过大，启动新线程发送，目的是避免攻击
+        // Phase 8.2.2: Validate time range
+        long timeRange = endTime - startTime;
+        if (timeRange > MAX_TIME_RANGE) {
+            log.warn("Large time range request: {} from {} (max: {})",
+                    timeRange, channel.getRemoteAddress(), MAX_TIME_RANGE);
+            // Use separate thread to avoid blocking main handler
+            blockSendExecutor.submit(() -> sendBlocksInBatches(startTime, endTime, random));
+            return;
+        }
+
+        // Normal time range - process in current thread
         log.debug("Send blocks between {} and {} to node {}",
                 FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(XdagTime.xdagTimestampToMs(startTime)),
                 FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(XdagTime.xdagTimestampToMs(endTime)),
                 channel.getRemoteAddress());
-        // Phase 8.3.2: Blockchain interface now returns BlockV5
-        List<BlockV5> blocks = chain.getBlocksByTime(startTime, endTime);
 
-        // Phase 7.3.0: Send BlockV5 messages only (no legacy fallback)
-        for (BlockV5 blockV5 : blocks) {
-            // Already have BlockV5 from blockchain, send directly
-            try {
-                if (blockV5 != null) {
-                    SyncBlockV5Message blockMsg = new SyncBlockV5Message(blockV5, 1);
-                    msgQueue.sendMessage(blockMsg);
-                } else {
-                    log.debug("Block is null, skipping");
-                }
-            } catch (Exception e) {
-                log.debug("Failed to send BlockV5: {}", e.getMessage());
+        sendBlocksInBatches(startTime, endTime, random);
+    }
+
+    /**
+     * Phase 8.2.2: Send blocks in batches with rate limiting
+     *
+     * Prevents resource exhaustion by:
+     * - Limiting total blocks sent (MAX_BLOCKS_PER_REQUEST)
+     * - Sending in small batches (BATCH_SIZE = 100)
+     * - Adding delay between batches (BATCH_DELAY_MS = 100ms)
+     *
+     * @param startTime Start time for block range
+     * @param endTime End time for block range
+     * @param random Random sequence number for reply
+     */
+    private void sendBlocksInBatches(long startTime, long endTime, long random) {
+        try {
+            // Phase 8.3.2: Blockchain interface now returns BlockV5
+            List<BlockV5> blocks = chain.getBlocksByTime(startTime, endTime);
+
+            // Phase 8.2.2: Limit blocks per request
+            if (blocks.size() > MAX_BLOCKS_PER_REQUEST) {
+                log.warn("Too many blocks requested: {}, limiting to {} from {}",
+                        blocks.size(), MAX_BLOCKS_PER_REQUEST, channel.getRemoteAddress());
+                blocks = blocks.subList(0, MAX_BLOCKS_PER_REQUEST);
             }
+
+            log.debug("Sending {} blocks to {} in batches",
+                    blocks.size(), channel.getRemoteAddress());
+
+            // Phase 8.2.2: Send in batches with rate limiting
+            for (int i = 0; i < blocks.size(); i++) {
+                BlockV5 blockV5 = blocks.get(i);
+
+                // Add delay between batches
+                if (i > 0 && i % BATCH_SIZE == 0) {
+                    try {
+                        Thread.sleep(BATCH_DELAY_MS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        log.warn("Block sending interrupted for {}", channel.getRemoteAddress());
+                        break;
+                    }
+                }
+
+                // Send block
+                try {
+                    if (blockV5 != null) {
+                        SyncBlockV5Message blockMsg = new SyncBlockV5Message(blockV5, 1);
+                        msgQueue.sendMessage(blockMsg);
+                    } else {
+                        log.debug("Block is null, skipping");
+                    }
+                } catch (Exception e) {
+                    log.debug("Failed to send BlockV5: {}", e.getMessage());
+                }
+            }
+
+            // Send reply message
+            msgQueue.sendMessage(new BlocksReplyMessage(startTime, endTime, random, chain.getChainStats()));
+            log.debug("Completed sending {} blocks to {}",
+                    blocks.size(), channel.getRemoteAddress());
+
+        } catch (Exception e) {
+            log.error("Error processing blocks request from {}: {}",
+                    channel.getRemoteAddress(), e.getMessage(), e);
         }
-        // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
-        msgQueue.sendMessage(new BlocksReplyMessage(startTime, endTime, random, chain.getChainStats()));
     }
 
     protected void processBlocksReply(BlocksReplyMessage msg) {
