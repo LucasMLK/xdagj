@@ -217,7 +217,6 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
             updateChainStats(msg);
 
             org.apache.tuweni.bytes.MutableBytes sums = org.apache.tuweni.bytes.MutableBytes.create(256);
-            // TODO v5.1: DELETED - BlockStore.loadSum() method no longer exists
             // Temporarily disabled - sum file system removed in v5.1
             // kernel.getBlockStore().loadSum(msg.getStarttime(), msg.getEndtime(), sums);
             // For now, send empty sums (256 zero bytes)

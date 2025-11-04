@@ -118,8 +118,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
 
     // XDAG configuration
     protected long xdagEra;
-    // TODO v5.1: DELETED - XdagField class no longer exists
-    // protected XdagField.FieldType xdagFieldHeader;
     protected XAmount mainStartAmount;
     protected long apolloForkHeight;
     protected XAmount apolloForkAmount;

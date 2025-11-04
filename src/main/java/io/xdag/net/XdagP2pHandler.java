@@ -466,7 +466,6 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
     protected void processSumsRequest(SumRequestMessage msg) {
         updateXdagStats(msg);
         MutableBytes sums = MutableBytes.create(256);
-        // TODO v5.1: DELETED - BlockStore.loadSum() method no longer exists
         // Temporarily disabled - sum file system removed in v5.1
         // kernel.getBlockStore().loadSum(msg.getStarttime(),msg.getEndtime(),sums);
         // For now, send empty sums (256 zero bytes)

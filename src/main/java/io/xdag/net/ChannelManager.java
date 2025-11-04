@@ -48,7 +48,6 @@ public class ChannelManager extends AbstractXdagLifecycle {
      * Simple tuple for block + TTL (v5.1)
      * Replaces BlockWrapper for network distribution
      *
-     * TODO v5.1: DELETED - Block class no longer exists (Phase 7.1)
      * This was used for legacy Block distribution. Use BlockV5 directly instead.
      */
     /*
@@ -66,7 +65,6 @@ public class ChannelManager extends AbstractXdagLifecycle {
     /**
      * Queue with new blocks from other peers
      *
-     * TODO v5.1: DELETED - BlockDistribution class no longer exists
      * Use BlockV5 foreign block queue instead
      */
     // private final BlockingQueue<BlockDistribution> newForeignBlocks = new LinkedBlockingQueue<>();
@@ -168,7 +166,6 @@ public class ChannelManager extends AbstractXdagLifecycle {
     /**
      * Processing new blocks received from other peers from queue
      *
-     * TODO v5.1: DELETED - Block class and BlockDistribution no longer exist
      * This method was used for legacy Block distribution. Use BlockV5 methods instead.
      */
     /*
@@ -212,7 +209,6 @@ public class ChannelManager extends AbstractXdagLifecycle {
     }
 
     /**
-     * TODO v5.1: DELETED - Block class no longer exists
      * This method was used for legacy Block foreign block queueing. Use onNewForeignBlockV5() instead.
      */
     /*

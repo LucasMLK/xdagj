@@ -56,10 +56,6 @@ public interface OrphanBlockStore extends XdagLifecycle {
 
     void deleteByHash(byte[] hash);
 
-    // TODO v5.1: DELETED - Block class no longer exists
-    // Temporarily disabled - waiting for migration to BlockV5
-    // void addOrphan(Block block);
-
     long getOrphanSize();
 
 }

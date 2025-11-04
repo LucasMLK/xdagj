@@ -126,7 +126,6 @@ public class BlockFinalizationService {
         }
     }
 
-    // TODO v5.1: DELETED - Block class no longer exists
     // Temporarily disabled - waiting for migration to BlockV5
     /*
     /**

@@ -151,7 +151,6 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
     }
 
     /**
-     * TODO v5.1: DELETED - Block class no longer exists
      * Pool payment distribution temporarily disabled - waiting for migration to BlockV5
      */
     public int payPools(long time) {
@@ -237,7 +236,6 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
     public void doPayments(Bytes32 hash, XAmount allAmount, Bytes32 poolWalletAddress, int keyPos,
                            TransactionInfoSender transactionInfoSender)
         throws AddressFormatException {
-        // TODO v5.1: DELETED - Block class no longer exists
         // Pool reward distribution temporarily disabled - waiting for v5.1 Transaction migration
         log.warn("Pool reward distribution temporarily disabled - waiting for v5.1 Transaction migration");
         /*

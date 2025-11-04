@@ -445,7 +445,6 @@ public class BlockchainImpl implements Blockchain {
         return chainStats.getMainBlockCount();
     }
 
-    // TODO v5.1: DELETED - BlockInfo.ref field no longer exists in v5.1 minimal design
     // Temporarily disabled - waiting for migration to v5.1 architecture
     /*
     /**
@@ -678,7 +677,6 @@ public class BlockchainImpl implements Blockchain {
         }
     }
 
-    // TODO v5.1: DELETED - BlockInfo.maxDiffLink field no longer exists in v5.1 minimal design
     // Temporarily disabled - waiting for migration to v5.1 architecture
     /*
     /**

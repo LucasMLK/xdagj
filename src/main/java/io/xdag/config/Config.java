@@ -92,14 +92,6 @@ public interface Config {
     XAmount getApolloForkAmount();
 
     /**
-     * Get the XDAG field header type
-     *
-     * TODO v5.1: DELETED - XdagField class no longer exists
-     * This configuration was never used in v5.1 architecture
-     */
-    // XdagField.FieldType getXdagFieldHeader();
-
-    /**
      * Change parameters based on command line arguments
      */
     void changePara(String[] args);

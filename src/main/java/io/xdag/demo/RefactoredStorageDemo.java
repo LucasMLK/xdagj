@@ -40,7 +40,6 @@ import java.nio.file.Path;
 /**
  * End-to-end demonstration of the new refactored storage system
  *
- * TODO v5.1: DELETED - Block and LegacyBlockInfo classes no longer exist
  * This demo is temporarily disabled - waiting for migration to BlockV5
  *
  * This demo shows:

@@ -24,9 +24,6 @@
 
 package io.xdag.config;
 
-// TODO v5.1: DELETED - XdagField class no longer exists
-// import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_HEAD_TEST;
-
 import org.apache.tuweni.units.bigints.UInt64;
 
 import io.xdag.Network;
@@ -57,8 +54,6 @@ public class TestnetConfig extends AbstractConfig {
         this.mainStartAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 42).toLong());
         this.apolloForkHeight = 196250;
         this.apolloForkAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 39).toLong());
-        // TODO v5.1: DELETED - XdagField class no longer exists
-        // this.xdagFieldHeader = XDAG_FIELD_HEAD_TEST;
         this.walletKeyFile = this.rootDir + "/wallet-testnet.dat";
         this.walletFilePath = this.rootDir + "/wallet/" + Constants.WALLET_FILE_NAME;
     }

@@ -34,7 +34,6 @@ import org.bouncycastle.util.encoders.Hex;
  */
 public class FileUtils {
 
-    // TODO v5.1: DELETED - BlockStore.SUM_FILE_NAME constant no longer exists
     // Temporarily disabled - waiting for migration to v5.1
     /*
     /**

@@ -42,8 +42,6 @@ import java.util.Date;
 import java.util.List;
 
 import static io.xdag.config.Constants.MIN_GAS;
-// TODO v5.1: DELETED - TxHistory class and Address class no longer exist
-// import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_INPUT;
 import static io.xdag.utils.BasicUtils.hash2Address;
 import static io.xdag.utils.BasicUtils.hash2byte;
 import static io.xdag.utils.WalletUtils.checkAddress;
@@ -74,7 +72,6 @@ public class TransactionHistoryStoreImpl implements TransactionHistoryStore {
         this.TX_PAGE_SIZE_LIMIT = txPageSizeLimit;
     }
 
-    // TODO v5.1: DELETED - TxHistory class no longer exists
     // All TX history save/list methods temporarily disabled - interface methods commented out
     /*
     @Override

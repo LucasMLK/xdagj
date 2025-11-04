@@ -210,7 +210,6 @@ public class XdagSync extends AbstractXdagLifecycle {
     private void findGetBlocks(io.xdag.p2p.channel.Channel xc, long t, long dt, SettableFuture<Bytes> sf) {
         MutableBytes lSums = MutableBytes.create(256);
         Bytes rSums;
-        // TODO v5.1: DELETED - BlockStore.loadSum() method no longer exists
         // Temporarily disabled - sum file system removed in v5.1
         // if (blockStore.loadSum(t, t + dt, lSums) <= 0) {
         //     return;
@@ -260,7 +259,6 @@ public class XdagSync extends AbstractXdagLifecycle {
     /**
      * Get timestamp of latest confirmed main block
      *
-     * TODO v5.1: DELETED - Block class no longer exists
      * Temporarily disabled - waiting for migration to BlockV5
      */
     public long getLastTime() {

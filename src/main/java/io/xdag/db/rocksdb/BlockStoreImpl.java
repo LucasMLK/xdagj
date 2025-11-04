@@ -290,7 +290,6 @@ public class BlockStoreImpl implements BlockStore {
                      serialized.length);
         } catch (Exception e) {
             log.error("Failed to serialize BlockInfo using CompactSerializer, falling back to legacy", e);
-            // TODO v5.1: DELETED - BlockInfo.toLegacy() no longer exists
             // Temporarily disabled - waiting for migration to v5.1
             log.warn("BlockInfo.toLegacy() no longer exists - cannot fallback to legacy serialization");
             // Fallback to legacy method
@@ -305,7 +304,6 @@ public class BlockStoreImpl implements BlockStore {
     private void buildBlockReferences(BlockInfo blockInfo) {
         Bytes32 thisBlockHash = blockInfo.getHash();
 
-        // TODO v5.1: DELETED - BlockInfo.ref field no longer exists in v5.1 minimal design
         // Temporarily disabled - waiting for migration to v5.1
         /*
         // Add reference for 'ref' field (if exists)
@@ -386,7 +384,6 @@ public class BlockStoreImpl implements BlockStore {
             // Create minimal BlockInfo for blocks without metadata
             // This should not normally happen, but we handle it gracefully
             log.warn("BlockV5 {} has no BlockInfo, creating minimal metadata", hash.toHexString());
-            // TODO v5.1: DELETED - BlockInfo.type field no longer exists in v5.1 minimal design
             // Temporarily disabled - waiting for migration to v5.1
             BlockInfo minimalInfo = BlockInfo.builder()
                 .hash(hash)

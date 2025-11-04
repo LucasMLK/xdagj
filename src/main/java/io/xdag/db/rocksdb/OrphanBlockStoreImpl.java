@@ -118,7 +118,6 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
         orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(currentsize - 1, false));
     }
 
-    // TODO v5.1: DELETED - Block class no longer exists
     // Temporarily disabled - waiting for migration to BlockV5
     /*
     public void addOrphan(Block block) {

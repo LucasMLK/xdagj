@@ -259,7 +259,6 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
 
                 BlockInfo info = infoOpt.get();
 
-                // TODO v5.1: DELETED - BlockInfo.maxDiffLink field no longer exists in v5.1 minimal design
                 // Temporarily disabled - waiting for migration to v5.1
                 /*
                 // Check if this block points to previous block

@@ -159,7 +159,6 @@ public class SnapshotStoreImpl implements SnapshotStore {
 
     // Phase 7.1.2: Removed setBlockInfo() method - PreBlockInfo deleted, use LegacyBlockInfo directly
 
-    // TODO v5.1: DELETED - LegacyBlockInfo class no longer exists
     // Temporarily disabled - waiting for migration to BlockV5
     /*
     // Phase 7.1.2: Removed boolean parameter - always deserialize to LegacyBlockInfo directly
@@ -209,7 +208,6 @@ public class SnapshotStoreImpl implements SnapshotStore {
     }
     */
 
-    // TODO v5.1: DELETED - Block, Address, TxHistory, LegacyBlockInfo classes no longer exist
     // Temporarily disabled - waiting for migration to BlockV5
     /*
     public void saveSnapshotToIndex(BlockStore blockStore, TransactionHistoryStore txHistoryStore, List<ECKeyPair> keys,long snapshotTime) {
@@ -319,7 +317,6 @@ public class SnapshotStoreImpl implements SnapshotStore {
                         }
                         allBalance = allBalance.add(balance); //calculate the address balance
                         addressStore.snapshotAddress(address, balance);
-                        // TODO v5.1: DELETED - Address and TxHistory classes no longer exist
                         // Temporarily disabled - waiting for migration to BlockV5
                         /*
                         if (txHistoryStore != null) {
@@ -349,7 +346,6 @@ public class SnapshotStoreImpl implements SnapshotStore {
         }
     }
 
-    // TODO v5.1: DELETED - LegacyBlockInfo class no longer exists
     // Temporarily disabled - waiting for migration to BlockV5
     /*
     public void save(RocksIterator iter, LegacyBlockInfo blockInfo) {
@@ -395,7 +391,6 @@ public class SnapshotStoreImpl implements SnapshotStore {
         kryo.setInstantiatorStrategy(new DefaultInstantiatorStrategy(new StdInstantiatorStrategy()));
         kryo.register(BigInteger.class);
         kryo.register(byte[].class);
-        // TODO v5.1: DELETED - LegacyBlockInfo class no longer exists
         // kryo.register(LegacyBlockInfo.class);
         // Phase 7.3: XdagStats registration removed (class deleted, using ChainStats + CompactSerializer)
         // Phase 7.3.1: XdagTopStatus registration removed (class deleted, merged into ChainStats)

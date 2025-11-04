@@ -28,7 +28,6 @@ import java.util.List;
 /**
  * TransactionHistoryStore interface
  *
- * TODO v5.1: DELETED - TxHistory class no longer exists
  * All methods temporarily disabled - waiting for migration to BlockV5 Transaction system
  */
 public interface TransactionHistoryStore {

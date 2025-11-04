@@ -42,10 +42,6 @@ public interface SnapshotStore {
 
     void saveAddress(BlockStore blockStore,AddressStore addressStore, TransactionHistoryStore txHistoryStore, List<ECKeyPair> keys,long snapshotTime);
 
-    // TODO v5.1: DELETED - LegacyBlockInfo class no longer exists
-    // Temporarily disabled - waiting for migration to BlockV5
-    // void save(RocksIterator iter, LegacyBlockInfo blockInfo);
-
     // Phase 7.1.2: Removed setBlockInfo() method - PreBlockInfo deleted
 
     XAmount getOurBalance();
