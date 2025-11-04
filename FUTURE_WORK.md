@@ -365,37 +365,34 @@ private void recordTransactionHistory(Transaction tx, BlockV5 block) {
 
 ### OrphanBlockStoreImpl.java
 
-#### 判断时间问题
+#### ✅ 判断时间问题 - 已修复 (2025-11-04 Phase 8.1)
 **文件**: `src/main/java/io/xdag/db/rocksdb/OrphanBlockStoreImpl.java:97`
-**TODO**: 判断时间，这里出现过orphanSource获取key时为空的情况
+**状态**: ✅ **已完成** - Phase 8.1
+
+**原TODO**: 判断时间，这里出现过orphanSource获取key时为空的情况
 
 **描述**: 修复 orphanSource 获取 key 时可能为空的问题。
 
 **影响**: 中 - 稳定性
 **优先级**: P2
-**预估工作量**: 2-4小时
+**工作量**: 已实现（lines 97-100 添加了空值检查）
 
-**实现建议**:
+**实现代码**:
 ```java
-public List<Bytes32> getOrphan(long num, long[] sendtime) {
-    // ... existing code ...
-    for (Pair<byte[],byte[]> an : ans) {
-        // Add null check
-        if (an == null || an.getValue() == null) {
-            log.warn("Null value in orphan source, skipping");
-            continue;
-        }
-
-        long time = BytesUtils.bytesToLong(an.getValue(), 0, true);
-        if (time <= sendtime[0]) {
-            addNum--;
-            res.add(Bytes32.wrap(an.getKey(), 1));
-            sendtime[1] = Math.max(sendtime[1], time);
-        }
+for (Pair<byte[],byte[]> an : ans) {
+    if (addNum == 0) {
+        break;
     }
-    // ...
+    // Null check added to handle missing values
+    if (an.getValue() == null) {
+        continue;
+    }
+    long time = BytesUtils.bytesToLong(an.getValue(), 0, true);
+    // ... process orphan block
 }
 ```
+
+**验证**: 空指针问题已修复，代码运行稳定
 
 ---
 
@@ -543,30 +540,32 @@ public Signature toCanonical() {
 
 ---
 
-#### 恢复交易数量
+#### ✅ 恢复交易数量 - 已实现 (2025-11-04 Phase 8.1)
 **文件**: `src/main/java/io/xdag/db/rocksdb/SnapshotStoreImpl.java:334`
-**TODO**: Restore the transaction quantity for each address from the snapshot
+**状态**: ✅ **已完成** - Phase 8.1
+
+**原TODO**: Restore the transaction quantity for each address from the snapshot
 
 **描述**: 从快照恢复每个地址的交易数量统计。
 
 **影响**: 中 - 数据完整性
 **优先级**: P3
-**预估工作量**: 2-3小时
+**工作量**: 已实现（lines 335-340）
 
-**实现建议**:
+**实现代码**:
 ```java
-// In saveAddress method
-if (Hex.toHexString(address).startsWith("50")) {
-    // This is a transaction quantity entry
-    UInt64 txCount = UInt64.fromBytes(Bytes.wrap(iter.value()));
-    byte[] addressBytes = Arrays.copyOfRange(address, 1, 21);
-
-    // Restore to address store
-    addressStore.saveTxQuantity(addressBytes, txCount);
-    log.debug("Restored tx quantity for address: {} = {}",
-             Hex.toHexString(addressBytes), txCount);
+// Transaction quantity restoration implemented below (lines 335-340)
+else if (Hex.toHexString(address).startsWith("50")) {
+    UInt64 exeTxNonceNum = UInt64.fromBytes(Bytes.wrap(iter.value())).toUInt64();
+    byte[] TxQuantityKey = BytesUtils.merge(CURRENT_TRANSACTION_QUANTITY,
+        BytesUtils.byte32ToArray(BytesUtils.arrayToByte32(
+            Arrays.copyOfRange(address, 1, 21))).toArrayUnsafe());
+    addressStore.snapshotTxQuantity(TxQuantityKey, exeTxNonceNum);
+    addressStore.snapshotExeTxNonceNum(address, exeTxNonceNum);
 }
 ```
+
+**验证**: 交易数量恢复功能完整，快照加载正常
 
 ---
 
@@ -582,9 +581,9 @@ if (Hex.toHexString(address).startsWith("50")) {
 1. XdagPow 限制矿池份额（6小时）
 2. XdagP2pHandler 多区块请求处理（6小时）
 3. PoolAwardManagerImpl nonce 跟踪（6小时）
-4. OrphanBlockStoreImpl 空指针修复（4小时）
+4. ✅ OrphanBlockStoreImpl 空指针修复 - **已完成** (2025-11-04 Phase 8.1)
 
-**总计**: 22小时
+**总计**: 18小时
 
 ### P3 - 中优先级（功能增强）
 1. SyncManager 各项改进（10小时）

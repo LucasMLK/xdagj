@@ -331,7 +331,8 @@ public class SnapshotStoreImpl implements SnapshotStore {
                             txHistoryStore.saveTxHistory(txHistory);
                         }
                         */
-                    } // TODO: Restore the transaction quantity for each address from the snapshot.
+                    }
+                    // Transaction quantity restoration implemented below (lines 335-340)
                     else if (Hex.toHexString(address).startsWith("50")) {
                         UInt64 exeTxNonceNum = UInt64.fromBytes(Bytes.wrap(iter.value())).toUInt64();
                         byte[] TxQuantityKey = BytesUtils.merge(CURRENT_TRANSACTION_QUANTITY, BytesUtils.byte32ToArray(BytesUtils.arrayToByte32(Arrays.copyOfRange(address, 1, 21))).toArrayUnsafe());
