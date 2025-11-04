@@ -173,14 +173,8 @@ public class Transaction implements Serializable {
      * Signature process:
      * 1. Calculate transaction hash
      * 2. Sign hash with private key: (v, r, s) = ECDSA_Sign(hash, private_key)
-     * 3. Return new Transaction with signature
-     *
-     * TODO: Implement proper signature extraction from xdagj-crypto Signature object
-     * Current xdagj-crypto library doesn't expose v, r, s getters
-     * Need to either:
-     * - Update xdagj-crypto library to expose these methods
-     * - Use encodedBytes() and parse manually
-     * - Store Signature object directly instead of v/r/s fields
+     * 3. Extract v, r, s components from Signature object
+     * 4. Return new Transaction with signature
      *
      * @param keyPair key pair containing private key
      * @return new Transaction instance with signature
@@ -189,17 +183,11 @@ public class Transaction implements Serializable {
         Bytes32 hash = getHash();
         Signature signature = Signer.sign(hash, keyPair);
 
-        // TODO: Extract v, r, s from Signature object
-        // For now, use default values to allow compilation
-        // This needs to be implemented based on xdagj-crypto API
-        Bytes encodedSig = signature.encodedBytes();
-
-        // Signature is typically 64 bytes (r + s, 32 bytes each)
-        // v (recovery id) may need to be extracted differently
-        byte[] sigBytes = encodedSig.toArray();
-        Bytes32 rValue = Bytes32.wrap(sigBytes, 0);  // First 32 bytes
-        Bytes32 sValue = Bytes32.wrap(sigBytes, 32); // Next 32 bytes
-        int vValue = 0; // TODO: Determine proper recovery id
+        // Extract v, r, s components from Signature object
+        // Signature class provides getters: getRBytes(), getSBytes(), getRecId()
+        Bytes32 rValue = signature.getRBytes();
+        Bytes32 sValue = signature.getSBytes();
+        int vValue = signature.getRecId() & 0xFF;  // Convert byte to int (0-255)
 
         return this.toBuilder()
                 .v(vValue)

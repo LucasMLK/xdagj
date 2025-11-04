@@ -443,69 +443,42 @@ BlockV5 rewardBlock = blockchain.createRewardBlockV5(
 
 ### Transaction.java
 
-#### 实现签名提取
+#### ✅ 实现签名提取 - 已完成 (2025-11-04)
 **文件**: `src/main/java/io/xdag/core/Transaction.java:178, 192, 202`
-**TODO**:
-- Implement proper signature extraction from xdagj-crypto Signature object
-- Extract v, r, s from Signature object
-- Determine proper recovery id
+**状态**: ✅ **已完成** - Phase 2
 
 **描述**: 完整实现 Transaction 签名的提取和验证。
 
 **影响**: 高 - 核心功能
 **优先级**: P1 ⚠️
-**预估工作量**: 4-6小时
+**工作量**: 4小时
 
-**实现建议**:
+**实现方案**:
+使用 xdagj-crypto 0.1.4 库的 Signature 类方法:
+- `getRBytes()` - 返回 R 组件 (Bytes32)
+- `getSBytes()` - 返回 S 组件 (Bytes32)
+- `getRecId()` - 返回恢复 ID (byte)
+
+**实现代码**:
 ```java
-public byte[] extractR() {
-    if (signature == null) {
-        return new byte[32];
-    }
-    // Extract R component from signature
-    // Signature format: R (32 bytes) + S (32 bytes) + V (1 byte)
-    byte[] sigBytes = signature.toBytes().toArray();
-    return Arrays.copyOfRange(sigBytes, 0, 32);
-}
+public Transaction sign(ECKeyPair keyPair) {
+    Bytes32 hash = getHash();
+    Signature signature = Signer.sign(hash, keyPair);
 
-public byte[] extractS() {
-    if (signature == null) {
-        return new byte[32];
-    }
-    // Extract S component
-    byte[] sigBytes = signature.toBytes().toArray();
-    return Arrays.copyOfRange(sigBytes, 32, 64);
-}
+    // Extract v, r, s components from Signature object
+    Bytes32 rValue = signature.getRBytes();
+    Bytes32 sValue = signature.getSBytes();
+    int vValue = signature.getRecId() & 0xFF;
 
-public int extractV() {
-    if (signature == null) {
-        return 0;
-    }
-    // Extract V (recovery id)
-    byte[] sigBytes = signature.toBytes().toArray();
-    if (sigBytes.length >= 65) {
-        return sigBytes[64] & 0xFF;
-    }
-    // Calculate recovery id from signature
-    return calculateRecoveryId();
-}
-
-private int calculateRecoveryId() {
-    // Implement recovery id calculation
-    // This requires comparing recovered public key with expected public key
-    for (int i = 0; i < 4; i++) {
-        try {
-            ECKey recoveredKey = ECKey.recoverFromSignature(i, signature, messageHash);
-            if (recoveredKey != null && recoveredKey.equals(expectedPublicKey)) {
-                return i;
-            }
-        } catch (Exception e) {
-            continue;
-        }
-    }
-    return 0;  // Default recovery id
+    return this.toBuilder()
+            .v(vValue)
+            .r(rValue)
+            .s(sValue)
+            .build();
 }
 ```
+
+**验证**: 编译通过，verifySignature() 方法兼容
 
 ---
 
@@ -600,10 +573,10 @@ if (Hex.toHexString(address).startsWith("50")) {
 ## 📊 优先级总结
 
 ### P1 - 高优先级（核心功能） ⚠️
-1. Transaction 签名提取实现（6小时）
+1. ✅ Transaction 签名提取实现 - **已完成** (2025-11-04 Phase 2)
 2. SnapshotStoreImpl toCanonical 修复（4小时）
 
-**总计**: 10小时
+**总计**: 4小时（剩余）
 
 ### P2 - 中高优先级（安全和稳定性）
 1. XdagPow 限制矿池份额（6小时）
