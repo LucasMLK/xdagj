@@ -98,19 +98,63 @@ public class SnapshotStoreImpl implements SnapshotStore {
         snapshotSource.reset();
     }
 
+    /**
+     * Create blockchain snapshot (Phase 8.3.2 - Deferred to Phase 8.4)
+     *
+     * @deprecated Phase 8.3.2: Requires full v5.1 snapshot system migration (Phase 8.4).
+     * This method is a complex data migration tool (~150-200 lines) that needs:
+     * - LegacyBlockInfo → BlockV5 migration
+     * - TransactionStore integration for balance calculation
+     * - Comprehensive testing with real blockchain data
+     *
+     * @param blockSource RocksDB block source
+     * @param indexSource RocksDB index source
+     * @throws UnsupportedOperationException Always - not yet migrated to v5.1
+     */
     @Override
     public void makeSnapshot(RocksdbKVSource blockSource, RocksdbKVSource indexSource) {
-        log.warn("makeSnapshot() temporarily disabled - v5.1 migration in progress");
-        // TODO v5.1: DELETED - LegacyBlockInfo class no longer exists
-        // Temporarily disabled - waiting for migration to BlockV5
+        log.warn("makeSnapshot() requires full v5.1 snapshot system migration");
+        log.warn("This feature is temporarily unavailable - see Phase 8.4 planning");
+        log.warn("Called from: XdagCli.java:515 (CLI snapshot command)");
+        throw new UnsupportedOperationException(
+            "Snapshot creation not yet migrated to v5.1. " +
+            "This requires Phase 8.4 implementation (~4-6 hours). " +
+            "Please start blockchain from genesis or wait for Phase 8.4."
+        );
     }
 
+    /**
+     * Load blockchain snapshot into index (Phase 8.3.3 - Deferred to Phase 8.4)
+     *
+     * @deprecated Phase 8.3.3: Requires full v5.1 snapshot system migration (Phase 8.4).
+     * This method is CRITICAL for blockchain initialization (~200-250 lines) that needs:
+     * - Block → BlockV5 migration
+     * - TxHistory → Transaction migration
+     * - Signature validation and index rebuilding
+     * - Comprehensive testing to prevent data corruption
+     *
+     * WARNING: This is called by BlockchainImpl.java:198 during blockchain startup.
+     * If snapshot boot is enabled, blockchain CANNOT start until Phase 8.4 is complete.
+     *
+     * @param blockStore Block storage
+     * @param txHistoryStore Transaction history storage
+     * @param keys Wallet keys for signature validation
+     * @param snapshotTime Snapshot timestamp
+     * @throws UnsupportedOperationException Always - not yet migrated to v5.1
+     */
     @Override
     public void saveSnapshotToIndex(BlockStore blockStore, TransactionHistoryStore txHistoryStore,
                                      List<ECKeyPair> keys, long snapshotTime) {
-        log.warn("saveSnapshotToIndex() temporarily disabled - v5.1 migration in progress");
-        // TODO v5.1: DELETED - Block, Address, TxHistory, LegacyBlockInfo classes no longer exist
-        // Temporarily disabled - waiting for migration to BlockV5
+        log.error("saveSnapshotToIndex() not migrated to v5.1 - cannot load snapshot");
+        log.error("This CRITICAL method is called during blockchain initialization (BlockchainImpl.java:198)");
+        log.error("Blockchain must be started from genesis or use v5.1-compatible snapshot");
+        log.error("See Phase 8.4 planning for snapshot system migration (~4-6 hours)");
+        throw new UnsupportedOperationException(
+            "Snapshot loading not yet migrated to v5.1. " +
+            "This BLOCKS blockchain initialization if snapshot boot is enabled. " +
+            "Please disable snapshot boot or start from genesis. " +
+            "Phase 8.4 implementation required (~4-6 hours)."
+        );
     }
 
     // Phase 7.1.2: Removed setBlockInfo() method - PreBlockInfo deleted, use LegacyBlockInfo directly

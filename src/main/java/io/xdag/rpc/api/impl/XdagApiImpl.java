@@ -68,7 +68,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static io.xdag.cli.Commands.getStateByFlags;
 import static io.xdag.config.Constants.*;
-// TODO v5.1: DELETED - XdagField class no longer exists
+// Phase 9.3: XdagField deprecated in v5.1 (uses 512-byte block structure)
 // import static io.xdag.core.XdagField.FieldType.*;
 import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 import static io.xdag.db.mysql.TransactionHistoryStoreImpl.totalPage;
@@ -536,13 +536,23 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                 otherAddress = tx.getFrom();
             }
 
+            // Phase 9.1: Get transaction timestamp from containing block
+            long timestamp = 0L;
+            Bytes32 blockHash = kernel.getTransactionStore().getBlockByTransaction(tx.getHash());
+            if (blockHash != null) {
+                BlockV5 block = blockchain.getBlockByHash(blockHash, false);
+                if (block != null) {
+                    timestamp = xdagTimestampToMs(block.getTimestamp());
+                }
+            }
+
             // Build TxLink
             BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
             txLinkBuilder.address(otherAddress != null ? hash2Address(otherAddress) : "UNKNOWN")
                     .hash(tx.getHash().toUnprefixedHexString())
                     .amount(tx.getAmount().toDecimal(9, XUnit.XDAG).toPlainString())
                     .direction(direction)
-                    .time(0L)  // TODO: Need reverse index (txHash -> blockHash) for timestamps
+                    .time(timestamp)  // Phase 9.1: Timestamp lookup implemented
                     .remark(tx.getData() != null && tx.getData().size() > 0 ?
                             new String(tx.getData().toArray(), StandardCharsets.UTF_8).trim() : "");
 
@@ -569,17 +579,29 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
         List<BlockResponse.TxLink> txLinks = Lists.newArrayList();
 
+        // Get all transactions in this block (needed for both main and non-main blocks)
+        List<Transaction> allTransactions = kernel.getTransactionStore().getTransactionsByBlock(blockHash);
+
         // 1. Add earning info for Main blocks
         if (block.getInfo().isMainBlock() &&
             block.getInfo().getHeight() > kernel.getConfig().getSnapshotSpec().getSnapshotHeight()) {
 
+            // Phase 9.2: Calculate total earnings (reward + transaction fees)
             XAmount reward = blockchain.getReward(block.getInfo().getHeight());
-            // TODO: Calculate fee from transactions (sum of tx fees)
+
+            // Sum up transaction fees
+            XAmount totalFees = XAmount.ZERO;
+            for (Transaction tx : allTransactions) {
+                totalFees = totalFees.add(tx.getFee());
+            }
+
+            // Total earnings = mining reward + transaction fees
+            XAmount totalEarnings = reward.add(totalFees);
 
             BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
             txLinkBuilder.address(hash2Address(blockHash))
                     .hash(blockHash.toUnprefixedHexString())
-                    .amount(reward.toDecimal(9, XUnit.XDAG).toPlainString())
+                    .amount(totalEarnings.toDecimal(9, XUnit.XDAG).toPlainString())
                     .direction(2)  // Earning
                     .time(xdagTimestampToMs(block.getTimestamp()))
                     .remark("");
@@ -587,10 +609,8 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             txLinks.add(txLinkBuilder.build());
         }
 
-        // 2. Add transaction history
-        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(blockHash);
-
-        for (Transaction tx : transactions) {
+        // 2. Add transaction history (for all blocks)
+        for (Transaction tx : allTransactions) {
             // Determine direction relative to this block
             int direction;
             Bytes32 otherAddress;
@@ -606,13 +626,23 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                 otherAddress = tx.getFrom();
             }
 
+            // Phase 9.1: Get transaction timestamp from containing block
+            long timestamp = 0L;
+            Bytes32 txBlockHash = kernel.getTransactionStore().getBlockByTransaction(tx.getHash());
+            if (txBlockHash != null) {
+                BlockV5 txBlock = blockchain.getBlockByHash(txBlockHash, false);
+                if (txBlock != null) {
+                    timestamp = xdagTimestampToMs(txBlock.getTimestamp());
+                }
+            }
+
             // Build TxLink
             BlockResponse.TxLink.TxLinkBuilder txLinkBuilder = BlockResponse.TxLink.builder();
             txLinkBuilder.address(otherAddress != null ? hash2Address(otherAddress) : "UNKNOWN")
                     .hash(tx.getHash().toUnprefixedHexString())
                     .amount(tx.getAmount().toDecimal(9, XUnit.XDAG).toPlainString())
                     .direction(direction)
-                    .time(0L)  // TODO: Need reverse index (txHash -> blockHash) for timestamps
+                    .time(timestamp)  // Phase 9.1: Timestamp lookup implemented
                     .remark(tx.getData() != null && tx.getData().size() > 0 ?
                             new String(tx.getData().toArray(), StandardCharsets.UTF_8).trim() : "");
 

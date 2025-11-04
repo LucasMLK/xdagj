@@ -472,46 +472,53 @@ public class BlockStoreImpl implements BlockStore {
     // ========== Phase 7.3 Fix: Missing BlockStore Methods (Stub Implementations) ==========
 
     /**
-     * Remove our block from index (Phase 7.3 stub)
+     * Remove our block from index
      *
-     * TODO v5.1: This method needs proper implementation
+     * @deprecated Phase 8.3.1: Not needed in v5.1 architecture. No active callers found.
+     * "Our blocks" concept is superseded by wallet-level address tracking.
+     * Kept for interface compatibility but performs no operation.
      *
      * @param hash Block hash to remove
      */
+    @Deprecated
     @Override
     public void removeOurBlock(byte[] hash) {
-        log.warn("removeOurBlock() temporarily disabled - v5.1 migration in progress");
-        // TODO v5.1: Implement proper our block removal
+        log.info("removeOurBlock() is deprecated - not needed in v5.1 architecture");
+        // No-op in v5.1: "our blocks" tracking moved to wallet/address layer
     }
 
     /**
-     * Get key index by hash (Phase 7.3 stub)
+     * Get key index by hash
      *
-     * TODO v5.1: This method needs proper implementation
+     * @deprecated Phase 8.3.1: Not needed in v5.1 architecture. No active callers found.
+     * Key-to-index mapping is superseded by direct hash-based lookups.
+     * Kept for interface compatibility but returns -1 (not found).
      *
      * @param hash Block hash
-     * @return int key index or -1
+     * @return int -1 (always returns not found in v5.1)
      */
+    @Deprecated
     @Override
     public int getKeyIndexByHash(Bytes32 hash) {
-        log.warn("getKeyIndexByHash() temporarily disabled - v5.1 migration in progress");
-        // TODO v5.1: Implement key index retrieval
-        return -1;
+        log.info("getKeyIndexByHash() is deprecated - not needed in v5.1 architecture");
+        return -1;  // v5.1: Direct hash-based lookups replace index-based access
     }
 
     /**
-     * Get our block by index (Phase 7.3 stub)
+     * Get our block by index
      *
-     * TODO v5.1: This method needs proper implementation
+     * @deprecated Phase 8.3.1: Not needed in v5.1 architecture. No active callers found.
+     * Index-based "our block" retrieval is superseded by direct hash-based queries.
+     * Kept for interface compatibility but returns null.
      *
      * @param index Block index
-     * @return Bytes or null
+     * @return Bytes null (always returns null in v5.1)
      */
+    @Deprecated
     @Override
     public Bytes getOurBlock(int index) {
-        log.warn("getOurBlock() temporarily disabled - v5.1 migration in progress");
-        // TODO v5.1: Implement our block retrieval by index
-        return null;
+        log.info("getOurBlock() is deprecated - not needed in v5.1 architecture");
+        return null;  // v5.1: Use getBlockV5ByHash() for direct hash-based access
     }
 
     /**

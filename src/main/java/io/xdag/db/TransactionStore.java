@@ -70,6 +70,13 @@ public interface TransactionStore extends XdagLifecycle {
     byte TX_BLOCK_INDEX = (byte) 0xe1;
 
     /**
+     * Transaction-to-Block reverse index: txHash -> blockHash (Phase 9.1)
+     * Format: 0xe3 + txHash(32) -> blockHash(32)
+     * Enables transaction timestamp lookup and block confirmation queries
+     */
+    byte TRANSACTION_TO_BLOCK_INDEX = (byte) 0xe3;
+
+    /**
      * Address-to-Transactions index: address -> List<txHash>
      * Format: 0xe2 + address(32) -> concatenated txHashes
      * Enables transaction history queries by address
@@ -138,6 +145,21 @@ public interface TransactionStore extends XdagLifecycle {
      * @param txHash The transaction hash
      */
     void indexTransactionToBlock(Bytes32 blockHash, Bytes32 txHash);
+
+    /**
+     * Get the block hash that contains a specific transaction (Phase 9.1)
+     *
+     * This method uses the reverse index built by indexTransactionToBlock()
+     * to find which block contains a given transaction. This enables:
+     * - Transaction timestamp lookup (block.getTimestamp())
+     * - Transaction confirmation status
+     * - Transaction block height
+     *
+     * @param txHash The transaction hash
+     * @return Block hash containing the transaction, or null if not indexed
+     * @since Phase 9.1 v5.1
+     */
+    Bytes32 getBlockByTransaction(Bytes32 txHash);
 
     /**
      * Get all transactions involving a specific address (from or to)

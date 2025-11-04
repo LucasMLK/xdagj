@@ -186,6 +186,7 @@ public class TransactionStoreImpl implements TransactionStore {
     @Override
     public void indexTransactionToBlock(Bytes32 blockHash, Bytes32 txHash) {
         try {
+            // Forward index: blockHash -> List<txHash>
             byte[] key = BytesUtils.merge(TX_BLOCK_INDEX, blockHash.toArray());
             byte[] existingValue = indexSource.get(key);
 
@@ -199,10 +200,32 @@ public class TransactionStoreImpl implements TransactionStore {
             }
 
             indexSource.put(key, newValue);
-            log.debug("Indexed transaction {} to block {}",
+
+            // Phase 9.1: Reverse index: txHash -> blockHash (for timestamp lookup)
+            byte[] reverseKey = BytesUtils.merge(TRANSACTION_TO_BLOCK_INDEX, txHash.toArray());
+            indexSource.put(reverseKey, blockHash.toArray());
+
+            log.debug("Indexed transaction {} to block {} (bidirectional)",
                      txHash.toHexString(), blockHash.toHexString());
         } catch (Exception e) {
             log.error("Failed to index transaction to block", e);
+        }
+    }
+
+    @Override
+    public Bytes32 getBlockByTransaction(Bytes32 txHash) {
+        try {
+            byte[] key = BytesUtils.merge(TRANSACTION_TO_BLOCK_INDEX, txHash.toArray());
+            byte[] blockHashBytes = indexSource.get(key);
+
+            if (blockHashBytes == null) {
+                return null;
+            }
+
+            return Bytes32.wrap(blockHashBytes);
+        } catch (Exception e) {
+            log.error("Failed to get block by transaction: {}", txHash.toHexString(), e);
+            return null;
         }
     }
 

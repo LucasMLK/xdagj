@@ -447,8 +447,8 @@ public class Commands {
         return block(hash);
     }
 
-    // TODO v5.1: DELETED - Block, Address, TxHistory classes no longer exist
-    // Temporarily disabled - waiting for migration to BlockV5
+    // Phase 9.3: printBlockInfo() deprecated in v5.1 (uses Block, Address, TxHistory which no longer exist)
+    // Replaced by printBlockInfoV5() which uses BlockV5 and TransactionStore
     /*
     public String printBlockInfo(Block block, boolean raw) {
         block.parse();
@@ -740,19 +740,32 @@ public class Commands {
                 otherAddress = tx.getFrom();
             }
 
-            // Get transaction timestamp (from block containing this transaction)
-            // Note: Transaction doesn't have timestamp, need to find containing block
-            // For now, show hash as identifier
+            // Phase 9.1: Get transaction timestamp from containing block
+            String timeStr = "";
+            Bytes32 blockHash = kernel.getTransactionStore().getBlockByTransaction(tx.getHash());
+            if (blockHash != null) {
+                BlockV5 block = kernel.getBlockchain().getBlockByHash(blockHash, false);
+                if (block != null) {
+                    long timestamp = XdagTime.xdagTimestampToMs(block.getTimestamp());
+                    timeStr = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(timestamp);
+                }
+            }
+
+            // If timestamp not found, show tx hash instead
+            if (timeStr.isEmpty()) {
+                timeStr = tx.getHash().toHexString().substring(0, 16) + "...";
+            }
+
             String addressStr = otherAddress != null ? hash2Address(otherAddress) : "UNKNOWN";
 
             txHistory.append(String.format("%s: %s           %s   %s\n",
                     direction,
                     addressStr,
                     tx.getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
-                    tx.getHash().toHexString().substring(0, 16) + "..."));  // Show tx hash instead of time for now
+                    timeStr));
         }
 
-        // TODO v5.1: Add transaction timestamp lookup (requires reverse index: txHash -> blockHash)
+        // Phase 9.1: Transaction timestamp lookup implemented using reverse index
         return overview + "\n" + txHistory.toString();
     }
 
