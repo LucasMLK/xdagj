@@ -143,7 +143,8 @@ public class PoolHandShakeHandler extends SimpleChannelInboundHandler<Object> {
         }
 
         if (xdagPow != null) {
-            xdagPow.getSharesFromPools().getShareInfo(((TextWebSocketFrame) frame).text());
+            // Pass channel ID to identify pool for share limiting
+            xdagPow.getSharesFromPools().getShareInfo(((TextWebSocketFrame) frame).text(), ctx.channel().id().asShortText());
         }
     }
 

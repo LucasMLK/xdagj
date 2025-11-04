@@ -51,6 +51,7 @@ import java.io.IOException;
 import java.util.Objects;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -137,6 +138,10 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
         log.debug("Start new block generate....");
         long sendTime = XdagTime.getMainTime();
         resetTimeout(sendTime);
+
+        // Phase 8.2: Reset share counters for new block production cycle
+        sharesFromPools.resetShareCounters();
+
         if (randomXUtils != null && randomXUtils.isRandomxFork(XdagTime.getEpoch(sendTime))) {
             if (randomXUtils.getRandomXPoolMemIndex() == 0) {
                 randomXUtils.setRandomXPoolMemIndex((randomXUtils.getRandomXHashEpochIndex() - 1) & 1);
@@ -650,6 +655,11 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
         private volatile boolean isRunning = false;
         private static final int SHARE_FLAG = 2;
 
+        // Phase 8.2: Share limiting to prevent pool spam attacks
+        // Track shares per pool per block production cycle
+        private final ConcurrentHashMap<String, AtomicInteger> sharesPerPoolPerCycle = new ConcurrentHashMap<>();
+        private static final int MAX_SHARES_PER_POOL = 100;  // Maximum shares per pool per cycle
+
         @Override
         public void run() {
             isRunning = true;
@@ -679,11 +689,44 @@ public class XdagPow implements PoW, Listener, Runnable, XdagLifecycle {
             }
         }
 
-        public void getShareInfo(String share) {
-            // TODO: Limit the number of shares submitted by each pool within each block production cycle
-            if (!shareQueue.offer(share)) {
-                log.error("Failed to get ShareInfo from pools");
+        /**
+         * Receive share from pool with rate limiting
+         *
+         * Phase 8.2: Added pool share limiting to prevent spam attacks.
+         * Each pool can submit at most MAX_SHARES_PER_POOL shares per block production cycle.
+         *
+         * @param share Share data (JSON string)
+         * @param poolId Pool identifier (channel ID)
+         */
+        public void getShareInfo(String share, String poolId) {
+            // Check if pool has exceeded share limit for current cycle
+            int currentCount = sharesPerPoolPerCycle
+                    .computeIfAbsent(poolId, k -> new AtomicInteger(0))
+                    .incrementAndGet();
+
+            if (currentCount > MAX_SHARES_PER_POOL) {
+                log.warn("Pool {} exceeded max shares limit ({}/{}), share rejected",
+                        poolId, currentCount, MAX_SHARES_PER_POOL);
+                return;
             }
+
+            if (!shareQueue.offer(share)) {
+                log.error("Failed to get ShareInfo from pool {}, queue full", poolId);
+            } else {
+                log.debug("Accepted share from pool {} ({}/{})",
+                        poolId, currentCount, MAX_SHARES_PER_POOL);
+            }
+        }
+
+        /**
+         * Reset share counters for new block production cycle
+         *
+         * Phase 8.2: Called when starting a new block generation cycle
+         * to reset all pool share counters.
+         */
+        public void resetShareCounters() {
+            sharesPerPoolPerCycle.clear();
+            log.debug("Reset share counters for new block production cycle");
         }
     }
 }
