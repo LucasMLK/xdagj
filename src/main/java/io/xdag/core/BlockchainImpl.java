@@ -150,15 +150,20 @@ public class BlockchainImpl implements Blockchain {
             
             this.xdagTopStatus = Objects.requireNonNullElseGet(storedTopStatus, XdagTopStatus::new);
 
-            // TODO v5.1: DELETED - Block class no longer exists
-            // Temporarily disabled - waiting for migration to BlockV5
-            // Block lastBlock = getBlockByHeightInternal(xdagStats.nmain);
-            // if (lastBlock != null) {
-            //     xdagStats.setMaxdifficulty(lastBlock.getInfo().getDifficulty().toBigInteger());
-            //     xdagStats.setDifficulty(lastBlock.getInfo().getDifficulty().toBigInteger());
-            //     xdagTopStatus.setTop(lastBlock.getHash().toArray());
-            //     xdagTopStatus.setTopDiff(lastBlock.getInfo().getDifficulty().toBigInteger());
-            // }
+            // Phase 7.3 continuation: Restore lastBlock initialization using BlockV5
+            // Load last main block to initialize stats and top status
+            BlockV5 lastBlock = getBlockByHeight(xdagStats.nmain);
+            if (lastBlock != null && lastBlock.getInfo() != null) {
+                BigInteger lastDifficulty = lastBlock.getInfo().getDifficulty().toBigInteger();
+                xdagStats.setMaxdifficulty(lastDifficulty);
+                xdagStats.setDifficulty(lastDifficulty);
+                xdagTopStatus.setTop(lastBlock.getHash().toArray());
+                xdagTopStatus.setTopDiff(lastDifficulty);
+                log.debug("Initialized blockchain state from last main block at height {}: diff={}, hash={}",
+                         xdagStats.nmain, lastDifficulty, lastBlock.getHash().toHexString());
+            } else if (xdagStats.nmain > 0) {
+                log.warn("Last main block not found at height {}, blockchain state may be incomplete", xdagStats.nmain);
+            }
             preSeed = blockStore.getPreSeed();
         }
 
@@ -192,17 +197,22 @@ public class BlockchainImpl implements Blockchain {
         snapshotStore.init();
         snapshotStore.saveSnapshotToIndex(this.blockStore, this.txHistoryStore, kernel.getWallet().getAccounts(), kernel.getConfig().getSnapshotSpec().getSnapshotTime());
 
-        // TODO v5.1: DELETED - Block class no longer exists
-        // Temporarily disabled - waiting for migration to BlockV5
-        /*
-        Block lastBlock = blockStore.getBlockByHeight(snapshotHeight);
-        xdagStats.setMaxdifficulty(lastBlock.getInfo().getDifficulty().toBigInteger());
-        xdagStats.setDifficulty(lastBlock.getInfo().getDifficulty().toBigInteger());
-        xdagTopStatus.setPreTop(lastBlock.getHash().toArray());
-        xdagTopStatus.setTop(lastBlock.getHash().toArray());
-        xdagTopStatus.setTopDiff(lastBlock.getInfo().getDifficulty().toBigInteger());
-        xdagTopStatus.setPreTopDiff(lastBlock.getInfo().getDifficulty().toBigInteger());
-        */
+        // Phase 7.3 continuation: Restore lastBlock initialization using BlockV5
+        // Load snapshot block to initialize stats and top status
+        BlockV5 lastBlock = getBlockByHeight(snapshotHeight);
+        if (lastBlock != null && lastBlock.getInfo() != null) {
+            BigInteger lastDifficulty = lastBlock.getInfo().getDifficulty().toBigInteger();
+            xdagStats.setMaxdifficulty(lastDifficulty);
+            xdagStats.setDifficulty(lastDifficulty);
+            xdagTopStatus.setPreTop(lastBlock.getHash().toArray());
+            xdagTopStatus.setTop(lastBlock.getHash().toArray());
+            xdagTopStatus.setTopDiff(lastDifficulty);
+            xdagTopStatus.setPreTopDiff(lastDifficulty);
+            log.debug("Initialized snapshot state from block at height {}: diff={}, hash={}",
+                     snapshotHeight, lastDifficulty, lastBlock.getHash().toHexString());
+        } else {
+            log.warn("Snapshot block not found at height {}, using default stats", snapshotHeight);
+        }
 
         // Initialize stats
         xdagStats.balance = snapshotStore.getOurBalance();
