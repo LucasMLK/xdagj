@@ -71,10 +71,23 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
     protected List<Bytes32> blockPreHashs = new CopyOnWriteArrayList<>(new ArrayList<>(16));
     protected List<Bytes32> blockHashs = new CopyOnWriteArrayList<>(new ArrayList<>(16));
     protected List<Bytes32> minShares = new CopyOnWriteArrayList<>(new ArrayList<>(16));
-    // TODO v5.1: Restore after migrating to BlockV5 Transaction system
-    // private final Map<Address, ECKeyPair> paymentsToNodesMap = new HashMap<>(10);
-    private final Map<Bytes32, ECKeyPair> paymentsToNodesMap = new HashMap<>(10); // Temporary: use Bytes32 as key
+    // Phase 9: Node reward accumulation for batch processing
+    // Stores deferred node rewards (5%) to be sent in batches of 10
+    private final Map<Bytes32, NodeReward> paymentsToNodesMap = new HashMap<>(10);
     private static final BlockingQueue<AwardBlock> awardBlockBlockingQueue = new LinkedBlockingQueue<>();
+
+    /**
+     * Helper class to store node reward information (Phase 9)
+     */
+    private static class NodeReward {
+        final XAmount amount;      // Node reward amount (5% of block reward)
+        final ECKeyPair keyPair;   // Wallet key for signing the reward transaction
+
+        NodeReward(XAmount amount, ECKeyPair keyPair) {
+            this.amount = amount;
+            this.keyPair = keyPair;
+        }
+    }
 
     // Phase 8.5: Nonce tracking per reward source address
     // Prevents transaction replay attacks in pool reward distribution
@@ -217,18 +230,23 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
             return -4;
         }
 
-        // Phase 8.5: Get amount from BlockV5
-        // TODO Phase 9: Implement proper amount calculation from block's transactions
-        // For now, use default XDAG block reward (1024 XDAG)
+        // Phase 9: Calculate block reward from block height
         XAmount allAmount;
         if (blockV5.getInfo() == null) {
-            log.warn("Block info not loaded, using default block reward");
-            allAmount = XAmount.of(1024, XUnit.XDAG);
+            log.warn("Block info not loaded, cannot calculate reward from height");
+            allAmount = XAmount.of(1024, XUnit.XDAG);  // Fallback
         } else {
-            // Try to get amount from info if available (may be set by legacy code)
-            // In v5.1, amount should be calculated from transactions
-            log.warn("Block amount calculation not yet implemented in v5.1, using default block reward");
-            allAmount = XAmount.of(1024, XUnit.XDAG);
+            long blockHeight = blockV5.getInfo().getHeight();
+            if (blockHeight > 0) {
+                // Use blockchain.getReward() to calculate correct block reward based on height
+                allAmount = blockchain.getReward(blockHeight);
+                log.debug("Calculated block reward for height {}: {} XDAG",
+                        blockHeight, allAmount.toDecimal(9, XUnit.XDAG).toPlainString());
+            } else {
+                // Orphan block (height = 0), should not pay rewards
+                log.debug("Block is orphan (height=0), cannot pay rewards");
+                return -5;
+            }
         }
 
         // Phase 8.5: Extract pool wallet address from nonce (bytes 12-31)
@@ -276,14 +294,11 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
                            TransactionInfoSender transactionInfoSender)
         throws AddressFormatException {
 
-        // Phase 8.5: Check if node rewards map is full, send batch if needed
+        // Phase 9: Check if node rewards map is full, send batch if needed
         if (paymentsToNodesMap.size() >= 10) {
-            // Send accumulated node rewards via batch transaction
-            // TODO Phase 8.6: Implement batch node reward distribution
-            log.info("Node reward map reached size limit ({}), should send batch transaction",
+            log.info("Node reward map reached size limit ({}), sending batch transaction",
                     paymentsToNodesMap.size());
-            // For now, clear the map to prevent unbounded growth
-            paymentsToNodesMap.clear();
+            sendBatchNodeRewards();
         }
 
         // Calculate reward distribution
@@ -331,11 +346,11 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
             // Phase 8.5: Call new transaction() signature with List<Bytes32> and List<XAmount>
             transaction(hash, recipients, amounts, keyPos, transactionInfoSender);
 
-            // Phase 8.5: Store node reward for batch processing
-            // paymentsToNodesMap now uses Bytes32 as key (source block hash)
-            paymentsToNodesMap.put(hash, wallet.getAccount(keyPos));
-            log.info("Node reward deferred for block {}, current Map size: {}",
-                    hash.toHexString(), paymentsToNodesMap.size());
+            // Phase 9: Store node reward for batch processing
+            paymentsToNodesMap.put(hash, new NodeReward(nodeAmount, wallet.getAccount(keyPos)));
+            log.info("Node reward deferred for block {}, amount: {} XDAG, Map size: {}",
+                    hash.toHexString(), nodeAmount.toDecimal(9, XUnit.XDAG).toPlainString(),
+                    paymentsToNodesMap.size());
         } else {
             log.debug("The balance of block {} is insufficient and rewards will not be distributed. " +
                             "Maybe this block has been rollback. send balance: {}",
@@ -363,6 +378,104 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
         return rewardAccountNonces
             .computeIfAbsent(sourceAddress, k -> new AtomicLong(0))
             .getAndIncrement();
+    }
+
+    /**
+     * Send batch node reward distribution (Phase 9)
+     *
+     * Phase 9: Implements batch distribution of accumulated node rewards (5% portions).
+     * Sends all accumulated node rewards to the node's coinbase address.
+     *
+     * Strategy:
+     * - Iterate through all accumulated node rewards in paymentsToNodesMap
+     * - For each source block, send its node reward (5%) to node address
+     * - Use source block's keyPair for signing each reward transaction
+     * - Clear map after successful distribution
+     *
+     * This approach sends multiple reward blocks (one per source block) but processes
+     * them together to ensure all accumulated rewards are distributed atomically.
+     */
+    private void sendBatchNodeRewards() {
+        if (paymentsToNodesMap.isEmpty()) {
+            log.warn("sendBatchNodeRewards called but paymentsToNodesMap is empty");
+            return;
+        }
+
+        // Get node's coinbase address (where node rewards go)
+        Bytes32 nodeAddress = keyPair2Hash(wallet.getDefKey());
+
+        // Calculate total amount for logging
+        XAmount totalAmount = paymentsToNodesMap.values().stream()
+            .map(nr -> nr.amount)
+            .reduce(XAmount.ZERO, XAmount::add);
+
+        log.info("Starting batch node reward distribution: {} source blocks, total {} XDAG to node {}",
+                paymentsToNodesMap.size(),
+                totalAmount.toDecimal(9, XUnit.XDAG).toPlainString(),
+                nodeAddress.toHexString().substring(0, 16) + "...");
+
+        int successCount = 0;
+        int failCount = 0;
+
+        // Send individual reward blocks for each source block
+        for (Map.Entry<Bytes32, NodeReward> entry : paymentsToNodesMap.entrySet()) {
+            Bytes32 sourceBlockHash = entry.getKey();
+            NodeReward nodeReward = entry.getValue();
+
+            try {
+                // Create single-recipient list (node address)
+                List<Bytes32> recipients = new ArrayList<>(1);
+                recipients.add(nodeAddress);
+
+                List<XAmount> amounts = new ArrayList<>(1);
+                amounts.add(nodeReward.amount);
+
+                // Get source address for nonce tracking
+                Bytes32 sourceAddress = keyPair2Hash(nodeReward.keyPair);
+                long baseNonce = getNextNonce(sourceAddress);
+
+                // Create reward BlockV5 for this source block's node reward
+                BlockV5 rewardBlock = blockchain.createRewardBlockV5(
+                    sourceBlockHash,    // source block hash
+                    recipients,         // node address
+                    amounts,            // node reward amount
+                    nodeReward.keyPair, // source key for signing
+                    baseNonce,          // proper nonce tracking
+                    MIN_GAS             // fee
+                );
+
+                // Import reward block to blockchain
+                ImportResult result = kernel.getSyncMgr().validateAndAddNewBlockV5(
+                    new io.xdag.consensus.SyncManager.SyncBlockV5(rewardBlock, 5)
+                );
+
+                if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
+                    log.debug("Node reward sent: {} XDAG from block {} (result: {})",
+                            nodeReward.amount.toDecimal(9, XUnit.XDAG).toPlainString(),
+                            sourceBlockHash.toHexString().substring(0, 16) + "...",
+                            result);
+                    successCount++;
+                } else {
+                    log.warn("Node reward import failed for block {}: result={}, error={}",
+                            sourceBlockHash.toHexString().substring(0, 16) + "...",
+                            result,
+                            result.getErrorInfo() != null ? result.getErrorInfo() : "none");
+                    failCount++;
+                }
+
+            } catch (Exception e) {
+                log.error("Failed to send node reward for block {}: {}",
+                        sourceBlockHash.toHexString(), e.getMessage(), e);
+                failCount++;
+            }
+        }
+
+        // Clear the map after processing all rewards
+        paymentsToNodesMap.clear();
+
+        log.info("Batch node reward distribution complete: {} succeeded, {} failed, total {} XDAG sent",
+                successCount, failCount,
+                totalAmount.toDecimal(9, XUnit.XDAG).toPlainString());
     }
 
     /**
