@@ -23,49 +23,22 @@
  */
 package io.xdag.net;
 
-import io.xdag.crypto.core.CryptoProvider;
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.apache.commons.lang3.time.FastDateFormat;
-import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
-import org.apache.tuweni.bytes.MutableBytes;
-import org.apache.tuweni.bytes.MutableBytes32;
-
-import com.google.common.util.concurrent.SettableFuture;
-
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.xdag.Kernel;
 import io.xdag.config.Config;
 import io.xdag.config.spec.NodeSpec;
 import io.xdag.consensus.SyncManager;
-import io.xdag.core.BlockV5;
+import io.xdag.core.Block;
 import io.xdag.core.Blockchain;
-import io.xdag.core.ChainStats;
+import io.xdag.crypto.core.CryptoProvider;
 import io.xdag.net.message.Message;
 import io.xdag.net.message.MessageQueue;
 import io.xdag.net.message.ReasonCode;
-import io.xdag.net.message.consensus.BlockExtRequestMessage;
 import io.xdag.net.message.consensus.BlockRequestMessage;
-import io.xdag.net.message.consensus.BlocksReplyMessage;
-import io.xdag.net.message.consensus.BlocksRequestMessage;
-// Phase 7.3.0: Removed NewBlockMessage and SyncBlockMessage imports (use V5 messages)
-import io.xdag.net.message.consensus.NewBlockV5Message;
-import io.xdag.net.message.consensus.SumReplyMessage;
-import io.xdag.net.message.consensus.SumRequestMessage;
-// Phase 7.3.0: Removed SyncBlockMessage import (use V5 messages)
-import io.xdag.net.message.consensus.SyncBlockV5Message;
+import io.xdag.net.message.consensus.NewBlockMessage;
+import io.xdag.net.message.consensus.SyncBlockMessage;
 import io.xdag.net.message.consensus.SyncBlockRequestMessage;
-import io.xdag.net.message.consensus.XdagMessage;
 import io.xdag.net.message.p2p.DisconnectMessage;
 import io.xdag.net.message.p2p.HelloMessage;
 import io.xdag.net.message.p2p.InitMessage;
@@ -73,9 +46,18 @@ import io.xdag.net.message.p2p.PingMessage;
 import io.xdag.net.message.p2p.PongMessage;
 import io.xdag.net.message.p2p.WorldMessage;
 import io.xdag.net.node.NodeManager;
-import io.xdag.utils.XdagTime;
 import io.xdag.utils.exception.UnreachableException;
+import java.util.Arrays;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.Bytes32;
 
 /**
  * Xdag P2P message handler
@@ -213,8 +195,7 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
 
         /* sync */
         // Phase 7.3.0: Removed NEW_BLOCK, SYNC_BLOCK from routing (use V5 messages)
-        case BLOCKS_REQUEST, BLOCKS_REPLY, SUMS_REQUEST, SUMS_REPLY, BLOCKEXT_REQUEST, BLOCKEXT_REPLY, BLOCK_REQUEST, SYNCBLOCK_REQUEST,
-        NEW_BLOCK_V5, SYNC_BLOCK_V5 ->  // Phase 3: BlockV5 message support
+        case BLOCK_REQUEST, SYNCBLOCK_REQUEST, NEW_BLOCK, SYNC_BLOCK ->  // Phase 3: Block message support
                 onXdag(msg);
         default -> ctx.fireChannelRead(msg);
         }
@@ -326,14 +307,9 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
 
         switch (msg.getCode()) {
             // Phase 7.3.0: Removed NEW_BLOCK and SYNC_BLOCK cases (use V5 messages)
-            case NEW_BLOCK_V5 -> processNewBlockV5((NewBlockV5Message) msg);  // Phase 3
+            case NEW_BLOCK -> processNewBlock((NewBlockMessage) msg);  // Phase 3
             case BLOCK_REQUEST -> processBlockRequest((BlockRequestMessage) msg);
-            case BLOCKS_REQUEST -> processBlocksRequest((BlocksRequestMessage) msg);
-            case BLOCKS_REPLY -> processBlocksReply((BlocksReplyMessage) msg);
-            case SUMS_REQUEST -> processSumsRequest((SumRequestMessage) msg);
-            case SUMS_REPLY -> processSumsReply((SumReplyMessage) msg);
-            case BLOCKEXT_REQUEST -> processBlockExtRequest((BlockExtRequestMessage) msg);
-            case SYNC_BLOCK_V5 -> processSyncBlockV5((SyncBlockV5Message) msg);  // Phase 3
+            case SYNC_BLOCK -> processSyncBlock((SyncBlockMessage) msg);  // Phase 3
             case SYNCBLOCK_REQUEST -> processSyncBlockRequest((SyncBlockRequestMessage) msg);
             default -> throw new UnreachableException();
         }
@@ -369,336 +345,86 @@ public class XdagP2pHandler extends SimpleChannelInboundHandler<Message> {
         }
     }
 
-    /**
-     * ********************** Message Processing * ***********************
-     */
-
-    /**
-     * Phase 3 - Network Layer Migration: Process BlockV5 new block
-     *
-     * Handles NEW_BLOCK_V5 messages (0x1B) containing v5.1 BlockV5 structure.
-     * This method directly calls Blockchain.tryToConnect(BlockV5) without wrapping.
-     *
-     * Phase 7.3.0: This is now the ONLY way to receive new blocks from peers.
-     * Legacy NEW_BLOCK messages are no longer accepted.
-     *
-     * @param msg NewBlockV5Message containing BlockV5 and TTL
-     */
-    protected void processNewBlockV5(NewBlockV5Message msg) {
-        BlockV5 block = msg.getBlock();
+    protected void processNewBlock(NewBlockMessage msg) {
+        Block block = msg.getBlock();
         if (syncMgr.isSyncOld()) {
             return;
         }
 
-        log.debug("processNewBlockV5:{} from node {} (v5.1)",
+        log.debug("processNewBlock:{} from node {} (v5.1)",
             block.getHash(), channel.getRemoteAddress());
 
-        // Phase 3: Direct BlockV5 processing
-        // Use Blockchain.tryToConnect(BlockV5) - no wrapper needed
         try {
             chain.tryToConnect(block);
         } catch (Exception e) {
-            log.error("Failed to process BlockV5: {}", block.getHash(), e);
+            log.error("Failed to process Block: {}", block.getHash(), e);
         }
     }
 
-    /**
-     * Phase 3 - Network Layer Migration: Process BlockV5 sync block
-     *
-     * Handles SYNC_BLOCK_V5 messages (0x1C) containing v5.1 BlockV5 structure.
-     * Similar to processNewBlockV5 but for synchronization (not broadcasting).
-     *
-     * @param msg SyncBlockV5Message containing BlockV5 and TTL
-     */
-    protected void processSyncBlockV5(SyncBlockV5Message msg) {
-        BlockV5 block = msg.getBlock();
+    protected void processSyncBlock(SyncBlockMessage msg) {
+        Block block = msg.getBlock();
 
-        log.debug("processSyncBlockV5:{} from node {} (v5.1)",
+        log.debug("processSyncBlock:{} from node {} (v5.1)",
             block.getHash(), channel.getRemoteAddress());
 
-        // Phase 3: Direct BlockV5 processing
-        // Use Blockchain.tryToConnect(BlockV5) - no wrapper needed
         try {
             chain.tryToConnect(block);
         } catch (Exception e) {
-            log.error("Failed to process BlockV5 during sync: {}", block.getHash(), e);
+            log.error("Failed to process Block during sync: {}", block.getHash(), e);
         }
     }
 
-    /**
-     * Phase 8.2.2: Multi-block request with DoS attack protection
-     *
-     * Handles BLOCKS_REQUEST messages with rate limiting to prevent resource exhaustion.
-     *
-     * Protection mechanisms:
-     * 1. Time range limiting (MAX_TIME_RANGE = 1 day)
-     * 2. Block count limiting (MAX_BLOCKS_PER_REQUEST = 1000)
-     * 3. Async processing for large requests (prevents main thread blocking)
-     * 4. Batch sending with rate limiting (100 blocks per batch, 100ms delay)
-     *
-     * Phase 7.3.0: Send BlockV5 messages only (legacy message support removed)
-     *
-     * Note: This method can only send blocks that exist as BlockV5 in storage.
-     * Legacy blocks that haven't been migrated to BlockV5 format will be skipped.
-     * This is acceptable as the network should only use v5.1 protocol going forward.
-     */
-    protected void processBlocksRequest(BlocksRequestMessage msg) {
-        // Update network stats
-        updateXdagStats(msg);
-        long startTime = msg.getStarttime();
-        long endTime = msg.getEndtime();
-        long random = msg.getRandom();
-
-        // Phase 8.2.2: Validate time range
-        long timeRange = endTime - startTime;
-        if (timeRange > MAX_TIME_RANGE) {
-            log.warn("Large time range request: {} from {} (max: {})",
-                    timeRange, channel.getRemoteAddress(), MAX_TIME_RANGE);
-            // Use separate thread to avoid blocking main handler
-            blockSendExecutor.submit(() -> sendBlocksInBatches(startTime, endTime, random));
-            return;
-        }
-
-        // Normal time range - process in current thread
-        log.debug("Send blocks between {} and {} to node {}",
-                FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(XdagTime.xdagTimestampToMs(startTime)),
-                FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(XdagTime.xdagTimestampToMs(endTime)),
-                channel.getRemoteAddress());
-
-        sendBlocksInBatches(startTime, endTime, random);
-    }
-
-    /**
-     * Phase 8.2.2: Send blocks in batches with rate limiting
-     *
-     * Prevents resource exhaustion by:
-     * - Limiting total blocks sent (MAX_BLOCKS_PER_REQUEST)
-     * - Sending in small batches (BATCH_SIZE = 100)
-     * - Adding delay between batches (BATCH_DELAY_MS = 100ms)
-     *
-     * @param startTime Start time for block range
-     * @param endTime End time for block range
-     * @param random Random sequence number for reply
-     */
-    private void sendBlocksInBatches(long startTime, long endTime, long random) {
-        try {
-            // Phase 8.3.2: Blockchain interface now returns BlockV5
-            List<BlockV5> blocks = chain.getBlocksByTime(startTime, endTime);
-
-            // Phase 8.2.2: Limit blocks per request
-            if (blocks.size() > MAX_BLOCKS_PER_REQUEST) {
-                log.warn("Too many blocks requested: {}, limiting to {} from {}",
-                        blocks.size(), MAX_BLOCKS_PER_REQUEST, channel.getRemoteAddress());
-                blocks = blocks.subList(0, MAX_BLOCKS_PER_REQUEST);
-            }
-
-            log.debug("Sending {} blocks to {} in batches",
-                    blocks.size(), channel.getRemoteAddress());
-
-            // Phase 8.2.2: Send in batches with rate limiting
-            for (int i = 0; i < blocks.size(); i++) {
-                BlockV5 blockV5 = blocks.get(i);
-
-                // Add delay between batches
-                if (i > 0 && i % BATCH_SIZE == 0) {
-                    try {
-                        Thread.sleep(BATCH_DELAY_MS);
-                    } catch (InterruptedException e) {
-                        Thread.currentThread().interrupt();
-                        log.warn("Block sending interrupted for {}", channel.getRemoteAddress());
-                        break;
-                    }
-                }
-
-                // Send block
-                try {
-                    if (blockV5 != null) {
-                        SyncBlockV5Message blockMsg = new SyncBlockV5Message(blockV5, 1);
-                        msgQueue.sendMessage(blockMsg);
-                    } else {
-                        log.debug("Block is null, skipping");
-                    }
-                } catch (Exception e) {
-                    log.debug("Failed to send BlockV5: {}", e.getMessage());
-                }
-            }
-
-            // Send reply message
-            msgQueue.sendMessage(new BlocksReplyMessage(startTime, endTime, random, chain.getChainStats()));
-            log.debug("Completed sending {} blocks to {}",
-                    blocks.size(), channel.getRemoteAddress());
-
-        } catch (Exception e) {
-            log.error("Error processing blocks request from {}: {}",
-                    channel.getRemoteAddress(), e.getMessage(), e);
-        }
-    }
-
-    protected void processBlocksReply(BlocksReplyMessage msg) {
-        updateXdagStats(msg);
-        long randomSeq = msg.getRandom();
-        SettableFuture<Bytes> sf = kernel.getSync().getBlocksRequestMap().get(randomSeq);
-        if (sf != null) {
-            sf.set(Bytes.wrap(new byte[]{0}));
-        }
-    }
-
-    /**
-     * 将sumRequest的后8个字段填充为自己的sum 修改type类型为reply 发送
-     */
-    protected void processSumsRequest(SumRequestMessage msg) {
-        updateXdagStats(msg);
-        MutableBytes sums = MutableBytes.create(256);
-        // Temporarily disabled - sum file system removed in v5.1
-        // kernel.getBlockStore().loadSum(msg.getStarttime(),msg.getEndtime(),sums);
-        // For now, send empty sums (256 zero bytes)
-        // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
-        SumReplyMessage reply = new SumReplyMessage(msg.getEndtime(), msg.getRandom(),
-                chain.getChainStats(), sums);
-        msgQueue.sendMessage(reply);
-    }
-
-    protected void processSumsReply(SumReplyMessage msg) {
-        updateXdagStats(msg);
-        long randomSeq = msg.getRandom();
-        SettableFuture<Bytes> sf = kernel.getSync().getSumsRequestMap().get(randomSeq);
-        if (sf != null) {
-            sf.set(msg.getSum());
-        }
-    }
-
-    protected void processBlockExtRequest(BlockExtRequestMessage msg) {
-    }
-
-    /**
-     * Phase 7.3.0: Send BlockV5 messages only (legacy message support removed)
-     *
-     * After Phase 7.3.0, this handler only sends NEW_BLOCK_V5 messages (0x1B) to peers.
-     * Blocks not available as BlockV5 will be skipped (not sent).
-     */
     protected void processBlockRequest(BlockRequestMessage msg) {
         Bytes hash = msg.getHash();
         int ttl = config.getNodeSpec().getTTL();
 
-        // Phase 7.3.0: Send BlockV5 messages only
+        // Phase 7.3.0: Send Block messages only
         try {
-            BlockV5 blockV5 = kernel.getBlockStore().getBlockV5ByHash(Bytes32.wrap(hash), true);
-            if (blockV5 != null) {
-                log.debug("processBlockRequest: findBlockV5 {}", Bytes32.wrap(hash).toHexString());
-                NewBlockV5Message message = new NewBlockV5Message(blockV5, ttl);
+            Block block = kernel.getBlockStore().getBlockByHash(Bytes32.wrap(hash), true);
+            if (block != null) {
+                log.debug("processBlockRequest: findBlock {}", Bytes32.wrap(hash).toHexString());
+                NewBlockMessage message = new NewBlockMessage(block, ttl);
                 msgQueue.sendMessage(message);
                 return;
             } else {
-                log.debug("Block {} not available as BlockV5, not sending", Bytes32.wrap(hash).toHexString());
+                log.debug("Block {} not available as Block, not sending", Bytes32.wrap(hash).toHexString());
             }
         } catch (Exception e) {
-            log.debug("Failed to get BlockV5 for hash {}: {}",
+            log.debug("Failed to get Block for hash {}: {}",
                      Bytes32.wrap(hash).toHexString(), e.getMessage());
         }
     }
 
-    /**
-     * Phase 7.3.0: Send BlockV5 messages only (legacy message support removed)
-     *
-     * After Phase 7.3.0, this handler only sends SYNC_BLOCK_V5 messages (0x1C) to peers
-     * during synchronization. Blocks not available as BlockV5 will be skipped.
-     */
     private void processSyncBlockRequest(SyncBlockRequestMessage msg) {
         Bytes hash = msg.getHash();
 
-        // Phase 7.3.0: Send BlockV5 messages only
+        // Phase 7.3.0: Send Block messages only
         try {
-            BlockV5 blockV5 = kernel.getBlockStore().getBlockV5ByHash(Bytes32.wrap(hash), true);
-            if (blockV5 != null) {
-                log.debug("processSyncBlockRequest: findBlockV5 {}, to node: {}",
+            Block block = kernel.getBlockStore().getBlockByHash(Bytes32.wrap(hash), true);
+            if (block != null) {
+                log.debug("processSyncBlockRequest: findBlock {}, to node: {}",
                          Bytes32.wrap(hash).toHexString(), channel.getRemoteAddress());
-                SyncBlockV5Message message = new SyncBlockV5Message(blockV5, 1);
+                SyncBlockMessage message = new SyncBlockMessage(block, 1);
                 msgQueue.sendMessage(message);
                 return;
             } else {
-                log.debug("Block {} not available as BlockV5, not sending to node: {}",
+                log.debug("Block {} not available as Block, not sending to node: {}",
                          Bytes32.wrap(hash).toHexString(), channel.getRemoteAddress());
             }
         } catch (Exception e) {
-            log.debug("Failed to get BlockV5 for hash {}: {}",
+            log.debug("Failed to get Block for hash {}: {}",
                      Bytes32.wrap(hash).toHexString(), e.getMessage());
         }
     }
 
-    /**
-     * ********************** Xdag Message ************************
-     */
-
-    /**
-     * Phase 7.3.0: Deleted sendNewBlock() - use sendNewBlockV5() instead
-     *
-     * The legacy sendNewBlock(Block, int) method was removed in Phase 7.3.0
-     * when NewBlockMessage and SyncBlockMessage were deleted.
-     *
-     * For sending new blocks, use sendNewBlockV5(BlockV5, int) instead.
-     */
-
-    /**
-     * Phase 3.2 - Send BlockV5 to peer
-     *
-     * Sends NEW_BLOCK_V5 message (0x1B) to connected peer.
-     * Should only be called if peer supports v5.1 protocol.
-     *
-     * Usage:
-     * ```java
-     * if (channel.getRemotePeer().supportsV5()) {
-     *     handler.sendNewBlockV5(blockV5, ttl);
-     * }
-     * ```
-     *
-     * @param newBlock BlockV5 to send
-     * @param TTL Time-to-live (number of hops)
-     */
-    public void sendNewBlockV5(BlockV5 newBlock, int TTL) {
-        log.debug("send blockV5:{} to node:{} (v5.1)", newBlock.getHash(), channel.getRemoteAddress());
-        NewBlockV5Message msg = new NewBlockV5Message(newBlock, TTL);
+    public void sendNewBlock(Block newBlock, int TTL) {
+        log.debug("send Block:{} to node:{} (v5.1)", newBlock.getHash(), channel.getRemoteAddress());
+        NewBlockMessage msg = new NewBlockMessage(newBlock, TTL);
         sendMessage(msg);
-    }
-
-    public long sendGetBlocks(long startTime, long endTime) {
-        log.debug("Request blocks between {} and {} from node {}",
-                FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(XdagTime.xdagTimestampToMs(startTime)),
-                FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(XdagTime.xdagTimestampToMs(endTime)),
-                channel.getRemoteAddress());
-        // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
-        BlocksRequestMessage msg = new BlocksRequestMessage(startTime, endTime, chain.getChainStats());
-        sendMessage(msg);
-        return msg.getRandom();
-    }
-
-    public long sendGetBlock(MutableBytes32 hash, boolean isOld) {
-        XdagMessage msg;
-        //        log.debug("sendGetBlock:[{}]", Hex.toHexString(hash));
-        // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
-        msg = isOld ? new SyncBlockRequestMessage(hash, kernel.getBlockchain().getChainStats())
-                : new BlockRequestMessage(hash, kernel.getBlockchain().getChainStats());
-        log.debug("Request block {} isold: {} from node {}", hash, isOld,channel.getRemoteAddress());
-        sendMessage(msg);
-        return msg.getRandom();
-    }
-
-    public long sendGetSums(long startTime, long endTime) {
-        // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
-        SumRequestMessage msg = new SumRequestMessage(startTime, endTime, chain.getChainStats());
-        sendMessage(msg);
-        return msg.getRandom();
     }
 
     public void sendMessage(Message message) {
         msgQueue.sendMessage(message);
-    }
-
-    public void updateXdagStats(XdagMessage message) {
-        // Confirm that the remote stats has been updated, used to check local state.
-        syncMgr.getIsUpdateXdagStats().compareAndSet(false, true);
-        // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
-        ChainStats remoteChainStats = message.getChainStats();
-        chain.updateStatsFromRemote(remoteChainStats);
     }
 
 }

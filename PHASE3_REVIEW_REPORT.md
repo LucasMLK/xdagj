@@ -88,10 +88,10 @@
 - OrphanBlockStoreImpl 其他优化 (4h)
 
 ### Phase 8.4: 快照系统迁移 (4-6小时) ⚠️ 关键
-**依赖**: BlockV5 + Transaction 完全迁移
+**依赖**: Block + Transaction 完全迁移
 
 **任务**:
-1. makeSnapshot() 迁移到 BlockV5 (2-3h)
+1. makeSnapshot() 迁移到 Block (2-3h)
 2. saveSnapshotToIndex() 完全重写 (2-3h)
 3. toCanonical 签名规范化实现
 4. 测试和验证
@@ -101,7 +101,7 @@
 - 必须从创世块开始（slow）
 
 ### Phase 8.5: 矿池系统完全迁移 (6-8小时)
-**依赖**: BlockV5 Transaction 系统
+**依赖**: Block Transaction 系统
 
 **任务**:
 1. PoolAwardManagerImpl nonce 跟踪 (2h)

@@ -3,11 +3,12 @@
  */
 package io.xdag.core;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.junit.Test;
-
-import static org.junit.Assert.*;
 
 public class TransactionSerializationDebugTest {
 

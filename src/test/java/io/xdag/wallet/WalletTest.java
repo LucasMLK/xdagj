@@ -23,20 +23,21 @@
  */
 
 package io.xdag.wallet;
-import io.xdag.crypto.keys.AddressUtils;
+
+import static io.xdag.utils.BasicUtils.hash2PubAddress;
+import static io.xdag.utils.BasicUtils.keyPair2Hash;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import com.google.common.collect.Lists;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.crypto.SampleKeys;
-import io.xdag.utils.WalletUtils;
-import org.apache.commons.collections4.CollectionUtils;
+import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.keys.ECKeyPair;
-import org.jline.utils.Log;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-
+import io.xdag.utils.WalletUtils;
 import java.io.File;
 import java.io.IOException;
 import java.security.InvalidAlgorithmParameterException;
@@ -45,10 +46,11 @@ import java.security.NoSuchProviderException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-
-import static io.xdag.utils.BasicUtils.hash2PubAddress;
-import static io.xdag.utils.BasicUtils.keyPair2Hash;
-import static org.junit.Assert.*;
+import org.apache.commons.collections4.CollectionUtils;
+import org.jline.utils.Log;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 public class WalletTest {
 

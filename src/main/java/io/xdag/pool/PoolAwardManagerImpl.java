@@ -23,36 +23,46 @@
  */
 package io.xdag.pool;
 
+import static io.xdag.config.Constants.MIN_GAS;
+import static io.xdag.pool.PoolAwardManagerImpl.BlockRewardHistorySender.awardMessageHistoryQueue;
+import static io.xdag.utils.BasicUtils.div;
+import static io.xdag.utils.BasicUtils.keyPair2Hash;
+import static io.xdag.utils.BasicUtils.pubAddress2Hash;
+import static io.xdag.utils.BytesUtils.compareTo;
+import static io.xdag.utils.WalletUtils.checkAddress;
+
 import io.xdag.Kernel;
 import io.xdag.Wallet;
 import io.xdag.cli.Commands;
 import io.xdag.config.Config;
-import io.xdag.core.*;
+import io.xdag.core.AbstractXdagLifecycle;
+import io.xdag.core.Block;
+import io.xdag.core.Blockchain;
+import io.xdag.core.ImportResult;
+import io.xdag.core.XAmount;
+import io.xdag.core.XUnit;
 import io.xdag.crypto.encoding.Base58;
 import io.xdag.crypto.exception.AddressFormatException;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.utils.BasicUtils;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes32;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicLong;
-
-import static io.xdag.config.Constants.MIN_GAS;
-// TODO v5.1: Restore after migrating to BlockV5 Transaction system
-// import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_IN;
-// import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_OUTPUT;
-import static io.xdag.pool.PoolAwardManagerImpl.BlockRewardHistorySender.awardMessageHistoryQueue;
-import static io.xdag.utils.BasicUtils.*;
-import static io.xdag.utils.BytesUtils.compareTo;
-import static io.xdag.utils.WalletUtils.checkAddress;
 
 @Slf4j
 public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolAwardManager, Runnable {
@@ -200,17 +210,17 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
         // Obtain the hash (legacy format) of this block for query
         MutableBytes32 hash = MutableBytes32.create();
         hash.set(8, Bytes.wrap(blockHash).slice(8, 24));
-        // Phase 8.5: Blockchain interface returns BlockV5, use it directly for nonce/coinbase access
-        BlockV5 blockV5 = blockchain.getBlockByHash(hash, true);
-        if (blockV5 == null) {
+        // Phase 8.5: Blockchain interface returns Block, use it directly for nonce/coinbase access
+        Block block = blockchain.getBlockByHash(hash, true);
+        if (block == null) {
             log.debug("Can't find the block");
             return -2;
         }
         log.debug("Hash (legacy format) [{}]", hash.toHexString());
 
-        // Phase 8.5: Access nonce and coinbase directly from BlockV5.header
-        Bytes32 blockNonce = blockV5.getHeader().getNonce();
-        Bytes32 blockCoinbase = blockV5.getHeader().getCoinbase();
+        // Phase 8.5: Access nonce and coinbase directly from Block.header
+        Bytes32 blockNonce = block.getHeader().getNonce();
+        Bytes32 blockCoinbase = block.getHeader().getCoinbase();
 
         // nonce = share(12 bytes) + pool wallet address(20 bytes)
         // Check if this block is produced by pool mining (nonce contains pool address different from coinbase)
@@ -232,11 +242,11 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
 
         // Phase 9: Calculate block reward from block height
         XAmount allAmount;
-        if (blockV5.getInfo() == null) {
+        if (block.getInfo() == null) {
             log.warn("Block info not loaded, cannot calculate reward from height");
             allAmount = XAmount.of(1024, XUnit.XDAG);  // Fallback
         } else {
-            long blockHeight = blockV5.getInfo().getHeight();
+            long blockHeight = block.getInfo().getHeight();
             if (blockHeight > 0) {
                 // Use blockchain.getReward() to calculate correct block reward based on height
                 allAmount = blockchain.getReward(blockHeight);
@@ -434,8 +444,8 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
                 Bytes32 sourceAddress = keyPair2Hash(nodeReward.keyPair);
                 long baseNonce = getNextNonce(sourceAddress);
 
-                // Create reward BlockV5 for this source block's node reward
-                BlockV5 rewardBlock = blockchain.createRewardBlockV5(
+                // Create reward Block for this source block's node reward
+                Block rewardBlock = blockchain.createRewardBlock(
                     sourceBlockHash,    // source block hash
                     recipients,         // node address
                     amounts,            // node reward amount
@@ -445,8 +455,8 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
                 );
 
                 // Import reward block to blockchain
-                ImportResult result = kernel.getSyncMgr().validateAndAddNewBlockV5(
-                    new io.xdag.consensus.SyncManager.SyncBlockV5(rewardBlock, 5)
+                ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(
+                    new io.xdag.consensus.SyncManager.SyncBlock(rewardBlock, 5)
                 );
 
                 if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
@@ -481,8 +491,8 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
     /**
      * Create and distribute reward block to recipients (Phase 8.5 - v5.1 implementation)
      *
-     * Phase 8.5: Pool reward distribution using BlockV5 + Transaction architecture.
-     * This method creates a reward BlockV5 containing Transaction objects for each recipient.
+     * Phase 8.5: Pool reward distribution using Block + Transaction architecture.
+     * This method creates a reward Block containing Transaction objects for each recipient.
      *
      * Key Changes from Legacy:
      * - Uses List<Bytes32> recipients instead of ArrayList<Address>
@@ -508,8 +518,8 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
         // Phase 8.5: Get next nonce for this source address
         long baseNonce = getNextNonce(sourceAddress);
 
-        // Create reward BlockV5
-        BlockV5 rewardBlock = blockchain.createRewardBlockV5(
+        // Create reward Block
+        Block rewardBlock = blockchain.createRewardBlock(
             hash,           // source block hash
             recipients,     // recipient addresses
             amounts,        // amounts for each recipient
@@ -519,11 +529,11 @@ public class PoolAwardManagerImpl extends AbstractXdagLifecycle implements PoolA
         );
 
         // Import reward block to blockchain
-        ImportResult result = kernel.getSyncMgr().validateAndAddNewBlockV5(
-            new io.xdag.consensus.SyncManager.SyncBlockV5(rewardBlock, 5)
+        ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(
+            new io.xdag.consensus.SyncManager.SyncBlock(rewardBlock, 5)
         );
 
-        log.debug("Reward BlockV5 import result: {}", result);
+        log.debug("Reward Block import result: {}", result);
         log.debug("Reward block hash: {}", rewardBlock.getHash().toHexString());
         log.debug("Nonce used: {} (for {} transactions)", baseNonce, recipients.size());
 

@@ -24,8 +24,29 @@
 
 package io.xdag.rpc.api.impl;
 
+import static io.xdag.config.Constants.CLIENT_VERSION;
+import static io.xdag.config.Constants.MIN_GAS;
+import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
+import static io.xdag.db.mysql.TransactionHistoryStoreImpl.totalPage;
+import static io.xdag.rpc.error.JsonRpcError.ERR_XDAG_ADDRESS;
+import static io.xdag.rpc.error.JsonRpcError.ERR_XDAG_AMOUNT;
+import static io.xdag.rpc.error.JsonRpcError.ERR_XDAG_BALANCE;
+import static io.xdag.rpc.error.JsonRpcError.ERR_XDAG_DEST;
+import static io.xdag.rpc.error.JsonRpcError.ERR_XDAG_PARAM;
+import static io.xdag.rpc.error.JsonRpcError.ERR_XDAG_WALLET;
+import static io.xdag.rpc.error.JsonRpcError.ERR_XDAG_WALLET_LOCKED;
+import static io.xdag.rpc.error.JsonRpcError.SUCCESS;
+import static io.xdag.rpc.util.TypeConverter.toQuantityJsonHex;
+import static io.xdag.utils.BasicUtils.address2Hash;
+import static io.xdag.utils.BasicUtils.compareAmountTo;
+import static io.xdag.utils.BasicUtils.hash2Address;
+import static io.xdag.utils.BasicUtils.hash2byte;
+import static io.xdag.utils.BasicUtils.keyPair2Hash;
+import static io.xdag.utils.BasicUtils.pubAddress2Hash;
+import static io.xdag.utils.WalletUtils.fromBase58;
+import static io.xdag.utils.XdagTime.xdagTimestampToMs;
+
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import io.xdag.Kernel;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
@@ -34,49 +55,46 @@ import io.xdag.config.MainnetConfig;
 import io.xdag.config.TestnetConfig;
 import io.xdag.config.spec.NodeSpec;
 import io.xdag.config.spec.RPCSpec;
-import io.xdag.core.*;
+import io.xdag.core.AbstractXdagLifecycle;
+import io.xdag.core.BlockHeader;
+import io.xdag.core.BlockInfo;
+import io.xdag.core.Block;
+import io.xdag.core.Blockchain;
+import io.xdag.core.ChainStats;
+import io.xdag.core.ImportResult;
+import io.xdag.core.Link;
+import io.xdag.core.Transaction;
+import io.xdag.core.XAmount;
+import io.xdag.core.XUnit;
+import io.xdag.core.XdagState;
 import io.xdag.crypto.encoding.Base58;
 import io.xdag.crypto.exception.AddressFormatException;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.net.Channel;
-import io.xdag.rpc.model.request.TransactionRequest;
-import io.xdag.rpc.model.response.*;
-import io.xdag.rpc.server.core.JsonRpcServer;
 import io.xdag.rpc.api.XdagApi;
+import io.xdag.rpc.model.request.TransactionRequest;
+import io.xdag.rpc.model.response.BlockResponse;
+import io.xdag.rpc.model.response.ConfigResponse;
+import io.xdag.rpc.model.response.NetConnResponse;
+import io.xdag.rpc.model.response.ProcessResponse;
+import io.xdag.rpc.model.response.XdagStatusResponse;
+import io.xdag.rpc.server.core.JsonRpcServer;
 import io.xdag.utils.BasicUtils;
-import io.xdag.utils.BytesUtils;
 import io.xdag.utils.WalletUtils;
 import io.xdag.utils.XdagTime;
 import io.xdag.utils.exception.XdagOverFlowException;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
-import org.apache.tuweni.bytes.MutableBytes32;
-import org.apache.tuweni.units.bigints.UInt64;
-import org.bouncycastle.util.encoders.Hex;
-
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicReference;
-
-import static io.xdag.cli.Commands.getStateByFlags;
-import static io.xdag.config.Constants.*;
-// Phase 9.3: XdagField deprecated in v5.1 (uses 512-byte block structure)
-// import static io.xdag.core.XdagField.FieldType.*;
-import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
-import static io.xdag.db.mysql.TransactionHistoryStoreImpl.totalPage;
-import static io.xdag.rpc.error.JsonRpcError.*;
-import static io.xdag.rpc.util.TypeConverter.toQuantityJsonHex;
-import static io.xdag.utils.BasicUtils.*;
-import static io.xdag.utils.WalletUtils.*;
-import static io.xdag.utils.XdagTime.xdagTimestampToMs;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.StringUtils;
+import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.bytes.MutableBytes32;
+import org.apache.tuweni.units.bigints.UInt64;
 
 @Slf4j
 public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
@@ -144,7 +162,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     @Override
     public String xdag_getBalanceByNumber(String bnOrId) {
         // Phase 8.2.3: Restored using TransactionStore (v5.1 pattern from CLI balance())
-        BlockV5 block = blockchain.getBlockByHeight(Long.parseLong(bnOrId));
+        Block block = blockchain.getBlockByHeight(Long.parseLong(bnOrId));
         if (block == null) {
             return "0.0";
         }
@@ -223,9 +241,9 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     @Override
     public List<BlockResponse> xdag_getBlocksByNumber(String bnOrId) {
         int number = bnOrId == null ? 20 : Integer.parseInt(bnOrId);// default 20
-        List<BlockV5> blocks = blockchain.listMainBlocks(number);
+        List<Block> blocks = blockchain.listMainBlocks(number);
         List<BlockResponse> resultDTOS = Lists.newArrayList();
-        for (BlockV5 block : blocks){
+        for (Block block : blocks){
             BlockResponse dto = transferBlockToBriefBlockResultDTO(blockchain.getBlockByHash(block.getHash(), false));
             if(dto != null){
                 resultDTOS.add(dto);
@@ -269,8 +287,8 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                 return "0.0";
             }
 
-            // Get BlockV5
-            BlockV5 block = blockchain.getBlockByHash(hash, false);
+            // Get Block
+            Block block = blockchain.getBlockByHash(hash, false);
             if (block == null) {
                 return "0.0";
             }
@@ -307,10 +325,13 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     @Override
     public XdagStatusResponse xdag_getStatus() {
         // Phase 7.3: Use ChainStats directly (XdagStats deleted)
+        // Phase 7.3.1: XdagExtStats deleted - hashrate tracking not implemented, use 0 values
         ChainStats chainStats = blockchain.getChainStats();
-        XdagExtStats xdagExtStats = blockchain.getXdagExtStats();
-        double hashrateOurs = BasicUtils.xdagHashRate(xdagExtStats.getHashRateOurs());
-        double hashrateTotal = BasicUtils.xdagHashRate(xdagExtStats.getHashRateTotal());
+
+        // Hashrate tracking not implemented yet - use zero values
+        double hashrateOurs = 0.0;
+        double hashrateTotal = 0.0;
+
         XdagStatusResponse.XdagStatusResponseBuilder builder = XdagStatusResponse.builder();
         builder.nblock(Long.toString(chainStats.getTotalBlockCount()))
                 .totalNblocks(Long.toString(chainStats.getTotalBlockCount()))
@@ -478,19 +499,19 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         return BlockResultDTOBuilder.build();
     }
 
-    private BlockResponse transferBlockInfoToBlockResultDTO(BlockV5 blockV5, int page, Object... parameters) {
-        if (null == blockV5) {
+    private BlockResponse transferBlockInfoToBlockResultDTO(Block block, int page, Object... parameters) {
+        if (null == block) {
             return null;
         }
 
         // Phase 8.2.3: Restored using TransactionStore for balance calculation
-        BlockInfo info = blockV5.getInfo();
+        BlockInfo info = block.getInfo();
         if (info == null) {
             return null;
         }
 
         // Calculate balance from Transactions
-        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(blockV5.getHash());
+        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(block.getHash());
         XAmount balance = XAmount.ZERO;
         for (Transaction tx : transactions) {
             balance = balance.add(tx.getAmount());
@@ -498,8 +519,8 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
         // Build response
         BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
-        builder.address(hash2Address(blockV5.getHash()))
-                .hash(blockV5.getHash().toUnprefixedHexString())
+        builder.address(hash2Address(block.getHash()))
+                .hash(block.getHash().toUnprefixedHexString())
                 .balance(balance.toDecimal(9, XUnit.XDAG).toPlainString())
                 .type("Snapshot")  // BlockInfo only, no raw data
                 .blockTime(xdagTimestampToMs(info.getTimestamp()))
@@ -508,7 +529,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
         // Add transaction history if page != 0
         if (page != 0) {
-            builder.transactions(getTxHistoryV5(blockV5.getHash(), page, parameters))
+            builder.transactions(getTxHistoryV5(block.getHash(), page, parameters))
                     .totalPage(totalPage);
         }
 
@@ -540,7 +561,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             long timestamp = 0L;
             Bytes32 blockHash = kernel.getTransactionStore().getBlockByTransaction(tx.getHash());
             if (blockHash != null) {
-                BlockV5 block = blockchain.getBlockByHash(blockHash, false);
+                Block block = blockchain.getBlockByHash(blockHash, false);
                 if (block != null) {
                     timestamp = xdagTimestampToMs(block.getTimestamp());
                 }
@@ -572,7 +593,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
      */
     private List<BlockResponse.TxLink> getTxHistoryV5(Bytes32 blockHash, int page, Object... parameters) {
         // Phase 8.2.3: New method using TransactionStore
-        BlockV5 block = blockchain.getBlockByHash(blockHash, false);
+        Block block = blockchain.getBlockByHash(blockHash, false);
         if (block == null || block.getInfo() == null) {
             return Lists.newArrayList();
         }
@@ -630,7 +651,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             long timestamp = 0L;
             Bytes32 txBlockHash = kernel.getTransactionStore().getBlockByTransaction(tx.getHash());
             if (txBlockHash != null) {
-                BlockV5 txBlock = blockchain.getBlockByHash(txBlockHash, false);
+                Block txBlock = blockchain.getBlockByHash(txBlockHash, false);
                 if (txBlock != null) {
                     timestamp = xdagTimestampToMs(txBlock.getTimestamp());
                 }
@@ -653,11 +674,11 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     }
 
     public BlockResponse getBlockByNumber(String bnOrId, int page, Object... parameters) {
-        BlockV5 blockFalse = blockchain.getBlockByHeight(Long.parseLong(bnOrId));
+        Block blockFalse = blockchain.getBlockByHeight(Long.parseLong(bnOrId));
         if (null == blockFalse) {
             return null;
         }
-        BlockV5 blockTrue = blockchain.getBlockByHash(blockFalse.getHash(), true);
+        Block blockTrue = blockchain.getBlockByHash(blockFalse.getHash(), true);
         if (blockTrue == null) {
             return transferBlockInfoToBlockResultDTO(blockFalse, page, parameters);
         }
@@ -675,7 +696,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
             } else {
                 blockHash = BasicUtils.getHash(hash);
             }
-            BlockV5 block = blockchain.getBlockByHash(blockHash, true);
+            Block block = blockchain.getBlockByHash(blockHash, true);
             if (block == null) {
                 block = blockchain.getBlockByHash(blockHash, false);
                 return transferBlockInfoToBlockResultDTO(block, page, parameters);
@@ -692,21 +713,21 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     // Phase 8.2.2: DELETED - getLinks(Block block)
     // Obsolete: Extracts Address objects from Block.getInputs()/getOutputs()
     // v5.1: Link structure is 33-byte references to Transactions, not Address amounts
-    // v5.1: Will need new getLinksV5(BlockV5) implementation
+    // v5.1: Will need new getLinksV5(Block) implementation
 
-    private BlockResponse transferBlockToBlockResultDTO(BlockV5 blockV5, int page, Object... parameters) {
-        if (null == blockV5) {
+    private BlockResponse transferBlockToBlockResultDTO(Block block, int page, Object... parameters) {
+        if (null == block) {
             return null;
         }
 
         // Phase 8.2.3: Restored using TransactionStore for balance calculation
-        BlockInfo info = blockV5.getInfo();
+        BlockInfo info = block.getInfo();
         if (info == null) {
             return null;
         }
 
         // Calculate balance from Transactions
-        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(blockV5.getHash());
+        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(block.getHash());
         XAmount balance = XAmount.ZERO;
         for (Transaction tx : transactions) {
             balance = balance.add(tx.getAmount());
@@ -714,19 +735,19 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
         // Build response
         BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
-        builder.address(hash2Address(blockV5.getHash()))
-                .hash(blockV5.getHash().toUnprefixedHexString())
+        builder.address(hash2Address(block.getHash()))
+                .hash(block.getHash().toUnprefixedHexString())
                 .balance(balance.toDecimal(9, XUnit.XDAG).toPlainString())
-                .blockTime(xdagTimestampToMs(blockV5.getTimestamp()))
-                .timeStamp(blockV5.getTimestamp())
+                .blockTime(xdagTimestampToMs(block.getTimestamp()))
+                .timeStamp(block.getTimestamp())
                 .diff(toQuantityJsonHex(info.getDifficulty().toBigInteger()))
                 .state(info.isMainBlock() ? "Main" : "Orphan")
-                .type(getTypeV5(blockV5))
+                .type(getTypeV5(block))
                 .height(info.getHeight());
 
         // Add transaction history if page != 0
         if (page != 0) {
-            builder.transactions(getTxHistoryV5(blockV5.getHash(), page, parameters))
+            builder.transactions(getTxHistoryV5(block.getHash(), page, parameters))
                     .totalPage(totalPage);
         }
 
@@ -734,19 +755,19 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         return builder.build();
     }
 
-    private BlockResponse transferBlockToBriefBlockResultDTO(BlockV5 blockV5) {
-        if (null == blockV5) {
+    private BlockResponse transferBlockToBriefBlockResultDTO(Block block) {
+        if (null == block) {
             return null;
         }
 
         // Phase 8.2.3: Restored using TransactionStore for balance calculation
-        BlockInfo info = blockV5.getInfo();
+        BlockInfo info = block.getInfo();
         if (info == null) {
             return null;
         }
 
         // Calculate balance from Transactions
-        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(blockV5.getHash());
+        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(block.getHash());
         XAmount balance = XAmount.ZERO;
         for (Transaction tx : transactions) {
             balance = balance.add(tx.getAmount());
@@ -754,14 +775,14 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
 
         // Build response
         BlockResponse.BlockResponseBuilder builder = BlockResponse.builder();
-        builder.address(hash2Address(blockV5.getHash()))
-                .hash(blockV5.getHash().toUnprefixedHexString())
+        builder.address(hash2Address(block.getHash()))
+                .hash(block.getHash().toUnprefixedHexString())
                 .balance(balance.toDecimal(9, XUnit.XDAG).toPlainString())
                 .blockTime(xdagTimestampToMs(info.getTimestamp()))
                 .timeStamp(info.getTimestamp())
                 .diff(toQuantityJsonHex(info.getDifficulty().toBigInteger()))
                 .state(info.isMainBlock() ? "Main" : "Orphan")
-                .type(getTypeV5(blockV5))
+                .type(getTypeV5(block))
                 .height(info.getHeight());
 
         return builder.build();
@@ -772,12 +793,12 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     // v5.1: Type can be determined from BlockInfo.isMainBlock() and Link structure
 
     /**
-     * Get block type for v5.1 BlockV5 (Phase 8.2.3 restoration)
+     * Get block type for v5.1 Block (Phase 8.2.3 restoration)
      *
-     * @param block BlockV5 to determine type for
+     * @param block Block to determine type for
      * @return Block type string (Main/Transaction/Wallet)
      */
-    private String getTypeV5(BlockV5 block) {
+    private String getTypeV5(Block block) {
         if (block == null || block.getInfo() == null) {
             return "Unknown";
         }
@@ -827,7 +848,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
     }
 
     /**
-     * RPC transaction creation method (Phase 8.1: BlockV5 + Transaction migration)
+     * RPC transaction creation method (Phase 8.1: Block + Transaction migration)
      *
      * Phase 8.1.1: Single-account RPC transactions
      * Phase 8.1.2: Multi-account RPC transactions (deferred)
@@ -860,7 +881,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
         XAmount fee = MIN_GAS;  // 0.1 XDAG fee
         XAmount totalRequired = amount.add(fee);
 
-        // Phase 8.1.1: Single-account BlockV5 + Transaction path
+        // Phase 8.1.1: Single-account Block + Transaction path
         if (fromAddress != null) {
             // Extract address bytes (20 bytes)
             MutableBytes32 from = MutableBytes32.create();
@@ -937,7 +958,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                 // Save Transaction to TransactionStore
                 kernel.getTransactionStore().saveTransaction(signedTx);
 
-                // Create BlockV5 with Transaction link
+                // Create Block with Transaction link
                 List<Link> links = Lists.newArrayList(Link.toTransaction(signedTx.getHash()));
 
                 // Create BlockHeader
@@ -946,11 +967,11 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                         .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
                         .nonce(Bytes32.ZERO)
                         .coinbase(fromAddress)
-                        .hash(null)  // Will be calculated by BlockV5.getHash()
+                        .hash(null)  // Will be calculated by Block.getHash()
                         .build();
 
-                // Create BlockV5
-                BlockV5 block = BlockV5.builder()
+                // Create Block
+                Block block = Block.builder()
                         .header(header)
                         .links(links)
                         .info(null)  // Will be initialized by tryToConnect()
@@ -963,9 +984,9 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                     // Update nonce in address store
                     kernel.getAddressStore().updateTxQuantity(fromAddr, finalNonce);
 
-                    // Broadcast BlockV5
+                    // Broadcast Block
                     int ttl = kernel.getConfig().getNodeSpec().getTTL();
-                    kernel.broadcastBlockV5(block, ttl);
+                    kernel.broadcastBlock(block, ttl);
 
                     // Success response
                     processResponse.setCode(SUCCESS);
@@ -973,7 +994,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                             BasicUtils.hash2Address(block.getHash())
                     ));
 
-                    log.info("RPC transaction successful (BlockV5): tx={}, block={}, amount={} XDAG",
+                    log.info("RPC transaction successful (Block): tx={}, block={}, amount={} XDAG",
                             signedTx.getHash().toHexString().substring(0, 16) + "...",
                             BasicUtils.hash2Address(block.getHash()),
                             amount.toDecimal(9, XUnit.XDAG).toPlainString());
@@ -1095,7 +1116,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                 // Save Transaction to TransactionStore
                 kernel.getTransactionStore().saveTransaction(signedTx);
 
-                // Create BlockV5 with Transaction link
+                // Create Block with Transaction link
                 List<Link> links = Lists.newArrayList(Link.toTransaction(signedTx.getHash()));
 
                 // Create BlockHeader
@@ -1104,11 +1125,11 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                         .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
                         .nonce(Bytes32.ZERO)
                         .coinbase(accountFromAddress)
-                        .hash(null)  // Will be calculated by BlockV5.getHash()
+                        .hash(null)  // Will be calculated by Block.getHash()
                         .build();
 
-                // Create BlockV5
-                BlockV5 block = BlockV5.builder()
+                // Create Block
+                Block block = Block.builder()
                         .header(header)
                         .links(links)
                         .info(null)  // Will be initialized by tryToConnect()
@@ -1121,9 +1142,9 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                     // Update nonce in address store
                     kernel.getAddressStore().updateTxQuantity(contributor.address, contributor.nonce);
 
-                    // Broadcast BlockV5
+                    // Broadcast Block
                     int ttl = kernel.getConfig().getNodeSpec().getTTL();
-                    kernel.broadcastBlockV5(block, ttl);
+                    kernel.broadcastBlock(block, ttl);
 
                     // Add to success list
                     txHashes.add(BasicUtils.hash2Address(block.getHash()));

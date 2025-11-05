@@ -103,12 +103,12 @@ public class Peer {
     }
 
     /**
-     * Check if peer supports v5.1 protocol (BlockV5)
+     * Check if peer supports v5.1 protocol (Block)
      *
      * Phase 3.2: Protocol version detection
      * Checks if peer's capabilities contain "xdag-v5.1" flag
      *
-     * @return true if peer supports BlockV5 messages
+     * @return true if peer supports Block messages
      */
     public boolean supportsV5() {
         if (capabilities == null) {

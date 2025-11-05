@@ -25,27 +25,25 @@ package io.xdag.net.message.p2p;
 
 import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 
+import io.xdag.Network;
+import io.xdag.config.Config;
 import io.xdag.crypto.encoding.Base58;
 import io.xdag.crypto.hash.HashUtils;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.crypto.keys.PublicKey;
 import io.xdag.crypto.keys.Signature;
 import io.xdag.crypto.keys.Signer;
-import java.util.ArrayList;
-import java.util.List;
-
-import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
-
-import io.xdag.Network;
-import io.xdag.config.Config;
-import io.xdag.utils.SimpleEncoder;
 import io.xdag.net.Peer;
 import io.xdag.net.message.Message;
 import io.xdag.net.message.MessageCode;
 import io.xdag.utils.SimpleDecoder;
+import io.xdag.utils.SimpleEncoder;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.Bytes32;
 
 @Getter
 @Setter

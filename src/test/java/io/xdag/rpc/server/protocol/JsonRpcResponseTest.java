@@ -23,9 +23,11 @@
  */
 package io.xdag.rpc.server.protocol;
 
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+
 import io.xdag.rpc.error.JsonRpcError;
 import org.junit.Test;
-import static org.junit.Assert.*;
 
 public class JsonRpcResponseTest {
 

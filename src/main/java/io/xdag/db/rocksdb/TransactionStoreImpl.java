@@ -28,11 +28,10 @@ import com.google.common.collect.Lists;
 import io.xdag.core.Transaction;
 import io.xdag.db.TransactionStore;
 import io.xdag.utils.BytesUtils;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.tuweni.bytes.Bytes32;
-
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes32;
 
 /**
  * RocksDB implementation of TransactionStore for XDAG v5.1

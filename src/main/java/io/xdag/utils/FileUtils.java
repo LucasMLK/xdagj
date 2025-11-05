@@ -24,11 +24,6 @@
 
 package io.xdag.utils;
 
-import com.google.common.collect.Lists;
-import io.xdag.db.BlockStore;
-import java.util.List;
-import org.bouncycastle.util.encoders.Hex;
-
 /**
  * Utility class for file operations
  */

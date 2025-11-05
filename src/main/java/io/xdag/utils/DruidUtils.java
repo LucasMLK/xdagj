@@ -24,14 +24,16 @@
 package io.xdag.utils;
 
 import com.alibaba.druid.pool.DruidDataSourceFactory;
-
+import java.io.InputStream;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.Properties;
+import javax.sql.DataSource;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-
-import javax.sql.DataSource;
-import java.io.InputStream;
-import java.sql.*;
-import java.util.Properties;
 
 /**
  * Utility class for managing Druid database connections

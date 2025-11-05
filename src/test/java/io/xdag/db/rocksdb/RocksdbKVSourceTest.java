@@ -23,10 +23,15 @@
  */
 
 package io.xdag.db.rocksdb;
-import io.xdag.crypto.hash.HashUtils;
+
+import static org.junit.Assert.assertEquals;
+
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
+import io.xdag.crypto.hash.HashUtils;
 import io.xdag.utils.BlockUtils;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.bouncycastle.util.encoders.Hex;
@@ -34,11 +39,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-
-import java.nio.charset.StandardCharsets;
-import java.util.List;
-
-import static org.junit.Assert.assertEquals;
 
 public class RocksdbKVSourceTest {
 

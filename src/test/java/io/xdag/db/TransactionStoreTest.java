@@ -24,6 +24,12 @@
 
 package io.xdag.db;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.core.Transaction;
@@ -34,6 +40,7 @@ import io.xdag.db.rocksdb.DatabaseName;
 import io.xdag.db.rocksdb.KVSource;
 import io.xdag.db.rocksdb.RocksdbFactory;
 import io.xdag.db.rocksdb.TransactionStoreImpl;
+import java.util.List;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
@@ -42,10 +49,6 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-
-import java.util.List;
-
-import static org.junit.Assert.*;
 
 /**
  * Unit tests for TransactionStore (Phase 4 - v5.1)

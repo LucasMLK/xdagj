@@ -24,9 +24,8 @@
 
 package io.xdag.net.message;
 
-import org.apache.tuweni.bytes.Bytes;
-
 import lombok.Getter;
+import org.apache.tuweni.bytes.Bytes;
 
 @Getter
 public abstract class Message {

@@ -24,6 +24,9 @@
 
 package io.xdag.cli;
 
+import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
+import static io.xdag.utils.WalletUtils.WALLET_PASSWORD_PROMPT;
+
 import com.google.common.collect.Lists;
 import io.xdag.Kernel;
 import io.xdag.Launcher;
@@ -40,22 +43,26 @@ import io.xdag.db.rocksdb.RocksdbKVSource;
 import io.xdag.db.rocksdb.SnapshotStoreImpl;
 import io.xdag.utils.BytesUtils;
 import io.xdag.utils.XdagTime;
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.ParseException;
-
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.Console;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Objects;
 import java.util.Scanner;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.ParseException;
 import org.apache.commons.lang3.Strings;
-
-import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
-import static io.xdag.utils.WalletUtils.WALLET_PASSWORD_PROMPT;
 
 public class XdagCli extends Launcher {
 

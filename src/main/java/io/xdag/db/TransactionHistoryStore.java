@@ -23,16 +23,14 @@
  */
 package io.xdag.db;
 
-import java.util.List;
-
 /**
  * TransactionHistoryStore interface
  *
- * All methods temporarily disabled - waiting for migration to BlockV5 Transaction system
+ * All methods temporarily disabled - waiting for migration to Block Transaction system
  */
 public interface TransactionHistoryStore {
 
-    // TODO v5.1: Restore after migrating to BlockV5 Transaction system
+    // TODO v5.1: Restore after migrating to Block Transaction system
     // boolean saveTxHistory(TxHistory txHistory);
     // boolean batchSaveTxHistory(TxHistory txHistory,int... cacheNum);
     // List<TxHistory> listTxHistoryByAddress(String address, int page, Object... parameters);

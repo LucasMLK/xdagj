@@ -24,11 +24,11 @@
 
 package io.xdag.utils;
 
+import io.xdag.crypto.encoding.Base58;
 import io.xdag.crypto.exception.AddressFormatException;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-import io.xdag.crypto.encoding.Base58;
 
 /**
  * Utility class for wallet operations including BIP44 key generation, address encoding/decoding and validation

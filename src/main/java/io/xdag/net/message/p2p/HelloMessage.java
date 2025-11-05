@@ -23,12 +23,11 @@
  */
 package io.xdag.net.message.p2p;
 
-import io.xdag.crypto.keys.ECKeyPair;
-import java.util.Arrays;
-
 import io.xdag.Network;
+import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.net.message.MessageCode;
 import io.xdag.utils.BytesUtils;
+import java.util.Arrays;
 
 public class HelloMessage extends HandshakeMessage {
 

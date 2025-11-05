@@ -27,11 +27,10 @@ package io.xdag.db.store;
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
 import io.xdag.core.BlockInfo;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.tuweni.bytes.Bytes32;
-
 import java.util.List;
 import java.util.Optional;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes32;
 
 /**
  * Bloom Filter wrapper for FinalizedBlockStore

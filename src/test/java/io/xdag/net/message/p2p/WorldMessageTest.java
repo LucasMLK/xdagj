@@ -22,20 +22,20 @@
  * THE SOFTWARE.
  */
 package io.xdag.net.message.p2p;
+
 import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 import static junit.framework.TestCase.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import io.xdag.crypto.core.CryptoProvider;
-import io.xdag.crypto.encoding.Base58;
-import io.xdag.crypto.keys.ECKeyPair;
-import org.junit.Test;
-
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.crypto.SampleKeys;
+import io.xdag.crypto.core.CryptoProvider;
+import io.xdag.crypto.encoding.Base58;
+import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.net.CapabilityTreeSet;
 import io.xdag.net.Peer;
+import org.junit.Test;
 
 public class WorldMessageTest {
 

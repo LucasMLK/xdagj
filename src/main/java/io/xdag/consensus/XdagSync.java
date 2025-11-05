@@ -24,27 +24,36 @@
 
 package io.xdag.consensus;
 
+import static io.xdag.config.Constants.REQUEST_BLOCKS_MAX_TIME;
+import static io.xdag.config.Constants.REQUEST_WAIT;
+
 import com.google.common.util.concurrent.SettableFuture;
 import io.xdag.Kernel;
-import io.xdag.config.*;
+import io.xdag.config.Config;
+import io.xdag.config.DevnetConfig;
+import io.xdag.config.MainnetConfig;
+import io.xdag.config.TestnetConfig;
 import io.xdag.core.AbstractXdagLifecycle;
 import io.xdag.core.XdagState;
 import io.xdag.crypto.core.CryptoProvider;
 import io.xdag.db.BlockStore;
+import java.nio.ByteOrder;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.MutableBytes;
-
-import java.nio.ByteOrder;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.concurrent.*;
-
-import static io.xdag.config.Constants.REQUEST_BLOCKS_MAX_TIME;
-import static io.xdag.config.Constants.REQUEST_WAIT;
 
 @Slf4j
 public class XdagSync extends AbstractXdagLifecycle {
@@ -79,207 +88,26 @@ public class XdagSync extends AbstractXdagLifecycle {
         blocksRequestMap = new ConcurrentHashMap<>();
     }
 
-    @Override
-    protected void doStart() {
-        if (status != Status.SYNCING) {
-            status = Status.SYNCING;
-            // TODO: Set sync start time/snapshot time
-            sendFuture = sendTask.scheduleAtFixedRate(this::syncLoop, 32, 10, TimeUnit.SECONDS);
-        }
-    }
+  @Override
+  protected void doStart() {
 
-    @Override
-    protected void doStop() {
-        try {
-            if (sendFuture != null) {
-                sendFuture.cancel(true);
-            }
-            // Shutdown thread pool
-            sendTask.shutdownNow();
-            sendTask.awaitTermination(5, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            log.error(e.getMessage(), e);
-        }
-        log.debug("sync stop done");
-    }
+  }
 
-    private void syncLoop() {
-        try {
-            if (syncWindow.isEmpty()) {
-                log.debug("start finding different time periods");
-                requestBlocks(0, 1L << 48);
-            }
+  @Override
+  protected void doStop() {
 
-            log.debug("start getting blocks");
-            getBlocks();
-        } catch (Throwable e) {
-            log.error("error when requestBlocks {}", e.getMessage());
-        }
-    }
+  }
 
-    /**
-     * Use syncWindow to request blocks in segments
-     */
-    private void getBlocks() {
-        List<io.xdag.p2p.channel.Channel> any = getAnyNode();
-        if (any == null || any.isEmpty()) {
-            return;
-        }
-        SettableFuture<Bytes> sf = SettableFuture.create();
-        int index = CryptoProvider.nextInt(0, any.size());
-        io.xdag.p2p.channel.Channel xc = any.get(index);
-        long lastTime = getLastTime();
+  /**
+   * Get the last request time
+   *
+   * @return Last request time in XDAG timestamp format
+   */
+  public long getLastTime() {
+    return lastRequestTime;
+  }
 
-        // Remove synchronized time periods
-        while (!syncWindow.isEmpty() && syncWindow.getFirst() < lastTime) {
-            syncWindow.pollFirst();
-        }
-
-        // Request blocks in segments, 32 time periods per request
-        int size = syncWindow.size();
-        for (int i = 0; i < 128; i++) {
-            if (i >= size) {
-                break;
-            }
-            // Update channel if sync channel is removed/reset
-            if (!xc.isFinishHandshake()){
-                log.debug("sync channel need to update");
-                return;
-            }
-
-            long time = syncWindow.get(i);
-            if (time >= lastRequestTime) {
-                sendGetBlocks(xc, time, sf);
-                lastRequestTime = time;
-            }
-        }
-    }
-
-    /**
-     * Request blocks for a time range
-     * @param t start time
-     * @param dt time interval
-     */
-    private void requestBlocks(long t, long dt) {
-        // Stop sync if not in SYNCING state
-        if (status != Status.SYNCING) {
-            log.info("Sync status is no longer SYNCING (current: {}), requestBlocks will exit.", status);
-            return;
-        }
-
-        List<io.xdag.p2p.channel.Channel> any = getAnyNode();
-        if (any == null || any.isEmpty()) {
-            return;
-        }
-
-        SettableFuture<Bytes> sf = SettableFuture.create();
-        int index = CryptoProvider.nextInt(0, any.size());
-        io.xdag.p2p.channel.Channel xc = any.get(index);
-        if (dt > REQUEST_BLOCKS_MAX_TIME) {
-            findGetBlocks(xc, t, dt, sf);
-        } else {
-            if (!kernel.getSyncMgr().isSyncOld() && !kernel.getSyncMgr().isSync()) {
-                log.debug("set sync old");
-                setSyncOld();
-            }
-
-            if (t > getLastTime()) {
-                syncWindow.offerLast(t);
-            }
-        }
-    }
-
-    /**
-     * Send request to get blocks from remote node
-     * @param t request time
-     */
-    private void sendGetBlocks(io.xdag.p2p.channel.Channel xc, long t, SettableFuture<Bytes> sf) {
-        long randomSeq = kernel.getP2pEventHandler().sendGetBlocks(xc, t, t + REQUEST_BLOCKS_MAX_TIME);
-        blocksRequestMap.put(randomSeq, sf);
-        try {
-            sf.get(REQUEST_WAIT, TimeUnit.SECONDS);
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            blocksRequestMap.remove(randomSeq);
-            log.error(e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Recursively find time periods to request blocks
-     */
-    private void findGetBlocks(io.xdag.p2p.channel.Channel xc, long t, long dt, SettableFuture<Bytes> sf) {
-        MutableBytes lSums = MutableBytes.create(256);
-        Bytes rSums;
-        // Temporarily disabled - sum file system removed in v5.1
-        // if (blockStore.loadSum(t, t + dt, lSums) <= 0) {
-        //     return;
-        // }
-        // For now, skip sum checking and continue with sync
-        long randomSeq = kernel.getP2pEventHandler().sendGetSums(xc, t, t + dt);
-        sumsRequestMap.put(randomSeq, sf);
-        try {
-            Bytes sums = sf.get(REQUEST_WAIT, TimeUnit.SECONDS);
-            rSums = sums.copy();
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            sumsRequestMap.remove(randomSeq);
-            log.error(e.getMessage(), e);
-            return;
-        }
-        sumsRequestMap.remove(randomSeq);
-        dt >>= 4;
-        for (int i = 0; i < 16; i++) {
-            long lSumsSum = lSums.getLong(i * 16, ByteOrder.LITTLE_ENDIAN);
-            long lSumsSize = lSums.getLong(i * 16 + 8, ByteOrder.LITTLE_ENDIAN);
-            long rSumsSum = rSums.getLong(i * 16, ByteOrder.LITTLE_ENDIAN);
-            long rSumsSize = rSums.getLong(i * 16 + 8, ByteOrder.LITTLE_ENDIAN);
-
-            if (lSumsSize != rSumsSize || lSumsSum != rSumsSum) {
-                requestBlocks(t + i * dt, dt);
-            }
-        }
-    }
-
-    public void setSyncOld() {
-        Config config = kernel.getConfig();
-        if (config instanceof MainnetConfig) {
-            if (kernel.getXdagState() != XdagState.CONNP) {
-                kernel.setXdagState(XdagState.CONNP);
-            }
-        } else if (config instanceof TestnetConfig) {
-            if (kernel.getXdagState() != XdagState.CTSTP) {
-                kernel.setXdagState(XdagState.CTSTP);
-            }
-        } else if (config instanceof DevnetConfig) {
-            if (kernel.getXdagState() != XdagState.CDSTP) {
-                kernel.setXdagState(XdagState.CDSTP);
-            }
-        }
-    }
-
-    /**
-     * Get timestamp of latest confirmed main block
-     *
-     * Temporarily disabled - waiting for migration to BlockV5
-     */
-    public long getLastTime() {
-        // Phase 7.3: Use getChainStats() instead of getXdagStatus() (XdagStats deleted)
-        io.xdag.core.ChainStats stats = blockStore.getChainStats();
-        if (stats == null) return 0;
-        long height = stats.getMainBlockCount();
-        if(height == 0) return 0;
-        // TODO v5.1: Migrate to BlockV5 when available
-        // Block lastBlock = blockStore.getBlockByHeight(height);
-        // if (lastBlock != null) {
-        //     return lastBlock.getTimestamp();
-        // }
-        return 0;
-    }
-
-    public List<io.xdag.p2p.channel.Channel> getAnyNode() {
-        return kernel.getActiveP2pChannels();
-    }
-
-    public enum Status {
+  public enum Status {
         /**
          * Sync states
          */

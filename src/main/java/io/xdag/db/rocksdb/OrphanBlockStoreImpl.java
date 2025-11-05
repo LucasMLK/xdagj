@@ -24,6 +24,7 @@
 
 package io.xdag.db.rocksdb;
 
+import com.google.common.collect.Lists;
 import io.xdag.db.OrphanBlockStore;
 import io.xdag.utils.BytesUtils;
 import java.util.Comparator;
@@ -32,8 +33,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.tuweni.bytes.Bytes32;
 import org.bouncycastle.util.encoders.Hex;
-
-import com.google.common.collect.Lists;
 
 /**
  * OrphanBlockStore implementation for v5.1
@@ -118,7 +117,7 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
         orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(currentsize - 1, false));
     }
 
-    // Temporarily disabled - waiting for migration to BlockV5
+    // Temporarily disabled - waiting for migration to Block
     /*
     public void addOrphan(Block block) {
         orphanSource.put(BytesUtils.merge(ORPHAN_PREFEX, block.getHash().toArray()),

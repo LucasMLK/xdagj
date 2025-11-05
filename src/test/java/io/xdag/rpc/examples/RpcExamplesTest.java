@@ -23,25 +23,28 @@
  */
 package io.xdag.rpc.examples;
 
+import static io.xdag.rpc.server.handler.JsonRpcHandler.MAPPER;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.when;
+
 import io.xdag.rpc.api.XdagApi;
 import io.xdag.rpc.model.response.BlockResponse;
 import io.xdag.rpc.model.response.ProcessResponse;
 import io.xdag.rpc.model.response.XdagStatusResponse;
 import io.xdag.rpc.server.handler.JsonRequestHandler;
 import io.xdag.rpc.server.protocol.JsonRpcRequest;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-
-import static io.xdag.rpc.server.handler.JsonRpcHandler.MAPPER;
-import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.when;
 
 /**
  * Test cases from XDAGJ_RPC.md documentation.

@@ -23,12 +23,13 @@
  */
 package io.xdag.db;
 
+import io.xdag.core.BlockInfo;
+import io.xdag.core.Block;
+import io.xdag.core.ChainStats;
 import io.xdag.core.XdagLifecycle;
-import io.xdag.core.*;
+import java.util.List;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-
-import java.util.List;
 
 public interface BlockStore extends XdagLifecycle {
 
@@ -105,70 +106,70 @@ public interface BlockStore extends XdagLifecycle {
      */
     List<Bytes32> getBlockReferences(Bytes32 blockHash);
 
-    // ========== Phase 4: BlockV5 Storage Support ==========
+    // ========== Phase 4: Block Storage Support ==========
 
     /**
-     * Save BlockV5 to storage (Phase 4.1)
+     * Save Block to storage (Phase 4.1)
      * <p>
      * Stores:
-     * - Raw BlockV5 bytes (variable-length serialization)
+     * - Raw Block bytes (variable-length serialization)
      * - BlockInfo metadata (CompactSerializer)
      * - Time index for range queries
      * - Epoch/height indexes
      *
-     * @param block BlockV5 to save
+     * @param block Block to save
      */
-    void saveBlockV5(BlockV5 block);
+    void saveBlock(Block block);
 
     /**
-     * Get BlockV5 by hash (Phase 4.1)
+     * Get Block by hash (Phase 4.1)
      *
      * @param hash Block hash
      * @param isRaw true to load full raw data, false for BlockInfo only
-     * @return BlockV5 or null if not found
+     * @return Block or null if not found
      */
-    BlockV5 getBlockV5ByHash(Bytes32 hash, boolean isRaw);
+    Block getBlockByHash(Bytes32 hash, boolean isRaw);
 
     /**
-     * Get raw BlockV5 with full deserialized data (Phase 4.1)
+     * Get raw Block with full deserialized data (Phase 4.1)
      *
      * @param hash Block hash
-     * @return BlockV5 with complete data or null if not found
+     * @return Block with complete data or null if not found
      */
-    BlockV5 getRawBlockV5ByHash(Bytes32 hash);
+    Block getRawBlockByHash(Bytes32 hash);
 
     /**
-     * Get BlockV5 with BlockInfo metadata only (Phase 4.1)
+     * Get Block with BlockInfo metadata only (Phase 4.1)
      * Does not load or parse raw block data (faster)
      *
      * @param hash Block hash
-     * @return BlockV5 with BlockInfo or null if not found
+     * @return Block with BlockInfo or null if not found
      */
-    BlockV5 getBlockV5InfoByHash(Bytes32 hash);
+    Block getBlockInfoByHash(Bytes32 hash);
 
     // ========== Phase 7.3: Main Chain Index Access ==========
 
     /**
-     * Get BlockV5 by main chain height (Phase 7.3)
+     * Get Block by main chain height (Phase 7.3)
      *
      * Uses MAIN_BLOCKS_INDEX (0xc0) to map height → blockHash,
-     * then retrieves the BlockV5 object.
+     * then retrieves the Block object.
      *
      * @param height Main chain height (must be > 0)
      * @param isRaw true to load full raw data, false for BlockInfo only
-     * @return BlockV5 main block at height, or null if not found
+     * @return Block main block at height, or null if not found
      */
-    BlockV5 getBlockV5ByHeight(long height, boolean isRaw);
+    Block getBlockByHeight(long height, boolean isRaw);
 
     /**
-     * Get list of BlockV5 objects within time range (Phase 7.3)
+     * Get list of Block objects within time range (Phase 7.3)
      *
      * Uses TIME_HASH_INFO index to find blocks in time range.
      *
      * @param startTime Start timestamp (XDAG format)
      * @param endTime End timestamp (XDAG format)
-     * @return List of BlockV5 objects in time range
+     * @return List of Block objects in time range
      */
-    List<BlockV5> getBlockV5sByTime(long startTime, long endTime);
+    List<Block> getBlocksByTime(long startTime, long endTime);
 
 }

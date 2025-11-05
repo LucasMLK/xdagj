@@ -24,12 +24,11 @@
 
 package io.xdag.core;
 
+import java.io.Serializable;
 import lombok.Builder;
 import lombok.Value;
 import lombok.With;
 import org.apache.tuweni.bytes.Bytes;
-
-import java.io.Serializable;
 
 /**
  * Immutable snapshot information for block state

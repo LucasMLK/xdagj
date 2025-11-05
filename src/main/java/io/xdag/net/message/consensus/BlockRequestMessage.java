@@ -23,20 +23,45 @@
  */
 package io.xdag.net.message.consensus;
 
-
-
+import io.xdag.core.ChainStats;
+import io.xdag.net.message.MessageCode;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
 
-import io.xdag.core.ChainStats;
-import io.xdag.net.message.MessageCode;
+/**
+ * BlockRequestMessage - Request for a specific Block by hash (Phase 7.3)
+ *
+ * <p>Used when the sync system receives a Block that references a missing parent block.
+ * The node sends this message to request the missing Block from peers.
+ *
+ * <p><b>Message Flow:</b>
+ * <ol>
+ *   <li>Node A receives Block child but parent is missing</li>
+ *   <li>Node A sends Block_REQUEST with parent hash to peers</li>
+ *   <li>Node B responds with NEW_BLOCK_V5 or SYNC_BLOCK_V5 containing the requested block</li>
+ *   <li>Node A imports parent, then processes waiting children</li>
+ * </ol>
+ *
 
+ * @since 0.8.1 (Phase 7.3)
+ */
 public class BlockRequestMessage extends XdagMessage {
 
+    /**
+     * Constructor for sending Block request
+     *
+     * @param hash Hash of the requested Block
+     * @param chainStats Current node statistics (Phase 7.3: XdagStats deleted)
+     */
     public BlockRequestMessage(MutableBytes hash, ChainStats chainStats) {
         super(MessageCode.BLOCK_REQUEST, null, 0, 0, Bytes32.wrap(hash), chainStats);
     }
 
+    /**
+     * Constructor for receiving Block request from network
+     *
+     * @param body Raw message bytes
+     */
     public BlockRequestMessage(byte[] body) {
         super(MessageCode.BLOCK_REQUEST, null, body);
     }

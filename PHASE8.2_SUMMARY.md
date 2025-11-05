@@ -163,8 +163,8 @@ protected void processBlocksRequest(BlocksRequestMessage msg) {
 ```java
 private void sendBlocksInBatches(long startTime, long endTime, long random) {
     try {
-        // Phase 8.3.2: Blockchain 接口返回 BlockV5
-        List<BlockV5> blocks = chain.getBlocksByTime(startTime, endTime);
+        // Phase 8.3.2: Blockchain 接口返回 Block
+        List<Block> blocks = chain.getBlocksByTime(startTime, endTime);
 
         // Phase 8.2.2: 限制区块数量
         if (blocks.size() > MAX_BLOCKS_PER_REQUEST) {
@@ -178,7 +178,7 @@ private void sendBlocksInBatches(long startTime, long endTime, long random) {
 
         // Phase 8.2.2: 批量发送 + 速率限制
         for (int i = 0; i < blocks.size(); i++) {
-            BlockV5 blockV5 = blocks.get(i);
+            Block Block = blocks.get(i);
 
             // 批次间添加延迟
             if (i > 0 && i % BATCH_SIZE == 0) {
@@ -193,14 +193,14 @@ private void sendBlocksInBatches(long startTime, long endTime, long random) {
 
             // 发送区块
             try {
-                if (blockV5 != null) {
-                    SyncBlockV5Message blockMsg = new SyncBlockV5Message(blockV5, 1);
+                if (Block != null) {
+                    SyncBlockMessage blockMsg = new SyncBlockMessage(Block, 1);
                     msgQueue.sendMessage(blockMsg);
                 } else {
                     log.debug("Block is null, skipping");
                 }
             } catch (Exception e) {
-                log.debug("Failed to send BlockV5: {}", e.getMessage());
+                log.debug("Failed to send Block: {}", e.getMessage());
             }
         }
 
@@ -258,7 +258,7 @@ private void sendBlocksInBatches(long startTime, long endTime, long random) {
 
 从 `BlockchainImpl.java:522-530` 分析：
 ```java
-// createRewardBlockV5() 为每个接收者创建一个交易
+// createRewardBlock() 为每个接收者创建一个交易
 for (int i = 0; i < recipients.size(); i++) {
     Transaction tx = Transaction.createTransfer(
         sourceAddress,      // from (pool's reward wallet)
@@ -310,14 +310,14 @@ public class PoolAwardManagerImpl {
     /**
      * Create reward block with proper nonce tracking
      */
-    private BlockV5 createRewardBlock(Bytes32 hash,
+    private Block createRewardBlock(Bytes32 hash,
                                      List<Bytes32> recipients,
                                      List<XAmount> amounts,
                                      ECKeyPair sourceKey) {
         Bytes32 sourceAddress = AddressUtils.publicKeyToAddress(sourceKey.getPublicKey());
         long baseNonce = getNextNonce(sourceAddress);
 
-        BlockV5 rewardBlock = blockchain.createRewardBlockV5(
+        Block rewardBlock = blockchain.createRewardBlock(
             hash,
             recipients,
             amounts,

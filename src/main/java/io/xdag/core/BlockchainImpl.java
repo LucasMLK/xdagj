@@ -24,6 +24,15 @@
 
 package io.xdag.core;
 
+import static io.xdag.config.Constants.MAIN_BIG_PERIOD_LOG;
+import static io.xdag.config.Constants.MAIN_CHAIN_PERIOD;
+import static io.xdag.config.Constants.MIN_GAS;
+import static io.xdag.config.Constants.MessageType.NEW_LINK;
+import static io.xdag.core.ImportResult.IMPORTED_BEST;
+import static io.xdag.core.ImportResult.IMPORTED_NOT_BEST;
+import static io.xdag.utils.BasicUtils.keyPair2Hash;
+import static io.xdag.utils.BytesUtils.long2UnsignedLong;
+
 import com.google.common.collect.Lists;
 import com.google.common.primitives.UnsignedLong;
 import io.xdag.Kernel;
@@ -31,29 +40,34 @@ import io.xdag.Wallet;
 import io.xdag.consensus.RandomX;
 import io.xdag.crypto.core.CryptoProvider;
 import io.xdag.crypto.keys.ECKeyPair;
-import io.xdag.db.*;
+import io.xdag.db.AddressStore;
+import io.xdag.db.BlockStore;
+import io.xdag.db.OrphanBlockStore;
+import io.xdag.db.SnapshotStore;
+import io.xdag.db.TransactionHistoryStore;
+import io.xdag.db.TransactionStore;
 import io.xdag.db.rocksdb.RocksdbKVSource;
 import io.xdag.db.rocksdb.SnapshotStoreImpl;
 import io.xdag.listener.BlockMessage;
 import io.xdag.listener.Listener;
 import io.xdag.utils.XdagTime;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.util.*;
-import java.util.concurrent.*;
-
-import static io.xdag.config.Constants.*;
-import static io.xdag.config.Constants.MessageType.NEW_LINK;
-import static io.xdag.core.ImportResult.IMPORTED_BEST;
-import static io.xdag.core.ImportResult.IMPORTED_NOT_BEST;
-import static io.xdag.utils.BasicUtils.*;
-import static io.xdag.utils.BytesUtils.*;
 
 @Slf4j
 @Getter
@@ -81,7 +95,7 @@ public class BlockchainImpl implements Blockchain {
     private final OrphanBlockStore orphanBlockStore;
 
     // In-memory pools and maps
-    private final LinkedHashMap<Bytes, BlockV5> memOrphanPool = new LinkedHashMap<>();
+    private final LinkedHashMap<Bytes, Block> memOrphanPool = new LinkedHashMap<>();
     private final Map<Bytes, Integer> memOurBlocks = new ConcurrentHashMap<>();
 
     // Stats and status tracking (v5.1 immutable design)
@@ -99,7 +113,6 @@ public class BlockchainImpl implements Blockchain {
     private final long snapshotHeight;
     private SnapshotStore snapshotStore;
     private SnapshotStore snapshotAddressStore;
-    private final XdagExtStats xdagExtStats;
     
     @Getter
     private byte[] preSeed;
@@ -109,7 +122,6 @@ public class BlockchainImpl implements Blockchain {
         // Initialize core components
         this.kernel = kernel;
         this.wallet = kernel.getWallet();
-        this.xdagExtStats = new XdagExtStats();
         
         // Initialize storage components
         this.addressStore = kernel.getAddressStore();
@@ -147,9 +159,9 @@ public class BlockchainImpl implements Blockchain {
                 this.chainStats = ChainStats.zero();
             }
 
-            // Phase 7.3 continuation: Restore lastBlock initialization using BlockV5
+            // Phase 7.3 continuation: Restore lastBlock initialization using Block
             // Load last main block to initialize stats and top status
-            BlockV5 lastBlock = getBlockByHeight(chainStats.getMainBlockCount());
+            Block lastBlock = getBlockByHeight(chainStats.getMainBlockCount());
             if (lastBlock != null && lastBlock.getInfo() != null) {
                 BigInteger lastDifficulty = lastBlock.getInfo().getDifficulty().toBigInteger();
                 chainStats = chainStats
@@ -197,9 +209,9 @@ public class BlockchainImpl implements Blockchain {
         snapshotStore.init();
         snapshotStore.saveSnapshotToIndex(this.blockStore, this.txHistoryStore, kernel.getWallet().getAccounts(), kernel.getConfig().getSnapshotSpec().getSnapshotTime());
 
-        // Phase 7.3 continuation: Restore lastBlock initialization using BlockV5
+        // Phase 7.3 continuation: Restore lastBlock initialization using Block
         // Load snapshot block to initialize stats and top status
-        BlockV5 lastBlock = getBlockByHeight(snapshotHeight);
+        Block lastBlock = getBlockByHeight(snapshotHeight);
         if (lastBlock != null && lastBlock.getInfo() != null) {
             BigInteger lastDifficulty = lastBlock.getInfo().getDifficulty().toBigInteger();
             chainStats = chainStats
@@ -243,23 +255,23 @@ public class BlockchainImpl implements Blockchain {
         this.listeners.add(listener);
     }
 
-    // ========== Phase 4 Step 2.1: BlockV5 Support ==========
+    // ========== Phase 4 Step 2.1: Block Support ==========
 
     /**
-     * Try to connect a BlockV5 to the blockchain (v5.1 implementation)
+     * Try to connect a Block to the blockchain (v5.1 implementation)
      *
-     * Phase 4 Step 2.1: This is the NEW implementation for BlockV5 that uses
+     * Phase 4 Step 2.1: This is the NEW implementation for Block that uses
      * Link-based references instead of Address objects.
      *
-     * @param block BlockV5 to connect (uses List<Link>)
+     * @param block Block to connect (uses List<Link>)
      * @return ImportResult indicating success or failure
      */
-    public synchronized ImportResult tryToConnect(BlockV5 block) {
+    public synchronized ImportResult tryToConnect(Block block) {
         return tryToConnectV2(block);
     }
 
     /**
-     * Internal implementation for BlockV5 (v5.1 Link-based design)
+     * Internal implementation for Block (v5.1 Link-based design)
      *
      * Key differences from V1 (old Block + Address):
      * 1. Uses Link instead of Address
@@ -268,10 +280,10 @@ public class BlockchainImpl implements Blockchain {
      *
      * Phase 4 Step 2.3 Part 2: Added BlockInfo initialization for new blocks
      *
-     * @param block BlockV5 instance
+     * @param block Block instance
      * @return ImportResult
      */
-    private synchronized ImportResult tryToConnectV2(BlockV5 block) {
+    private synchronized ImportResult tryToConnectV2(Block block) {
         try {
             ImportResult result = ImportResult.IMPORTED_NOT_BEST;
 
@@ -280,7 +292,7 @@ public class BlockchainImpl implements Blockchain {
                     || block.getTimestamp() < kernel.getConfig().getXdagEra()) {
                 result = ImportResult.INVALID_BLOCK;
                 result.setErrorInfo("Block's time is illegal");
-                log.debug("BlockV5 time is illegal: {}", block.getTimestamp());
+                log.debug("Block time is illegal: {}", block.getTimestamp());
                 return result;
             }
 
@@ -293,11 +305,11 @@ public class BlockchainImpl implements Blockchain {
                 return ImportResult.IN_MEM;
             }
 
-            // Validate block structure (from BlockV5.isValid())
+            // Validate block structure (from Block.isValid())
             if (!block.isValid()) {
                 result = ImportResult.INVALID_BLOCK;
-                result.setErrorInfo("BlockV5 structure validation failed");
-                log.debug("BlockV5 validation failed: {}", block.getHash().toHexString());
+                result.setErrorInfo("Block structure validation failed");
+                log.debug("Block validation failed: {}", block.getHash().toHexString());
                 return result;
             }
 
@@ -345,7 +357,7 @@ public class BlockchainImpl implements Blockchain {
 
                 } else {
                     // Block link validation
-                  BlockV5 refBlock = getBlockByHash(link.getTargetHash(), false);
+                  Block refBlock = getBlockByHash(link.getTargetHash(), false);
                     if (refBlock == null) {
                         result = ImportResult.NO_PARENT;
                         result.setHash(link.getTargetHash());
@@ -406,35 +418,35 @@ public class BlockchainImpl implements Blockchain {
             // Save initial BlockInfo to database
             blockStore.saveBlockInfoV2(initialInfo);
 
-            // Phase 4.5: Save raw BlockV5 data to storage
-            // Attach BlockInfo to BlockV5 before saving (BlockV5 is immutable)
-            BlockV5 blockWithInfo = block.toBuilder().info(initialInfo).build();
-            blockStore.saveBlockV5(blockWithInfo);
+            // Phase 4.5: Save raw Block data to storage
+            // Attach BlockInfo to Block before saving (Block is immutable)
+            Block blockWithInfo = block.toBuilder().info(initialInfo).build();
+            blockStore.saveBlock(blockWithInfo);
 
-            log.info("BlockV5 connected and saved to storage: {}", block.getHash().toHexString());
+            log.info("Block connected and saved to storage: {}", block.getHash().toHexString());
 
-            // Phase 7.3: Notify listeners (e.g., pool listener) of new BlockV5
-            onNewBlockV5(blockWithInfo);
+            // Phase 7.3: Notify listeners (e.g., pool listener) of new Block
+            onNewBlock(blockWithInfo);
 
             return result;
 
         } catch (Throwable e) {
-            log.error("Error connecting BlockV5: " + e.getMessage(), e);
+            log.error("Error connecting Block: " + e.getMessage(), e);
             return ImportResult.ERROR;
         }
     }
 
     /**
-     * Notify listeners of new BlockV5 (v5.1 implementation)
+     * Notify listeners of new Block (v5.1 implementation)
      *
-     * Phase 7.3: Pool listener migration to BlockV5.
-     * Sends BlockV5 serialized data to listener system (e.g., XdagPow).
+     * Phase 7.3: Pool listener migration to Block.
+     * Sends Block serialized data to listener system (e.g., XdagPow).
      *
-     * @param block BlockV5 to broadcast
+     * @param block Block to broadcast
      */
-    protected void onNewBlockV5(BlockV5 block) {
+    protected void onNewBlock(Block block) {
         for (Listener listener : listeners) {
-            // Serialize BlockV5 to bytes for listener
+            // Serialize Block to bytes for listener
             byte[] blockBytes = block.toBytes();
             listener.onMessage(new BlockMessage(Bytes.wrap(blockBytes), NEW_LINK));
         }
@@ -448,15 +460,15 @@ public class BlockchainImpl implements Blockchain {
     // Temporarily disabled - waiting for migration to v5.1 architecture
     /*
     /**
-     * Update BlockV5 ref field in database
+     * Update Block ref field in database
      *
-     * Phase 4 Step 2.3 Part 2: Update BlockInfo.ref for BlockV5.
+     * Phase 4 Step 2.3 Part 2: Update BlockInfo.ref for Block.
      *
-     * @param refBlock Referenced block (can be Block or BlockV5)
+     * @param refBlock Referenced block (can be Block or Block)
      * @param mainBlockHash Hash of the main block that references this block
      */
     /*
-    private void updateBlockV5Ref(BlockV5 refBlock, Bytes32 mainBlockHash) {
+    private void updateBlockRef(Block refBlock, Bytes32 mainBlockHash) {
         BlockInfo refInfo = refBlock.getInfo();
         if (refInfo == null) {
             log.warn("BlockInfo not found for ref block: {}", refBlock.getHash().toHexString());
@@ -472,17 +484,17 @@ public class BlockchainImpl implements Blockchain {
     */
 
     /**
-     * Create a reward BlockV5 for pool distribution (v5.1 implementation - Phase 7.6)
+     * Create a reward Block for pool distribution (v5.1 implementation - Phase 7.6)
      *
-     * Phase 7.6: Pool reward distribution using BlockV5 architecture.
-     * This method creates a BlockV5 containing Transaction references for reward distribution.
+     * Phase 7.6: Pool reward distribution using Block architecture.
+     * This method creates a Block containing Transaction references for reward distribution.
      *
      * Flow:
      * 1. Create Transaction objects for each recipient (foundation, pool)
      * 2. Sign each Transaction with the source key
      * 3. Save Transactions to TransactionStore
-     * 4. Create BlockV5 with Link.toTransaction() references
-     * 5. Return BlockV5 (caller will import via tryToConnect)
+     * 4. Create Block with Link.toTransaction() references
+     * 5. Return Block (caller will import via tryToConnect)
      *
      * @param sourceBlockHash Hash of source block (where funds come from)
      * @param recipients List of recipient addresses
@@ -490,11 +502,11 @@ public class BlockchainImpl implements Blockchain {
      * @param sourceKey ECKeyPair for signing transactions (source of funds)
      * @param nonce Account nonce for transaction
      * @param totalFee Total transaction fee
-     * @return BlockV5 containing reward transactions
+     * @return Block containing reward transactions
      * @see Transaction#createTransfer(Bytes32, Bytes32, XAmount, long, XAmount)
      * @see Link#toTransaction(Bytes32)
      */
-    public BlockV5 createRewardBlockV5(
+    public Block createRewardBlock(
             Bytes32 sourceBlockHash,
             List<Bytes32> recipients,
             List<XAmount> amounts,
@@ -550,7 +562,7 @@ public class BlockchainImpl implements Blockchain {
         allLinks.add(Link.toBlock(sourceBlockHash));  // Source block (where funds come from)
         allLinks.addAll(transactionLinks);            // Transaction references
 
-        // Create BlockV5 with current difficulty
+        // Create Block with current difficulty
         long timestamp = XdagTime.getCurrentTimestamp();
         org.apache.tuweni.units.bigints.UInt256 difficulty = chainStats.getDifficulty();
 
@@ -558,9 +570,9 @@ public class BlockchainImpl implements Blockchain {
         Bytes32 coinbase = keyPair2Hash(wallet.getDefKey());
 
         // Create reward block (candidate block with nonce = 0, no mining needed for reward distribution)
-        BlockV5 rewardBlock = BlockV5.createCandidate(timestamp, difficulty, coinbase, allLinks);
+        Block rewardBlock = Block.createCandidate(timestamp, difficulty, coinbase, allLinks);
 
-        log.info("Created reward BlockV5: {} transactions, source={}, total_fee={}",
+        log.info("Created reward Block: {} transactions, source={}, total_fee={}",
                  recipients.size(),
                  sourceBlockHash.toHexString().substring(0, 16) + "...",
                  totalFee.toDecimal(9, XUnit.XDAG).toPlainString());
@@ -569,7 +581,7 @@ public class BlockchainImpl implements Blockchain {
     }
 
     /**
-     * Create a genesis BlockV5 (v5.1 implementation - Phase 7.5)
+     * Create a genesis Block (v5.1 implementation - Phase 7.5)
      *
      * Phase 7.5: Genesis block creation for fresh node startup.
      * This is called when xdagStats.getOurLastBlockHash() == null.
@@ -583,10 +595,10 @@ public class BlockchainImpl implements Blockchain {
      *
      * @param key ECKeyPair for coinbase address
      * @param timestamp Genesis block timestamp
-     * @return BlockV5 genesis block
-     * @see BlockV5#createWithNonce(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, Bytes32, List)
+     * @return Block genesis block
+     * @see Block#createWithNonce(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, Bytes32, List)
      */
-    public BlockV5 createGenesisBlockV5(ECKeyPair key, long timestamp) {
+    public Block createGenesisBlock(ECKeyPair key, long timestamp) {
         // Genesis block uses minimal difficulty
         org.apache.tuweni.units.bigints.UInt256 genesisDifficulty =
             org.apache.tuweni.units.bigints.UInt256.ONE;
@@ -598,7 +610,7 @@ public class BlockchainImpl implements Blockchain {
         List<Link> emptyLinks = new ArrayList<>();
 
         // Create genesis block with zero nonce (no mining needed)
-        BlockV5 genesisBlock = BlockV5.createWithNonce(
+        Block genesisBlock = Block.createWithNonce(
             timestamp,
             genesisDifficulty,
             Bytes32.ZERO,  // nonce = 0
@@ -606,7 +618,7 @@ public class BlockchainImpl implements Blockchain {
             emptyLinks
         );
 
-        log.info("Created genesis BlockV5: epoch={}, hash={}, coinbase={}",
+        log.info("Created genesis Block: epoch={}, hash={}, coinbase={}",
                  XdagTime.getEpoch(timestamp),
                  genesisBlock.getHash().toHexString(),
                  coinbase.toHexString().substring(0, 16) + "...");
@@ -615,25 +627,25 @@ public class BlockchainImpl implements Blockchain {
     }
 
     /**
-     * Create a link BlockV5 for network health (v5.1 implementation - Phase 8.3.1)
+     * Create a link Block for network health (v5.1 implementation - Phase 8.3.1)
      *
-     * Phase 8.3.1: Orphan health system migration to BlockV5.
-     * Creates a BlockV5 that references orphan blocks to maintain network health.
+     * Phase 8.3.1: Orphan health system migration to Block.
+     * Creates a Block that references orphan blocks to maintain network health.
      *
      * Link blocks help prevent orphan blocks from being forgotten by periodically
      * referencing them. This maintains network connectivity and reduces orphan count.
      *
-     * Key differences from createMainBlockV5():
+     * Key differences from createMainBlock():
      * 1. No pretop block reference (link blocks only reference orphans)
      * 2. No mining required (nonce = 0)
      * 3. Uses all available space for orphan references
      *
-     * @return BlockV5 link block ready for import
+     * @return Block link block ready for import
      * @see #checkOrphan()
-     * @see BlockV5#createCandidate(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, List)
+     * @see Block#createCandidate(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, List)
      * @since Phase 8.3.1 v5.1
      */
-    public BlockV5 createLinkBlockV5() {
+    public Block createLinkBlock() {
         // Get current timestamp (link blocks don't use main time alignment)
         long timestamp = XdagTime.getCurrentTimestamp();
 
@@ -646,7 +658,7 @@ public class BlockchainImpl implements Blockchain {
         // Get orphan blocks to reference (use ALL available link slots)
         long[] sendTime = new long[2];
         sendTime[0] = timestamp;
-        List<Bytes32> orphans = orphanBlockStore.getOrphan(BlockV5.MAX_BLOCK_LINKS, sendTime);
+        List<Bytes32> orphans = orphanBlockStore.getOrphan(Block.MAX_BLOCK_LINKS, sendTime);
 
         List<Link> links = new ArrayList<>();
         for (Bytes32 orphan : orphans) {
@@ -654,43 +666,43 @@ public class BlockchainImpl implements Blockchain {
         }
 
         // Create link block (nonce = 0, no mining needed)
-        BlockV5 linkBlock = BlockV5.createCandidate(timestamp, difficulty, coinbase, links);
+        Block linkBlock = Block.createCandidate(timestamp, difficulty, coinbase, links);
 
-        log.debug("Created BlockV5 link block: epoch={}, orphans={}",
+        log.debug("Created Block link block: epoch={}, orphans={}",
                  XdagTime.getEpoch(timestamp), links.size());
 
         return linkBlock;
     }
 
-    @Override
-    public BlockV5 getBlockByHash(Bytes32 hash, boolean isRaw) {
-        if (hash == null) {
-            return null;
-        }
-
-        // Phase 8.3.2: Use BlockV5 version from blockStore
-        try {
-            return blockStore.getBlockV5ByHash(hash, isRaw);
-        } catch (Exception e) {
-            log.debug("Failed to get BlockV5 for hash {}: {}", hash.toHexString(), e.getMessage());
-            return null;
-        }
-    }
+//    @Override
+//    public Block getBlockByHash(Bytes32 hash, boolean isRaw) {
+//        if (hash == null) {
+//            return null;
+//        }
+//
+//        // Phase 8.3.2: Use Block version from blockStore
+//        try {
+//            return blockStore.getBlockByHash(hash, isRaw);
+//        } catch (Exception e) {
+//            log.debug("Failed to get Block for hash {}: {}", hash.toHexString(), e.getMessage());
+//            return null;
+//        }
+//    }
 
     // Temporarily disabled - waiting for migration to v5.1 architecture
     /*
     /**
-     * Get max difficulty link for BlockV5 (Phase 8.3.3)
+     * Get max difficulty link for Block (Phase 8.3.3)
      *
      * Returns the block with maximum difficulty link from BlockInfo.
      * For Phase 8.3.3, this internally uses Block for compatibility.
      *
-     * @param block BlockV5 to get maxDiffLink from
+     * @param block Block to get maxDiffLink from
      * @param isRaw Whether to load raw block data
      * @return Block with max difficulty (legacy, for internal use)
      */
     /*
-    private BlockV5 getMaxDiffLinkV5(BlockV5 block, boolean isRaw) {
+    private Block getMaxDiffLinkV5(Block block, boolean isRaw) {
         BlockInfo info = loadBlockInfo(block);
         if (info != null && info.getMaxDiffLink() != null) {
             Bytes32 maxDiffLinkHash = info.getMaxDiffLink();
@@ -776,19 +788,6 @@ public class BlockchainImpl implements Blockchain {
                  maxHosts, maxBlocks, maxMain, newMaxDiff.toDecimalString());
     }
 
-    /**
-     * Get extended blockchain statistics (Phase 7.3)
-     *
-     * Phase 7.3: XdagExtStats provides detailed hash rate tracking.
-     * This includes historical hash rate data for network and local node.
-     *
-     * @return XdagExtStats containing hash rate history
-     */
-    @Override
-    public XdagExtStats getXdagExtStats() {
-        return this.xdagExtStats;
-    }
-
     public XAmount getReward(long nmain) {
         XAmount start = getStartAmount(nmain);
         long nanoAmount = start.toXAmount().toLong();
@@ -818,24 +817,24 @@ public class BlockchainImpl implements Blockchain {
     }
 
     /**
-     * Get BlockV5 by its hash (Phase 7.3.0 - Legacy method, kept for compatibility)
+     * Get Block by its hash (Phase 7.3.0 - Legacy method, kept for compatibility)
      *
      * This is a legacy helper method that duplicates getBlockByHash().
-     * Kept for internal callers that explicitly want BlockV5.
+     * Kept for internal callers that explicitly want Block.
      *
      * @param hash Block hash
      * @param isRaw Whether to include raw block data
-     * @return BlockV5 or null if not found
+     * @return Block or null if not found
      */
-    public BlockV5 getBlockV5ByHash(Bytes32 hash, boolean isRaw) {
+    public Block getBlockByHash(Bytes32 hash, boolean isRaw) {
         if (hash == null) {
             return null;
         }
 
         try {
-            return blockStore.getBlockV5ByHash(hash, isRaw);
+            return blockStore.getBlockByHash(hash, isRaw);
         } catch (Exception e) {
-            log.debug("Failed to get BlockV5 for hash {}: {}",
+            log.debug("Failed to get Block for hash {}: {}",
                      hash.toHexString(), e.getMessage());
             return null;
         }
@@ -865,14 +864,14 @@ public class BlockchainImpl implements Blockchain {
             nblk = nblk / 61 + (b ? 1 : 0);
         }
         while (nblk-- > 0) {
-            // Phase 8.3.1: Use BlockV5 for link block creation
+            // Phase 8.3.1: Use Block for link block creation
             // Link blocks help maintain network health by referencing orphan blocks
-            BlockV5 linkBlock = createLinkBlockV5();
+            Block linkBlock = createLinkBlock();
 
-            // Import using working BlockV5 method
+            // Import using working Block method
             ImportResult result = tryToConnect(linkBlock);
             if (result == IMPORTED_NOT_BEST || result == IMPORTED_BEST) {
-                onNewBlockV5(linkBlock);
+                onNewBlock(linkBlock);
             }
         }
     }
@@ -956,7 +955,7 @@ public class BlockchainImpl implements Blockchain {
     // ========== Phase 7.3 Fix: Missing Interface Methods ==========
 
     /**
-     * Remove orphan block from pool (Phase 7.3 continuation - BlockV5 implementation)
+     * Remove orphan block from pool (Phase 7.3 continuation - Block implementation)
      *
      * v5.1 Design: Simple orphan removal. When a block is referenced by another block,
      * it's no longer an orphan and should be removed from the orphan pool.
@@ -1027,53 +1026,53 @@ public class BlockchainImpl implements Blockchain {
     /**
      * Load BlockInfo from database (Phase 7.3 continuation)
      *
-     * Loads BlockInfo for a given BlockV5 from storage.
-     * If BlockV5 already has info attached, returns it directly.
+     * Loads BlockInfo for a given Block from storage.
+     * If Block already has info attached, returns it directly.
      *
-     * @param block BlockV5 to load info for
+     * @param block Block to load info for
      * @return BlockInfo or null if not found
      */
-    public BlockInfo loadBlockInfo(BlockV5 block) {
-        // Check if BlockV5 already has BlockInfo attached
+    public BlockInfo loadBlockInfo(Block block) {
+        // Check if Block already has BlockInfo attached
         if (block.getInfo() != null) {
             return block.getInfo();
         }
 
         // Load from BlockStore using hash
-        BlockV5 blockWithInfo = blockStore.getBlockV5InfoByHash(block.getHash());
+        Block blockWithInfo = blockStore.getBlockInfoByHash(block.getHash());
         if (blockWithInfo != null && blockWithInfo.getInfo() != null) {
             return blockWithInfo.getInfo();
         }
 
-        log.debug("BlockInfo not found for BlockV5: {}", block.getHash().toHexString());
+        log.debug("BlockInfo not found for Block: {}", block.getHash().toHexString());
         return null;
     }
 
     /**
-     * Get BlockV5 by height (Phase 7.3 continuation)
+     * Get Block by height (Phase 7.3 continuation)
      *
-     * Uses BlockStore.getBlockV5ByHeight() to retrieve main block at given height.
+     * Uses BlockStore.getBlockByHeight() to retrieve main block at given height.
      *
      * @param height Block height (main block number)
-     * @return BlockV5 or null if not found
+     * @return Block or null if not found
      */
     @Override
-    public BlockV5 getBlockByHeight(long height) {
-        return blockStore.getBlockV5ByHeight(height, false);
+    public Block getBlockByHeight(long height) {
+        return blockStore.getBlockByHeight(height, false);
     }
 
     /**
      * Get blocks by time range (Phase 7.3 continuation)
      *
-     * Uses BlockStore.getBlockV5sByTime() to retrieve blocks in time range.
+     * Uses BlockStore.getBlocksByTime() to retrieve blocks in time range.
      *
      * @param starttime Start timestamp
      * @param endtime End timestamp
-     * @return List of BlockV5 in time range
+     * @return List of Block in time range
      */
     @Override
-    public List<BlockV5> getBlocksByTime(long starttime, long endtime) {
-        return blockStore.getBlockV5sByTime(starttime, endtime);
+    public List<Block> getBlocksByTime(long starttime, long endtime) {
+        return blockStore.getBlocksByTime(starttime, endtime);
     }
 
     /**
@@ -1083,18 +1082,18 @@ public class BlockchainImpl implements Blockchain {
      * Uses getBlockByHeight() to retrieve each block.
      *
      * @param count Number of blocks to list
-     * @return List of main BlockV5s
+     * @return List of main Blocks
      */
     @Override
-    public List<BlockV5> listMainBlocks(int count) {
-        List<BlockV5> result = Lists.newArrayList();
+    public List<Block> listMainBlocks(int count) {
+        List<Block> result = Lists.newArrayList();
 
         long currentHeight = chainStats.getMainBlockCount();
         long startHeight = Math.max(1, currentHeight - count + 1);
 
         // Retrieve blocks from latest to oldest (or oldest to latest, depending on requirement)
         for (long height = currentHeight; height >= startHeight && height > 0; height--) {
-            BlockV5 block = getBlockByHeight(height);
+            Block block = getBlockByHeight(height);
             if (block != null) {
                 result.add(block);
             } else {
@@ -1113,11 +1112,11 @@ public class BlockchainImpl implements Blockchain {
      * Uses memOurBlocks to identify our blocks, then retrieves them.
      *
      * @param count Number of blocks to list
-     * @return List of mined BlockV5s
+     * @return List of mined Blocks
      */
     @Override
-    public List<BlockV5> listMinedBlocks(int count) {
-        List<BlockV5> result = Lists.newArrayList();
+    public List<Block> listMinedBlocks(int count) {
+        List<Block> result = Lists.newArrayList();
 
         // memOurBlocks contains: hash -> keyIndex mapping for blocks we mined
         int collected = 0;
@@ -1128,7 +1127,7 @@ public class BlockchainImpl implements Blockchain {
 
             // Convert Bytes to Bytes32
             Bytes32 blockHash = Bytes32.wrap(hash);
-            BlockV5 block = getBlockByHash(blockHash, false);
+            Block block = getBlockByHash(blockHash, false);
 
             if (block != null) {
                 result.add(block);
@@ -1143,7 +1142,7 @@ public class BlockchainImpl implements Blockchain {
     }
 
     /**
-     * Create main BlockV5 for mining (Phase 7.3 continuation - v5.1 design)
+     * Create main Block for mining (Phase 7.3 continuation - v5.1 design)
      *
      * v5.1 Key Changes:
      * - NO LinkBlock concept - all blocks are candidate blocks competing for main chain
@@ -1151,18 +1150,18 @@ public class BlockchainImpl implements Blockchain {
      * - All blocks have nonce, coinbase, and compete for main block selection
      * - Main block = block with smallest hash in each epoch
      *
-     * @return BlockV5 candidate for mining (nonce = 0, needs POW)
+     * @return Block candidate for mining (nonce = 0, needs POW)
      */
     @Override
-    public BlockV5 createMainBlockV5() {
+    public Block createMainBlock() {
         // 1. Get previous main block (last confirmed main block)
         long currentMainHeight = chainStats.getMainBlockCount();
-        BlockV5 prevMainBlock = null;
+        Block prevMainBlock = null;
 
         if (currentMainHeight > 0) {
             prevMainBlock = getBlockByHeight(currentMainHeight);
             if (prevMainBlock == null) {
-                log.warn("Cannot create main BlockV5: previous main block not found at height {}", currentMainHeight);
+                log.warn("Cannot create main Block: previous main block not found at height {}", currentMainHeight);
                 return null;
             }
         }
@@ -1186,7 +1185,7 @@ public class BlockchainImpl implements Blockchain {
 
         // Add orphan block references (for network health)
         // v5.1: No LinkBlock - just reference orphans directly
-        int maxOrphans = BlockV5.MAX_BLOCK_LINKS - (prevMainBlock != null ? 1 : 0);
+        int maxOrphans = Block.MAX_BLOCK_LINKS - (prevMainBlock != null ? 1 : 0);
         long[] sendTime = new long[2];
         sendTime[0] = timestamp;
         List<Bytes32> orphans = orphanBlockStore.getOrphan(maxOrphans, sendTime);
@@ -1196,9 +1195,9 @@ public class BlockchainImpl implements Blockchain {
         }
 
         // 6. Create candidate block (nonce = 0, ready for mining)
-        BlockV5 candidateBlock = BlockV5.createCandidate(timestamp, difficulty, coinbase, links);
+        Block candidateBlock = Block.createCandidate(timestamp, difficulty, coinbase, links);
 
-        log.info("Created mining candidate BlockV5: epoch={}, prevMainHeight={}, orphans={}, hash={}",
+        log.info("Created mining candidate Block: epoch={}, prevMainHeight={}, orphans={}, hash={}",
                 XdagTime.getEpoch(timestamp),
                 currentMainHeight,
                 orphans.size(),
@@ -1219,6 +1218,9 @@ public class BlockchainImpl implements Blockchain {
 
     // Phase 7.3.1: XdagTopStatus deleted - top block state merged into ChainStats
     // Use getChainStats().getTopBlock(), getChainStats().getTopDifficulty(), etc.
+
+    // Phase 7.3.1: XdagExtStats deleted - hashrate tracking moved to ChainStats
+    // Future hashrate metrics will be added directly to ChainStats
 
     enum OrphanRemoveActions {
         ORPHAN_REMOVE_NORMAL, ORPHAN_REMOVE_REUSE, ORPHAN_REMOVE_EXTRA

@@ -24,7 +24,10 @@
 
 package io.xdag.net.message;
 
-import io.xdag.net.message.consensus.*;
+import io.xdag.net.message.consensus.BlockRequestMessage;
+import io.xdag.net.message.consensus.NewBlockMessage;
+import io.xdag.net.message.consensus.SyncBlockRequestMessage;
+import io.xdag.net.message.consensus.SyncBlockMessage;
 import io.xdag.net.message.p2p.DisconnectMessage;
 import io.xdag.net.message.p2p.HelloMessage;
 import io.xdag.net.message.p2p.InitMessage;
@@ -62,22 +65,11 @@ public class MessageFactory {
                 case DISCONNECT -> new DisconnectMessage(body);
                 case PING -> new PingMessage(body);
                 case PONG -> new PongMessage(body);
-                case BLOCKS_REQUEST -> new BlocksRequestMessage(body);
-                case BLOCKS_REPLY -> new BlocksReplyMessage(body);
-                case SUMS_REQUEST -> new SumRequestMessage(body);
-                case SUMS_REPLY -> new SumReplyMessage(body);
-                case BLOCKEXT_REQUEST -> new BlockExtRequestMessage(body);
-                case BLOCKEXT_REPLY -> new BlockExtReplyMessage(body);
                 case BLOCK_REQUEST -> new BlockRequestMessage(body);
-                // Phase 7.3.0: Removed NEW_BLOCK and SYNC_BLOCK cases (use V5 messages)
-                // case NEW_BLOCK -> new NewBlockMessage(body);
-                // case SYNC_BLOCK -> new SyncBlockMessage(body);
                 case SYNCBLOCK_REQUEST -> new SyncBlockRequestMessage(body);
-                // Phase 3: BlockV5 messages
-                case NEW_BLOCK_V5 -> new NewBlockV5Message(body);
-                case SYNC_BLOCK_V5 -> new SyncBlockV5Message(body);
-                // Phase 7.3: BlockV5 request
-                case BLOCKV5_REQUEST -> new BlockV5RequestMessage(body);
+                // Phase 3: Block messages
+                case NEW_BLOCK -> new NewBlockMessage(body);
+                case SYNC_BLOCK -> new SyncBlockMessage(body);
             };
         } catch (Exception e) {
             throw new MessageException("Failed to decode message", e);

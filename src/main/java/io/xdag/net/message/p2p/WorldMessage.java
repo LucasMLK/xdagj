@@ -23,14 +23,12 @@
  */
 package io.xdag.net.message.p2p;
 
+import io.xdag.Network;
 import io.xdag.crypto.keys.ECKeyPair;
+import io.xdag.net.message.MessageCode;
 import java.util.Arrays;
-
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
-
-import io.xdag.Network;
-import io.xdag.net.message.MessageCode;
 
 @Slf4j
 public class WorldMessage extends HandshakeMessage {

@@ -29,10 +29,8 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.handler.timeout.ReadTimeoutHandler;
 import io.xdag.Kernel;
 import io.xdag.net.message.MessageQueue;
-
 import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
-
 import lombok.Getter;
 import lombok.Setter;
 

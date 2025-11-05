@@ -23,9 +23,8 @@
  */
 
 package io.xdag.cli;
-import io.xdag.crypto.keys.AddressUtils;
+
 import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
-import static uk.org.webcompere.systemstubs.SystemStubs.tapSystemOut;
 import static io.xdag.utils.WalletUtils.WALLET_PASSWORD_PROMPT;
 import static java.lang.System.setErr;
 import static java.lang.System.setOut;
@@ -42,7 +41,10 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static uk.org.webcompere.systemstubs.SystemStubs.tapSystemOut;
 
+import com.google.common.collect.Lists;
+import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.Constants;
 import io.xdag.config.DevnetConfig;
@@ -50,21 +52,16 @@ import io.xdag.config.MainnetConfig;
 import io.xdag.config.TestnetConfig;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.utils.BytesUtils;
-import io.xdag.Wallet;
-
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mockito;
-
-import com.google.common.collect.Lists;
 
 public class XdagCliTest {
     private Config config;

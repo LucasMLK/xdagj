@@ -24,15 +24,16 @@
 
 package io.xdag.serialization;
 
-import io.xdag.core.*;
-import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
-import org.apache.tuweni.bytes.MutableBytes;
-import org.apache.tuweni.units.bigints.UInt256;
-
+import io.xdag.core.BlockInfo;
+import io.xdag.core.ChainStats;
+import io.xdag.core.Snapshot;
+import io.xdag.core.SnapshotInfo;
+import io.xdag.core.XAmount;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.math.BigInteger;
+import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt256;
 
 /**
  * Compact serializer for XDAG data structures

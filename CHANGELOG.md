@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Support for UTF-8 remark data (up to 1KB)
   - Hash caching mechanism for performance
 
-- **BlockV5**: Immutable block structure with 48MB capacity
+- **Block**: Immutable block structure with 48MB capacity
   - BlockHeader (104 bytes fixed): timestamp, difficulty, nonce, coinbase
   - Links (33 bytes each): 32-byte hash + 1-byte type
   - Support for up to 1,485,000 transaction links per block
@@ -121,9 +121,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 #### For Developers
 - **Transaction Creation**: Use `Transaction.builder()` instead of creating Blocks
-- **Block Creation**: Use `BlockV5.builder()` with Link references
+- **Block Creation**: Use `Block.builder()` with Link references
 - **Storage**: Use `TransactionStore` for independent transaction storage
-- **Validation**: Use `BlockchainImpl.tryToConnect(BlockV5)` method
+- **Validation**: Use `BlockchainImpl.tryToConnect(Block)` method
 
 ### Breaking Changes
 - None - Full backward compatibility maintained

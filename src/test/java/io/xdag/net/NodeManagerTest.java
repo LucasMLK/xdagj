@@ -25,16 +25,13 @@ package io.xdag.net;
 
 import static org.junit.Assert.assertTrue;
 
+import com.google.common.collect.Lists;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
-
 import java.net.InetSocketAddress;
 import java.util.List;
-
 import org.junit.Before;
 import org.junit.Test;
-
-import com.google.common.collect.Lists;
 
 public class NodeManagerTest {
 

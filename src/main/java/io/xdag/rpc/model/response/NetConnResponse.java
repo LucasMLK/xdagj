@@ -23,9 +23,9 @@
  */
 package io.xdag.rpc.model.response;
 
+import java.net.InetSocketAddress;
 import lombok.Builder;
 import lombok.Data;
-import java.net.InetSocketAddress;
 
 @Data
 @Builder

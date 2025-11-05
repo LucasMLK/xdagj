@@ -24,11 +24,10 @@
 
 package io.xdag.core;
 
-import lombok.Value;
-import org.apache.tuweni.bytes.Bytes32;
-
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import lombok.Value;
+import org.apache.tuweni.bytes.Bytes32;
 
 /**
  * Lightweight DAG edge (Link) for XDAG v5.1

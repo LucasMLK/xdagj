@@ -25,10 +25,9 @@
 package io.xdag.db.store;
 
 import io.xdag.core.BlockInfo;
-import org.apache.tuweni.bytes.Bytes32;
-
 import java.util.List;
 import java.util.Optional;
+import org.apache.tuweni.bytes.Bytes32;
 
 /**
  * Storage interface for finalized blocks (blocks older than 12 days / 16384 epochs)

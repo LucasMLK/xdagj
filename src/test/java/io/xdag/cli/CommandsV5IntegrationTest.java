@@ -24,26 +24,28 @@
 
 package io.xdag.cli;
 
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import io.xdag.Kernel;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
-import io.xdag.core.*;
+import io.xdag.core.BlockchainImpl;
+import io.xdag.core.XAmount;
+import io.xdag.core.XUnit;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.db.AddressStore;
 import io.xdag.db.BlockStore;
 import io.xdag.db.TransactionHistoryStore;
 import io.xdag.db.TransactionStore;
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt64;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
 /**
  * Integration tests for Commands v5.1 xferV2()
@@ -131,9 +133,9 @@ public class CommandsV5IntegrationTest {
      * - remark: "Test transfer"
      *
      * 预期结果:
-     * - 返回成功消息包含"Transaction created"和"BlockV5 created"
+     * - 返回成功消息包含"Transaction created"和"Block created"
      * - Transaction被创建并存储
-     * - BlockV5被创建
+     * - Block被创建
      * - nonce递增到1
      */
     @Test
@@ -147,8 +149,8 @@ public class CommandsV5IntegrationTest {
         //    - Transaction created with correct parameters
         //    - Transaction signed with sender's key
         //    - Transaction stored in TransactionStore
-        //    - BlockV5 created with Link to Transaction
-        //    - BlockV5 broadcast to network
+        //    - Block created with Link to Transaction
+        //    - Block broadcast to network
         //    - Nonce incremented
         //
         // Example verification:
@@ -158,9 +160,9 @@ public class CommandsV5IntegrationTest {
         //     "Test transfer"
         // );
         // assertTrue(result.toString().contains("Transaction created"));
-        // assertTrue(result.toString().contains("BlockV5 created"));
+        // assertTrue(result.toString().contains("Block created"));
         // verify(mockTransactionStore).saveTransaction(any(Transaction.class));
-        // verify(mockBlockchain).tryToConnect(any(BlockV5.class));
+        // verify(mockBlockchain).tryToConnect(any(Block.class));
 
         assertTrue("Test structure created successfully", true);
     }
@@ -180,7 +182,7 @@ public class CommandsV5IntegrationTest {
      * 预期结果:
      * - 返回错误消息"Balance not enough"
      * - 不创建Transaction
-     * - 不创建BlockV5
+     * - 不创建Block
      */
     @Test
     public void testXferV2_InsufficientBalance() {
@@ -308,24 +310,24 @@ public class CommandsV5IntegrationTest {
     }
 
     /**
-     * Test 6: BlockV5创建验证
+     * Test 6: Block创建验证
      *
-     * 场景：验证xferV2创建的BlockV5结构正确
+     * 场景：验证xferV2创建的Block结构正确
      *
      * 预期结果:
-     * - BlockV5包含正确的BlockHeader
-     * - BlockV5.links包含一个Link.toTransaction
+     * - Block包含正确的BlockHeader
+     * - Block.links包含一个Link.toTransaction
      * - Link指向创建的Transaction
      */
     @Test
-    public void testXferV2_BlockV5Creation() {
-        // Test that xferV2 creates proper BlockV5 structure
+    public void testXferV2_BlockCreation() {
+        // Test that xferV2 creates proper Block structure
         //
         // commands.xferV2(XAmount.of(10, XUnit.XDAG), recipientAddress, null);
         //
-        // ArgumentCaptor<BlockV5> captor = ArgumentCaptor.forClass(BlockV5.class);
+        // ArgumentCaptor<Block> captor = ArgumentCaptor.forClass(Block.class);
         // verify(mockBlockchain).tryToConnect(captor.capture());
-        // BlockV5 block = captor.getValue();
+        // Block block = captor.getValue();
         //
         // assertNotNull(block.getHeader());
         // assertEquals(1, block.getLinks().size());

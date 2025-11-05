@@ -24,20 +24,51 @@
 
 package io.xdag.cli;
 
+import static io.xdag.config.Constants.BI_APPLIED;
+import static io.xdag.config.Constants.BI_MAIN;
+import static io.xdag.config.Constants.BI_MAIN_CHAIN;
+import static io.xdag.config.Constants.BI_MAIN_REF;
+import static io.xdag.config.Constants.BI_OURS;
+import static io.xdag.config.Constants.BI_REF;
+import static io.xdag.config.Constants.BI_REMARK;
+import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
+import static io.xdag.utils.BasicUtils.address2Hash;
+import static io.xdag.utils.BasicUtils.compareAmountTo;
+import static io.xdag.utils.BasicUtils.getHash;
+import static io.xdag.utils.BasicUtils.hash2Address;
+import static io.xdag.utils.BasicUtils.hash2byte;
+import static io.xdag.utils.BasicUtils.keyPair2Hash;
+import static io.xdag.utils.BasicUtils.pubAddress2Hash;
+import static io.xdag.utils.BasicUtils.xdagHashRate;
+import static io.xdag.utils.WalletUtils.checkAddress;
+import static io.xdag.utils.WalletUtils.fromBase58;
+
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import io.xdag.Kernel;
-import io.xdag.core.*;
+import io.xdag.core.BlockHeader;
+import io.xdag.core.BlockInfo;
+import io.xdag.core.Block;
+import io.xdag.core.ChainStats;
+import io.xdag.core.ImportResult;
+import io.xdag.core.Link;
+import io.xdag.core.Transaction;
+import io.xdag.core.XAmount;
+import io.xdag.core.XUnit;
+import io.xdag.core.XdagState;
 import io.xdag.crypto.encoding.Base58;
 import io.xdag.crypto.exception.AddressFormatException;
 import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.net.Channel;
 import io.xdag.pool.ChannelSupervise;
-import io.xdag.utils.BasicUtils;
-import io.xdag.utils.BytesUtils;
 import io.xdag.utils.XdagTime;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -45,23 +76,8 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.time.FastDateFormat;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-import org.apache.tuweni.bytes.MutableBytes32;
 import org.apache.tuweni.units.bigints.UInt64;
 import org.bouncycastle.util.encoders.Hex;
-
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
-
-import static io.xdag.config.Constants.*;
-// TODO v5.1: Restore after migrating legacy display methods
-// import static io.xdag.core.XdagField.FieldType.*;
-import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
-import static io.xdag.utils.BasicUtils.*;
-import static io.xdag.utils.WalletUtils.*;
 
 /**
  * Command line interface for XDAG operations
@@ -93,33 +109,33 @@ public class Commands {
                 """;
     }
 
-    // ========== Phase 8.1: BlockV5 Display Methods ==========
+    // ========== Phase 8.1: Block Display Methods ==========
 
     /**
-     * Print BlockV5 in list format (v5.1 implementation)
+     * Print Block in list format (v5.1 implementation)
      *
-     * Phase 8.1: BlockV5 display for CLI commands.
+     * Phase 8.1: Block display for CLI commands.
      * Shows minimal v5.1 BlockInfo fields (hash, height, timestamp).
      *
-     * @param block BlockV5 to print
+     * @param block Block to print
      * @return Formatted string for block list display
      */
-    public static String printBlockV5(BlockV5 block) {
-        return printBlockV5(block, false);
+    public static String printBlock(Block block) {
+        return printBlock(block, false);
     }
 
     /**
-     * Print BlockV5 with optional address-only mode (v5.1 implementation)
+     * Print Block with optional address-only mode (v5.1 implementation)
      *
-     * Phase 8.1: BlockV5 display for CLI commands.
+     * Phase 8.1: Block display for CLI commands.
      * v5.1 minimal design: Only hash, height, timestamp, difficulty available.
      * No flags, amount, fee, or remark in v5.1 BlockInfo.
      *
-     * @param block BlockV5 to print
+     * @param block Block to print
      * @param print_only_addresses If true, print only address and height
      * @return Formatted string for block list display
      */
-    public static String printBlockV5(BlockV5 block, boolean print_only_addresses) {
+    public static String printBlock(Block block, boolean print_only_addresses) {
         StringBuilder sbd = new StringBuilder();
         BlockInfo info = block.getInfo();
 
@@ -148,9 +164,9 @@ public class Commands {
     }
 
     /**
-     * Print detailed BlockV5 info (v5.1 implementation)
+     * Print detailed Block info (v5.1 implementation)
      *
-     * Phase 8.1: BlockV5 detailed display for block info command.
+     * Phase 8.1: Block detailed display for block info command.
      * v5.1 minimal design shows only available fields from BlockInfo.
      *
      * Note: Transaction details and history are NOT shown here because:
@@ -158,10 +174,10 @@ public class Commands {
      * - Transaction data stored separately in TransactionStore
      * - Would require additional queries to show full transaction details
      *
-     * @param block BlockV5 to display
+     * @param block Block to display
      * @return Formatted detailed block information
      */
-    public static String printBlockInfoV5(BlockV5 block) {
+    public static String printBlockInfoV5(Block block) {
         BlockInfo info = block.getInfo();
 
         if (info == null) {
@@ -297,8 +313,8 @@ public class Commands {
                     return "Invalid address format";
                 }
 
-                // Get BlockV5
-                BlockV5 block = kernel.getBlockchain().getBlockByHash(hash, false);
+                // Get Block
+                Block block = kernel.getBlockchain().getBlockByHash(hash, false);
                 if (block == null) {
                     return "Block not found";
                 }
@@ -397,8 +413,6 @@ public class Commands {
                 kernel.getBlockchain().getSupply(chainStats.getMainBlockCount()).toDecimal(9, XUnit.XDAG).toPlainString(),
                 kernel.getBlockchain().getSupply(Math.max(chainStats.getMainBlockCount(), chainStats.getTotalMainBlockCount())).toDecimal(9, XUnit.XDAG).toPlainString(),
                 kernel.getAddressStore().getAllBalance().toDecimal(9, XUnit.XDAG).toPlainString(),
-                xdagHashRate(kernel.getBlockchain().getXdagExtStats().getHashRateOurs()),
-                xdagHashRate(kernel.getBlockchain().getXdagExtStats().getHashRateTotal()),
                 kernel.getAddressStore().getAddressSize().toLong(),
                 finalizedStats
         );
@@ -412,9 +426,9 @@ public class Commands {
     }
 
     /**
-     * Get block info by hash (Phase 8.1: Restored using BlockV5)
+     * Get block info by hash (Phase 8.1: Restored using Block)
      *
-     * Phase 8.1: Restored CLI command using BlockV5.
+     * Phase 8.1: Restored CLI command using Block.
      * Uses getBlockByHash() from Blockchain and printBlockInfoV5() for display.
      *
      * @param blockhash Block hash to lookup
@@ -422,7 +436,7 @@ public class Commands {
      */
     public String block(Bytes32 blockhash) {
         try {
-            BlockV5 block = kernel.getBlockchain().getBlockByHash(blockhash, true);
+            Block block = kernel.getBlockchain().getBlockByHash(blockhash, true);
             if (block == null) {
                 return "Block not found";
             }
@@ -434,9 +448,9 @@ public class Commands {
     }
 
     /**
-     * Get block info by address (Phase 8.1: Restored using BlockV5)
+     * Get block info by address (Phase 8.1: Restored using Block)
      *
-     * Phase 8.1: Restored CLI command using BlockV5.
+     * Phase 8.1: Restored CLI command using Block.
      * Converts address to hash, then uses block(Bytes32).
      *
      * @param address Block address (various formats supported)
@@ -448,7 +462,7 @@ public class Commands {
     }
 
     // Phase 9.3: printBlockInfo() deprecated in v5.1 (uses Block, Address, TxHistory which no longer exist)
-    // Replaced by printBlockInfoV5() which uses BlockV5 and TransactionStore
+    // Replaced by printBlockInfoV5() which uses Block and TransactionStore
     /*
     public String printBlockInfo(Block block, boolean raw) {
         block.parse();
@@ -561,43 +575,43 @@ public class Commands {
     */
 
     /**
-     * List main blocks (Phase 8.1: Restored using BlockV5)
+     * List main blocks (Phase 8.1: Restored using Block)
      *
-     * Phase 8.1: Restored CLI command using BlockV5 display.
-     * Uses listMainBlocks() from Blockchain and printBlockV5() for display.
+     * Phase 8.1: Restored CLI command using Block display.
+     * Uses listMainBlocks() from Blockchain and printBlock() for display.
      *
      * @param n Number of blocks to list
      * @return Formatted list of main blocks
      */
     public String mainblocks(int n) {
-        List<BlockV5> blockV5List = kernel.getBlockchain().listMainBlocks(n);
+        List<Block> blockList = kernel.getBlockchain().listMainBlocks(n);
 
-        if (CollectionUtils.isEmpty(blockV5List)) {
+        if (CollectionUtils.isEmpty(blockList)) {
             return "empty";
         }
 
         return printHeaderBlockList() +
-                blockV5List.stream().map(Commands::printBlockV5).collect(Collectors.joining("\n"));
+                blockList.stream().map(Commands::printBlock).collect(Collectors.joining("\n"));
     }
 
     /**
-     * List mined blocks (Phase 8.1: Restored using BlockV5)
+     * List mined blocks (Phase 8.1: Restored using Block)
      *
-     * Phase 8.1: Restored CLI command using BlockV5 display.
-     * Uses listMinedBlocks() from Blockchain and printBlockV5() for display.
+     * Phase 8.1: Restored CLI command using Block display.
+     * Uses listMinedBlocks() from Blockchain and printBlock() for display.
      *
      * @param n Number of blocks to list
      * @return Formatted list of mined blocks
      */
     public String minedBlocks(int n) {
-        List<BlockV5> blockV5List = kernel.getBlockchain().listMinedBlocks(n);
+        List<Block> blockList = kernel.getBlockchain().listMinedBlocks(n);
 
-        if (CollectionUtils.isEmpty(blockV5List)) {
+        if (CollectionUtils.isEmpty(blockList)) {
             return "empty";
         }
 
         return printHeaderBlockList() +
-                blockV5List.stream().map(Commands::printBlockV5).collect(Collectors.joining("\n"));
+                blockList.stream().map(Commands::printBlock).collect(Collectors.joining("\n"));
     }
 
     /**
@@ -744,7 +758,7 @@ public class Commands {
             String timeStr = "";
             Bytes32 blockHash = kernel.getTransactionStore().getBlockByTransaction(tx.getHash());
             if (blockHash != null) {
-                BlockV5 block = kernel.getBlockchain().getBlockByHash(blockHash, false);
+                Block block = kernel.getBlockchain().getBlockByHash(blockHash, false);
                 if (block != null) {
                     long timestamp = XdagTime.xdagTimestampToMs(block.getTimestamp());
                     timeStr = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(timestamp);
@@ -824,7 +838,7 @@ public class Commands {
      *
      * Key differences from xfer():
      * 1. Uses Transaction instead of Address
-     * 2. Uses BlockV5 instead of Block
+     * 2. Uses Block instead of Block
      * 3. Uses Link to reference Transaction
      * 4. Stores Transaction in TransactionStore
      * 5. Supports configurable fee
@@ -915,7 +929,7 @@ public class Commands {
             // Save Transaction to TransactionStore
             kernel.getTransactionStore().saveTransaction(signedTx);
 
-            // Create BlockV5 with Transaction link
+            // Create Block with Transaction link
             List<Link> links = Lists.newArrayList(Link.toTransaction(signedTx.getHash()));
 
             // Create BlockHeader
@@ -924,18 +938,18 @@ public class Commands {
                     .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
                     .nonce(Bytes32.ZERO)
                     .coinbase(fromAddress)
-                    .hash(null)  // Will be calculated by BlockV5.getHash()
+                    .hash(null)  // Will be calculated by Block.getHash()
                     .build();
 
-            // Create BlockV5
-            BlockV5 block = BlockV5.builder()
+            // Create Block
+            Block block = Block.builder()
                     .header(header)
                     .links(links)
                     .info(null)  // Will be initialized by tryToConnectV2()
                     .build();
 
             // Validate and add block
-            // Phase 4 Layer 3 Task 1.1: Blockchain interface now supports BlockV5
+            // Phase 4 Layer 3 Task 1.1: Blockchain interface now supports Block
             ImportResult result = kernel.getBlockchain().tryToConnect(block);
 
             if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
@@ -943,9 +957,9 @@ public class Commands {
                 byte[] fromAddr = toBytesAddress(fromAccount).toArray();
                 kernel.getAddressStore().updateTxQuantity(fromAddr, UInt64.valueOf(currentNonce));
 
-                // Phase 4 Layer 3 Task 1.2: Broadcast BlockV5 using new network method
+                // Phase 4 Layer 3 Task 1.2: Broadcast Block using new network method
                 int ttl = kernel.getConfig().getNodeSpec().getTTL();
-                kernel.broadcastBlockV5(block, ttl);
+                kernel.broadcastBlock(block, ttl);
 
                 // Phase 2 Task 2.1: Build success message with optional remark
                 StringBuilder successMsg = new StringBuilder();
@@ -970,7 +984,7 @@ public class Commands {
 
                 successMsg.append(String.format("  Nonce: %d\n", currentNonce));
                 successMsg.append(String.format("  Status: %s\n", result.name()));
-                successMsg.append(String.format("\n✅ BlockV5 broadcasted to network (TTL=%d)", ttl));
+                successMsg.append(String.format("\n✅ Block broadcasted to network (TTL=%d)", ttl));
 
                 return successMsg.toString();
             } else {
@@ -999,7 +1013,7 @@ public class Commands {
      * 1. Uses address balances (not block balances)
      * 2. AddressStore handles confirmation logic automatically
      * 3. Creates Transaction objects for each transfer
-     * 4. Uses BlockV5 for transaction broadcast
+     * 4. Uses Block for transaction broadcast
      *
      * @return Transaction result message
      */
@@ -1084,7 +1098,7 @@ public class Commands {
                 // Save Transaction to TransactionStore
                 kernel.getTransactionStore().saveTransaction(signedTx);
 
-                // Create BlockV5 with Transaction link
+                // Create Block with Transaction link
                 List<Link> links = Lists.newArrayList(Link.toTransaction(signedTx.getHash()));
 
                 BlockHeader header = BlockHeader.builder()
@@ -1095,7 +1109,7 @@ public class Commands {
                         .hash(null)
                         .build();
 
-                BlockV5 block = BlockV5.builder()
+                Block block = Block.builder()
                         .header(header)
                         .links(links)
                         .info(null)
@@ -1110,7 +1124,7 @@ public class Commands {
 
                     // Broadcast
                     int ttl = kernel.getConfig().getNodeSpec().getTTL();
-                    kernel.broadcastBlockV5(block, ttl);
+                    kernel.broadcastBlock(block, ttl);
 
                     // Update stats
                     successCount++;
@@ -1153,7 +1167,7 @@ public class Commands {
      *
      * Key differences from xferToNode():
      * 1. Uses Transaction instead of Address
-     * 2. Uses BlockV5 instead of Block
+     * 2. Uses Block instead of Block
      * 3. Creates one Transaction per account balance
      * 4. Simpler logic: account-to-account transfers (not block-as-input)
      *
@@ -1163,7 +1177,7 @@ public class Commands {
      * @return Transaction result message (StringBuilder for compatibility)
      */
     public StringBuilder xferToNodeV2(Map<Bytes32, ECKeyPair> paymentsToNodesMap) {
-        // TODO v5.1: Rewrite to use BlockV5 Transaction system without Address class
+        // TODO v5.1: Rewrite to use Block Transaction system without Address class
         log.warn("Node reward distribution temporarily disabled - waiting for v5.1 Transaction migration");
         return new StringBuilder("Node reward distribution temporarily disabled - v5.1 migration in progress");
 

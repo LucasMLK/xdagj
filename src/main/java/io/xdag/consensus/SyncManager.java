@@ -24,16 +24,52 @@
 
 package io.xdag.consensus;
 
+import static io.xdag.config.Constants.REQUEST_BLOCKS_MAX_TIME;
+import static io.xdag.core.ImportResult.EXIST;
+import static io.xdag.core.ImportResult.IMPORTED_BEST;
+import static io.xdag.core.ImportResult.IMPORTED_NOT_BEST;
+import static io.xdag.core.ImportResult.INVALID_BLOCK;
+import static io.xdag.core.ImportResult.NO_PARENT;
+import static io.xdag.core.XdagState.CDST;
+import static io.xdag.core.XdagState.CDSTP;
+import static io.xdag.core.XdagState.CONN;
+import static io.xdag.core.XdagState.CONNP;
+import static io.xdag.core.XdagState.CTST;
+import static io.xdag.core.XdagState.CTSTP;
+import static io.xdag.utils.XdagTime.msToXdagtimestamp;
+
 import com.google.common.collect.Queues;
 import io.xdag.Kernel;
-import io.xdag.config.*;
-import io.xdag.core.*;
+import io.xdag.config.Config;
+import io.xdag.config.DevnetConfig;
+import io.xdag.config.MainnetConfig;
+import io.xdag.config.TestnetConfig;
+import io.xdag.core.AbstractXdagLifecycle;
+import io.xdag.core.Block;
+import io.xdag.core.Blockchain;
+import io.xdag.core.ChainStats;
+import io.xdag.core.ImportResult;
+import io.xdag.core.XdagState;
 import io.xdag.crypto.core.CryptoProvider;
 import io.xdag.db.TransactionHistoryStore;
-import io.xdag.net.Channel;
 import io.xdag.net.Peer;
+import io.xdag.net.message.consensus.NewBlockMessage;
+import io.xdag.net.message.consensus.SyncBlockMessage;
 import io.xdag.net.node.Node;
 import io.xdag.utils.XdagTime;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -41,19 +77,6 @@ import org.apache.commons.lang3.Strings;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.commons.lang3.time.FastDateFormat;
 import org.apache.tuweni.bytes.Bytes32;
-
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Queue;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
-
-import static io.xdag.config.Constants.REQUEST_BLOCKS_MAX_TIME;
-import static io.xdag.core.ImportResult.*;
-import static io.xdag.core.XdagState.*;
-import static io.xdag.utils.XdagTime.msToXdagtimestamp;
 
 /**
  * SyncManager for v5.1
@@ -74,44 +97,44 @@ public class SyncManager extends AbstractXdagLifecycle {
      * SyncBlock - Simple block wrapper for sync process (legacy v1.0)
      *
      * @deprecated As of v5.1 refactor (Phase 5.5 Part 3), this class wraps legacy Block objects.
-     *             After complete BlockV5 migration, sync will work directly with BlockV5 objects
+     *             After complete Block migration, sync will work directly with Block objects
      *             without needing a wrapper class.
      *
      * TODO v5.1: DELETED - Block class no longer exists (Phase 7.1)
-     * This wrapper is no longer usable. Use SyncBlockV5 instead.
+     * This wrapper is no longer usable. Use SyncBlock instead.
      *
      *             <p><b>Migration Path:</b>
      *             <ul>
      *               <li>Phase 5.5 Part 3 (Current): Mark as @Deprecated</li>
-     *               <li>Post-Restart: After fresh start with BlockV5-only storage, network layer will
-     *                   use BlockV5Message directly</li>
-     *               <li>Future: Remove this class and work directly with BlockV5</li>
+     *               <li>Post-Restart: After fresh start with Block-only storage, network layer will
+     *                   use BlockMessage directly</li>
+     *               <li>Future: Remove this class and work directly with Block</li>
      *             </ul>
      *
      *             <p><b>Replacement Strategy:</b>
-     *             Network layer already has BlockV5 message support (NewBlockV5Message, SyncBlockV5Message).
+     *             Network layer already has Block message support (NewBlockMessage, SyncBlockMessage).
      *             After migration, sync process will:
      *             <pre>{@code
-     * // 1. Receive BlockV5 from network
-     * BlockV5 block = blockV5Message.getBlock();
+     * // 1. Receive Block from network
+     * Block block = BlockMessage.getBlock();
      *
      * // 2. Validate and import directly
      * ImportResult result = blockchain.tryToConnect(block);
      *
      * // 3. Broadcast if needed (no wrapper required)
      * if (shouldBroadcast(result)) {
-     *     kernel.broadcastBlockV5(block, ttl);
+     *     kernel.broadcastBlock(block, ttl);
      * }
      *             }</pre>
      *
      *             <p><b>Impact:</b>
-     *             This wrapper is used throughout sync process. After BlockV5 migration, the sync
-     *             flow becomes simpler: receive BlockV5 → validate → import → broadcast (no wrapping needed).
+     *             This wrapper is used throughout sync process. After Block migration, the sync
+     *             flow becomes simpler: receive Block → validate → import → broadcast (no wrapping needed).
      *
-     * @see io.xdag.core.BlockV5
-     * @see io.xdag.net.message.consensus.NewBlockV5Message
-     * @see io.xdag.net.message.consensus.SyncBlockV5Message
-     * @see io.xdag.core.Blockchain#tryToConnect(BlockV5)
+     * @see Block
+     * @see NewBlockMessage
+     * @see SyncBlockMessage
+     * @see io.xdag.core.Blockchain#tryToConnect(Block)
      */
     /*
     @Deprecated(since = "0.8.1", forRemoval = true)
@@ -141,46 +164,46 @@ public class SyncManager extends AbstractXdagLifecycle {
     */
 
     /**
-     * SyncBlockV5 - BlockV5 wrapper for sync process (v5.1)
+     * SyncBlock - Block wrapper for sync process (v5.1)
      *
-     * Phase 7.2: This is the NEW wrapper class for BlockV5 objects in the sync system.
+     * Phase 7.2: This is the NEW wrapper class for Block objects in the sync system.
      * Unlike the legacy SyncBlock (which wraps Block objects), this class works directly
-     * with immutable BlockV5 objects.
+     * with immutable Block objects.
      *
      * <p><b>Design Rationale:</b>
      * <ul>
-     *   <li>BlockV5 is immutable - no parsing needed</li>
+     *   <li>Block is immutable - no parsing needed</li>
      *   <li>Uses Link-based references instead of Address</li>
      *   <li>Cleaner sync flow: receive → validate → import → broadcast</li>
-     *   <li>Integrates with blockchain.tryToConnect(BlockV5)</li>
+     *   <li>Integrates with blockchain.tryToConnect(Block)</li>
      * </ul>
      *
      * <p><b>Usage:</b>
      * <pre>{@code
-     * // 1. Receive BlockV5 from network
-     * BlockV5 block = blockV5Message.getBlock();
+     * // 1. Receive Block from network
+     * Block block = BlockMessage.getBlock();
      *
-     * // 2. Wrap in SyncBlockV5
-     * SyncBlockV5 syncBlock = new SyncBlockV5(block, ttl, remotePeer, isOld);
+     * // 2. Wrap in SyncBlock
+     * SyncBlock syncBlock = new SyncBlock(block, ttl, remotePeer, isOld);
      *
      * // 3. Validate and import
-     * ImportResult result = syncManager.validateAndAddNewBlockV5(syncBlock);
+     * ImportResult result = syncManager.validateAndAddNewBlock(syncBlock);
      *
      * // 4. Handle result
      * if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
-     *     log.info("BlockV5 successfully imported: {}", block.getHash().toHexString());
+     *     log.info("Block successfully imported: {}", block.getHash().toHexString());
      * }
      * }</pre>
      *
-     * @see io.xdag.core.BlockV5
-     * @see io.xdag.core.Blockchain#tryToConnect(BlockV5)
+     * @see Block
+     * @see io.xdag.core.Blockchain#tryToConnect(Block)
      * @since 0.8.1 (Phase 7.2)
      */
     @Getter
     @Setter
-    public static class SyncBlockV5 {
-        /** The BlockV5 object to be synced */
-        private BlockV5 block;
+    public static class SyncBlock {
+        /** The Block object to be synced */
+        private Block block;
 
         /** Time-to-live for broadcast propagation (decrements with each hop) */
         private int ttl;
@@ -195,26 +218,26 @@ public class SyncManager extends AbstractXdagLifecycle {
         private boolean old;
 
         /**
-         * Create SyncBlockV5 with minimal info (for local blocks)
+         * Create SyncBlock with minimal info (for local blocks)
          *
-         * @param block BlockV5 object
+         * @param block Block object
          * @param ttl Time-to-live for broadcast
          */
-        public SyncBlockV5(BlockV5 block, int ttl) {
+        public SyncBlock(Block block, int ttl) {
             this.block = block;
             this.ttl = ttl;
             this.time = System.currentTimeMillis();
         }
 
         /**
-         * Create SyncBlockV5 with full metadata (for network-received blocks)
+         * Create SyncBlock with full metadata (for network-received blocks)
          *
-         * @param block BlockV5 object
+         * @param block Block object
          * @param ttl Time-to-live for broadcast
          * @param remotePeer Peer that sent this block
          * @param old Whether this is an old block (sync mode)
          */
-        public SyncBlockV5(BlockV5 block, int ttl, Peer remotePeer, boolean old) {
+        public SyncBlock(Block block, int ttl, Peer remotePeer, boolean old) {
             this.block = block;
             this.ttl = ttl;
             this.remotePeer = remotePeer;
@@ -239,7 +262,7 @@ public class SyncManager extends AbstractXdagLifecycle {
 
     /**
      * Queue with validated blocks to be added to the blockchain (legacy Block)
-     * @deprecated Use blockQueueV5 for BlockV5 objects
+     * @deprecated Use blockQueueV5 for Block objects
      *
      * TODO v5.1: DELETED - SyncBlock class no longer exists
      */
@@ -248,7 +271,7 @@ public class SyncManager extends AbstractXdagLifecycle {
 
     /**
      * Queue for blocks with missing links (legacy Block)
-     * @deprecated Use syncMapV5 for BlockV5 objects
+     * @deprecated Use syncMapV5 for Block objects
      *
      * TODO v5.1: DELETED - SyncBlock class no longer exists
      */
@@ -257,29 +280,29 @@ public class SyncManager extends AbstractXdagLifecycle {
 
     /**
      * Queue for polling oldest blocks (legacy)
-     * @deprecated Use syncQueueV5 for BlockV5 objects
+     * @deprecated Use syncQueueV5 for Block objects
      *
      * TODO v5.1: DELETED - SyncBlock class no longer exists
      */
     // @Deprecated(since = "0.8.1", forRemoval = true)
     // private ConcurrentLinkedQueue<Bytes32> syncQueue = new ConcurrentLinkedQueue<>();
 
-    // ========== BlockV5 Data Structures (Phase 7.2) ==========
+    // ========== Block Data Structures (Phase 7.2) ==========
 
     /**
-     * Queue with validated BlockV5 objects to be added to the blockchain
+     * Queue with validated Block objects to be added to the blockchain
      */
-    private Queue<SyncBlockV5> blockQueueV5 = new ConcurrentLinkedQueue<>();
+    private Queue<SyncBlock> blockQueueV5 = new ConcurrentLinkedQueue<>();
 
     /**
-     * Queue for BlockV5 objects with missing parent blocks
+     * Queue for Block objects with missing parent blocks
      * Key: Hash of missing parent block
      * Value: Queue of child blocks waiting for this parent
      */
-    private ConcurrentHashMap<Bytes32, Queue<SyncBlockV5>> syncMapV5 = new ConcurrentHashMap<>();
+    private ConcurrentHashMap<Bytes32, Queue<SyncBlock>> syncMapV5 = new ConcurrentHashMap<>();
 
     /**
-     * Queue for polling oldest BlockV5 objects
+     * Queue for polling oldest Block objects
      */
     private ConcurrentLinkedQueue<Bytes32> syncQueueV5 = new ConcurrentLinkedQueue<>();
 
@@ -364,23 +387,23 @@ public class SyncManager extends AbstractXdagLifecycle {
      *
      * @deprecated As of v5.1 refactor (Phase 5.5 Part 3), this method processes legacy SyncBlock
      *             wrappers containing Block objects. Uses deprecated blockchain.tryToConnect(Block).
-     *             After BlockV5 migration, sync will import BlockV5 objects directly.
+     *             After Block migration, sync will import Block objects directly.
      *
      * TODO v5.1: DELETED - SyncBlock class and Block class no longer exist
-     * This method cannot be used. Use importBlockV5() for BlockV5 objects instead.
+     * This method cannot be used. Use importBlock() for Block objects instead.
      *
      *             <p><b>Migration Path:</b>
      *             <ul>
      *               <li>Phase 5.5 Part 3 (Current): Mark as @Deprecated</li>
-     *               <li>Post-Restart: Use blockchain.tryToConnect(BlockV5) directly</li>
+     *               <li>Post-Restart: Use blockchain.tryToConnect(Block) directly</li>
      *               <li>Future: Remove this method</li>
      *             </ul>
      *
      *             <p><b>Replacement Strategy:</b>
-     *             After migration, import BlockV5 directly without wrapper:
+     *             After migration, import Block directly without wrapper:
      *             <pre>{@code
-     * // Receive BlockV5 from network
-     * BlockV5 block = blockV5Message.getBlock();
+     * // Receive Block from network
+     * Block block = BlockMessage.getBlock();
      *
      * // Import directly
      * ImportResult result = blockchain.tryToConnect(block);
@@ -399,7 +422,7 @@ public class SyncManager extends AbstractXdagLifecycle {
      *
      * @param syncBlock Legacy SyncBlock wrapper containing Block
      * @return ImportResult from blockchain connection attempt
-     * @see io.xdag.core.Blockchain#tryToConnect(BlockV5)
+     * @see io.xdag.core.Blockchain#tryToConnect(Block)
      * @see SyncBlock
      */
     /*
@@ -409,16 +432,16 @@ public class SyncManager extends AbstractXdagLifecycle {
         log.debug("importBlock:{}", syncBlock.getBlock().getHash());
 
         // Phase 7.1: TEMPORARY STUB - tryToConnect(Block) was deleted
-        // The sync system needs full migration to BlockV5. For now, return INVALID_BLOCK
+        // The sync system needs full migration to Block. For now, return INVALID_BLOCK
         // to allow compilation. Sync functionality is temporarily impaired.
         //
-        // TODO Phase 7.1: Complete sync migration to BlockV5:
-        // 1. Update network layer to send/receive BlockV5 instead of Block
-        // 2. Change SyncBlock wrapper to use BlockV5
-        // 3. Call blockchain.tryToConnect(BlockV5) instead
-        // 4. Update all sync logic to work with BlockV5
+        // TODO Phase 7.1: Complete sync migration to Block:
+        // 1. Update network layer to send/receive Block instead of Block
+        // 2. Change SyncBlock wrapper to use Block
+        // 3. Call blockchain.tryToConnect(Block) instead
+        // 4. Update all sync logic to work with Block
         log.error("importBlock() called but tryToConnect(Block) was deleted in Phase 7.1");
-        log.error("Sync system needs BlockV5 migration. Block {} cannot be imported.",
+        log.error("Sync system needs Block migration. Block {} cannot be imported.",
                 syncBlock.getBlock().getHash().toHexString());
 
         ImportResult importResult = ImportResult.INVALID_BLOCK;
@@ -447,7 +470,7 @@ public class SyncManager extends AbstractXdagLifecycle {
 
     /**
      * TODO v5.1: DELETED - SyncBlock class no longer exists
-     * Use validateAndAddNewBlockV5() for BlockV5 objects instead.
+     * Use validateAndAddNewBlock() for Block objects instead.
      */
     /*
     public synchronized ImportResult validateAndAddNewBlock(SyncBlock syncBlock) {
@@ -486,7 +509,7 @@ public class SyncManager extends AbstractXdagLifecycle {
      * @param hash Hash of missing parent block
      *
      * TODO v5.1: DELETED - SyncBlock class no longer exists
-     * Use syncPushBlockV5() for BlockV5 objects instead.
+     * Use syncPushBlock() for Block objects instead.
      */
     /*
     public boolean syncPushBlock(SyncBlock syncBlock, Bytes32 hash) {
@@ -538,7 +561,7 @@ public class SyncManager extends AbstractXdagLifecycle {
      * Release child blocks based on received block
      *
      * TODO v5.1: DELETED - SyncBlock class no longer exists
-     * Use syncPopBlockV5() for BlockV5 objects instead.
+     * Use syncPopBlock() for Block objects instead.
      */
     /*
     public void syncPopBlock(SyncBlock syncBlock) {
@@ -649,7 +672,7 @@ public class SyncManager extends AbstractXdagLifecycle {
      * @deprecated This method is non-functional after Phase 7.3.0 cleanup
      *
      * TODO v5.1: DELETED - SyncBlock class no longer exists
-     * Use distributeBlockV5() for BlockV5 objects instead.
+     * Use distributeBlock() for Block objects instead.
      */
     /*
     @Deprecated(since = "0.8.1", forRemoval = true)
@@ -661,46 +684,46 @@ public class SyncManager extends AbstractXdagLifecycle {
     }
     */
 
-    // ========== BlockV5 Sync Methods (Phase 7.2) ==========
+    // ========== Block Sync Methods (Phase 7.2) ==========
 
     /**
-     * Import BlockV5 to blockchain (v5.1 implementation)
+     * Import Block to blockchain (v5.1 implementation)
      *
-     * Phase 7.2: This is the NEW import method for BlockV5 objects. Unlike the legacy
+     * Phase 7.2: This is the NEW import method for Block objects. Unlike the legacy
      * importBlock() which uses deprecated tryToConnect(Block), this method uses the
-     * functional tryToConnect(BlockV5) from BlockchainImpl.
+     * functional tryToConnect(Block) from BlockchainImpl.
      *
      * <p><b>Key Differences from Legacy:</b>
      * <ul>
-     *   <li>No parse() needed - BlockV5 is immutable and pre-validated</li>
-     *   <li>Uses blockchain.tryToConnect(BlockV5) directly</li>
+     *   <li>No parse() needed - Block is immutable and pre-validated</li>
+     *   <li>Uses blockchain.tryToConnect(Block) directly</li>
      *   <li>Cleaner error handling with ImportResult</li>
-     *   <li>Broadcasts via kernel.broadcastBlockV5()</li>
+     *   <li>Broadcasts via kernel.broadcastBlock()</li>
      * </ul>
      *
-     * @param syncBlock SyncBlockV5 wrapper containing BlockV5 and metadata
+     * @param syncBlock SyncBlock wrapper containing Block and metadata
      * @return ImportResult indicating success or failure reason
      */
-    public ImportResult importBlockV5(SyncBlockV5 syncBlock) {
-        BlockV5 block = syncBlock.getBlock();
-        log.debug("importBlockV5: {}", block.getHash().toHexString());
+    public ImportResult importBlock(SyncBlock syncBlock) {
+        Block block = syncBlock.getBlock();
+        log.debug("importBlock: {}", block.getHash().toHexString());
 
-        // Import BlockV5 directly to blockchain
+        // Import Block directly to blockchain
         ImportResult importResult = blockchain.tryToConnect(block);
 
         // Log result
         if (importResult == EXIST) {
-            log.debug("BlockV5 already exists: {}", block.getHash().toHexString());
+            log.debug("Block already exists: {}", block.getHash().toHexString());
         } else if (importResult == IMPORTED_BEST) {
-            log.info("BlockV5 imported as BEST: {}", block.getHash().toHexString());
+            log.info("Block imported as BEST: {}", block.getHash().toHexString());
         } else if (importResult == IMPORTED_NOT_BEST) {
-            log.debug("BlockV5 imported as NOT_BEST: {}", block.getHash().toHexString());
+            log.debug("Block imported as NOT_BEST: {}", block.getHash().toHexString());
         } else if (importResult == NO_PARENT) {
-            log.debug("BlockV5 missing parent: {} (parent: {})",
+            log.debug("Block missing parent: {} (parent: {})",
                      block.getHash().toHexString(),
                      importResult.getHash() != null ? importResult.getHash().toHexString() : "unknown");
         } else if (importResult == INVALID_BLOCK) {
-            log.warn("BlockV5 validation failed: {} (reason: {})",
+            log.warn("Block validation failed: {} (reason: {})",
                     block.getHash().toHexString(),
                     importResult.getErrorInfo());
         }
@@ -718,7 +741,7 @@ public class SyncManager extends AbstractXdagLifecycle {
                 blockPeer.getPort() != node.getPort()) {
 
                 if (syncBlock.getTtl() > 0) {
-                    distributeBlockV5(syncBlock);
+                    distributeBlock(syncBlock);
                 }
             }
         }
@@ -727,14 +750,14 @@ public class SyncManager extends AbstractXdagLifecycle {
     }
 
     /**
-     * Validate and add new BlockV5 to blockchain (v5.1 entry point)
+     * Validate and add new Block to blockchain (v5.1 entry point)
      *
-     * Phase 7.2: This is the main entry point for importing BlockV5 objects from the network.
-     * Network message handlers should call this method when receiving new BlockV5 objects.
+     * Phase 7.2: This is the main entry point for importing Block objects from the network.
+     * Network message handlers should call this method when receiving new Block objects.
      *
      * <p><b>Process Flow:</b>
      * <ol>
-     *   <li>Import BlockV5 via importBlockV5()</li>
+     *   <li>Import Block via importBlock()</li>
      *   <li>Handle ImportResult:
      *     <ul>
      *       <li>IMPORTED_BEST/NOT_BEST/EXIST → Process child blocks waiting for this block</li>
@@ -744,33 +767,33 @@ public class SyncManager extends AbstractXdagLifecycle {
      *   </li>
      * </ol>
      *
-     * @param syncBlock SyncBlockV5 wrapper containing BlockV5 and metadata
+     * @param syncBlock SyncBlock wrapper containing Block and metadata
      * @return ImportResult from the import attempt
      */
-    public synchronized ImportResult validateAndAddNewBlockV5(SyncBlockV5 syncBlock) {
-        // No parse() needed for BlockV5 (immutable, pre-validated)
-        ImportResult result = importBlockV5(syncBlock);
+    public synchronized ImportResult validateAndAddNewBlock(SyncBlock syncBlock) {
+        // No parse() needed for Block (immutable, pre-validated)
+        ImportResult result = importBlock(syncBlock);
 
-        log.debug("validateAndAddNewBlockV5: {} → {}",
+        log.debug("validateAndAddNewBlock: {} → {}",
                  syncBlock.getBlock().getHash().toHexString(), result);
 
         // Handle result
         switch (result) {
             case EXIST, IMPORTED_BEST, IMPORTED_NOT_BEST, IN_MEM -> {
                 // Block successfully added - process any child blocks waiting for it
-                syncPopBlockV5(syncBlock);
+                syncPopBlock(syncBlock);
             }
             case NO_PARENT -> {
                 // Block's parent is missing - add to waiting queue
                 doNoParentV5(syncBlock, result);
             }
             case INVALID_BLOCK -> {
-                log.debug("Invalid BlockV5: {} (reason: {})",
+                log.debug("Invalid Block: {} (reason: {})",
                          syncBlock.getBlock().getHash().toHexString(),
                          result.getErrorInfo());
             }
             default -> {
-                log.warn("Unexpected ImportResult for BlockV5: {} → {}",
+                log.warn("Unexpected ImportResult for Block: {} → {}",
                         syncBlock.getBlock().getHash().toHexString(), result);
             }
         }
@@ -779,18 +802,18 @@ public class SyncManager extends AbstractXdagLifecycle {
     }
 
     /**
-     * Handle BlockV5 with missing parent block
+     * Handle Block with missing parent block
      *
-     * Phase 7.2: When a BlockV5 references a parent block that doesn't exist yet,
+     * Phase 7.2: When a Block references a parent block that doesn't exist yet,
      * this method adds the child block to a waiting queue (syncMapV5) and requests
      * the missing parent from the network.
      *
-     * @param syncBlock SyncBlockV5 that has a missing parent
+     * @param syncBlock SyncBlock that has a missing parent
      * @param result ImportResult with NO_PARENT status (contains parent hash)
      */
-    private void doNoParentV5(SyncBlockV5 syncBlock, ImportResult result) {
+    private void doNoParentV5(SyncBlock syncBlock, ImportResult result) {
         // Add child block to waiting queue
-        if (syncPushBlockV5(syncBlock, result.getHash())) {
+        if (syncPushBlock(syncBlock, result.getHash())) {
             logParentV5(syncBlock, result);
 
             // Request missing parent block from network (Phase 7.3)
@@ -801,10 +824,10 @@ public class SyncManager extends AbstractXdagLifecycle {
 
                 // Request from all active peers
                 channels.forEach(channel -> {
-                    eventHandler.requestBlockV5ByHash(channel, result.getHash());
+                    eventHandler.requestBlockByHash(channel, result.getHash());
                 });
 
-                log.debug("Requested missing parent BlockV5: {} from {} peers (for child: {})",
+                log.debug("Requested missing parent Block: {} from {} peers (for child: {})",
                          result.getHash().toHexString(),
                          channels.size(),
                          syncBlock.getBlock().getHash().toHexString());
@@ -813,16 +836,16 @@ public class SyncManager extends AbstractXdagLifecycle {
     }
 
     /**
-     * Add BlockV5 to waiting queue for missing parent
+     * Add Block to waiting queue for missing parent
      *
      * Phase 7.2: Manages the queue of child blocks waiting for their parent blocks.
-     * Similar to syncPushBlock() but for BlockV5 objects.
+     * Similar to syncPushBlock() but for Block objects.
      *
-     * @param syncBlock SyncBlockV5 to add to waiting queue
+     * @param syncBlock SyncBlock to add to waiting queue
      * @param parentHash Hash of the missing parent block
      * @return true if block was added or request should be sent, false if duplicate
      */
-    public boolean syncPushBlockV5(SyncBlockV5 syncBlock, Bytes32 parentHash) {
+    public boolean syncPushBlock(SyncBlock syncBlock, Bytes32 parentHash) {
         // Check if syncMapV5 is getting too large
         if (syncMapV5.size() >= MAX_SIZE) {
             // Remove oldest entries
@@ -842,7 +865,7 @@ public class SyncManager extends AbstractXdagLifecycle {
         long now = System.currentTimeMillis();
 
         // Create new queue for this parent hash
-        Queue<SyncBlockV5> newQueue = Queues.newConcurrentLinkedQueue();
+        Queue<SyncBlock> newQueue = Queues.newConcurrentLinkedQueue();
         syncBlock.setTime(now);
         newQueue.add(syncBlock);
         // Phase 7.3: Use new ChainStats increment method
@@ -854,7 +877,7 @@ public class SyncManager extends AbstractXdagLifecycle {
             blockchain.decrementWaitingSyncCount();
 
             // Check if this block is already in the queue
-            for (SyncBlockV5 existing : oldQueue) {
+            for (SyncBlock existing : oldQueue) {
                 if (existing.getBlock().getHash().equals(syncBlock.getBlock().getHash())) {
                     // Block already waiting - check if we should resend request
                     if (now - existing.getTime() > 64 * 1000) {
@@ -879,34 +902,34 @@ public class SyncManager extends AbstractXdagLifecycle {
     }
 
     /**
-     * Process child BlockV5 objects when their parent arrives
+     * Process child Block objects when their parent arrives
      *
-     * Phase 7.2: When a parent BlockV5 is successfully imported, this method
+     * Phase 7.2: When a parent Block is successfully imported, this method
      * retrieves all child blocks that were waiting for it and attempts to import them.
      *
-     * @param syncBlock SyncBlockV5 that was just imported (the parent)
+     * @param syncBlock SyncBlock that was just imported (the parent)
      */
-    public void syncPopBlockV5(SyncBlockV5 syncBlock) {
-        BlockV5 block = syncBlock.getBlock();
+    public void syncPopBlock(SyncBlock syncBlock) {
+        Block block = syncBlock.getBlock();
 
         // Get queue of child blocks waiting for this parent
-        Queue<SyncBlockV5> queue = syncMapV5.getOrDefault(block.getHash(), null);
+        Queue<SyncBlock> queue = syncMapV5.getOrDefault(block.getHash(), null);
         if (queue != null) {
             syncMapV5.remove(block.getHash());
             // Phase 7.3: Use new ChainStats decrement method
             blockchain.decrementWaitingSyncCount();
 
-            log.debug("Processing {} child BlockV5 objects waiting for parent: {}",
+            log.debug("Processing {} child Block objects waiting for parent: {}",
                      queue.size(), block.getHash().toHexString());
 
             // Try to import each child block
             queue.forEach(childSync -> {
-                ImportResult childResult = importBlockV5(childSync);
+                ImportResult childResult = importBlock(childSync);
 
                 switch (childResult) {
                     case EXIST, IN_MEM, IMPORTED_BEST, IMPORTED_NOT_BEST -> {
                         // Child successfully imported - process its children recursively
-                        syncPopBlockV5(childSync);
+                        syncPopBlock(childSync);
                         queue.remove(childSync);
                     }
                     case NO_PARENT -> {
@@ -914,12 +937,12 @@ public class SyncManager extends AbstractXdagLifecycle {
                         doNoParentV5(childSync, childResult);
                     }
                     case INVALID_BLOCK -> {
-                        log.warn("Child BlockV5 invalid after parent arrived: {} (reason: {})",
+                        log.warn("Child Block invalid after parent arrived: {} (reason: {})",
                                 childSync.getBlock().getHash().toHexString(),
                                 childResult.getErrorInfo());
                     }
                     default -> {
-                        log.debug("Unexpected result for child BlockV5: {} → {}",
+                        log.debug("Unexpected result for child Block: {} → {}",
                                 childSync.getBlock().getHash().toHexString(), childResult);
                     }
                 }
@@ -928,34 +951,34 @@ public class SyncManager extends AbstractXdagLifecycle {
     }
 
     /**
-     * Broadcast BlockV5 to network peers
+     * Broadcast Block to network peers
      *
-     * Phase 7.2: Distributes a BlockV5 object to all connected peers using the P2P service.
+     * Phase 7.2: Distributes a Block object to all connected peers using the P2P service.
      *
-     * @param syncBlock SyncBlockV5 to broadcast
+     * @param syncBlock SyncBlock to broadcast
      */
-    public void distributeBlockV5(SyncBlockV5 syncBlock) {
-        // Use Kernel's BlockV5 broadcast method
-        kernel.broadcastBlockV5(syncBlock.getBlock(), syncBlock.getTtl());
+    public void distributeBlock(SyncBlock syncBlock) {
+        // Use Kernel's Block broadcast method
+        kernel.broadcastBlock(syncBlock.getBlock(), syncBlock.getTtl());
 
-        log.debug("Distributed BlockV5: {} (ttl={})",
+        log.debug("Distributed Block: {} (ttl={})",
                  syncBlock.getBlock().getHash().toHexString(),
                  syncBlock.getTtl());
     }
 
     /**
-     * Log missing parent information for BlockV5
+     * Log missing parent information for Block
      *
-     * @param syncBlock SyncBlockV5 with missing parent
+     * @param syncBlock SyncBlock with missing parent
      * @param importResult ImportResult containing parent hash
      */
-    private void logParentV5(SyncBlockV5 syncBlock, ImportResult importResult) {
-        log.debug("BlockV5 {} waiting for parent: {}",
+    private void logParentV5(SyncBlock syncBlock, ImportResult importResult) {
+        log.debug("Block {} waiting for parent: {}",
                  syncBlock.getBlock().getHash().toHexString(),
                  importResult.getHash().toHexString());
     }
 
-    // ========== End of BlockV5 Sync Methods ==========
+    // ========== End of Block Sync Methods ==========
 
     private class StateListener implements Runnable {
 

@@ -27,7 +27,6 @@ import io.xdag.core.XAmount;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.db.rocksdb.RocksdbKVSource;
 import java.util.List;
-import org.rocksdb.RocksIterator;
 
 public interface SnapshotStore {
 

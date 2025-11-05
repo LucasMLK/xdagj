@@ -23,20 +23,26 @@
  */
 package io.xdag.rpc.server.handler;
 
+import static io.xdag.rpc.server.handler.JsonRpcHandler.MAPPER;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.anyInt;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 import io.xdag.rpc.api.XdagApi;
 import io.xdag.rpc.error.JsonRpcError;
 import io.xdag.rpc.error.JsonRpcException;
-import io.xdag.rpc.server.protocol.JsonRpcRequest;
 import io.xdag.rpc.model.response.BlockResponse;
+import io.xdag.rpc.server.protocol.JsonRpcRequest;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
-
-import static io.xdag.rpc.server.handler.JsonRpcHandler.MAPPER;
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.*;
 
 /**
  * Unit tests for JsonRequestHandler

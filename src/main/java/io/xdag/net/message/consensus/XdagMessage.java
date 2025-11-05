@@ -23,19 +23,17 @@
  */
 package io.xdag.net.message.consensus;
 
-import java.math.BigInteger;
-
-import org.apache.tuweni.bytes.Bytes32;
-
 import io.xdag.core.ChainStats;
-import io.xdag.utils.SimpleEncoder;
 import io.xdag.net.message.Message;
 import io.xdag.net.message.MessageCode;
 import io.xdag.utils.BytesUtils;
 import io.xdag.utils.Numeric;
 import io.xdag.utils.SimpleDecoder;
+import io.xdag.utils.SimpleEncoder;
+import java.math.BigInteger;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.tuweni.bytes.Bytes32;
 
 @Getter
 @Setter

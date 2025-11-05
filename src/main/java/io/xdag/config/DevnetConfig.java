@@ -24,10 +24,9 @@
 
 package io.xdag.config;
 
-import org.apache.tuweni.units.bigints.UInt64;
-
 import io.xdag.Network;
 import io.xdag.core.XAmount;
+import org.apache.tuweni.units.bigints.UInt64;
 
 /**
  * Configuration class for the development network (devnet)

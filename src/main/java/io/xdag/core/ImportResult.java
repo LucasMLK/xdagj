@@ -24,10 +24,9 @@
 
 package io.xdag.core;
 
-import org.apache.tuweni.bytes.Bytes32;
-
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.tuweni.bytes.Bytes32;
 
 /**
  * Enum representing different results of block import operations

@@ -31,34 +31,56 @@ import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.config.MainnetConfig;
 import io.xdag.config.TestnetConfig;
+import io.xdag.consensus.RandomX;
 import io.xdag.consensus.SyncManager;
 import io.xdag.consensus.XdagPow;
 import io.xdag.consensus.XdagSync;
-import io.xdag.core.*;
-import io.xdag.consensus.RandomX;
+import io.xdag.core.BlockFinalizationService;
+import io.xdag.core.Block;
+import io.xdag.core.Blockchain;
+import io.xdag.core.BlockchainImpl;
+import io.xdag.core.ChainStats;
+import io.xdag.core.ImportResult;
+import io.xdag.core.XdagState;
 import io.xdag.crypto.keys.ECKeyPair;
-import io.xdag.db.*;
+import io.xdag.db.AddressStore;
+import io.xdag.db.BlockStore;
+import io.xdag.db.OrphanBlockStore;
+import io.xdag.db.SnapshotStore;
+import io.xdag.db.TransactionHistoryStore;
+import io.xdag.db.TransactionStore;
 import io.xdag.db.mysql.TransactionHistoryStoreImpl;
-import io.xdag.db.rocksdb.*;
-import io.xdag.db.store.*;
-import io.xdag.net.*;
+import io.xdag.db.rocksdb.AddressStoreImpl;
+import io.xdag.db.rocksdb.BlockStoreImpl;
+import io.xdag.db.rocksdb.DatabaseFactory;
+import io.xdag.db.rocksdb.DatabaseName;
+import io.xdag.db.rocksdb.OrphanBlockStoreImpl;
+import io.xdag.db.rocksdb.RocksdbFactory;
+import io.xdag.db.store.BloomFilterBlockStore;
+import io.xdag.db.store.CachedBlockStore;
+import io.xdag.db.store.FinalizedBlockStore;
+import io.xdag.db.store.FinalizedBlockStoreImpl;
+import io.xdag.net.ChannelManager;
+import io.xdag.net.NetDB;
+import io.xdag.net.NetDBManager;
+import io.xdag.net.PeerClient;
+import io.xdag.net.PeerServer;
 import io.xdag.net.message.MessageQueue;
 import io.xdag.net.node.NodeManager;
 import io.xdag.p2p.P2pConfigFactory;
 import io.xdag.p2p.XdagP2pEventHandler;
 import io.xdag.p2p.config.P2pConfig;
-import io.xdag.pool.WebSocketServer;
 import io.xdag.pool.PoolAwardManagerImpl;
+import io.xdag.pool.WebSocketServer;
 import io.xdag.rpc.api.XdagApi;
 import io.xdag.rpc.api.impl.XdagApiImpl;
 import io.xdag.utils.XdagTime;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
-
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @Getter
@@ -97,25 +119,25 @@ public class Kernel {
     protected io.xdag.p2p.P2pService p2pService;
     protected XdagP2pEventHandler p2pEventHandler;
 
-    public void broadcastBlockV5(BlockV5 block, int ttl) {
+    public void broadcastBlock(Block block, int ttl) {
         if (p2pService == null || p2pEventHandler == null) {
-            log.warn("P2P service not initialized, cannot broadcast BlockV5");
+            log.warn("P2P service not initialized, cannot broadcast Block");
             return;
         }
 
         try {
-            // Serialize BlockV5
+            // Serialize Block
             byte[] blockBytes = block.toBytes();
 
-            // Create message manually (temporary - should use dedicated NewBlockV5Message)
+            // Create message manually (temporary - should use dedicated NewBlockMessage)
             io.xdag.utils.SimpleEncoder enc = new io.xdag.utils.SimpleEncoder();
             enc.writeBytes(blockBytes);
             enc.writeInt(ttl);
             byte[] messageBody = enc.toBytes();
 
-            // Phase 7.3.0: Use NEW_BLOCK_V5 message code for BlockV5
+            // Phase 7.3.0: Use NEW_BLOCK_V5 message code for Block
             byte[] fullMessage = new byte[messageBody.length + 1];
-            fullMessage[0] = io.xdag.net.message.MessageCode.NEW_BLOCK_V5.toByte();
+            fullMessage[0] = io.xdag.net.message.MessageCode.NEW_BLOCK.toByte();
             System.arraycopy(messageBody, 0, fullMessage, 1, messageBody.length);
 
             // Broadcast to all channels
@@ -126,17 +148,17 @@ public class Kernel {
                         channel.send(Bytes.wrap(fullMessage));
                         sentCount++;
                     } catch (Exception e) {
-                        log.error("Error broadcasting BlockV5 to {}: {}",
+                        log.error("Error broadcasting Block to {}: {}",
                                 channel.getRemoteAddress(), e.getMessage());
                     }
                 }
             }
 
-            log.debug("BlockV5 {} broadcasted to {} peers (ttl={})",
+            log.debug("Block {} broadcasted to {} peers (ttl={})",
                     block.getHash().toHexString().substring(0, 16) + "...", sentCount, ttl);
 
         } catch (Exception e) {
-            log.error("Error broadcasting BlockV5: {}", e.getMessage(), e);
+            log.error("Error broadcasting Block: {}", e.getMessage(), e);
         }
     }
 
@@ -263,13 +285,13 @@ public class Kernel {
         ChainStats chainStats = blockchain.getChainStats();
 
         // Create genesis block if first startup
-        // Phase 7.5: Genesis BlockV5 creation restored
+        // Phase 7.5: Genesis Block creation restored
         // Phase 7.3: Check mainBlockCount == 0 instead of ourLastBlockHash (field removed)
         if (chainStats.getMainBlockCount() == 0) {
             firstAccount = toBytesAddress(wallet.getDefKey().getPublicKey());
 
-            // Create genesis BlockV5
-            BlockV5 genesisBlock = blockchain.createGenesisBlockV5(
+            // Create genesis Block
+            Block genesisBlock = blockchain.createGenesisBlock(
                 wallet.getDefKey(),
                 XdagTime.getCurrentTimestamp()
             );
@@ -279,10 +301,10 @@ public class Kernel {
 
             // Import genesis block to blockchain
             ImportResult result = blockchain.tryToConnect(genesisBlock);
-            log.info("Genesis BlockV5 import result: {}", result);
+            log.info("Genesis Block import result: {}", result);
 
             // Store the genesis block reference
-//            firstBlock = null;  // No legacy Block for genesis (BlockV5 only)
+//            firstBlock = null;  // No legacy Block for genesis (Block only)
         } else {
             firstAccount = toBytesAddress(wallet.getDefKey().getPublicKey());
         }

@@ -24,27 +24,29 @@
 
 package io.xdag.e2e;
 
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import io.xdag.Kernel;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
-import io.xdag.core.*;
+import io.xdag.core.BlockchainImpl;
+import io.xdag.core.XAmount;
+import io.xdag.core.XUnit;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.db.AddressStore;
 import io.xdag.db.BlockStore;
 import io.xdag.db.OrphanBlockStore;
 import io.xdag.db.TransactionHistoryStore;
 import io.xdag.db.TransactionStore;
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt64;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
 /**
  * End-to-End Integration Tests for v5.1 Transaction System
@@ -56,7 +58,7 @@ import static org.mockito.Mockito.*;
  * 测试范围：
  * 1. Transaction创建和签名
  * 2. Transaction存储
- * 3. BlockV5创建和Link
+ * 3. Block创建和Link
  * 4. BlockchainImpl连接和验证
  * 5. applyBlock执行和余额更新
  * 6. Nonce管理
@@ -134,9 +136,9 @@ public class TransferE2ETest {
      * 2. Alice签名Transaction
      * 3. 验证签名有效
      * 4. 保存Transaction到TransactionStore
-     * 5. 创建BlockV5，包含Link指向Transaction
-     * 6. blockchain.tryToConnect(blockV5) - 连接到区块链
-     * 7. blockchain.applyBlock(blockV5) - 执行Transaction
+     * 5. 创建Block，包含Link指向Transaction
+     * 6. blockchain.tryToConnect(Block) - 连接到区块链
+     * 7. blockchain.applyBlock(Block) - 执行Transaction
      * 8. 验证余额变化
      * 9. 验证nonce递增
      *
@@ -188,27 +190,27 @@ public class TransferE2ETest {
         // mockTransactionStore.saveTransaction(signedTx);
         // when(mockTransactionStore.getTransaction(signedTx.getHash())).thenReturn(signedTx);
         //
-        // === PHASE 5: CREATE BLOCKV5 ===
-        // 5. Create BlockV5 with Link to Transaction
+        // === PHASE 5: CREATE Block ===
+        // 5. Create Block with Link to Transaction
         // Link txLink = Link.toTransaction(signedTx.getHash());
         // BlockHeader header = BlockHeader.builder()
         //     .timestamp(System.currentTimeMillis())
         //     .fee(XAmount.of(100, XUnit.MILLI_XDAG))
         //     .build();
-        // BlockV5 blockV5 = BlockV5.builder()
+        // Block Block = Block.builder()
         //     .header(header)
         //     .links(Lists.newArrayList(txLink))
         //     .build();
         //
         // === PHASE 6: CONNECT TO BLOCKCHAIN ===
-        // 6. Connect BlockV5 to blockchain
-        // ImportResult result = mockBlockchain.tryToConnect(blockV5);
+        // 6. Connect Block to blockchain
+        // ImportResult result = mockBlockchain.tryToConnect(Block);
         // assertTrue(result == ImportResult.IMPORTED_BEST ||
         //           result == ImportResult.IMPORTED_NOT_BEST);
         //
         // === PHASE 7: APPLY BLOCK ===
         // 7. Apply block to execute Transaction
-        // XAmount gasCollected = mockBlockchain.applyBlock(true, blockV5);
+        // XAmount gasCollected = mockBlockchain.applyBlock(true, Block);
         // assertEquals(XAmount.of(100, XUnit.MILLI_XDAG), gasCollected);
         //
         // === PHASE 8: VERIFY RESULTS ===
@@ -257,7 +259,7 @@ public class TransferE2ETest {
         //     .build();
         //
         // Try to execute - should fail
-        // XAmount gas = mockBlockchain.applyBlock(true, blockV5);
+        // XAmount gas = mockBlockchain.applyBlock(true, Block);
         // assertEquals(XAmount.ZERO, gas);  // Failed, no gas collected
         //
         // Verify balances unchanged
@@ -298,7 +300,7 @@ public class TransferE2ETest {
         //     .fee(XAmount.of(100, XUnit.MILLI_XDAG))
         //     .build();
         //
-        // ImportResult result = mockBlockchain.tryToConnect(blockV5);
+        // ImportResult result = mockBlockchain.tryToConnect(Block);
         // assertEquals(ImportResult.INVALID_BLOCK, result);
 
         // Case 2: Skipped nonce
@@ -311,7 +313,7 @@ public class TransferE2ETest {
         //     .fee(XAmount.of(100, XUnit.MILLI_XDAG))
         //     .build();
         //
-        // ImportResult result2 = mockBlockchain.tryToConnect(blockV5_2);
+        // ImportResult result2 = mockBlockchain.tryToConnect(Block_2);
         // assertEquals(ImportResult.INVALID_BLOCK, result2);
 
         assertTrue("Test structure created successfully", true);
@@ -349,7 +351,7 @@ public class TransferE2ETest {
         // assertFalse(wrongSignedTx.verifySignature());
 
         // tryToConnect should reject
-        // ImportResult result = mockBlockchain.tryToConnect(blockV5);
+        // ImportResult result = mockBlockchain.tryToConnect(Block);
         // assertEquals(ImportResult.INVALID_BLOCK, result);
 
         assertTrue("Test structure created successfully", true);
@@ -387,7 +389,7 @@ public class TransferE2ETest {
         //     .build();
         //
         // Execute transaction
-        // mockBlockchain.applyBlock(true, blockV5);
+        // mockBlockchain.applyBlock(true, Block);
         //
         // Verify only fee is deducted
         // XAmount finalBalance = mockAddressStore.getBalanceByAddress(aliceAddress.toArray());
@@ -399,7 +401,7 @@ public class TransferE2ETest {
     /**
      * Test 6: 批量转账场景
      *
-     * 场景：一个BlockV5包含多个Transaction
+     * 场景：一个Block包含多个Transaction
      *
      * 操作:
      * - Alice → Bob: 100 XDAG
@@ -444,8 +446,8 @@ public class TransferE2ETest {
         //     .nonce(0L).fee(XAmount.of(100, XUnit.MILLI_XDAG))
         //     .build();
         //
-        // Create BlockV5 with 3 Transaction links
-        // BlockV5 blockV5 = BlockV5.builder()
+        // Create Block with 3 Transaction links
+        // Block Block = Block.builder()
         //     .header(...)
         //     .links(Lists.newArrayList(
         //         Link.toTransaction(tx1.getHash()),
@@ -455,7 +457,7 @@ public class TransferE2ETest {
         //     .build();
         //
         // Execute and verify
-        // XAmount totalGas = mockBlockchain.applyBlock(true, blockV5);
+        // XAmount totalGas = mockBlockchain.applyBlock(true, Block);
         // assertEquals(XAmount.of(300, XUnit.MILLI_XDAG), totalGas);
 
         assertTrue("Test structure created successfully", true);
@@ -485,7 +487,7 @@ public class TransferE2ETest {
         //     .build();
         //
         // tryToConnect should reject
-        // ImportResult result = mockBlockchain.tryToConnect(blockV5);
+        // ImportResult result = mockBlockchain.tryToConnect(Block);
         // assertEquals(ImportResult.INVALID_BLOCK, result);
         // assertTrue(result.getErrorInfo().contains("fee < minGas"));
 
@@ -526,7 +528,7 @@ public class TransferE2ETest {
         //         .fee(XAmount.of(100, XUnit.MILLI_XDAG))
         //         .build();
         //
-        //     BlockV5 block = createBlockV5(tx);
+        //     Block block = createBlock(tx);
         //     mockBlockchain.tryToConnect(block);
         //     mockBlockchain.applyBlock(true, block);
         // }

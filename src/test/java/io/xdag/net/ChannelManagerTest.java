@@ -26,19 +26,16 @@ package io.xdag.net;
 
 import static org.junit.Assert.assertTrue;
 
+import com.google.common.collect.Lists;
 import io.xdag.Kernel;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.crypto.SampleKeys;
-
+import io.xdag.crypto.keys.ECKeyPair;
 import java.net.InetSocketAddress;
 import java.util.List;
-
-import io.xdag.crypto.keys.ECKeyPair;
 import org.junit.Before;
 import org.junit.Test;
-
-import com.google.common.collect.Lists;
 
 public class ChannelManagerTest {
 

@@ -23,10 +23,9 @@
  */
 package io.xdag.db;
 
+import io.xdag.core.XAmount;
 import io.xdag.core.XdagLifecycle;
 import org.apache.tuweni.units.bigints.UInt64;
-
-import io.xdag.core.XAmount;
 
 public interface AddressStore extends XdagLifecycle {
 

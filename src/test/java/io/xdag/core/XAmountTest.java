@@ -23,15 +23,20 @@
  */
 package io.xdag.core;
 
-import org.apache.tuweni.units.bigints.UInt64;
-import org.junit.Test;
-
-import java.math.BigDecimal;
-
 import static io.xdag.config.Constants.MIN_GAS;
 import static io.xdag.core.XAmount.ZERO;
-import static io.xdag.core.XUnit.*;
-import static org.junit.Assert.*;
+import static io.xdag.core.XUnit.MICRO_XDAG;
+import static io.xdag.core.XUnit.MILLI_XDAG;
+import static io.xdag.core.XUnit.NANO_XDAG;
+import static io.xdag.core.XUnit.XDAG;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
+import java.math.BigDecimal;
+import org.apache.tuweni.units.bigints.UInt64;
+import org.junit.Test;
 
 public class XAmountTest {
 

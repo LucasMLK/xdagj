@@ -22,16 +22,19 @@
  * THE SOFTWARE.
  */
 package io.xdag.utils;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import io.xdag.crypto.encoding.Base58;
-import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.exception.AddressFormatException;
+import io.xdag.crypto.keys.AddressUtils;
+import io.xdag.crypto.keys.ECKeyPair;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.MutableBytes32;
-import io.xdag.crypto.keys.ECKeyPair;
 import org.junit.Assert;
 import org.junit.Test;
-
-import static org.junit.Assert.*;
 
 public class PubkeyAddressUtilsTest {
 

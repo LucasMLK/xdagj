@@ -75,12 +75,12 @@ public enum MessageCode {
     // =======================================
     // [0x10, 0x1f] Reserved for node
     // =======================================
-    BLOCKS_REQUEST(0x10),
-    BLOCKS_REPLY(0x11),
-    SUMS_REQUEST(0x12),
-    SUMS_REPLY(0x13),
-    BLOCKEXT_REQUEST(0x14),
-    BLOCKEXT_REPLY(0x15),
+//    BLOCKS_REQUEST(0x10),
+//    BLOCKS_REPLY(0x11),
+//    SUMS_REQUEST(0x12),
+//    SUMS_REPLY(0x13),
+//    BLOCKEXT_REQUEST(0x14),
+//    BLOCKEXT_REPLY(0x15),
     BLOCK_REQUEST(0x16),
 //    RECEIVE_BLOCK(0x17),
     // Phase 7.3.0: Removed NEW_BLOCK and SYNC_BLOCK (use NEW_BLOCK_V5 and SYNC_BLOCK_V5)
@@ -90,25 +90,25 @@ public enum MessageCode {
 
     // v5.1 messages (Phase 3 - Network Layer Migration)
     /**
-     * [0x1B] NEW_BLOCK_V5 - Broadcast new BlockV5 to peers
-     * Uses BlockV5 structure instead of legacy Block
-     * @see io.xdag.net.message.consensus.NewBlockV5Message
+     * [0x1B] NEW_BLOCK_V5 - Broadcast new Block to peers
+     * Uses Block structure instead of legacy Block
+     * @see io.xdag.net.message.consensus.NewBlockMessage
      */
-    NEW_BLOCK_V5(0x1B),
+    NEW_BLOCK(0x1B),
 
     /**
-     * [0x1C] SYNC_BLOCK_V5 - Synchronize BlockV5 during sync
-     * Uses BlockV5 structure instead of legacy Block
-     * @see io.xdag.net.message.consensus.SyncBlockV5Message
+     * [0x1C] SYNC_BLOCK_V5 - Synchronize Block during sync
+     * Uses Block structure instead of legacy Block
+     * @see io.xdag.net.message.consensus.SyncBlockMessage
      */
-    SYNC_BLOCK_V5(0x1C),
+    SYNC_BLOCK(0x1C);
 
     /**
-     * [0x1D] BLOCKV5_REQUEST - Request specific BlockV5 by hash (Phase 7.3)
-     * Used when a BlockV5 references a missing parent block
-     * @see io.xdag.net.message.consensus.BlockV5RequestMessage
+     * [0x1D] Block_REQUEST - Request specific Block by hash (Phase 7.3)
+     * Used when a Block references a missing parent block
+     * @see io.xdag.net.message.consensus.BlockRequestMessage
      */
-    BLOCKV5_REQUEST(0x1D);
+//    Block_REQUEST(0x1D);
 
 
     private static final MessageCode[] map = new MessageCode[256];

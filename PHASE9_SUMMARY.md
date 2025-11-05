@@ -34,11 +34,11 @@ This violated XDAG's block reward halving mechanism.
 ```java
 // Phase 9: Calculate block reward from block height
 XAmount allAmount;
-if (blockV5.getInfo() == null) {
+if (Block.getInfo() == null) {
     log.warn("Block info not loaded, cannot calculate reward from height");
     allAmount = XAmount.of(1024, XUnit.XDAG);  // Fallback
 } else {
-    long blockHeight = blockV5.getInfo().getHeight();
+    long blockHeight = Block.getInfo().getHeight();
     if (blockHeight > 0) {
         // Use blockchain.getReward() to calculate correct block reward based on height
         allAmount = blockchain.getReward(blockHeight);
@@ -71,7 +71,7 @@ public XAmount getReward(long nmain) {
 - Start amount depends on fork height (MainStartAmount or ApolloForkAmount)
 
 #### Orphan Block Detection
-- `blockV5.getInfo().getHeight() == 0` indicates orphan block
+- `Block.getInfo().getHeight() == 0` indicates orphan block
 - Orphan blocks should NOT distribute rewards (return error code -5)
 - Only main chain blocks (height > 0) get rewards
 
@@ -174,8 +174,8 @@ private void sendBatchNodeRewards() {
         Bytes32 sourceAddress = keyPair2Hash(nodeReward.keyPair);
         long baseNonce = getNextNonce(sourceAddress);
 
-        // Create reward BlockV5
-        BlockV5 rewardBlock = blockchain.createRewardBlockV5(
+        // Create reward Block
+        Block rewardBlock = blockchain.createRewardBlock(
             sourceBlockHash,    // source block hash
             recipients,         // node address
             amounts,            // node reward amount
@@ -185,8 +185,8 @@ private void sendBatchNodeRewards() {
         );
 
         // Import reward block
-        ImportResult result = kernel.getSyncMgr().validateAndAddNewBlockV5(
-            new SyncManager.SyncBlockV5(rewardBlock, 5)
+        ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(
+            new SyncManager.SyncBlock(rewardBlock, 5)
         );
 
         if (result == IMPORTED_BEST || result == IMPORTED_NOT_BEST) {
@@ -235,11 +235,11 @@ log.info("Node reward deferred for block {}, amount: {} XDAG, Map size: {}",
 
 **Answer**: Semantic correctness
 - Each node reward comes from a different source block
-- blockchain.createRewardBlockV5() expects ONE source block hash
+- blockchain.createRewardBlock() expects ONE source block hash
 - Creating one transaction with multiple sources would violate the "funds from source block" semantic
 
 **Approach**:
-- Send multiple reward BlockV5s (one per source block)
+- Send multiple reward Blocks (one per source block)
 - Process them together in sendBatchNodeRewards()
 - "Batching" means processing accumulated rewards atomically, not combining into one transaction
 
@@ -314,7 +314,7 @@ paymentsToNodesMap.size() == 10?
   ↓ YES
 sendBatchNodeRewards():
   - For each of 10 source blocks:
-    - Create reward BlockV5
+    - Create reward Block
     - Send to node coinbase
     - Use proper nonce
   - Clear map

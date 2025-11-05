@@ -24,11 +24,15 @@
 
 package io.xdag.core;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
+
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.Test;
-
-import static org.junit.Assert.*;
 
 /**
  * Unit tests for BlockHeader (v5.1)

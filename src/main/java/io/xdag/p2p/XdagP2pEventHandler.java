@@ -25,19 +25,18 @@ package io.xdag.p2p;
 
 import io.xdag.Kernel;
 import io.xdag.consensus.SyncManager;
-import io.xdag.core.BlockV5;
+import io.xdag.core.Block;
 import io.xdag.core.Blockchain;
 import io.xdag.core.ChainStats;
 import io.xdag.net.message.MessageCode;
-import io.xdag.net.message.consensus.*;
-import io.xdag.utils.XdagTime;
+import io.xdag.net.message.consensus.BlockRequestMessage;
+import io.xdag.net.message.consensus.NewBlockMessage;
+import io.xdag.net.message.consensus.SyncBlockMessage;
+import io.xdag.net.message.consensus.XdagMessage;
+import java.util.HashSet;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.lang3.time.FastDateFormat;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-
-import java.util.HashSet;
-import java.util.List;
 
 /**
  * XDAG-specific P2P event handler that processes blockchain messages
@@ -56,20 +55,12 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
         this.syncManager = kernel.getSyncMgr();
 
         // Register XDAG-specific message types
-        // Phase 7.3.0: Removed NEW_BLOCK and SYNC_BLOCK (use V5 messages)
+        // Phase 7.3: Register Block message types
         this.messageTypes = new HashSet<>();
-        this.messageTypes.add(MessageCode.BLOCKS_REQUEST.toByte());
-        this.messageTypes.add(MessageCode.BLOCKS_REPLY.toByte());
-        this.messageTypes.add(MessageCode.SUMS_REQUEST.toByte());
-        this.messageTypes.add(MessageCode.SUMS_REPLY.toByte());
-        this.messageTypes.add(MessageCode.BLOCK_REQUEST.toByte());
-        this.messageTypes.add(MessageCode.SYNCBLOCK_REQUEST.toByte());
-        this.messageTypes.add(MessageCode.BLOCKEXT_REQUEST.toByte());
 
-        // Phase 7.3: Register BlockV5 message types
-        this.messageTypes.add(MessageCode.NEW_BLOCK_V5.toByte());
-        this.messageTypes.add(MessageCode.SYNC_BLOCK_V5.toByte());
-        this.messageTypes.add(MessageCode.BLOCKV5_REQUEST.toByte());
+        this.messageTypes.add(MessageCode.NEW_BLOCK.toByte());
+        this.messageTypes.add(MessageCode.SYNC_BLOCK.toByte());
+        this.messageTypes.add(MessageCode.BLOCK_REQUEST.toByte());
     }
 
     @Override
@@ -95,36 +86,14 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
 
         try {
             switch (MessageCode.of(messageType)) {
-                // Phase 7.3.0: Removed NEW_BLOCK and SYNC_BLOCK cases (use V5 messages)
-                case BLOCKS_REQUEST:
-                    handleBlocksRequest(channel, data);
+                case NEW_BLOCK:
+                    handleNewBlock(channel, data);
                     break;
-                case BLOCKS_REPLY:
-                    handleBlocksReply(channel, data);
-                    break;
-                case SUMS_REQUEST:
-                    handleSumsRequest(channel, data);
-                    break;
-                case SUMS_REPLY:
-                    handleSumsReply(channel, data);
+                case SYNC_BLOCK:
+                    handleSyncBlock(channel, data);
                     break;
                 case BLOCK_REQUEST:
                     handleBlockRequest(channel, data);
-                    break;
-                case SYNCBLOCK_REQUEST:
-                    handleSyncBlockRequest(channel, data);
-                    break;
-                case BLOCKEXT_REQUEST:
-                    handleBlockExtRequest(channel, data);
-                    break;
-                case NEW_BLOCK_V5:
-                    handleNewBlockV5(channel, data);
-                    break;
-                case SYNC_BLOCK_V5:
-                    handleSyncBlockV5(channel, data);
-                    break;
-                case BLOCKV5_REQUEST:
-                    handleBlockV5Request(channel, data);
                     break;
                 default:
                     log.warn("Unknown message type {} from {}",
@@ -137,204 +106,19 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Phase 7.3.0: Removed handleNewBlock() and handleSyncBlock() methods
+     * Handle NEW_BLOCK_V5 message - a new Block propagated through the network (Phase 7.3)
      *
-     * Legacy NEW_BLOCK and SYNC_BLOCK message support was removed in Phase 7.3.0.
-     * All block receiving now uses NEW_BLOCK_V5 and SYNC_BLOCK_V5 messages.
-     * See handleNewBlockV5() and handleSyncBlockV5() for BlockV5 support.
-     */
-
-    /**
-     * Handle BLOCKS_REQUEST - request for blocks in a time range
-     */
-    private void handleBlocksRequest(io.xdag.p2p.channel.Channel channel, Bytes data) {
-        try {
-            BlocksRequestMessage msg = new BlocksRequestMessage(data.toArray());
-            updateChainStats(msg);
-
-            long startTime = msg.getStarttime();
-            long endTime = msg.getEndtime();
-            long random = msg.getRandom();
-
-            log.debug("Received BLOCKS_REQUEST [{} - {}] from {}",
-                    FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS")
-                            .format(XdagTime.xdagTimestampToMs(startTime)),
-                    FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS")
-                            .format(XdagTime.xdagTimestampToMs(endTime)),
-                    channel.getRemoteAddress());
-
-            // Phase 8.3.2: Blockchain interface now returns BlockV5
-            List<BlockV5> blocks = blockchain.getBlocksByTime(startTime, endTime);
-            for (BlockV5 blockV5 : blocks) {
-                try {
-                    if (blockV5 != null) {
-                        SyncBlockV5Message blockMsg = new SyncBlockV5Message(blockV5, 1);
-                        channel.send(Bytes.wrap(blockMsg.getBody()));
-                    } else {
-                        log.debug("Block {} not available as BlockV5, skipping", blockV5.getHash().toHexString());
-                    }
-                } catch (Exception e) {
-                    log.debug("Failed to get BlockV5 for hash {}", blockV5.getHash().toHexString());
-                }
-            }
-
-            // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
-            // Send reply
-            BlocksReplyMessage reply = new BlocksReplyMessage(
-                    startTime, endTime, random, blockchain.getChainStats());
-            channel.send(Bytes.wrap(reply.getBody()));
-        } catch (Exception e) {
-            log.error("Error handling BLOCKS_REQUEST from {}: {}",
-                    channel.getRemoteAddress(), e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Handle BLOCKS_REPLY - response to blocks request
-     */
-    private void handleBlocksReply(io.xdag.p2p.channel.Channel channel, Bytes data) {
-        try {
-            BlocksReplyMessage msg = new BlocksReplyMessage(data.toArray());
-            updateChainStats(msg);
-
-            long randomSeq = msg.getRandom();
-            var future = kernel.getSync().getBlocksRequestMap().get(randomSeq);
-            if (future != null) {
-                future.set(Bytes.wrap(new byte[]{0}));
-            }
-        } catch (Exception e) {
-            log.error("Error handling BLOCKS_REPLY from {}: {}",
-                    channel.getRemoteAddress(), e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Handle SUMS_REQUEST - request for block sums
-     */
-    private void handleSumsRequest(io.xdag.p2p.channel.Channel channel, Bytes data) {
-        try {
-            SumRequestMessage msg = new SumRequestMessage(data.toArray());
-            updateChainStats(msg);
-
-            org.apache.tuweni.bytes.MutableBytes sums = org.apache.tuweni.bytes.MutableBytes.create(256);
-            // Temporarily disabled - sum file system removed in v5.1
-            // kernel.getBlockStore().loadSum(msg.getStarttime(), msg.getEndtime(), sums);
-            // For now, send empty sums (256 zero bytes)
-
-            // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
-            SumReplyMessage reply = new SumReplyMessage(
-                    msg.getEndtime(), msg.getRandom(), blockchain.getChainStats(), sums);
-            channel.send(Bytes.wrap(reply.getBody()));
-        } catch (Exception e) {
-            log.error("Error handling SUMS_REQUEST from {}: {}",
-                    channel.getRemoteAddress(), e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Handle SUMS_REPLY - response to sums request
-     */
-    private void handleSumsReply(io.xdag.p2p.channel.Channel channel, Bytes data) {
-        try {
-            SumReplyMessage msg = new SumReplyMessage(data.toArray());
-            updateChainStats(msg);
-
-            long randomSeq = msg.getRandom();
-            var future = kernel.getSync().getSumsRequestMap().get(randomSeq);
-            if (future != null) {
-                future.set(msg.getSum());
-            }
-        } catch (Exception e) {
-            log.error("Error handling SUMS_REPLY from {}: {}",
-                    channel.getRemoteAddress(), e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Handle BLOCK_REQUEST - request for a specific block by hash (Phase 7.3.0)
-     *
-     * Phase 7.3.0: Updated to send BlockV5 messages only.
-     * Blocks not available as BlockV5 will be skipped (not sent).
-     */
-    private void handleBlockRequest(io.xdag.p2p.channel.Channel channel, Bytes data) {
-        try {
-            BlockRequestMessage msg = new BlockRequestMessage(data.toArray());
-            Bytes hash = msg.getHash();
-
-            // Phase 7.3.0: Try to get BlockV5
-            try {
-                io.xdag.core.BlockV5 blockV5 = kernel.getBlockStore().getBlockV5ByHash(Bytes32.wrap(hash), true);
-                if (blockV5 != null) {
-                    log.debug("Responding to BLOCK_REQUEST for {} with BlockV5", Bytes32.wrap(hash).toHexString());
-                    NewBlockV5Message response = new NewBlockV5Message(blockV5,
-                            kernel.getConfig().getNodeSpec().getTTL());
-                    channel.send(Bytes.wrap(response.getBody()));
-                } else {
-                    log.debug("Block {} not available as BlockV5, not sending", Bytes32.wrap(hash).toHexString());
-                }
-            } catch (Exception e) {
-                log.debug("Failed to get BlockV5 for hash {}", Bytes32.wrap(hash).toHexString());
-            }
-        } catch (Exception e) {
-            log.error("Error handling BLOCK_REQUEST from {}: {}",
-                    channel.getRemoteAddress(), e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Handle SYNCBLOCK_REQUEST - request for a specific historical block (Phase 7.3.0)
-     *
-     * Phase 7.3.0: Updated to send BlockV5 messages only.
-     * Blocks not available as BlockV5 will be skipped (not sent).
-     */
-    private void handleSyncBlockRequest(io.xdag.p2p.channel.Channel channel, Bytes data) {
-        try {
-            SyncBlockRequestMessage msg = new SyncBlockRequestMessage(data.toArray());
-            Bytes hash = msg.getHash();
-
-            // Phase 7.3.0: Try to get BlockV5
-            try {
-                io.xdag.core.BlockV5 blockV5 = kernel.getBlockStore().getBlockV5ByHash(Bytes32.wrap(hash), true);
-                if (blockV5 != null) {
-                    log.debug("Responding to SYNCBLOCK_REQUEST for {} with BlockV5",
-                            Bytes32.wrap(hash).toHexString());
-                    SyncBlockV5Message response = new SyncBlockV5Message(blockV5, 1);
-                    channel.send(Bytes.wrap(response.getBody()));
-                } else {
-                    log.debug("Block {} not available as BlockV5, not sending", Bytes32.wrap(hash).toHexString());
-                }
-            } catch (Exception e) {
-                log.debug("Failed to get BlockV5 for hash {}", Bytes32.wrap(hash).toHexString());
-            }
-        } catch (Exception e) {
-            log.error("Error handling SYNCBLOCK_REQUEST from {}: {}",
-                    channel.getRemoteAddress(), e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Handle BLOCKEXT_REQUEST - extended block request (currently not implemented)
-     */
-    private void handleBlockExtRequest(io.xdag.p2p.channel.Channel channel, Bytes data) {
-        // Not implemented yet
-        log.debug("Received BLOCKEXT_REQUEST from {} (not implemented)",
-                channel.getRemoteAddress());
-    }
-
-    /**
-     * Handle NEW_BLOCK_V5 message - a new BlockV5 propagated through the network (Phase 7.3)
-     *
-     * This is the NEW handler for BlockV5 objects received from network peers.
+     * This is the NEW handler for Block objects received from network peers.
      * Unlike the legacy handleNewBlock(), this method:
-     * - Uses NewBlockV5Message to deserialize BlockV5 objects
-     * - Wraps in SyncBlockV5 instead of SyncBlock
-     * - Calls syncManager.validateAndAddNewBlockV5() instead of validateAndAddNewBlock()
-     * - Uses functional blockchain.tryToConnect(BlockV5) for import
+     * - Uses NewBlockMessage to deserialize Block objects
+     * - Wraps in SyncBlock instead of SyncBlock
+     * - Calls syncManager.validateAndAddNewBlock() instead of validateAndAddNewBlock()
+     * - Uses functional blockchain.tryToConnect(Block) for import
      */
-    private void handleNewBlockV5(io.xdag.p2p.channel.Channel channel, Bytes data) {
+    private void handleNewBlock(io.xdag.p2p.channel.Channel channel, Bytes data) {
         try {
-            NewBlockV5Message msg = new NewBlockV5Message(data.toArray());
-            io.xdag.core.BlockV5 block = msg.getBlock();
+            NewBlockMessage msg = new NewBlockMessage(data.toArray());
+            Block block = msg.getBlock();
 
             if (syncManager.isSyncOld()) {
                 return;
@@ -350,10 +134,10 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
                 kernel.getConfig().getNodeSpec().getNetworkVersion()
             );
 
-            // Phase 7.3: Use SyncBlockV5 instead of SyncBlock
-            SyncManager.SyncBlockV5 syncBlock = new SyncManager.SyncBlockV5(
+            // Phase 7.3: Use SyncBlock instead of SyncBlock
+            SyncManager.SyncBlock syncBlock = new SyncManager.SyncBlock(
                 block, msg.getTtl() - 1, peer, false);
-            syncManager.validateAndAddNewBlockV5(syncBlock);
+            syncManager.validateAndAddNewBlock(syncBlock);
         } catch (Exception e) {
             log.error("Error handling NEW_BLOCK_V5 from {}: {}",
                     channel.getRemoteAddress(), e.getMessage(), e);
@@ -361,15 +145,15 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle SYNC_BLOCK_V5 message - a historical BlockV5 during sync (Phase 7.3)
+     * Handle SYNC_BLOCK_V5 message - a historical Block during sync (Phase 7.3)
      *
-     * Similar to handleNewBlockV5() but marks blocks as "old" (old=true) to indicate
+     * Similar to handleNewBlock() but marks blocks as "old" (old=true) to indicate
      * they are part of historical sync rather than real-time propagation.
      */
-    private void handleSyncBlockV5(io.xdag.p2p.channel.Channel channel, Bytes data) {
+    private void handleSyncBlock(io.xdag.p2p.channel.Channel channel, Bytes data) {
         try {
-            SyncBlockV5Message msg = new SyncBlockV5Message(data.toArray());
-            io.xdag.core.BlockV5 block = msg.getBlock();
+            SyncBlockMessage msg = new SyncBlockMessage(data.toArray());
+            Block block = msg.getBlock();
 
             log.debug("Received SYNC_BLOCK_V5: {} from {}",
                     block.getHash().toHexString(), channel.getRemoteAddress());
@@ -380,10 +164,10 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
                 kernel.getConfig().getNodeSpec().getNetworkVersion()
             );
 
-            // Phase 7.3: Use SyncBlockV5 with old=true (historical sync)
-            SyncManager.SyncBlockV5 syncBlock = new SyncManager.SyncBlockV5(
+            // Phase 7.3: Use SyncBlock with old=true (historical sync)
+            SyncManager.SyncBlock syncBlock = new SyncManager.SyncBlock(
                 block, msg.getTtl() - 1, peer, true);
-            syncManager.validateAndAddNewBlockV5(syncBlock);
+            syncManager.validateAndAddNewBlock(syncBlock);
         } catch (Exception e) {
             log.error("Error handling SYNC_BLOCK_V5 from {}: {}",
                     channel.getRemoteAddress(), e.getMessage(), e);
@@ -391,31 +175,31 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle BLOCKV5_REQUEST - request for a specific BlockV5 by hash (Phase 7.3)
+     * Handle Block_REQUEST - request for a specific Block by hash (Phase 7.3)
      *
-     * When a peer requests a specific BlockV5 (usually a missing parent block),
+     * When a peer requests a specific Block (usually a missing parent block),
      * this handler looks up the block and sends it back via SYNC_BLOCK_V5 message.
      */
-    private void handleBlockV5Request(io.xdag.p2p.channel.Channel channel, Bytes data) {
+    private void handleBlockRequest(io.xdag.p2p.channel.Channel channel, Bytes data) {
         try {
-            BlockV5RequestMessage msg = new BlockV5RequestMessage(data.toArray());
+            BlockRequestMessage msg = new BlockRequestMessage(data.toArray());
             Bytes hash = msg.getHash();
 
             // Phase 8.3.2: Use unified getBlockByHash() method
-            io.xdag.core.BlockV5 block = blockchain.getBlockByHash(Bytes32.wrap(hash), true);
+            Block block = blockchain.getBlockByHash(Bytes32.wrap(hash), true);
             if (block != null) {
-                log.debug("Responding to BLOCKV5_REQUEST for {} from {}",
+                log.debug("Responding to Block_REQUEST for {} from {}",
                         Bytes32.wrap(hash).toHexString(), channel.getRemoteAddress());
 
-                // Send requested BlockV5 as SYNC_BLOCK_V5 (with ttl=1, not for broadcast)
-                SyncBlockV5Message response = new SyncBlockV5Message(block, 1);
+                // Send requested Block as SYNC_BLOCK_V5 (with ttl=1, not for broadcast)
+                SyncBlockMessage response = new SyncBlockMessage(block, 1);
                 channel.send(Bytes.wrap(response.getBody()));
             } else {
-                log.debug("BLOCKV5_REQUEST for {} from {} - block not found",
+                log.debug("Block_REQUEST for {} from {} - block not found",
                         Bytes32.wrap(hash).toHexString(), channel.getRemoteAddress());
             }
         } catch (Exception e) {
-            log.error("Error handling BLOCKV5_REQUEST from {}: {}",
+            log.error("Error handling Block_REQUEST from {}: {}",
                     channel.getRemoteAddress(), e.getMessage(), e);
         }
     }
@@ -431,72 +215,47 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Phase 7.3.0: Deleted sendNewBlock() method
+     * Request a specific Block by hash from a channel (Phase 7.3)
      *
-     * Legacy sendNewBlock(Block, int) method was removed when NewBlockMessage was deleted.
-     * Use kernel.broadcastBlockV5() for broadcasting BlockV5 blocks instead.
-     */
-
-    /**
-     * Send BLOCKS_REQUEST to request blocks in a time range
-     * @return random sequence number for tracking the response
-     */
-    // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
-    public long sendGetBlocks(io.xdag.p2p.channel.Channel channel, long startTime, long endTime) {
-        try {
-            BlocksRequestMessage msg = new BlocksRequestMessage(startTime, endTime, blockchain.getChainStats());
-            log.debug("Sending BLOCKS_REQUEST [{} - {}] to {}",
-                    startTime, endTime, channel.getRemoteAddress());
-            channel.send(Bytes.wrap(msg.getBody()));
-            return msg.getRandom();
-        } catch (Exception e) {
-            log.error("Error sending BLOCKS_REQUEST to {}: {}",
-                    channel.getRemoteAddress(), e.getMessage(), e);
-            return -1;
-        }
-    }
-
-    /**
-     * Send SUMS_REQUEST to request block sums in a time range
-     * @return random sequence number for tracking the response
-     */
-    // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
-    public long sendGetSums(io.xdag.p2p.channel.Channel channel, long startTime, long endTime) {
-        try {
-            SumRequestMessage msg = new SumRequestMessage(startTime, endTime, blockchain.getChainStats());
-            log.debug("Sending SUMS_REQUEST [{} - {}] to {}",
-                    startTime, endTime, channel.getRemoteAddress());
-            channel.send(Bytes.wrap(msg.getBody()));
-            return msg.getRandom();
-        } catch (Exception e) {
-            log.error("Error sending SUMS_REQUEST to {}: {}",
-                    channel.getRemoteAddress(), e.getMessage(), e);
-            return -1;
-        }
-    }
-
-    /**
-     * Request a specific BlockV5 by hash from a channel (Phase 7.3)
-     *
-     * This method is called by SyncManager when a BlockV5 references a missing parent block.
-     * The receiving peer will respond with the requested BlockV5 via SYNC_BLOCK_V5 message.
+     * This method is called by SyncManager when a Block references a missing parent block.
+     * The receiving peer will respond with the requested Block via SYNC_BLOCK_V5 message.
      *
      * @param channel P2P channel to send request to
-     * @param hash Hash of the requested BlockV5
+     * @param hash Hash of the requested Block
      */
     // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
-    public void requestBlockV5ByHash(io.xdag.p2p.channel.Channel channel, Bytes32 hash) {
+    public void requestBlockByHash(io.xdag.p2p.channel.Channel channel, Bytes32 hash) {
         try {
-            BlockV5RequestMessage msg = new BlockV5RequestMessage(
+            BlockRequestMessage msg = new BlockRequestMessage(
                 org.apache.tuweni.bytes.MutableBytes.wrap(hash.toArray()),
                 blockchain.getChainStats()
             );
-            log.debug("Sending BLOCKV5_REQUEST for {} to {}",
+            log.debug("Sending Block_REQUEST for {} to {}",
                     hash.toHexString(), channel.getRemoteAddress());
             channel.send(Bytes.wrap(msg.getBody()));
         } catch (Exception e) {
-            log.error("Error sending BLOCKV5_REQUEST to {}: {}",
+            log.error("Error sending Block_REQUEST to {}: {}",
                     channel.getRemoteAddress(), e.getMessage(), e);
         }
+    }
+
+    /**
+     * Legacy method - SUMS protocol removed in v5.1
+     * @deprecated Use Hybrid Sync Protocol instead
+     */
+    @Deprecated
+    public long sendGetBlocks(io.xdag.p2p.channel.Channel channel, long startTime, long endTime) {
+        log.warn("sendGetBlocks() called but SUMS protocol removed in v5.1 - use Hybrid Sync Protocol");
+        return 0;
+    }
+
+    /**
+     * Legacy method - SUMS protocol removed in v5.1
+     * @deprecated Use Hybrid Sync Protocol instead
+     */
+    @Deprecated
+    public long sendGetSums(io.xdag.p2p.channel.Channel channel, long startTime, long endTime) {
+        log.warn("sendGetSums() called but SUMS protocol removed in v5.1 - use Hybrid Sync Protocol");
+        return 0;
     }
 }

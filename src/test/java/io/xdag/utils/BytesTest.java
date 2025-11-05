@@ -22,11 +22,11 @@
  * THE SOFTWARE.
  */
 package io.xdag.utils;
-import io.xdag.crypto.hash.HashUtils;
+
 import static org.junit.Assert.assertEquals;
 
+import io.xdag.crypto.hash.HashUtils;
 import java.nio.charset.StandardCharsets;
-
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes32;

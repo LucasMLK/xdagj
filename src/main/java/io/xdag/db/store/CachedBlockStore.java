@@ -27,12 +27,11 @@ package io.xdag.db.store;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.xdag.core.BlockInfo;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.tuweni.bytes.Bytes32;
-
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes32;
 
 /**
  * LRU Cache wrapper for FinalizedBlockStore

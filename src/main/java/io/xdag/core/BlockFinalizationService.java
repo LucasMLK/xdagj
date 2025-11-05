@@ -27,15 +27,12 @@ package io.xdag.core;
 import io.xdag.Kernel;
 import io.xdag.db.BlockStore;
 import io.xdag.db.store.FinalizedBlockStore;
-import io.xdag.utils.XdagTime;
-import lombok.extern.slf4j.Slf4j;
-
-import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for automatically finalizing old blocks
@@ -126,7 +123,7 @@ public class BlockFinalizationService {
         }
     }
 
-    // Temporarily disabled - waiting for migration to BlockV5
+    // Temporarily disabled - waiting for migration to Block
     /*
     /**
      * Finalize blocks older than the threshold
@@ -236,7 +233,7 @@ public class BlockFinalizationService {
      * Stub method for Phase 7.3 - Block finalization temporarily disabled
      */
     private void finalizeOldBlocks() {
-        log.debug("Block finalization temporarily disabled - waiting for BlockV5 migration");
+        log.debug("Block finalization temporarily disabled - waiting for Block migration");
     }
 
     /**

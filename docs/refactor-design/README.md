@@ -13,7 +13,7 @@
 本目录包含 XDAG v5.1 重构的核心设计文档（已从121个文档精简到14个核心文档）。
 
 **核心成果**:
-- ✅ **v5.1 核心架构**: BlockV5 + Transaction + Link 极简设计
+- ✅ **v5.1 核心架构**: Block + Transaction + Link 极简设计
 - ✅ **TPS性能**: 从 100 提升到 23,200（232x提升，96.7% Visa水平）
 - ✅ **Block容量**: 从 512 bytes 提升到 48MB（97,656x提升）
 - ✅ **代码质量**: 消除100%代码重复（672行→0行）
@@ -51,7 +51,7 @@
 
 6. **[CORE_DATA_STRUCTURES.md](CORE_DATA_STRUCTURES.md)** ⭐⭐⭐
    - v5.1 最终设计（极简架构）
-   - 只有Transaction和BlockV5两种类型
+   - 只有Transaction和Block两种类型
    - TPS 23,200（96.7% Visa水平）
    - 完整共识机制、孤块管理、难度调整设计
 
@@ -152,11 +152,11 @@
 
 ### 1. v5.1 极简架构
 
-**核心设计**: 只有 Transaction 和 BlockV5 两种类型
+**核心设计**: 只有 Transaction 和 Block 两种类型
 
 **关键特性**:
 - Transaction: EVM兼容，ECDSA签名，独立对象
-- BlockV5: 48MB容量，Link引用，不可变
+- Block: 48MB容量，Link引用，不可变
 - 完全移除连接块（connection blocks）
 
 ### 2. DAG引用限制

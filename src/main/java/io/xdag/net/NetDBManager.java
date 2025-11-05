@@ -25,9 +25,8 @@
 package io.xdag.net;
 
 import io.xdag.config.Config;
-import java.net.InetSocketAddress;
-
 import io.xdag.core.AbstractXdagLifecycle;
+import java.net.InetSocketAddress;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 

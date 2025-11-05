@@ -24,29 +24,28 @@
 
 package io.xdag.cli;
 
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import io.xdag.Kernel;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
-import io.xdag.core.*;
+import io.xdag.core.BlockchainImpl;
+import io.xdag.core.XAmount;
+import io.xdag.core.XUnit;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.db.AddressStore;
 import io.xdag.db.BlockStore;
 import io.xdag.db.TransactionHistoryStore;
 import io.xdag.db.TransactionStore;
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt64;
 import org.junit.Before;
 import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
 /**
  * Integration tests for Commands xferToNodeV2()
@@ -245,18 +244,18 @@ public class CommandsXferToNodeV2Test {
     }
 
     /**
-     * Test 4: BlockV5创建验证
+     * Test 4: Block创建验证
      *
-     * 场景：验证xferToNodeV2创建的BlockV5包含多个Transaction Links
+     * 场景：验证xferToNodeV2创建的Block包含多个Transaction Links
      *
      * 预期结果:
-     * - BlockV5.links包含3个Link（对应3个账户）
+     * - Block.links包含3个Link（对应3个账户）
      * - 每个Link类型为TRANSACTION (type=0)
-     * - BlockV5被广播到网络
+     * - Block被广播到网络
      */
     @Test
-    public void testXferToNodeV2_BlockV5Structure() {
-        // Test that xferToNodeV2 creates proper BlockV5 with multiple Transaction links
+    public void testXferToNodeV2_BlockStructure() {
+        // Test that xferToNodeV2 creates proper Block with multiple Transaction links
         //
         // Map<Address, ECKeyPair> paymentsToNodesMap = new HashMap<>();
         // for (int i = 0; i < 3; i++) {
@@ -267,9 +266,9 @@ public class CommandsXferToNodeV2Test {
         //
         // commands.xferToNodeV2(paymentsToNodesMap);
         //
-        // ArgumentCaptor<BlockV5> captor = ArgumentCaptor.forClass(BlockV5.class);
+        // ArgumentCaptor<Block> captor = ArgumentCaptor.forClass(Block.class);
         // verify(mockBlockchain).tryToConnect(captor.capture());
-        // BlockV5 block = captor.getValue();
+        // Block block = captor.getValue();
         //
         // assertEquals(3, block.getLinks().size());  // 3 Transaction links
         // for (Link link : block.getLinks()) {
@@ -288,7 +287,7 @@ public class CommandsXferToNodeV2Test {
      * - "Node Reward Distribution"
      * - "Found X accounts"
      * - "Total: XX.X XDAG"
-     * - "BlockV5 created"
+     * - "Block created"
      * - "v5.1" (版本标识)
      */
     @Test
@@ -308,7 +307,7 @@ public class CommandsXferToNodeV2Test {
         // assertTrue(output.contains("Node Reward Distribution"));
         // assertTrue(output.contains("Found 3 accounts"));
         // assertTrue(output.contains("Total:"));
-        // assertTrue(output.contains("BlockV5"));
+        // assertTrue(output.contains("Block"));
         // assertTrue(output.contains("v5.1"));
 
         assertTrue("Test structure created successfully", true);
@@ -321,7 +320,7 @@ public class CommandsXferToNodeV2Test {
      *
      * 预期结果:
      * - 返回错误或提示信息
-     * - 不创建Transaction或BlockV5
+     * - 不创建Transaction或Block
      */
     @Test
     public void testXferToNodeV2_EmptyMap() {

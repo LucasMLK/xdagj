@@ -36,7 +36,7 @@ import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 
 /**
- * BlockV5 for XDAG v5.1 - Candidate Block
+ * Block for XDAG v5.1 - Candidate Block
  *
  * NOTE: This is the v5.1 Block implementation. During Phase 3 migration, it coexists
  * with the legacy Block.java. Once migration is complete, this class will be renamed
@@ -51,7 +51,7 @@ import org.apache.tuweni.bytes.Bytes32;
  *
  * Structure:
  * ```
- * BlockV5 {
+ * Block {
  *     header: BlockHeader  (timestamp, difficulty, nonce, coinbase, hash_cache)
  *     links: List<Link>    (references to Transactions and other Blocks)
  *     info: BlockInfo      (runtime metadata, not serialized)
@@ -66,7 +66,7 @@ import org.apache.tuweni.bytes.Bytes32;
  */
 @Value
 @Builder(toBuilder = true)
-public class BlockV5 implements Serializable {
+public class Block implements Serializable {
 
     /**
      * Block header (participates in hash calculation)
@@ -93,7 +93,7 @@ public class BlockV5 implements Serializable {
      *
      * Usage:
      * - getInfo(): Get BlockInfo (may be null if not loaded)
-     * - withInfo(info): Create new BlockV5 with BlockInfo attached
+     * - withInfo(info): Create new Block with BlockInfo attached
      */
     @Builder.Default
     BlockInfo info = null;
@@ -156,7 +156,7 @@ public class BlockV5 implements Serializable {
         Bytes32 hash = calculateHash();
 
         // Cache hash in header (creates new immutable header)
-        // Note: This creates a new BlockV5 instance with updated header
+        // Note: This creates a new Block instance with updated header
         // The caller should use the returned hash, not rely on this instance being updated
         return hash;
     }
@@ -194,35 +194,35 @@ public class BlockV5 implements Serializable {
     }
 
     /**
-     * Create a new BlockV5 with cached hash
+     * Create a new Block with cached hash
      * This method should be called after hash calculation to cache it
      *
      * @param hash calculated hash
-     * @return new BlockV5 with hash cached in header
+     * @return new Block with hash cached in header
      */
-    public BlockV5 withHash(Bytes32 hash) {
+    public Block withHash(Bytes32 hash) {
         return this.toBuilder()
                 .header(header.toBuilder().hash(hash).build())
                 .build();
     }
 
     /**
-     * Create a new BlockV5 with updated nonce (for mining)
+     * Create a new Block with updated nonce (for mining)
      *
      * Phase 5.5: This method enables updating nonce during POW mining.
-     * Since BlockV5 is immutable, this creates a new instance with the new nonce.
+     * Since Block is immutable, this creates a new instance with the new nonce.
      *
      * Usage during mining:
      * ```java
-     * BlockV5 template = blockchain.createMainBlockV5();  // nonce = 0
+     * Block template = blockchain.createMainBlock();  // nonce = 0
      * // Mining finds better nonce
-     * BlockV5 minedBlock = template.withNonce(bestNonce);  // Create new instance
+     * Block minedBlock = template.withNonce(bestNonce);  // Create new instance
      * ```
      *
      * @param nonce POW nonce (32 bytes)
-     * @return new BlockV5 with updated nonce
+     * @return new Block with updated nonce
      */
-    public BlockV5 withNonce(Bytes32 nonce) {
+    public Block withNonce(Bytes32 nonce) {
         return this.toBuilder()
                 .header(header.toBuilder().nonce(nonce).hash(null).build())  // Clear hash cache
                 .build();
@@ -290,19 +290,19 @@ public class BlockV5 implements Serializable {
     // ========== BlockInfo Operations (Phase 4 Step 2.3) ==========
 
     /**
-     * Create new BlockV5 with BlockInfo attached
+     * Create new Block with BlockInfo attached
      *
-     * Phase 4 Step 2.3: This method allows attaching runtime metadata to BlockV5
+     * Phase 4 Step 2.3: This method allows attaching runtime metadata to Block
      *
      * Usage:
      * ```java
-     * BlockV5 blockWithInfo = block.withInfo(newInfo);
+     * Block blockWithInfo = block.withInfo(newInfo);
      * ```
      *
      * @param newInfo BlockInfo to attach
-     * @return new BlockV5 with BlockInfo attached
+     * @return new Block with BlockInfo attached
      */
-    public BlockV5 withInfo(BlockInfo newInfo) {
+    public Block withInfo(BlockInfo newInfo) {
         return this.toBuilder().info(newInfo).build();
     }
 
@@ -436,7 +436,7 @@ public class BlockV5 implements Serializable {
      * @param links DAG links (transaction and block references)
      * @return candidate block (nonce not set, needs mining)
      */
-    public static BlockV5 createCandidate(
+    public static Block createCandidate(
             long timestamp,
             org.apache.tuweni.units.bigints.UInt256 difficulty,
             Bytes32 coinbase,
@@ -450,7 +450,7 @@ public class BlockV5 implements Serializable {
                 .hash(null)  // Will be calculated
                 .build();
 
-        return BlockV5.builder()
+        return Block.builder()
                 .header(header)
                 .links(new ArrayList<>(links))
                 .build();
@@ -466,7 +466,7 @@ public class BlockV5 implements Serializable {
      * @param links DAG links
      * @return block with nonce set
      */
-    public static BlockV5 createWithNonce(
+    public static Block createWithNonce(
             long timestamp,
             org.apache.tuweni.units.bigints.UInt256 difficulty,
             Bytes32 nonce,
@@ -481,7 +481,7 @@ public class BlockV5 implements Serializable {
                 .hash(null)
                 .build();
 
-        BlockV5 block = BlockV5.builder()
+        Block block = Block.builder()
                 .header(header)
                 .links(new ArrayList<>(links))
                 .build();
@@ -497,7 +497,7 @@ public class BlockV5 implements Serializable {
      * Calculate preHash for RandomX mining
      *
      * Phase 5.5: This method replaces the legacy block.getXdagBlock().getData().slice(0, 480)
-     * approach. For BlockV5, we use the serialized header + links metadata as input.
+     * approach. For Block, we use the serialized header + links metadata as input.
      *
      * PreHash calculation:
      * 1. Serialize header (timestamp, difficulty, nonce, coinbase) = 104 bytes
@@ -575,10 +575,10 @@ public class BlockV5 implements Serializable {
      * Deserialize block from bytes
      *
      * @param bytes serialized block data
-     * @return BlockV5 instance
+     * @return Block instance
      * @throws IllegalArgumentException if data is invalid
      */
-    public static BlockV5 fromBytes(byte[] bytes) {
+    public static Block fromBytes(byte[] bytes) {
         if (bytes.length < BlockHeader.getSerializedSize() + 4) {
             throw new IllegalArgumentException(
                 "Invalid block data: too small (" + bytes.length + " bytes)"
@@ -627,7 +627,7 @@ public class BlockV5 implements Serializable {
     @Override
     public String toString() {
         return String.format(
-            "BlockV5[epoch=%d, timestamp=%d, hash=%s, links=%d (%d txs, %d blocks), size=%d bytes]",
+            "Block[epoch=%d, timestamp=%d, hash=%s, links=%d (%d txs, %d blocks), size=%d bytes]",
             getEpoch(),
             getTimestamp(),
             header.getHash() != null ? header.getHash().toHexString().substring(0, 16) + "..." : "not_calculated",
@@ -641,8 +641,8 @@ public class BlockV5 implements Serializable {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof BlockV5)) return false;
-        BlockV5 block = (BlockV5) o;
+        if (!(o instanceof Block)) return false;
+        Block block = (Block) o;
         return Objects.equals(getHash(), block.getHash());
     }
 

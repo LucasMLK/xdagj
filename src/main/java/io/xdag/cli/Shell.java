@@ -24,10 +24,19 @@
 
 package io.xdag.cli;
 
+import static io.xdag.utils.BasicUtils.address2Hash;
+import static io.xdag.utils.BasicUtils.pubAddress2Hash;
+
 import io.xdag.Kernel;
 import io.xdag.Wallet;
 import io.xdag.utils.BasicUtils;
 import io.xdag.utils.WalletUtils;
+import java.io.PrintWriter;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -47,16 +56,6 @@ import org.jline.reader.LineReaderBuilder;
 import org.jline.reader.Parser;
 import org.jline.reader.impl.DefaultParser;
 import org.jline.terminal.Terminal;
-
-import java.io.PrintWriter;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import static io.xdag.utils.BasicUtils.address2Hash;
-import static io.xdag.utils.BasicUtils.pubAddress2Hash;
 
 @Slf4j
 public class Shell extends JlineCommandRegistry implements CommandRegistry, Telnet.ShellProvider {
@@ -141,7 +140,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
                 "  to the default account address using v5.1 Transaction architecture.",
                 "",
                 "  Key differences from 'xfertonew':",
-                "  - Uses v5.1 Transaction + BlockV5 architecture",
+                "  - Uses v5.1 Transaction + Block architecture",
                 "  - Account-level aggregation (more efficient)",
                 "  - Independent Transaction objects (better validation)",
                 "  - Detailed transfer output with statistics",

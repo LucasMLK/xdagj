@@ -25,7 +25,6 @@ package io.xdag.db;
 
 import io.xdag.core.XdagLifecycle;
 import java.util.List;
-
 import org.apache.tuweni.bytes.Bytes32;
 import org.bouncycastle.util.encoders.Hex;
 

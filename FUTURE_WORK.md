@@ -95,8 +95,8 @@ protected boolean loadOnlyMode = false;
 **实现建议**:
 ```java
 // In XdagP2pEventHandler
-public void requestBlockV5ByHash(Channel channel, Bytes32 hash) {
-    BlockV5RequestMessage msg = new BlockV5RequestMessage(hash, chainStats);
+public void requestBlockByHash(Channel channel, Bytes32 hash) {
+    BlockRequestMessage msg = new BlockRequestMessage(hash, chainStats);
     channel.send(Bytes.wrap(msg.getBody()));
 }
 ```
@@ -252,7 +252,7 @@ protected void processBlocksRequest(BlocksRequestMessage msg) {
 }
 
 private void sendBlocksInBatches(BlocksRequestMessage msg) {
-    List<BlockV5> blocks = chain.getBlocksByTime(msg.getStarttime(), msg.getEndtime());
+    List<Block> blocks = chain.getBlocksByTime(msg.getStarttime(), msg.getEndtime());
 
     // Limit blocks per request
     if (blocks.size() > MAX_BLOCKS_PER_REQUEST) {
@@ -266,7 +266,7 @@ private void sendBlocksInBatches(BlocksRequestMessage msg) {
         if (i > 0 && i % 100 == 0) {
             Thread.sleep(100); // Rate limit: 100ms per 100 blocks
         }
-        SyncBlockV5Message blockMsg = new SyncBlockV5Message(blocks.get(i), 1);
+        SyncBlockMessage blockMsg = new SyncBlockMessage(blocks.get(i), 1);
         msgQueue.sendMessage(blockMsg);
     }
 }
@@ -293,13 +293,13 @@ private void sendBlocksInBatches(BlocksRequestMessage msg) {
 // Add config option
 private boolean deleteFromActiveStore = false;
 
-private void finalizeBlock(BlockV5 block) {
+private void finalizeBlock(Block block) {
     // Save to FinalizedBlockStore
-    finalizedBlockStore.saveBlockV5(block);
+    finalizedBlockStore.saveBlock(block);
 
     // Optionally delete from active store
     if (deleteFromActiveStore) {
-        blockStore.deleteBlockV5(block.getHash());
+        blockStore.deleteBlock(block.getHash());
         log.debug("Deleted finalized block from active store: {}",
                  block.getHash().toHexString());
     }
@@ -331,7 +331,7 @@ private void recordTransactionHistory(Link link) {
 }
 
 // New approach (Transaction-based)
-private void recordTransactionHistory(Transaction tx, BlockV5 block) {
+private void recordTransactionHistory(Transaction tx, Block block) {
     TxHistoryEntry entry = TxHistoryEntry.builder()
         .txHash(tx.getHash())
         .blockHash(block.getHash())
@@ -413,7 +413,7 @@ for (Pair<byte[],byte[]> an : ans) {
 
 2. **transaction() 方法** (lines 318-385)
    - 使用 List<Bytes32> + List<XAmount> (移除 Address)
-   - 调用 blockchain.createRewardBlockV5()
+   - 调用 blockchain.createRewardBlock()
    - 使用正确的 nonce 跟踪
 
 3. **doPayments() 方法** (lines 241-328)
@@ -421,7 +421,7 @@ for (Pair<byte[],byte[]> an : ans) {
    - 使用新的 transaction() 签名
 
 4. **payPools() 方法** (lines 158-245)
-   - 使用 BlockV5 直接访问 nonce/coinbase
+   - 使用 Block 直接访问 nonce/coinbase
    - 移除 legacy Block 依赖
 
 **Phase 9 实现** (commit 21d9f735):
@@ -437,7 +437,7 @@ for (Pair<byte[],byte[]> an : ans) {
 
 3. **sendBatchNodeRewards() 方法** (lines 383-479)
    - 累积 10 个区块后批量发送节点奖励
-   - 为每个源区块创建奖励 BlockV5
+   - 为每个源区块创建奖励 Block
    - 使用正确的 nonce 跟踪
    - 完整的成功/失败日志
 
@@ -603,7 +603,7 @@ else if (Hex.toHexString(address).startsWith("50")) {
 1. ✅ Transaction 签名提取实现 - **已完成** (2025-11-04 Phase 2)
 2. ⏸️ SnapshotStoreImpl toCanonical 修复 - **推迟至快照系统迁移** (2025-11-05 Phase 8.4 分析)
    - 发现 toCanonical TODO 位于已禁用的快照系统中（saveSnapshotToIndex() 方法被注释）
-   - 需要完整的快照系统 BlockV5 迁移（makeSnapshot + saveSnapshotToIndex，~4-6小时）
+   - 需要完整的快照系统 Block 迁移（makeSnapshot + saveSnapshotToIndex，~4-6小时）
    - 快照是可选功能，不影响核心区块链运行
    - 推迟至 v5.1 稳定后单独实施
 
@@ -678,11 +678,11 @@ else if (Hex.toHexString(address).startsWith("50")) {
 ```java
 // Phase 9: Calculate block reward from block height
 XAmount allAmount;
-if (blockV5.getInfo() == null) {
+if (Block.getInfo() == null) {
     log.warn("Block info not loaded, cannot calculate reward from height");
     allAmount = XAmount.of(1024, XUnit.XDAG);  // Fallback
 } else {
-    long blockHeight = blockV5.getInfo().getHeight();
+    long blockHeight = Block.getInfo().getHeight();
     if (blockHeight > 0) {
         // Use blockchain.getReward() to calculate correct block reward based on height
         allAmount = blockchain.getReward(blockHeight);
@@ -733,8 +733,8 @@ private void sendBatchNodeRewards() {
         Bytes32 sourceBlockHash = entry.getKey();
         NodeReward nodeReward = entry.getValue();
 
-        // Create reward BlockV5 for this source block's node reward
-        BlockV5 rewardBlock = blockchain.createRewardBlockV5(
+        // Create reward Block for this source block's node reward
+        Block rewardBlock = blockchain.createRewardBlock(
             sourceBlockHash,    // source block hash
             recipients,         // node address
             amounts,            // node reward amount
@@ -744,7 +744,7 @@ private void sendBatchNodeRewards() {
         );
 
         // Import and track result
-        ImportResult result = kernel.getSyncMgr().validateAndAddNewBlockV5(...);
+        ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(...);
     }
 
     // Clear the map after processing
@@ -752,7 +752,7 @@ private void sendBatchNodeRewards() {
 }
 ```
 - **批处理**: 累积 10 个区块后一次性发送所有节点奖励
-- **语义正确**: 每个源区块创建单独的奖励 BlockV5
+- **语义正确**: 每个源区块创建单独的奖励 Block
 - **Nonce 跟踪**: 使用 getNextNonce() 防止重放攻击
 - **错误处理**: 记录成功/失败，继续处理其余奖励
 
@@ -802,7 +802,7 @@ private final Map<Bytes32, NodeReward> paymentsToNodesMap = new HashMap<>(10);
 ✅ **Phase 8.5: Pool System Migration - Nonce Tracking** (6小时)
 - 实现完整的 nonce 跟踪系统
 - 重新启用矿池奖励分配功能
-- 迁移到 v5.1 BlockV5 + Transaction 架构
+- 迁移到 v5.1 Block + Transaction 架构
 - Commit: cd37fb0e
 
 ### 实现细节
@@ -829,21 +829,21 @@ public void transaction(Bytes32 hash, List<Bytes32> recipients, List<XAmount> am
     // Phase 8.5: Get next nonce for this source address
     long baseNonce = getNextNonce(sourceAddress);
 
-    // Create reward BlockV5 with proper nonce
-    BlockV5 rewardBlock = blockchain.createRewardBlockV5(
+    // Create reward Block with proper nonce
+    Block rewardBlock = blockchain.createRewardBlock(
         hash, recipients, amounts, sourceKey, baseNonce,
         MIN_GAS.multiply(recipients.size())
     );
 
     // Import to blockchain
-    ImportResult result = kernel.getSyncMgr().validateAndAddNewBlockV5(
-        new SyncManager.SyncBlockV5(rewardBlock, 5)
+    ImportResult result = kernel.getSyncMgr().validateAndAddNewBlock(
+        new SyncManager.SyncBlock(rewardBlock, 5)
     );
 }
 ```
 - **架构变化**: List<Bytes32> + List<XAmount> 替代 ArrayList<Address>
 - **Nonce 跟踪**: getNextNonce() 替代 hardcoded 0
-- **v5.1 集成**: 使用 blockchain.createRewardBlockV5()
+- **v5.1 集成**: 使用 blockchain.createRewardBlock()
 
 #### 3. doPayments() 方法迁移 (lines 241-328)
 ```java
@@ -870,24 +870,24 @@ paymentsToNodesMap.put(hash, wallet.getAccount(keyPos));
 
 #### 4. payPools() 方法重启 (lines 158-245)
 ```java
-// Phase 8.5: Use BlockV5 directly (no legacy Block conversion)
-BlockV5 blockV5 = blockchain.getBlockByHash(hash, true);
-Bytes32 blockNonce = blockV5.getHeader().getNonce();
-Bytes32 blockCoinbase = blockV5.getHeader().getCoinbase();
+// Phase 8.5: Use Block directly (no legacy Block conversion)
+Block Block = blockchain.getBlockByHash(hash, true);
+Bytes32 blockNonce = Block.getHeader().getNonce();
+Bytes32 blockCoinbase = Block.getHeader().getCoinbase();
 
 // Extract pool wallet address from nonce (bytes 12-31)
 Bytes32 poolWalletAddress = BasicUtils.hexPubAddress2Hash(
     String.valueOf(blockNonce.slice(12, 20))
 );
 ```
-- **BlockV5 直接访问**: 移除 legacy Block 依赖
+- **Block 直接访问**: 移除 legacy Block 依赖
 - **Nonce 结构**: share(12 bytes) + pool wallet address(20 bytes)
 - **验证**: 检查是否为矿池挖出的区块
 
 ### 技术亮点
 1. **防重放攻击**: 每个地址独立 nonce 计数器
 2. **线程安全**: ConcurrentHashMap + AtomicLong 无锁实现
-3. **v5.1 兼容**: 完全使用 BlockV5 + Transaction 架构
+3. **v5.1 兼容**: 完全使用 Block + Transaction 架构
 4. **向后兼容**: 保留 legacy nonce 格式验证
 
 ### 已知限制 (TODO Phase 9)
@@ -909,7 +909,7 @@ Bytes32 poolWalletAddress = BasicUtils.hexPubAddress2Hash(
 **Phase 9** 候选任务：
 1. 实现正确的区块金额计算（从 Transaction 汇总）
 2. 实现节点奖励批量分发机制
-3. BlockV5 完全迁移剩余 legacy Block 依赖
+3. Block 完全迁移剩余 legacy Block 依赖
 
 ---
 

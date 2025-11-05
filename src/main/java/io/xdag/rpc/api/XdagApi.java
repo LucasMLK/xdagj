@@ -26,9 +26,12 @@ package io.xdag.rpc.api;
 
 import io.xdag.core.XdagLifecycle;
 import io.xdag.crypto.exception.AddressFormatException;
-import io.xdag.rpc.model.response.*;
 import io.xdag.rpc.model.request.TransactionRequest;
-
+import io.xdag.rpc.model.response.BlockResponse;
+import io.xdag.rpc.model.response.ConfigResponse;
+import io.xdag.rpc.model.response.NetConnResponse;
+import io.xdag.rpc.model.response.ProcessResponse;
+import io.xdag.rpc.model.response.XdagStatusResponse;
 import java.util.List;
 
 /**

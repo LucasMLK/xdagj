@@ -24,13 +24,11 @@
 
 package io.xdag.core;
 
+import java.io.Serializable;
 import lombok.Builder;
-import lombok.Getter;
 import lombok.Value;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
-
-import java.io.Serializable;
 
 /**
  * BlockHeader for XDAG v5.1

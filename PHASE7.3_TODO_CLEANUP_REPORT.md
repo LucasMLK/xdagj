@@ -8,7 +8,7 @@
 ## 📊 分类统计
 
 ### 1️⃣ v5.1 迁移待恢复功能 (7个) - 🔴 阻塞
-> 需要等待 BlockV5 完全迁移完成才能恢复
+> 需要等待 Block 完全迁移完成才能恢复
 
 | 文件 | 行号 | 说明 |
 |------|------|------|
@@ -17,7 +17,7 @@
 | TransactionHistoryStore.java | 35 | 恢复交易历史系统 |
 | PoolAwardManagerImpl.java | 48, 73, 263, 291 | 恢复矿池奖励分配系统（4处） |
 
-**建议**: ⏸️ 暂时保留，等待 Phase 8.4+ 完成 BlockV5 完全迁移
+**建议**: ⏸️ 暂时保留，等待 Phase 8.4+ 完成 Block 完全迁移
 
 ---
 
@@ -25,10 +25,10 @@
 
 | 文件 | 行号 | 说明 |
 |------|------|------|
-| XdagSync.java | 270 | 迁移到 BlockV5（getLastTime方法） |
-| Commands.java | 1166 | 重写为使用 BlockV5 Transaction 系统 |
+| XdagSync.java | 270 | 迁移到 Block（getLastTime方法） |
+| Commands.java | 1166 | 重写为使用 Block Transaction 系统 |
 
-**建议**: 📝 可以开始规划，但依赖 BlockV5 完整实现
+**建议**: 📝 可以开始规划，但依赖 Block 完整实现
 
 ---
 
@@ -36,10 +36,10 @@
 
 | 文件 | 行号 | 说明 | Phase |
 |------|------|------|-------|
-| SyncManager.java | 415 | 完成同步迁移到 BlockV5 | 7.1 |
-| ChannelManager.java | 225 | 创建 BlockV5Distribution 类 | 3.3 |
+| SyncManager.java | 415 | 完成同步迁移到 Block | 7.1 |
+| ChannelManager.java | 225 | 创建 BlockDistribution 类 | 3.3 |
 | BlockStoreImpl.java | 610 | 实现完整的时间范围迭代 | 7.3 |
-| PoolAwardManagerImpl.java | 185 | 迁移到 BlockV5 结构 | 9 |
+| PoolAwardManagerImpl.java | 185 | 迁移到 Block 结构 | 9 |
 
 **建议**: ✅ Phase 7.3 已完成，这些是下一步任务
 
@@ -111,10 +111,10 @@
 3. **文档化 Future Work**
    - 将低优先级 TODO 移到专门的 FUTURE_WORK.md
 
-### 中期规划（依赖 BlockV5）
+### 中期规划（依赖 Block）
 4. **Phase 任务** (4个)
    - Phase 7.3 后续任务
-   - BlockV5Distribution 类创建
+   - BlockDistribution 类创建
    - 时间范围迭代实现
 
 5. **v5.1 重构** (2个)
@@ -123,7 +123,7 @@
 
 ### 长期保留（等待大迁移）
 6. **v5.1 待恢复功能** (7个)
-   - 等待 Phase 8.4+ BlockV5 完全迁移
+   - 等待 Phase 8.4+ Block 完全迁移
    - 包括矿池奖励、交易历史、存储演示
 
 ---

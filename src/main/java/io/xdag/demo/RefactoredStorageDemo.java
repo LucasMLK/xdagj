@@ -24,15 +24,6 @@
 
 package io.xdag.demo;
 
-import io.xdag.config.Constants;
-import io.xdag.core.*;
-import io.xdag.db.store.FinalizedBlockStore;
-import io.xdag.db.store.FinalizedBlockStoreImpl;
-import io.xdag.serialization.CompactSerializer;
-import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
-import org.apache.tuweni.units.bigints.UInt256;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -40,7 +31,7 @@ import java.nio.file.Path;
 /**
  * End-to-end demonstration of the new refactored storage system
  *
- * This demo is temporarily disabled - waiting for migration to BlockV5
+ * This demo is temporarily disabled - waiting for migration to Block
  *
  * This demo shows:
  * 1. Creating blocks with the new BlockInfo structure
@@ -51,7 +42,7 @@ import java.nio.file.Path;
  */
 public class RefactoredStorageDemo {
 
-    // TODO v5.1: Restore after migrating to BlockV5
+    // TODO v5.1: Restore after migrating to Block
     /*
     public static void main(String[] args) throws IOException {
         System.out.println("=".repeat(80));

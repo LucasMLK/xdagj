@@ -24,13 +24,12 @@
 
 package io.xdag.core;
 
+import java.io.Serializable;
 import lombok.Builder;
 import lombok.Value;
 import lombok.With;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
-
-import java.io.Serializable;
 
 /**
  * Immutable chain statistics for XDAG network (v5.1 optimized)

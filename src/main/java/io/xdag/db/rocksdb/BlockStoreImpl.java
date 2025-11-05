@@ -30,38 +30,27 @@ import com.esotericsoftware.kryo.io.Input;
 import com.esotericsoftware.kryo.io.Output;
 import com.esotericsoftware.kryo.util.DefaultInstantiatorStrategy;
 import com.google.common.collect.Lists;
-import io.xdag.core.*;
+import io.xdag.core.BlockHeader;
+import io.xdag.core.BlockInfo;
+import io.xdag.core.Block;
+import io.xdag.core.ChainStats;
+import io.xdag.core.SnapshotInfo;
+import io.xdag.core.XAmount;
 import io.xdag.db.BlockStore;
 import io.xdag.db.execption.DeserializationException;
 import io.xdag.db.execption.SerializationException;
-import io.xdag.utils.BasicUtils;
 import io.xdag.utils.BlockUtils;
 import io.xdag.utils.BytesUtils;
-import io.xdag.utils.FileUtils;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections4.CollectionUtils;
-import org.apache.commons.lang3.tuple.Pair;
-import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
-import org.apache.tuweni.bytes.MutableBytes;
-import org.apache.tuweni.bytes.MutableBytes32;
-import org.apache.tuweni.units.bigints.UInt64;
-import org.bouncycastle.util.encoders.Hex;
-import org.objenesis.strategy.StdInstantiatorStrategy;
-
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
-import java.nio.ByteOrder;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Objects;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
-
-import static io.xdag.utils.BytesUtils.equalBytes;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt64;
+import org.bouncycastle.util.encoders.Hex;
+import org.objenesis.strategy.StdInstantiatorStrategy;
 
 @Slf4j
 public class BlockStoreImpl implements BlockStore {
@@ -361,29 +350,29 @@ public class BlockStoreImpl implements BlockStore {
         return result;
     }
 
-    // ========== Phase 4: BlockV5 Storage Implementation ==========
+    // ========== Phase 4: Block Storage Implementation ==========
 
     @Override
-    public void saveBlockV5(BlockV5 block) {
+    public void saveBlock(Block block) {
         long time = block.getTimestamp();
         Bytes32 hash = block.getHash();
 
         // 1. Time index (same as Block)
         timeSource.put(BlockUtils.getTimeKey(time, hash), new byte[]{0});
 
-        // 2. Raw BlockV5 data (variable-length serialization)
-        byte[] blockV5Bytes = block.toBytes();
-        blockSource.put(hash.toArray(), blockV5Bytes);
+        // 2. Raw Block data (variable-length serialization)
+        byte[] BlockBytes = block.toBytes();
+        blockSource.put(hash.toArray(), BlockBytes);
 
         // 3. BlockInfo metadata
-        // Note: BlockV5.getInfo() may return null if not initialized
+        // Note: Block.getInfo() may return null if not initialized
         BlockInfo info = block.getInfo();
         if (info != null) {
             saveBlockInfoV2(info);
         } else {
             // Create minimal BlockInfo for blocks without metadata
             // This should not normally happen, but we handle it gracefully
-            log.warn("BlockV5 {} has no BlockInfo, creating minimal metadata", hash.toHexString());
+            log.warn("Block {} has no BlockInfo, creating minimal metadata", hash.toHexString());
             // Temporarily disabled - waiting for migration to v5.1
             BlockInfo minimalInfo = BlockInfo.builder()
                 .hash(hash)
@@ -398,50 +387,50 @@ public class BlockStoreImpl implements BlockStore {
             saveBlockInfoV2(minimalInfo);
         }
 
-        log.debug("Saved BlockV5: {} ({} bytes)", hash.toHexString(), blockV5Bytes.length);
+        log.debug("Saved Block: {} ({} bytes)", hash.toHexString(), BlockBytes.length);
     }
 
     @Override
-    public BlockV5 getBlockV5ByHash(Bytes32 hash, boolean isRaw) {
+    public Block getBlockByHash(Bytes32 hash, boolean isRaw) {
         if (isRaw) {
-            return getRawBlockV5ByHash(hash);
+            return getRawBlockByHash(hash);
         }
-        return getBlockV5InfoByHash(hash);
+        return getBlockInfoByHash(hash);
     }
 
     @Override
-    public BlockV5 getRawBlockV5ByHash(Bytes32 hash) {
-        // 1. Get raw BlockV5 bytes from blockSource
-        byte[] blockV5Bytes = blockSource.get(hash.toArray());
-        if (blockV5Bytes == null) {
-            log.debug("BlockV5 raw data not found for hash: {}", hash.toHexString());
+    public Block getRawBlockByHash(Bytes32 hash) {
+        // 1. Get raw Block bytes from blockSource
+        byte[] BlockBytes = blockSource.get(hash.toArray());
+        if (BlockBytes == null) {
+            log.debug("Block raw data not found for hash: {}", hash.toHexString());
             return null;
         }
 
-        // 2. Deserialize BlockV5 from bytes
-        BlockV5 block;
+        // 2. Deserialize Block from bytes
+        Block block;
         try {
-            block = BlockV5.fromBytes(blockV5Bytes);
+            block = Block.fromBytes(BlockBytes);
         } catch (Exception e) {
-            log.error("Failed to deserialize BlockV5 from bytes for hash: {}", hash.toHexString(), e);
+            log.error("Failed to deserialize Block from bytes for hash: {}", hash.toHexString(), e);
             return null;
         }
 
         // 3. Load BlockInfo from indexSource
         BlockInfo info = loadBlockInfoFromIndex(hash);
         if (info != null) {
-            // Attach BlockInfo to BlockV5
-            // Note: BlockV5 is immutable, so we need to rebuild it with info
+            // Attach BlockInfo to Block
+            // Note: Block is immutable, so we need to rebuild it with info
             block = block.toBuilder().info(info).build();
         } else {
-            log.warn("BlockInfo not found for BlockV5: {}, using block without metadata", hash.toHexString());
+            log.warn("BlockInfo not found for Block: {}, using block without metadata", hash.toHexString());
         }
 
         return block;
     }
 
     @Override
-    public BlockV5 getBlockV5InfoByHash(Bytes32 hash) {
+    public Block getBlockInfoByHash(Bytes32 hash) {
         // Get BlockInfo only, no raw data
         BlockInfo info = loadBlockInfoFromIndex(hash);
         if (info == null) {
@@ -449,10 +438,10 @@ public class BlockStoreImpl implements BlockStore {
             return null;
         }
 
-        // Create minimal BlockV5 with BlockInfo only
+        // Create minimal Block with BlockInfo only
         // This is useful for metadata-only queries (faster than full deserialization)
-        // We create a minimal BlockV5 with empty header and links
-        BlockV5 block = BlockV5.builder()
+        // We create a minimal Block with empty header and links
+        Block block = Block.builder()
             .header(BlockHeader.builder()
                 .timestamp(info.getTimestamp())
                 .nonce(Bytes32.ZERO)
@@ -515,7 +504,7 @@ public class BlockStoreImpl implements BlockStore {
     @Override
     public Bytes getOurBlock(int index) {
         log.info("getOurBlock() is deprecated - not needed in v5.1 architecture");
-        return null;  // v5.1: Use getBlockV5ByHash() for direct hash-based access
+        return null;  // v5.1: Use getBlockByHash() for direct hash-based access
     }
 
     /**
@@ -544,18 +533,18 @@ public class BlockStoreImpl implements BlockStore {
     // ========== Phase 7.3 Continuation: Main Chain Index Access ==========
 
     /**
-     * Get BlockV5 by main chain height (Phase 7.3 continuation)
+     * Get Block by main chain height (Phase 7.3 continuation)
      *
      * Implementation:
      * 1. Use MAIN_BLOCKS_INDEX to get blockHash from height
-     * 2. Retrieve BlockV5 using getBlockV5ByHash()
+     * 2. Retrieve Block using getBlockByHash()
      *
      * @param height Main chain height (must be > 0 for main blocks)
      * @param isRaw true to load full raw data, false for BlockInfo only
-     * @return BlockV5 main block at height, or null if not found
+     * @return Block main block at height, or null if not found
      */
     @Override
-    public BlockV5 getBlockV5ByHeight(long height, boolean isRaw) {
+    public Block getBlockByHeight(long height, boolean isRaw) {
         // 1. Get blockHash from MAIN_BLOCKS_INDEX
         byte[] mainBlockKey = BytesUtils.merge(MAIN_BLOCKS_INDEX, BytesUtils.longToBytes(height, true));
         byte[] blockHashBytes = indexSource.get(mainBlockKey);
@@ -568,11 +557,11 @@ public class BlockStoreImpl implements BlockStore {
         // 2. Convert to Bytes32
         Bytes32 blockHash = Bytes32.wrap(blockHashBytes);
 
-        // 3. Retrieve BlockV5
-        BlockV5 block = getBlockV5ByHash(blockHash, isRaw);
+        // 3. Retrieve Block
+        Block block = getBlockByHash(blockHash, isRaw);
 
         if (block == null) {
-            log.warn("Main block index exists at height {} but BlockV5 not found for hash: {}",
+            log.warn("Main block index exists at height {} but Block not found for hash: {}",
                     height, blockHash.toHexString());
             return null;
         }
@@ -582,19 +571,19 @@ public class BlockStoreImpl implements BlockStore {
     }
 
     /**
-     * Get list of BlockV5 objects within time range (Phase 7.3 continuation)
+     * Get list of Block objects within time range (Phase 7.3 continuation)
      *
      * Implementation:
      * 1. Scan TIME_HASH_INFO index for blocks in time range
-     * 2. Retrieve each BlockV5 by hash
+     * 2. Retrieve each Block by hash
      *
      * @param startTime Start timestamp (XDAG format)
      * @param endTime End timestamp (XDAG format)
-     * @return List of BlockV5 objects in time range
+     * @return List of Block objects in time range
      */
     @Override
-    public List<BlockV5> getBlockV5sByTime(long startTime, long endTime) {
-        List<BlockV5> result = Lists.newArrayList();
+    public List<Block> getBlocksByTime(long startTime, long endTime) {
+        List<Block> result = Lists.newArrayList();
 
         // Scan time index for blocks in range
         // Time keys format: TIME_HASH_INFO + timestamp + hash
@@ -604,7 +593,7 @@ public class BlockStoreImpl implements BlockStore {
         // Note: This is a simplified implementation
         // A full implementation would need to iterate through timeSource keys
         // For now, we return an empty list and log a warning
-        log.warn("getBlockV5sByTime() partial implementation - time range queries need full iteration support");
+        log.warn("getBlocksByTime() partial implementation - time range queries need full iteration support");
         log.debug("Queried time range: {} to {}", startTime, endTime);
 
         // TODO Phase 7.3: Implement full time-based iteration using RocksDB iterator

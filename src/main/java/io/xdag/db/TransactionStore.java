@@ -26,9 +26,8 @@ package io.xdag.db;
 
 import io.xdag.core.Transaction;
 import io.xdag.core.XdagLifecycle;
-import org.apache.tuweni.bytes.Bytes32;
-
 import java.util.List;
+import org.apache.tuweni.bytes.Bytes32;
 
 /**
  * TransactionStore for XDAG v5.1

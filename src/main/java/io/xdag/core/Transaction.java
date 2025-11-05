@@ -29,14 +29,13 @@ import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.crypto.keys.PublicKey;
 import io.xdag.crypto.keys.Signature;
 import io.xdag.crypto.keys.Signer;
+import java.io.Serializable;
+import java.nio.ByteBuffer;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Value;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-
-import java.io.Serializable;
-import java.nio.ByteBuffer;
 
 /**
  * Independent Transaction class for XDAG v5.1

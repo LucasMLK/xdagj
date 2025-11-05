@@ -28,16 +28,13 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.Kernel;
 import io.xdag.core.AbstractXdagLifecycle;
-import io.xdag.core.BlockV5;
+import io.xdag.core.Block;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
-
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -48,7 +45,7 @@ public class ChannelManager extends AbstractXdagLifecycle {
      * Simple tuple for block + TTL (v5.1)
      * Replaces BlockWrapper for network distribution
      *
-     * This was used for legacy Block distribution. Use BlockV5 directly instead.
+     * This was used for legacy Block distribution. Use Block directly instead.
      */
     /*
     private static class BlockDistribution {
@@ -65,7 +62,7 @@ public class ChannelManager extends AbstractXdagLifecycle {
     /**
      * Queue with new blocks from other peers
      *
-     * Use BlockV5 foreign block queue instead
+     * Use Block foreign block queue instead
      */
     // private final BlockingQueue<BlockDistribution> newForeignBlocks = new LinkedBlockingQueue<>();
     // Thread for block distribution (deleted in v5.1)
@@ -164,7 +161,7 @@ public class ChannelManager extends AbstractXdagLifecycle {
     /**
      * Processing new blocks received from other peers from queue
      *
-     * This method was used for legacy Block distribution. Use BlockV5 methods instead.
+     * This method was used for legacy Block distribution. Use Block methods instead.
      */
     /*
     private void newBlocksDistributeLoop() {
@@ -173,9 +170,9 @@ public class ChannelManager extends AbstractXdagLifecycle {
             try {
                 distribution = newForeignBlocks.take();
                 log.debug("no problem..");
-                // Phase 7.3.0: sendNewBlock() deleted - blocks should be broadcast as BlockV5
+                // Phase 7.3.0: sendNewBlock() deleted - blocks should be broadcast as Block
                 // Legacy Block distribution no longer supported
-                log.warn("Attempted to broadcast legacy Block, skipping (use BlockV5 instead)");
+                log.warn("Attempted to broadcast legacy Block, skipping (use Block instead)");
             } catch (InterruptedException e) {
                 break;
             } catch (Throwable e) {
@@ -190,24 +187,24 @@ public class ChannelManager extends AbstractXdagLifecycle {
     */
 
     /**
-     * Phase 7.3.0: sendNewBlock() deleted - use sendNewBlockV5() instead
+     * Phase 7.3.0: sendNewBlock() deleted - use sendNewBlock() instead
      *
      * Legacy sendNewBlock(Block, int) method was removed when NewBlockMessage was deleted.
-     * All block broadcasting should now use sendNewBlockV5(BlockV5, int).
+     * All block broadcasting should now use sendNewBlock(Block, int).
      */
 
     /**
-     * Phase 3.2: Send BlockV5 to all connected peers
+     * Phase 3.2: Send Block to all connected peers
      * Pure v5.1 implementation - no protocol negotiation
      */
-    public void sendNewBlockV5(BlockV5 block, int ttl) {
+    public void sendNewBlock(Block block, int ttl) {
         for (Channel channel : activeChannels.values()) {
-            channel.getP2pHandler().sendNewBlockV5(block, ttl);
+            channel.getP2pHandler().sendNewBlock(block, ttl);
         }
     }
 
     /**
-     * This method was used for legacy Block foreign block queueing. Use onNewForeignBlockV5() instead.
+     * This method was used for legacy Block foreign block queueing. Use onNewForeignBlock() instead.
      */
     /*
     public void onNewForeignBlock(Block block, int ttl) {
@@ -216,14 +213,14 @@ public class ChannelManager extends AbstractXdagLifecycle {
     */
 
     /**
-     * Phase 3.2: Queue BlockV5 from other peers for broadcast
+     * Phase 3.2: Queue Block from other peers for broadcast
      * Note: Currently uses legacy BlockDistribution, will be refactored
      */
-    public void onNewForeignBlockV5(BlockV5 block, int ttl) {
-        // TODO Phase 3.3: Create BlockV5Distribution class
-        // For now, this is a placeholder - BlockV5 foreign blocks are processed directly
-        log.debug("Foreign BlockV5 received: {}, ttl: {}", block.getHash(), ttl);
-        sendNewBlockV5(block, ttl - 1);
+    public void onNewForeignBlock(Block block, int ttl) {
+        // TODO Phase 3.3: Create BlockDistribution class
+        // For now, this is a placeholder - Block foreign blocks are processed directly
+        log.debug("Foreign Block received: {}, ttl: {}", block.getHash(), ttl);
+        sendNewBlock(block, ttl - 1);
     }
 
     private void initWhiteIPs() {

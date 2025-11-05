@@ -28,7 +28,6 @@ import io.xdag.crypto.hash.XdagSha256Digest;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.MutableBytes;
 
 /**
  * Task class represents a mining task in the XDAG consensus

@@ -38,7 +38,7 @@ v5.1核心组件:
 │   ├─ from/to/amount/nonce/fee
 │   ├─ ECDSA签名 (secp256k1)
 │   └─ UTF-8备注支持 (1KB)
-├─ BlockV5 (48MB容量)
+├─ Block (48MB容量)
 │   ├─ BlockHeader (104字节)
 │   └─ Links (每个33字节)
 └─ TransactionStore (独立存储)
@@ -85,7 +85,7 @@ xfertonewv2                        # 账户级聚合
 
 ✅ **生产就绪** - v5.1架构已完全实施和测试：
 
-- ✅ 核心数据结构（Transaction、BlockV5、Link）
+- ✅ 核心数据结构（Transaction、Block、Link）
 - ✅ 存储层（TransactionStore）
 - ✅ 应用层（Commands、Wallet、PoolAwardManager）
 - ✅ 网络层（区块广播）

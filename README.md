@@ -116,15 +116,15 @@ xfertonewv2                            # With account aggregation
 - Immutable architecture with builder pattern
 
 **Phase 3: Network Layer** ✅
-- Block messages (NewBlockMessage, SyncBlockV5Message)
+- Block messages (NewBlockMessage, SyncBlockMessage)
 - P2P integration and broadcasting
 
 **Phase 4: Storage Layer** ✅
-- BlockStore with BlockV5 support
+- BlockStore with Block support
 - RocksDB integration and serialization
 
 **Phase 5: Runtime Migration** ✅
-- Mining layer (XdagPow → BlockV5, createMainBlockV5())
+- Mining layer (XdagPow → Block, createMainBlock())
 - Wallet layer (deprecated 3 transaction creation methods)
 - Sync layer (deprecated SyncBlock wrapper, importBlock())
 - 11 components deprecated with migration paths

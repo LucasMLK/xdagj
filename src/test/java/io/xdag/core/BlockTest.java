@@ -36,13 +36,13 @@ import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.Test;
 
 /**
- * Unit tests for BlockV5 (v5.1)
+ * Unit tests for Block (v5.1)
  *
  * Tests the v5.1 Block implementation which uses BlockHeader + List<Link> design.
  * This test suite covers all core functionality including creation, validation,
  * serialization, and Block reference limits.
  */
-public class BlockV5Test {
+public class BlockTest {
 
     @Test
     public void testCreateCandidate() {
@@ -54,7 +54,7 @@ public class BlockV5Test {
             Link.toBlock(Bytes32.random())
         );
 
-        BlockV5 block = BlockV5.createCandidate(timestamp, difficulty, coinbase, links);
+        Block block = Block.createCandidate(timestamp, difficulty, coinbase, links);
 
         assertNotNull(block);
         assertEquals(timestamp, block.getTimestamp());
@@ -70,7 +70,7 @@ public class BlockV5Test {
         Bytes32 coinbase = Bytes32.random();
         List<Link> links = List.of(Link.toTransaction(Bytes32.random()));
 
-        BlockV5 block = BlockV5.createWithNonce(timestamp, difficulty, nonce, coinbase, links);
+        Block block = Block.createWithNonce(timestamp, difficulty, nonce, coinbase, links);
 
         assertNotNull(block);
         assertNotNull(block.getHash());
@@ -79,7 +79,7 @@ public class BlockV5Test {
 
     @Test
     public void testHashCalculation() {
-        BlockV5 block = BlockV5.createCandidate(
+        Block block = Block.createCandidate(
             100,
             UInt256.ONE,
             Bytes32.ZERO,
@@ -105,7 +105,7 @@ public class BlockV5Test {
             Link.toBlock(block1)
         );
 
-        BlockV5 block = BlockV5.createCandidate(100, UInt256.ONE, Bytes32.ZERO, links);
+        Block block = Block.createCandidate(100, UInt256.ONE, Bytes32.ZERO, links);
 
         assertEquals(3, block.getLinks().size());
         assertEquals(2, block.getTransactionCount());
@@ -129,10 +129,10 @@ public class BlockV5Test {
             Link.toTransaction(Bytes32.random())
         );
 
-        BlockV5 original = BlockV5.createWithNonce(100, UInt256.ONE, nonce, coinbase, links);
+        Block original = Block.createWithNonce(100, UInt256.ONE, nonce, coinbase, links);
 
         byte[] bytes = original.toBytes();
-        BlockV5 deserialized = BlockV5.fromBytes(bytes);
+        Block deserialized = Block.fromBytes(bytes);
 
         assertEquals(original.getTimestamp(), deserialized.getTimestamp());
         assertEquals(original.getHeader().getNonce(), deserialized.getHeader().getNonce());
@@ -148,7 +148,7 @@ public class BlockV5Test {
             Link.toTransaction(Bytes32.random())
         );
 
-        BlockV5 block = BlockV5.createCandidate(100, UInt256.ONE, Bytes32.ZERO, links);
+        Block block = Block.createCandidate(100, UInt256.ONE, Bytes32.ZERO, links);
 
         int expectedSize = BlockHeader.getSerializedSize() + 4 + (2 * Link.LINK_SIZE);
         assertEquals(expectedSize, block.getSize());
@@ -158,10 +158,10 @@ public class BlockV5Test {
     public void testMaxSizeValidation() {
         // Test exceeding link count
         List<Link> tooManyLinks = new ArrayList<>();
-        for (int i = 0; i < BlockV5.MAX_LINKS_PER_BLOCK + 1; i++) {
+        for (int i = 0; i < Block.MAX_LINKS_PER_BLOCK + 1; i++) {
             tooManyLinks.add(Link.toTransaction(Bytes32.random()));
         }
-        BlockV5 blockExceedingLinks = BlockV5.createCandidate(100, UInt256.ONE, Bytes32.ZERO, tooManyLinks);
+        Block blockExceedingLinks = Block.createCandidate(100, UInt256.ONE, Bytes32.ZERO, tooManyLinks);
         assertTrue(blockExceedingLinks.exceedsMaxLinks());
 
         // Test exceeding size (need ~1,526,000 links to exceed 48MB)
@@ -169,7 +169,7 @@ public class BlockV5Test {
         for (int i = 0; i < 1_526_000; i++) {
             lotsOfLinks.add(Link.toTransaction(Bytes32.random()));
         }
-        BlockV5 blockExceedingSize = BlockV5.createCandidate(100, UInt256.ONE, Bytes32.ZERO, lotsOfLinks);
+        Block blockExceedingSize = Block.createCandidate(100, UInt256.ONE, Bytes32.ZERO, lotsOfLinks);
         assertTrue(blockExceedingSize.exceedsMaxSize());
         assertTrue(blockExceedingSize.exceedsMaxLinks());  // This also exceeds link count
     }
@@ -181,7 +181,7 @@ public class BlockV5Test {
             "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
         );
 
-        BlockV5 block = BlockV5.createWithNonce(
+        Block block = Block.createWithNonce(
             100,
             easyDifficulty,
             Bytes32.ZERO,
@@ -203,7 +203,7 @@ public class BlockV5Test {
         List<Link> noBlockLinks = List.of(
             Link.toTransaction(Bytes32.random())
         );
-        BlockV5 blockNoRefs = BlockV5.createWithNonce(
+        Block blockNoRefs = Block.createWithNonce(
             100, easyDifficulty, Bytes32.ZERO, Bytes32.random(), noBlockLinks
         );
         assertFalse(blockNoRefs.isValid());  // Should fail: blockRefCount < MIN_BLOCK_LINKS
@@ -213,28 +213,28 @@ public class BlockV5Test {
             Link.toBlock(Bytes32.random()),
             Link.toTransaction(Bytes32.random())
         );
-        BlockV5 blockOneRef = BlockV5.createWithNonce(
+        Block blockOneRef = Block.createWithNonce(
             100, easyDifficulty, Bytes32.ZERO, Bytes32.random(), oneBlockLink
         );
         assertTrue(blockOneRef.isValid());  // Should pass: blockRefCount = 1
 
         // Test: Maximum valid (16 Block references)
         List<Link> maxBlockLinks = new ArrayList<>();
-        for (int i = 0; i < BlockV5.MAX_BLOCK_LINKS; i++) {
+        for (int i = 0; i < Block.MAX_BLOCK_LINKS; i++) {
             maxBlockLinks.add(Link.toBlock(Bytes32.random()));
         }
         maxBlockLinks.add(Link.toTransaction(Bytes32.random()));
-        BlockV5 blockMaxRefs = BlockV5.createWithNonce(
+        Block blockMaxRefs = Block.createWithNonce(
             100, easyDifficulty, Bytes32.ZERO, Bytes32.random(), maxBlockLinks
         );
         assertTrue(blockMaxRefs.isValid());  // Should pass: blockRefCount = 16
 
         // Test: Too many Block references (17, invalid)
         List<Link> tooManyBlockLinks = new ArrayList<>();
-        for (int i = 0; i < BlockV5.MAX_BLOCK_LINKS + 1; i++) {
+        for (int i = 0; i < Block.MAX_BLOCK_LINKS + 1; i++) {
             tooManyBlockLinks.add(Link.toBlock(Bytes32.random()));
         }
-        BlockV5 blockTooManyRefs = BlockV5.createWithNonce(
+        Block blockTooManyRefs = Block.createWithNonce(
             100, easyDifficulty, Bytes32.ZERO, Bytes32.random(), tooManyBlockLinks
         );
         assertFalse(blockTooManyRefs.isValid());  // Should fail: blockRefCount > MAX_BLOCK_LINKS
@@ -249,7 +249,7 @@ public class BlockV5Test {
                 .coinbase(Bytes32.ZERO)
                 .build();
 
-        BlockV5 block = BlockV5.builder()
+        Block block = Block.builder()
                 .header(header)
                 .links(List.of())
                 .build();
@@ -262,7 +262,7 @@ public class BlockV5Test {
         List<Link> links1 = new ArrayList<>();
         links1.add(Link.toTransaction(Bytes32.random()));
 
-        BlockV5 block1 = BlockV5.createCandidate(100, UInt256.ONE, Bytes32.ZERO, links1);
+        Block block1 = Block.createCandidate(100, UInt256.ONE, Bytes32.ZERO, links1);
 
         // Modify original list
         links1.add(Link.toTransaction(Bytes32.random()));
@@ -276,8 +276,8 @@ public class BlockV5Test {
         Bytes32 nonce = Bytes32.random();
         List<Link> links = List.of(Link.toTransaction(Bytes32.random()));
 
-        BlockV5 block1 = BlockV5.createWithNonce(100, UInt256.ONE, nonce, Bytes32.ZERO, links);
-        BlockV5 block2 = BlockV5.createWithNonce(100, UInt256.ONE, nonce, Bytes32.ZERO, links);
+        Block block1 = Block.createWithNonce(100, UInt256.ONE, nonce, Bytes32.ZERO, links);
+        Block block2 = Block.createWithNonce(100, UInt256.ONE, nonce, Bytes32.ZERO, links);
 
         // Same content, same hash
         assertEquals(block1.getHash(), block2.getHash());
@@ -286,7 +286,7 @@ public class BlockV5Test {
 
     @Test
     public void testToString() {
-        BlockV5 block = BlockV5.createWithNonce(
+        Block block = Block.createWithNonce(
             128,
             UInt256.ONE,
             Bytes32.ZERO,
@@ -306,10 +306,10 @@ public class BlockV5Test {
 
     @Test
     public void testConstants() {
-        assertEquals(48 * 1024 * 1024, BlockV5.MAX_BLOCK_SIZE);
-        assertEquals(1, BlockV5.MIN_BLOCK_LINKS);
-        assertEquals(16, BlockV5.MAX_BLOCK_LINKS);
-        assertEquals(1_485_000, BlockV5.MAX_LINKS_PER_BLOCK);
-        assertEquals(23_200, BlockV5.TARGET_TPS);
+        assertEquals(48 * 1024 * 1024, Block.MAX_BLOCK_SIZE);
+        assertEquals(1, Block.MIN_BLOCK_LINKS);
+        assertEquals(16, Block.MAX_BLOCK_LINKS);
+        assertEquals(1_485_000, Block.MAX_LINKS_PER_BLOCK);
+        assertEquals(23_200, Block.TARGET_TPS);
     }
 }

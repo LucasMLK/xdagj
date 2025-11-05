@@ -26,7 +26,6 @@ package io.xdag.config.spec;
 
 import io.xdag.Network;
 import io.xdag.net.message.MessageCode;
-
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Set;

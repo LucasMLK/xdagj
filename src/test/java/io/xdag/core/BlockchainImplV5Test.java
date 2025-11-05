@@ -24,6 +24,12 @@
 
 package io.xdag.core;
 
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
 import io.xdag.Kernel;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
@@ -34,22 +40,17 @@ import io.xdag.db.BlockStore;
 import io.xdag.db.OrphanBlockStore;
 import io.xdag.db.TransactionHistoryStore;
 import io.xdag.db.TransactionStore;
+import java.util.ArrayList;
+import java.util.List;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt64;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.Assert.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
 /**
- * Integration tests for BlockchainImpl v5.1 tryToConnect(BlockV5)
+ * Integration tests for BlockchainImpl v5.1 tryToConnect(Block)
  *
- * Phase A.1: 验证BlockchainImpl的BlockV5连接逻辑
+ * Phase A.1: 验证BlockchainImpl的Block连接逻辑
  *
  * 关键性：🔴 P0 - BlockchainImpl是v5.1架构的核心组件
  */
@@ -107,24 +108,24 @@ public class BlockchainImplV5Test {
     }
 
     /**
-     * Test 1: 成功连接有效的BlockV5（基础场景）
+     * Test 1: 成功连接有效的Block（基础场景）
      *
-     * 场景：创建一个包含有效Transaction的BlockV5
+     * 场景：创建一个包含有效Transaction的Block
      * 验证：
      * - tryToConnect返回IMPORTED_NOT_BEST或IMPORTED_BEST
      * - BlockInfo被正确初始化
      */
     @Test
-    public void testTryConnectBlockV5_Success() {
+    public void testTryConnectBlock_Success() {
         // Note: This is a placeholder test as creating a fully functional
         // BlockchainImpl instance requires extensive setup of all dependencies.
         //
         // In a real integration test environment, you would:
         // 1. Create a Transaction with valid signature
         // 2. Save Transaction to TransactionStore
-        // 3. Create a BlockV5 with Link to that Transaction
+        // 3. Create a Block with Link to that Transaction
         // 4. Create a BlockchainImpl instance with all dependencies
-        // 5. Call blockchain.tryToConnect(blockV5)
+        // 5. Call blockchain.tryToConnect(Block)
         // 6. Verify ImportResult and BlockInfo initialization
         //
         // Due to the complexity of BlockchainImpl dependencies, this test
@@ -137,21 +138,21 @@ public class BlockchainImplV5Test {
     /**
      * Test 2: 无效Transaction场景
      *
-     * 场景：BlockV5引用一个不存在的Transaction
+     * 场景：Block引用一个不存在的Transaction
      * 验证：
      * - tryToConnect返回ImportResult.NO_PARENT
      * - ErrorInfo包含"Transaction not found"
      */
     @Test
-    public void testTryConnectBlockV5_TransactionNotFound() {
+    public void testTryConnectBlock_TransactionNotFound() {
         // 1. Setup: Mock TransactionStore to return null (Transaction not found)
         when(mockTransactionStore.getTransaction(any(Bytes32.class))).thenReturn(null);
 
-        // 2. Create a BlockV5 with Link to non-existent Transaction
-        // (Requires full BlockV5 creation with test data)
+        // 2. Create a Block with Link to non-existent Transaction
+        // (Requires full Block creation with test data)
 
         // 3. Call tryToConnect and verify result
-        // ImportResult result = blockchain.tryToConnect(blockV5);
+        // ImportResult result = blockchain.tryToConnect(Block);
         // assertEquals(ImportResult.NO_PARENT, result);
         // assertTrue(result.getErrorInfo().contains("Transaction not found"));
 
@@ -161,13 +162,13 @@ public class BlockchainImplV5Test {
     /**
      * Test 3: Transaction签名无效场景
      *
-     * 场景：BlockV5引用一个签名无效的Transaction
+     * 场景：Block引用一个签名无效的Transaction
      * 验证：
      * - tryToConnect返回ImportResult.INVALID_BLOCK
      * - ErrorInfo包含"Invalid transaction signature"
      */
     @Test
-    public void testTryConnectBlockV5_InvalidTransactionSignature() {
+    public void testTryConnectBlock_InvalidTransactionSignature() {
         // 1. Create a Transaction with invalid signature
         Transaction invalidTx = Transaction.builder()
             .from(Bytes32.random())
@@ -182,7 +183,7 @@ public class BlockchainImplV5Test {
         when(mockTransactionStore.getTransaction(any(Bytes32.class))).thenReturn(invalidTx);
 
         // 3. Test: tryToConnect should reject due to invalid signature
-        // ImportResult result = blockchain.tryToConnect(blockV5);
+        // ImportResult result = blockchain.tryToConnect(Block);
         // assertEquals(ImportResult.INVALID_BLOCK, result);
         // assertTrue(result.getErrorInfo().contains("Invalid transaction signature"));
 
@@ -192,7 +193,7 @@ public class BlockchainImplV5Test {
     /**
      * Test 4: BlockInfo初始化验证
      *
-     * 场景：成功连接BlockV5后，验证BlockInfo被正确初始化
+     * 场景：成功连接Block后，验证BlockInfo被正确初始化
      * 验证：
      * - BlockInfo.hash 设置正确
      * - BlockInfo.timestamp 设置正确
@@ -200,7 +201,7 @@ public class BlockchainImplV5Test {
      * - BlockInfo.height = 0 (未成为main block)
      */
     @Test
-    public void testTryConnectBlockV5_BlockInfoInitialization() {
+    public void testTryConnectBlock_BlockInfoInitialization() {
         // 1. Create a valid Transaction
         Transaction validTx = Transaction.builder()
             .from(Bytes32.random())
@@ -219,15 +220,15 @@ public class BlockchainImplV5Test {
         doNothing().when(mockBlockStore).saveBlockInfoV2(any(BlockInfo.class));
 
         // 4. Test: After tryToConnect, verify BlockInfo is initialized
-        // ImportResult result = blockchain.tryToConnect(blockV5);
+        // ImportResult result = blockchain.tryToConnect(Block);
         // assertEquals(ImportResult.IMPORTED_NOT_BEST, result);
 
         // 5. Verify BlockInfo was saved with correct initial values
         // ArgumentCaptor<BlockInfo> captor = ArgumentCaptor.forClass(BlockInfo.class);
         // verify(mockBlockStore).saveBlockInfoV2(captor.capture());
         // BlockInfo savedInfo = captor.getValue();
-        // assertEquals(blockV5.getHash(), savedInfo.getHash());
-        // assertEquals(blockV5.getTimestamp(), savedInfo.getTimestamp());
+        // assertEquals(Block.getHash(), savedInfo.getHash());
+        // assertEquals(Block.getTimestamp(), savedInfo.getTimestamp());
         // assertEquals(0, savedInfo.getFlags());
         // assertEquals(0L, savedInfo.getHeight());
 
@@ -243,7 +244,7 @@ public class BlockchainImplV5Test {
      * - ErrorInfo包含"amount + fee < minGas"
      */
     @Test
-    public void testTryConnectBlockV5_TransactionAmountTooSmall() {
+    public void testTryConnectBlock_TransactionAmountTooSmall() {
         // 1. Create a Transaction with amount + fee < MIN_GAS
         Transaction smallTx = Transaction.builder()
             .from(Bytes32.random())
@@ -258,7 +259,7 @@ public class BlockchainImplV5Test {
         when(mockTransactionStore.getTransaction(any(Bytes32.class))).thenReturn(smallTx);
 
         // 3. Test: tryToConnect should reject due to insufficient amount
-        // ImportResult result = blockchain.tryToConnect(blockV5);
+        // ImportResult result = blockchain.tryToConnect(Block);
         // assertEquals(ImportResult.INVALID_BLOCK, result);
         // assertTrue(result.getErrorInfo().contains("amount + fee < minGas"));
 
@@ -266,16 +267,16 @@ public class BlockchainImplV5Test {
     }
 
     /**
-     * Test 6: BlockV5时间戳验证
+     * Test 6: Block时间戳验证
      *
-     * 场景：BlockV5的时间戳不合法（未来时间或早于era时间）
+     * 场景：Block的时间戳不合法（未来时间或早于era时间）
      * 验证：
      * - tryToConnect返回ImportResult.INVALID_BLOCK
      * - ErrorInfo包含"Block's time is illegal"
      */
     @Test
-    public void testTryConnectBlockV5_IllegalTimestamp() {
-        // Test will verify that BlockV5 with illegal timestamp is rejected
+    public void testTryConnectBlock_IllegalTimestamp() {
+        // Test will verify that Block with illegal timestamp is rejected
         // - Too far in future: timestamp > currentTime + MAIN_CHAIN_PERIOD/4
         // - Too old: timestamp < config.getXdagEra()
 

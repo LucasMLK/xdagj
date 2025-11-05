@@ -26,11 +26,10 @@ package io.xdag.core;
 
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.listener.Listener;
-import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
-import org.apache.tuweni.units.bigints.UInt64;
 import java.util.List;
 import java.util.Map;
+import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.Bytes32;
 
 public interface Blockchain {
 
@@ -39,45 +38,45 @@ public interface Blockchain {
 
 
     /**
-     * Try to connect a new BlockV5 to the blockchain (Phase 4 Layer 3 Task 1.1)
+     * Try to connect a new Block to the blockchain (Phase 4 Layer 3 Task 1.1)
      *
-     * This method validates and imports a BlockV5 into the blockchain.
-     * BlockV5 uses Link-based references instead of Address objects.
+     * This method validates and imports a Block into the blockchain.
+     * Block uses Link-based references instead of Address objects.
      *
-     * @param block BlockV5 to connect
+     * @param block Block to connect
      * @return ImportResult indicating the result of the import operation
      *
      * @since Phase 4 v5.1
      */
-    ImportResult tryToConnect(BlockV5 block);
+    ImportResult tryToConnect(Block block);
 
     /**
-     * Create a BlockV5 mining main block (v5.1 implementation)
+     * Create a Block mining main block (v5.1 implementation)
      *
-     * Phase 5.5: This is the NEW method for BlockV5 mining block creation.
+     * Phase 5.5: This is the NEW method for Block mining block creation.
      * Replaces the deprecated createNewBlock() method for mining use case.
      *
      * Key features:
      * 1. Uses Link.toBlock() instead of Address objects for block references
      * 2. Coinbase stored in BlockHeader (not as a link)
-     * 3. Returns BlockV5 with Link-based DAG structure
+     * 3. Returns Block with Link-based DAG structure
      * 4. Uses current network difficulty from blockchain stats
      * 5. Creates candidate block (nonce = 0, ready for POW mining)
      *
      * Block structure:
      * - Header: timestamp, difficulty, nonce=0, coinbase
      * - Links: [pretop_block (if exists), orphan_blocks...]
-     * - Max block links: 16 (from BlockV5.MAX_BLOCK_LINKS)
+     * - Max block links: 16 (from Block.MAX_BLOCK_LINKS)
      *
-     * @return BlockV5 candidate block for mining (nonce = 0, needs POW)
-     * @see BlockV5#createCandidate(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, List)
+     * @return Block candidate block for mining (nonce = 0, needs POW)
+     * @see Block#createCandidate(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, List)
      * @see Link#toBlock(Bytes32)
      * @since Phase 5.5 v5.1
      */
-    BlockV5 createMainBlockV5();
+    Block createMainBlock();
 
     /**
-     * Create a genesis BlockV5 (v5.1 implementation)
+     * Create a genesis Block (v5.1 implementation)
      *
      * Phase 7.5: Genesis block creation for fresh node startup.
      * Called when xdagStats.getOurLastBlockHash() == null (first-time node initialization).
@@ -91,24 +90,24 @@ public interface Blockchain {
      *
      * @param key ECKeyPair for coinbase address
      * @param timestamp Genesis block timestamp
-     * @return BlockV5 genesis block
-     * @see BlockV5#createWithNonce(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, Bytes32, List)
+     * @return Block genesis block
+     * @see Block#createWithNonce(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, Bytes32, List)
      * @since Phase 7.5 v5.1
      */
-    BlockV5 createGenesisBlockV5(ECKeyPair key, long timestamp);
+    Block createGenesisBlock(ECKeyPair key, long timestamp);
 
     /**
-     * Create a reward BlockV5 for pool distribution (v5.1 implementation)
+     * Create a reward Block for pool distribution (v5.1 implementation)
      *
-     * Phase 7.6: Pool reward distribution using BlockV5 architecture.
-     * Creates a BlockV5 containing Transaction references for reward distribution.
+     * Phase 7.6: Pool reward distribution using Block architecture.
+     * Creates a Block containing Transaction references for reward distribution.
      *
      * This method:
      * 1. Creates Transaction objects for each recipient (foundation, pool)
      * 2. Signs each Transaction with the source key
      * 3. Saves Transactions to TransactionStore
-     * 4. Creates BlockV5 with Link.toTransaction() references
-     * 5. Returns BlockV5 (caller imports via tryToConnect)
+     * 4. Creates Block with Link.toTransaction() references
+     * 5. Returns Block (caller imports via tryToConnect)
      *
      * @param sourceBlockHash Hash of source block (where funds come from)
      * @param recipients List of recipient addresses
@@ -116,12 +115,12 @@ public interface Blockchain {
      * @param sourceKey ECKeyPair for signing transactions (source of funds)
      * @param nonce Account nonce for first transaction
      * @param totalFee Total transaction fee (distributed across transactions)
-     * @return BlockV5 containing reward transactions
+     * @return Block containing reward transactions
      * @see Transaction#createTransfer(Bytes32, Bytes32, XAmount, long, XAmount)
      * @see Link#toTransaction(Bytes32)
      * @since Phase 7.6 v5.1
      */
-    BlockV5 createRewardBlockV5(
+    Block createRewardBlock(
             Bytes32 sourceBlockHash,
             List<Bytes32> recipients,
             List<XAmount> amounts,
@@ -130,29 +129,29 @@ public interface Blockchain {
             XAmount totalFee);
 
     /**
-     * Get BlockV5 by its hash (v5.1 unified interface - Phase 8.3.2)
+     * Get Block by its hash (v5.1 unified interface - Phase 8.3.2)
      *
-     * Phase 8.3.2: Blockchain interface migration to BlockV5.
+     * Phase 8.3.2: Blockchain interface migration to Block.
      * This replaces the legacy Block getBlockByHash() method.
      *
      * @param hash Block hash
      * @param isRaw Whether to include raw block data
-     * @return BlockV5 or null if not found
+     * @return Block or null if not found
      * @since Phase 8.3.2 v5.1
      */
-    BlockV5 getBlockByHash(Bytes32 hash, boolean isRaw);
+    Block getBlockByHash(Bytes32 hash, boolean isRaw);
 
     /**
-     * Get BlockV5 by its height (v5.1 unified interface - Phase 8.3.2)
+     * Get Block by its height (v5.1 unified interface - Phase 8.3.2)
      *
-     * Phase 8.3.2: Blockchain interface migration to BlockV5.
+     * Phase 8.3.2: Blockchain interface migration to Block.
      * This replaces the legacy Block getBlockByHeight() method.
      *
      * @param height Block height (main block number)
-     * @return BlockV5 or null if not found
+     * @return Block or null if not found
      * @since Phase 8.3.2 v5.1
      */
-    BlockV5 getBlockByHeight(long height);
+    Block getBlockByHeight(long height);
 
     // Check and update main chain
     void checkNewMain();
@@ -161,28 +160,28 @@ public interface Blockchain {
     long getLatestMainBlockNumber();
 
     /**
-     * Get list of main BlockV5s with specified count (v5.1 unified interface - Phase 8.3.2)
+     * Get list of main Blocks with specified count (v5.1 unified interface - Phase 8.3.2)
      *
-     * Phase 8.3.2: Blockchain interface migration to BlockV5.
+     * Phase 8.3.2: Blockchain interface migration to Block.
      * This replaces the legacy List<Block> listMainBlocks() method.
      *
      * @param count Number of main blocks to retrieve
-     * @return List of BlockV5 main blocks
+     * @return List of Block main blocks
      * @since Phase 8.3.2 v5.1
      */
-    List<BlockV5> listMainBlocks(int count);
+    List<Block> listMainBlocks(int count);
 
     /**
-     * Get list of mined BlockV5s with specified count (v5.1 unified interface - Phase 8.3.2)
+     * Get list of mined Blocks with specified count (v5.1 unified interface - Phase 8.3.2)
      *
-     * Phase 8.3.2: Blockchain interface migration to BlockV5.
+     * Phase 8.3.2: Blockchain interface migration to Block.
      * This replaces the legacy List<Block> listMinedBlocks() method.
      *
      * @param count Number of mined blocks to retrieve
-     * @return List of BlockV5 mined blocks
+     * @return List of Block mined blocks
      * @since Phase 8.3.2 v5.1
      */
-    List<BlockV5> listMinedBlocks(int count);
+    List<Block> listMinedBlocks(int count);
 
     // Get memory blocks created by current node
     Map<Bytes, Integer> getMemOurBlocks();
@@ -194,7 +193,6 @@ public interface Blockchain {
      * ChainStats provides blockchain statistics without mutable state.
      *
      * @return ChainStats containing current blockchain statistics
-     * @see ChainStats#toLegacy() for backward compatibility
      * @since Phase 7.3 v5.1
      */
     ChainStats getChainStats();
@@ -246,17 +244,17 @@ public interface Blockchain {
     XAmount getSupply(long nmain);
 
     /**
-     * Get BlockV5 objects within specified time range (v5.1 unified interface - Phase 8.3.2)
+     * Get Block objects within specified time range (v5.1 unified interface - Phase 8.3.2)
      *
-     * Phase 8.3.2: Blockchain interface migration to BlockV5.
+     * Phase 8.3.2: Blockchain interface migration to Block.
      * This replaces the legacy List<Block> getBlocksByTime() method.
      *
      * @param starttime Start time in XDAG timestamp format
      * @param endtime End time in XDAG timestamp format
-     * @return List of BlockV5 objects in the time range
+     * @return List of Block objects in the time range
      * @since Phase 8.3.2 v5.1
      */
-    List<BlockV5> getBlocksByTime(long starttime, long endtime);
+    List<Block> getBlocksByTime(long starttime, long endtime);
 
     // Start main chain check thread with given period
     void startCheckMain(long period);
@@ -267,14 +265,4 @@ public interface Blockchain {
     // Register blockchain event listener
     void registerListener(Listener listener);
 
-    /**
-     * Get extended blockchain statistics (hashrate tracking)
-     *
-     * Phase 7.3: XdagExtStats tracks hash rate history for network monitoring.
-     * This provides detailed performance metrics beyond basic ChainStats.
-     *
-     * @return XdagExtStats containing hash rate history
-     * @since Phase 7.3 v5.1
-     */
-    XdagExtStats getXdagExtStats();
 }

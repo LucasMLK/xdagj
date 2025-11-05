@@ -23,25 +23,22 @@
  */
 package io.xdag.net;
 
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-
-import org.apache.commons.lang3.tuple.Pair;
-import org.xerial.snappy.Snappy;
-
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.MessageToMessageCodec;
 import io.xdag.config.Config;
 import io.xdag.net.message.Message;
 import io.xdag.net.message.MessageException;
 import io.xdag.net.message.MessageFactory;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.tuple.Pair;
+import org.xerial.snappy.Snappy;
 
 @Slf4j
 public class XdagMessageHandler extends MessageToMessageCodec<Frame, Message>  {

@@ -23,6 +23,9 @@
  */
 package io.xdag.db.rocksdb;
 
+import static io.xdag.db.AddressStore.ADDRESS_SIZE;
+import static io.xdag.db.AddressStore.CURRENT_TRANSACTION_QUANTITY;
+
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.KryoException;
 import com.esotericsoftware.kryo.io.Input;
@@ -31,40 +34,27 @@ import com.esotericsoftware.kryo.util.DefaultInstantiatorStrategy;
 import io.xdag.core.SnapshotInfo;
 import io.xdag.core.XAmount;
 import io.xdag.core.XUnit;
-// Phase 7.3.1: XdagTopStatus import removed (class deleted, merged into ChainStats)
 import io.xdag.crypto.hash.HashUtils;
 import io.xdag.crypto.keys.ECKeyPair;
-import io.xdag.crypto.keys.Signature;
-import io.xdag.crypto.keys.Signer;
 import io.xdag.db.AddressStore;
 import io.xdag.db.BlockStore;
 import io.xdag.db.SnapshotStore;
 import io.xdag.db.TransactionHistoryStore;
 import io.xdag.db.execption.DeserializationException;
 import io.xdag.db.execption.SerializationException;
-import io.xdag.utils.BasicUtils;
 import io.xdag.utils.BytesUtils;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.math.BigInteger;
+import java.util.Arrays;
+import java.util.List;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt64;
 import org.bouncycastle.util.encoders.Hex;
 import org.objenesis.strategy.StdInstantiatorStrategy;
 import org.rocksdb.RocksIterator;
-
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.List;
-
-import static io.xdag.config.Constants.BI_OURS;
-import static io.xdag.db.AddressStore.ADDRESS_SIZE;
-import static io.xdag.db.AddressStore.CURRENT_TRANSACTION_QUANTITY;
-import static io.xdag.db.BlockStore.*;
-import static io.xdag.utils.BasicUtils.compareAmountTo;
 
 @Slf4j
 public class SnapshotStoreImpl implements SnapshotStore {
@@ -103,7 +93,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
      *
      * @deprecated Phase 8.3.2: Requires full v5.1 snapshot system migration (Phase 8.4).
      * This method is a complex data migration tool (~150-200 lines) that needs:
-     * - LegacyBlockInfo → BlockV5 migration
+     * - LegacyBlockInfo → Block migration
      * - TransactionStore integration for balance calculation
      * - Comprehensive testing with real blockchain data
      *
@@ -128,7 +118,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
      *
      * @deprecated Phase 8.3.3: Requires full v5.1 snapshot system migration (Phase 8.4).
      * This method is CRITICAL for blockchain initialization (~200-250 lines) that needs:
-     * - Block → BlockV5 migration
+     * - Block → Block migration
      * - TxHistory → Transaction migration
      * - Signature validation and index rebuilding
      * - Comprehensive testing to prevent data corruption
@@ -159,7 +149,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
 
     // Phase 7.1.2: Removed setBlockInfo() method - PreBlockInfo deleted, use LegacyBlockInfo directly
 
-    // Temporarily disabled - waiting for migration to BlockV5
+    // Temporarily disabled - waiting for migration to Block
     /*
     // Phase 7.1.2: Removed boolean parameter - always deserialize to LegacyBlockInfo directly
     public void makeSnapshot(RocksdbKVSource blockSource, RocksdbKVSource indexSource) {
@@ -208,7 +198,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
     }
     */
 
-    // Temporarily disabled - waiting for migration to BlockV5
+    // Temporarily disabled - waiting for migration to Block
     /*
     public void saveSnapshotToIndex(BlockStore blockStore, TransactionHistoryStore txHistoryStore, List<ECKeyPair> keys,long snapshotTime) {
         try (RocksIterator iter = snapshotSource.getDb().newIterator()) {
@@ -317,7 +307,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
                         }
                         allBalance = allBalance.add(balance); //calculate the address balance
                         addressStore.snapshotAddress(address, balance);
-                        // Temporarily disabled - waiting for migration to BlockV5
+                        // Temporarily disabled - waiting for migration to Block
                         /*
                         if (txHistoryStore != null) {
                             XdagField.FieldType fieldType = XdagField.FieldType.XDAG_FIELD_SNAPSHOT;
@@ -347,7 +337,7 @@ public class SnapshotStoreImpl implements SnapshotStore {
         }
     }
 
-    // Temporarily disabled - waiting for migration to BlockV5
+    // Temporarily disabled - waiting for migration to Block
     /*
     public void save(RocksIterator iter, LegacyBlockInfo blockInfo) {
         byte[] value = null;

@@ -23,13 +23,12 @@
  */
 package io.xdag.net;
 
-import java.io.IOException;
-import java.util.List;
-
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.codec.ByteToMessageCodec;
 import io.xdag.config.Config;
+import java.io.IOException;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j

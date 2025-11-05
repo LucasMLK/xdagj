@@ -24,22 +24,27 @@
 
 package io.xdag.utils;
 
+import static io.xdag.utils.BasicUtils.address2Hash;
+import static io.xdag.utils.BasicUtils.crc32Verify;
+import static io.xdag.utils.BasicUtils.extractIpAddress;
+import static io.xdag.utils.BasicUtils.hash2Address;
+import static io.xdag.utils.BasicUtils.hash2byte;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
 import com.google.common.collect.Lists;
 import io.xdag.crypto.encoding.Base58;
 import io.xdag.crypto.exception.AddressFormatException;
 import io.xdag.utils.exception.XdagOverFlowException;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Random;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes32;
 import org.bouncycastle.util.encoders.Hex;
 import org.junit.Test;
-
-import java.math.BigDecimal;
-import java.util.List;
-import java.util.Random;
-
-import static io.xdag.utils.BasicUtils.*;
-import static org.junit.Assert.*;
 
 public class BasicUtilsTest {
     protected MutableBytes32 data;
