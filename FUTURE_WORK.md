@@ -1,8 +1,9 @@
 # Future Work - XDAGJ v5.1+
 
-**文档版本**: 1.0
+**文档版本**: 1.2
 **创建日期**: 2025-11-04
-**Phase 状态**: Phase 7.3 完成，Phase 8 规划中
+**最后更新**: 2025-11-05 (Phase 8.5 完成)
+**Phase 状态**: Phase 8.5 完成，所有 P2 任务完成
 
 本文档记录了低优先级的 TODO 和未来改进项，这些不阻塞当前 v5.1 核心功能的完成。
 
@@ -400,39 +401,42 @@ for (Pair<byte[],byte[]> an : ans) {
 
 ### PoolAwardManagerImpl.java
 
-#### Nonce跟踪
-**文件**: `src/main/java/io/xdag/pool/PoolAwardManagerImpl.java:312, 318`
-**TODO**:
-- Note: Using nonce = 0 for now (TODO: implement proper nonce tracking)
-- nonce (TODO: track properly)
+#### ✅ Nonce跟踪 - Phase 8.5 已完成 (2025-11-05)
+**文件**: `src/main/java/io/xdag/pool/PoolAwardManagerImpl.java:79-385`
+**状态**: ✅ **已完成** - Phase 8.5 (commit cd37fb0e)
 
-**描述**: 实现正确的 nonce 跟踪系统，用于矿池奖励分配。
+**描述**: 实现完整的 nonce 跟踪系统，重新启用矿池奖励分配功能。
 
-**影响**: 中 - 功能完整性
-**优先级**: P2
-**预估工作量**: 4-6小时
+**实现内容**:
+1. **Nonce 跟踪** (lines 79-81, 296-316)
+   - 添加 `rewardAccountNonces` ConcurrentHashMap
+   - 实现 `getNextNonce()` 方法，原子递增
+   - 防止交易重放攻击
 
-**实现建议**:
-```java
-// Add nonce tracking to wallet or pool manager
-private Map<Bytes32, AtomicLong> accountNonces = new ConcurrentHashMap<>();
+2. **transaction() 方法** (lines 318-385)
+   - 取消注释并完全重写
+   - 使用 List<Bytes32> + List<XAmount> (移除 Address)
+   - 调用 blockchain.createRewardBlockV5()
+   - 使用正确的 nonce 跟踪
 
-public long getNextNonce(Bytes32 address) {
-    return accountNonces
-        .computeIfAbsent(address, k -> new AtomicLong(0))
-        .getAndIncrement();
-}
+3. **doPayments() 方法** (lines 241-328)
+   - 重写为 v5.1 架构
+   - 三方分配：foundation (5%) + pool + node (5%)
+   - 使用新的 transaction() 签名
 
-// Use in reward distribution
-BlockV5 rewardBlock = blockchain.createRewardBlockV5(
-    hash,
-    recipients,
-    amounts,
-    sourceKey,
-    getNextNonce(sourceAddress),  // Proper nonce tracking
-    MIN_GAS.multiply(recipients.size())
-);
-```
+4. **payPools() 方法** (lines 158-245)
+   - 取消注释并更新
+   - 使用 BlockV5 直接访问 nonce/coinbase
+   - 移除 legacy Block 依赖
+
+**TODO (Phase 9)**:
+- 实现正确的区块金额计算（从交易中汇总）
+- 当前使用默认 1024 XDAG 作为临时方案
+
+**影响**: 高 - 矿池功能完整性
+**优先级**: P2 ✅ 完成
+**工作量**: 6小时（已实现）
+**Git Commit**: cd37fb0e
 
 ---
 
@@ -573,17 +577,21 @@ else if (Hex.toHexString(address).startsWith("50")) {
 
 ### P1 - 高优先级（核心功能） ⚠️
 1. ✅ Transaction 签名提取实现 - **已完成** (2025-11-04 Phase 2)
-2. SnapshotStoreImpl toCanonical 修复（4小时）
+2. ⏸️ SnapshotStoreImpl toCanonical 修复 - **推迟至快照系统迁移** (2025-11-05 Phase 8.4 分析)
+   - 发现 toCanonical TODO 位于已禁用的快照系统中（saveSnapshotToIndex() 方法被注释）
+   - 需要完整的快照系统 BlockV5 迁移（makeSnapshot + saveSnapshotToIndex，~4-6小时）
+   - 快照是可选功能，不影响核心区块链运行
+   - 推迟至 v5.1 稳定后单独实施
 
-**总计**: 4小时（剩余）
+**总计**: 0小时（P1 任务全部完成或推迟）
 
 ### P2 - 中高优先级（安全和稳定性）
-1. XdagPow 限制矿池份额（6小时）
-2. XdagP2pHandler 多区块请求处理（6小时）
-3. PoolAwardManagerImpl nonce 跟踪（6小时）
+1. ✅ XdagPow 限制矿池份额 - **已完成** (2025-11-04 Phase 8.2.1, commit 0642c406)
+2. ✅ XdagP2pHandler 多区块请求处理 - **已完成** (2025-11-04 Phase 8.2.2, commit ff77081a)
+3. ✅ PoolAwardManagerImpl nonce 跟踪 - **已完成** (2025-11-05 Phase 8.5, commit cd37fb0e)
 4. ✅ OrphanBlockStoreImpl 空指针修复 - **已完成** (2025-11-04 Phase 8.1)
 
-**总计**: 18小时
+**总计**: 18小时（全部完成）✅
 
 ### P3 - 中优先级（功能增强）
 1. SyncManager 各项改进（10小时）
@@ -626,5 +634,156 @@ else if (Hex.toHexString(address).startsWith("50")) {
 3. 优先级变更时更新
 4. 每个 Phase 完成后审查
 
-**最后更新**: 2025-11-04
-**下次审查**: Phase 8 完成时
+**最后更新**: 2025-11-05 (Phase 8.5 完成)
+**下次审查**: Phase 9 开始时
+
+---
+
+## 🎯 Phase 8.5 完成总结 (2025-11-05)
+
+### 已完成任务
+✅ **Phase 8.5: Pool System Migration - Nonce Tracking** (6小时)
+- 实现完整的 nonce 跟踪系统
+- 重新启用矿池奖励分配功能
+- 迁移到 v5.1 BlockV5 + Transaction 架构
+- Commit: cd37fb0e
+
+### 实现细节
+
+#### 1. Nonce 跟踪系统 (lines 79-81, 296-316)
+```java
+// Per-address nonce tracking to prevent replay attacks
+private final Map<Bytes32, AtomicLong> rewardAccountNonces = new ConcurrentHashMap<>();
+
+private long getNextNonce(Bytes32 sourceAddress) {
+    return rewardAccountNonces
+        .computeIfAbsent(sourceAddress, k -> new AtomicLong(0))
+        .getAndIncrement();
+}
+```
+- **线程安全**: ConcurrentHashMap + AtomicLong 无锁设计
+- **防重放**: 每个源地址独立的 nonce 计数器
+- **策略**: 从 0 开始，原子递增，节点重启时重置
+
+#### 2. transaction() 方法重写 (lines 318-385)
+```java
+public void transaction(Bytes32 hash, List<Bytes32> recipients, List<XAmount> amounts,
+                        int keyPos, TransactionInfoSender transactionInfoSender) {
+    // Phase 8.5: Get next nonce for this source address
+    long baseNonce = getNextNonce(sourceAddress);
+
+    // Create reward BlockV5 with proper nonce
+    BlockV5 rewardBlock = blockchain.createRewardBlockV5(
+        hash, recipients, amounts, sourceKey, baseNonce,
+        MIN_GAS.multiply(recipients.size())
+    );
+
+    // Import to blockchain
+    ImportResult result = kernel.getSyncMgr().validateAndAddNewBlockV5(
+        new SyncManager.SyncBlockV5(rewardBlock, 5)
+    );
+}
+```
+- **架构变化**: List<Bytes32> + List<XAmount> 替代 ArrayList<Address>
+- **Nonce 跟踪**: getNextNonce() 替代 hardcoded 0
+- **v5.1 集成**: 使用 blockchain.createRewardBlockV5()
+
+#### 3. doPayments() 方法迁移 (lines 241-328)
+```java
+// Three-way reward split
+XAmount fundAmount = allAmount.multiply(div(fundRation, 100, 6));  // 5%
+XAmount nodeAmount = allAmount.multiply(div(nodeRation, 100, 6));  // 5%
+XAmount poolAmount = allAmount.subtract(fundAmount).subtract(nodeAmount);
+
+List<Bytes32> recipients = new ArrayList<>(2);
+List<XAmount> amounts = new ArrayList<>(2);
+recipients.add(fundAddressHash);       // Foundation
+amounts.add(fundAmount);
+recipients.add(poolWalletAddress);     // Pool
+amounts.add(poolAmount);
+
+transaction(hash, recipients, amounts, keyPos, transactionInfoSender);
+
+// Node rewards deferred for batch processing
+paymentsToNodesMap.put(hash, wallet.getAccount(keyPos));
+```
+- **Foundation**: 5% 给社区基金
+- **Pool**: 剩余奖励扣除节点奖励后给矿池
+- **Node**: 5% 延迟批量处理（TODO Phase 8.6）
+
+#### 4. payPools() 方法重启 (lines 158-245)
+```java
+// Phase 8.5: Use BlockV5 directly (no legacy Block conversion)
+BlockV5 blockV5 = blockchain.getBlockByHash(hash, true);
+Bytes32 blockNonce = blockV5.getHeader().getNonce();
+Bytes32 blockCoinbase = blockV5.getHeader().getCoinbase();
+
+// Extract pool wallet address from nonce (bytes 12-31)
+Bytes32 poolWalletAddress = BasicUtils.hexPubAddress2Hash(
+    String.valueOf(blockNonce.slice(12, 20))
+);
+```
+- **BlockV5 直接访问**: 移除 legacy Block 依赖
+- **Nonce 结构**: share(12 bytes) + pool wallet address(20 bytes)
+- **验证**: 检查是否为矿池挖出的区块
+
+### 技术亮点
+1. **防重放攻击**: 每个地址独立 nonce 计数器
+2. **线程安全**: ConcurrentHashMap + AtomicLong 无锁实现
+3. **v5.1 兼容**: 完全使用 BlockV5 + Transaction 架构
+4. **向后兼容**: 保留 legacy nonce 格式验证
+
+### 已知限制 (TODO Phase 9)
+1. **区块金额计算**: 当前使用默认 1024 XDAG
+   - v5.1 BlockInfo 不再存储 amount
+   - 需要从区块的 Transaction 链表汇总计算
+2. **节点奖励批处理**: 当前仅累积，未实现批量发送
+
+### 影响范围
+- **功能**: 重新启用矿池奖励分配系统
+- **安全**: Nonce 跟踪防止交易重放
+- **架构**: 完成 v5.1 Transaction 迁移
+- **编译**: ✅ 验证通过 (mvn compile)
+
+### Git 提交
+- `cd37fb0e` - Phase 8.5: Pool System Migration - Nonce Tracking Implementation
+
+### 下一步工作
+**Phase 9** 候选任务：
+1. 实现正确的区块金额计算（从 Transaction 汇总）
+2. 实现节点奖励批量分发机制
+3. BlockV5 完全迁移剩余 legacy Block 依赖
+
+---
+
+## 🎯 Phase 8.2 完成总结 (2025-11-04)
+
+### 已完成任务
+1. ✅ **Phase 8.2.1: XdagPow 矿池份额限制** (6小时)
+   - 实现 ConcurrentHashMap 份额跟踪
+   - 每个矿池每周期最多 100 份额
+   - 周期重置机制集成到 newBlock()
+   - Commit: 0642c406
+
+2. ✅ **Phase 8.2.2: XdagP2pHandler 多区块请求 DoS 防护** (6小时)
+   - 时间范围验证 (最大 86400 XDAG 时间单位)
+   - 区块数量限制 (最大 1000 块/请求)
+   - 异步处理大请求
+   - 批量发送 + 速率限制 (100块/批，100ms延迟)
+   - Commit: ff77081a
+
+3. ⏸️ **Phase 8.2.3: PoolAwardManagerImpl nonce 跟踪** (设计6小时，实施推迟)
+   - 设计完成 - 详细文档在本文件第 403-509 行
+   - 发现矿池奖励系统完全禁用，等待 v5.1 Transaction 迁移
+   - 实施推迟至 Phase 8.5 矿池系统迁移
+
+### 影响范围
+- **安全性**: 防止矿池份额垃圾攻击和 P2P 区块请求 DoS 攻击
+- **性能**: 大区块请求不再阻塞主处理线程
+- **代码质量**: 详细设计文档为 Phase 8.5 实施做好准备
+
+### Git 提交
+- `0642c406` - Phase 8.2.1: Pool share rate limiting
+- `ff77081a` - Phase 8.2.2: Multi-block request DoS protection
+
+---
