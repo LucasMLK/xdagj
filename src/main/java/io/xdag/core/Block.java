@@ -25,17 +25,15 @@
 package io.xdag.core;
 
 import io.xdag.crypto.hash.HashUtils;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Value;
-import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
-
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import lombok.Builder;
+import lombok.Value;
+import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.Bytes32;
 
 /**
  * BlockV5 for XDAG v5.1 - Candidate Block
