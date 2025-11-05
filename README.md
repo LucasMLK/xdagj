@@ -29,7 +29,7 @@
 - **🚀 232x TPS Improvement**: Increased from 100 TPS to 23,200 TPS (96.7% of Visa level)
 - **💾 48MB Block Capacity**: Increased from 512 bytes to 48MB (97,656x capacity)
 - **🔗 Independent Transactions**: EVM-compatible Transaction objects with ECDSA signatures
-- **⚡ Immutable Architecture**: Thread-safe BlockV5 with Link-based references (33 bytes)
+- **⚡ Immutable Architecture**: Thread-safe Block with Link-based references (33 bytes)
 - **🔒 Enhanced Security**: Nonce-based replay protection and block reference limits
 - **✅ Zero Breaking Changes**: All existing CLI commands continue to work
 - **🧹 Code Quality**: Zero duplication (eliminated 672 lines, -100%)
@@ -42,7 +42,7 @@ v5.1 Core Components:
 │   ├─ from/to/amount/nonce/fee
 │   ├─ ECDSA signatures (secp256k1)
 │   └─ UTF-8 remark support (1KB)
-├─ BlockV5 (48MB capacity)
+├─ Block (48MB capacity)
 │   ├─ BlockHeader (104 bytes)
 │   └─ Links (33 bytes each)
 └─ TransactionStore (Independent storage)
@@ -112,11 +112,11 @@ xfertonewv2                            # With account aggregation
 ✅ **Production Ready (95%)** - All 9 phases complete:
 
 **Phase 1-2: Foundation** ✅
-- Core data structures (BlockV5, Link, Transaction)
+- Core data structures (Block, Link, Transaction)
 - Immutable architecture with builder pattern
 
 **Phase 3: Network Layer** ✅
-- BlockV5 messages (NewBlockV5Message, SyncBlockV5Message)
+- Block messages (NewBlockMessage, SyncBlockV5Message)
 - P2P integration and broadcasting
 
 **Phase 4: Storage Layer** ✅
