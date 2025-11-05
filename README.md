@@ -66,6 +66,7 @@ xfertonewv2                            # With account aggregation
 
 **Project Overview**:
 - **[V5.1_REFACTOR_COMPLETE.md](V5.1_REFACTOR_COMPLETE.md)** ⭐ - Complete project report (all 6 phases)
+- **[V5.1_DEPLOYMENT_READINESS.md](V5.1_DEPLOYMENT_READINESS.md)** 🚀 - Deployment readiness report (testnet ready!)
 - **[CHANGELOG.md](CHANGELOG.md)** - Complete v5.1 changes and migration guide
 - **[V5.1_IMPLEMENTATION_STATUS.md](V5.1_IMPLEMENTATION_STATUS.md)** - Implementation overview
 
@@ -157,9 +158,9 @@ xfertonewv2                            # With account aggregation
 - BUILD SUCCESS (no compilation errors)
 - Production validation (PoolAwardManagerImpl running)
 
-**Next Steps** ⏳
+**Next Steps** 🚀
+- **Testnet deployment** - See [V5.1_DEPLOYMENT_READINESS.md](V5.1_DEPLOYMENT_READINESS.md) for deployment guide
 - Performance testing (deferred to post-deployment)
-- Testnet deployment
 - Mainnet rollout (phased)
 
 ---
