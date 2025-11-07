@@ -280,12 +280,19 @@ public class XdagCli extends Launcher {
      *
      * <p>All component initialization and lifecycle management is handled internally by DagKernel.
      *
+     * <p>Phase 12: Now supports genesis.json configuration for:
+     * <ul>
+     *   <li>Network-specific genesis parameters</li>
+     *   <li>Initial balance allocations</li>
+     *   <li>Snapshot import from old XDAG chain</li>
+     * </ul>
+     *
      * @param config XDAG configuration
-     * @param wallet Wallet instance (not used in v5.1 yet)
+     * @param wallet Wallet for genesis block creation
      * @return DagKernel instance
      */
     protected DagKernel startDagKernel(Config config, Wallet wallet) {
-        DagKernel dagKernel = new DagKernel(config);
+        DagKernel dagKernel = new DagKernel(config, wallet);
         dagKernel.start();
         return dagKernel;
     }

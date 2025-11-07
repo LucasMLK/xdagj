@@ -25,12 +25,10 @@
 package io.xdag;
 
 import io.xdag.config.Config;
+import io.xdag.config.GenesisConfig;
 import io.xdag.consensus.HybridSyncManager;
-import io.xdag.core.DagAccountManager;
-import io.xdag.core.DagBlockProcessor;
-import io.xdag.core.DagChain;
-import io.xdag.core.DagChainImpl;
-import io.xdag.core.DagTransactionProcessor;
+import io.xdag.core.*;
+import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.db.AccountStore;
 import io.xdag.db.DagStore;
 import io.xdag.db.OrphanBlockStore;
@@ -46,6 +44,10 @@ import io.xdag.db.store.DagCache;
 import io.xdag.db.store.DagEntityResolver;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.units.bigints.UInt256;
+
+import java.io.File;
+import java.util.Map;
 
 /**
  * DagKernel - Standalone kernel for XDAG v5.1 DagStore architecture
@@ -117,6 +119,12 @@ public class DagKernel {
   private DagChain dagChain;
   private HybridSyncManager hybridSyncManager;
 
+  // Genesis configuration
+  private GenesisConfig genesisConfig;
+
+  // Wallet for genesis block creation (optional)
+  private Wallet wallet;
+
   private volatile boolean running = false;
   /**
    * Create a new standalone DagKernel
@@ -124,11 +132,25 @@ public class DagKernel {
    * @param config XDAG configuration (Mainnet/Testnet/Devnet)
    */
   public DagKernel(Config config) {
+      this(config, null);
+  }
+
+  /**
+   * Create a new standalone DagKernel with wallet
+   *
+   * @param config XDAG configuration (Mainnet/Testnet/Devnet)
+   * @param wallet Wallet for genesis block creation (optional, can be null)
+   */
+  public DagKernel(Config config, Wallet wallet) {
       this.config = config;
+      this.wallet = wallet;
 
       log.info("========================================");
       log.info("Initializing DagKernel v5.1 (Standalone)");
       log.info("========================================");
+
+      // Load genesis configuration
+      loadGenesisConfig();
 
       // ========== Storage Layer ==========
 
@@ -268,6 +290,9 @@ public class DagKernel {
               initializeConsensusLayer();
           }
 
+          // Bootstrap genesis block if needed
+          bootstrapGenesis();
+
           running = true;
           log.info("========================================");
           log.info("✓ DagKernel started successfully");
@@ -406,6 +431,306 @@ public class DagKernel {
       log.info("✓ DagCache cleared");
 
       log.info("✓ DagKernel reset completed - all data erased");
+  }
+
+  // ========== Genesis Configuration and Bootstrap ==========
+
+  /**
+   * Load genesis configuration from genesis.json
+   *
+   * <p>REQUIRED: genesis.json must exist. This follows Ethereum's approach where
+   * each network has an explicit genesis configuration.
+   *
+   * <p>Search order:
+   * <ol>
+   *   <li>{rootDir}/genesis.json</li>
+   *   <li>{rootDir}/config/genesis.json</li>
+   *   <li>FAIL: genesis.json is required</li>
+   * </ol>
+   *
+   * @throws RuntimeException if genesis.json not found
+   */
+  private void loadGenesisConfig() {
+      String rootDir = config.getRootDir();
+
+      // Try loading from rootDir/genesis.json
+      File genesisFile = new File(rootDir, "genesis.json");
+      if (!genesisFile.exists()) {
+          // Try config subdirectory
+          genesisFile = new File(rootDir, "config/genesis.json");
+      }
+
+      if (!genesisFile.exists()) {
+          // CRITICAL: genesis.json is REQUIRED (like Ethereum)
+          String errorMsg = String.format(
+              "genesis.json not found! Searched:\n" +
+              "  1. %s/genesis.json\n" +
+              "  2. %s/config/genesis.json\n\n" +
+              "XDAG v5.1 requires explicit genesis configuration (like Ethereum).\n" +
+              "Please create genesis.json for your network:\n" +
+              "  - Mainnet: cp config/genesis-mainnet.json ./genesis.json\n" +
+              "  - Testnet: cp config/genesis-testnet.json ./genesis.json\n" +
+              "  - Devnet:  cp config/genesis-devnet.json ./genesis.json",
+              rootDir, rootDir
+          );
+          log.error(errorMsg);
+          throw new RuntimeException("genesis.json is required but not found");
+      }
+
+      try {
+          genesisConfig = GenesisConfig.load(genesisFile);
+          genesisConfig.validate();
+
+          log.info("========================================");
+          log.info("Loaded genesis configuration:");
+          log.info("  File: {}", genesisFile.getAbsolutePath());
+          log.info("  Network: {}", genesisConfig.getNetworkId());
+          log.info("  Chain ID: {}", genesisConfig.getChainId());
+          log.info("  Genesis Timestamp: {} ({})",
+                  genesisConfig.getTimestamp(),
+                  new java.util.Date(genesisConfig.getTimestamp() * 1000));
+          log.info("  Initial Difficulty: {}", genesisConfig.getInitialDifficulty());
+          log.info("  Epoch Length: {} seconds", genesisConfig.getEpochLength());
+
+          if (genesisConfig.hasAllocations()) {
+              log.info("  Initial Allocations: {} addresses", genesisConfig.getAlloc().size());
+              long totalAlloc = genesisConfig.getAlloc().values().stream()
+                      .map(s -> new java.math.BigInteger(s))
+                      .reduce(java.math.BigInteger.ZERO, java.math.BigInteger::add)
+                      .divide(java.math.BigInteger.valueOf(1_000_000_000))
+                      .longValue();
+              log.info("  Total Allocated: {} XDAG", totalAlloc);
+          }
+
+          if (genesisConfig.hasSnapshot()) {
+              log.info("  Snapshot Import: ENABLED");
+              log.info("    Height: {}", genesisConfig.getSnapshot().getHeight());
+              log.info("    Hash: {}", genesisConfig.getSnapshot().getHash().substring(0, 18) + "...");
+              log.info("    File: {}", genesisConfig.getSnapshot().getDataFile());
+          }
+          log.info("========================================");
+
+      } catch (Exception e) {
+          log.error("Failed to load or validate genesis.json from {}: {}",
+                  genesisFile, e.getMessage());
+          throw new RuntimeException("Invalid genesis.json", e);
+      }
+  }
+
+  /**
+   * Bootstrap genesis block if chain is empty
+   *
+   * <p>This method follows Ethereum's approach:
+   * <ol>
+   *   <li>Check if chain is empty (first startup)</li>
+   *   <li>If empty: Create genesis block from genesis.json</li>
+   *   <li>If not empty: Verify existing genesis matches genesis.json</li>
+   * </ol>
+   *
+   * <p>Genesis block is completely defined by genesis.json:
+   * <ul>
+   *   <li>Timestamp from config (not current time)</li>
+   *   <li>Difficulty from config</li>
+   *   <li>Initial allocations from config</li>
+   *   <li>Snapshot import if configured</li>
+   * </ul>
+   *
+   * @throws RuntimeException if genesis creation fails or validation fails
+   */
+  private void bootstrapGenesis() {
+      if (dagChain == null) {
+          throw new IllegalStateException("DagChain not initialized");
+      }
+
+      // Check if chain already initialized
+      long mainBlockCount = dagChain.getChainStats().getMainBlockCount();
+
+      if (mainBlockCount == 0) {
+          // First startup: Create genesis block from genesis.json
+          log.info("========================================");
+          log.info("First Startup: Creating Genesis Block");
+          log.info("========================================");
+
+          try {
+              // Check for snapshot import
+              if (genesisConfig.hasSnapshot()) {
+                  importSnapshot();
+              } else {
+                  createGenesisBlock();
+              }
+
+              // Apply initial allocations
+              if (genesisConfig.hasAllocations()) {
+                  applyInitialAllocations();
+              }
+
+              log.info("========================================");
+              log.info("✓ Genesis bootstrap complete");
+              log.info("  - Network: {}", genesisConfig.getNetworkId());
+              log.info("  - Chain ID: {}", genesisConfig.getChainId());
+              log.info("  - Main chain height: {}", dagChain.getMainChainLength());
+              log.info("  - Max difficulty: {}", dagChain.getChainStats().getMaxDifficulty().toDecimalString());
+              log.info("========================================");
+
+          } catch (Exception e) {
+              log.error("Failed to bootstrap genesis", e);
+              throw new RuntimeException("Genesis bootstrap failed", e);
+          }
+
+      } else {
+          // Subsequent startup: Verify existing genesis matches genesis.json
+          log.info("Chain already initialized ({} blocks), verifying genesis...", mainBlockCount);
+          verifyGenesisBlock();
+      }
+  }
+
+  /**
+   * Verify that existing genesis block matches genesis.json
+   *
+   * <p>This ensures that the node is running on the correct network.
+   * Like Ethereum, genesis.json defines the network identity.
+   *
+   * @throws RuntimeException if genesis block doesn't match config
+   */
+  private void verifyGenesisBlock() {
+      // Get genesis block (position 0 in main chain)
+      Block genesisBlock = dagStore.getMainBlockAtPosition(0, true);
+      if (genesisBlock == null) {
+          log.warn("Cannot verify genesis block: main chain position 0 not found");
+          log.warn("This may happen if main chain index is not yet built");
+          return;
+      }
+
+      log.info("Verifying genesis block against genesis.json...");
+
+      // Verify timestamp
+      long expectedTimestamp = genesisConfig.getTimestamp();
+      long actualTimestamp = genesisBlock.getTimestamp();
+      long timeDiff = Math.abs(actualTimestamp - expectedTimestamp);
+
+      if (timeDiff > 64) {  // Allow 1 epoch tolerance
+          String error = String.format(
+              "Genesis block timestamp mismatch!\n" +
+              "  Expected (from genesis.json): %d\n" +
+              "  Actual (from blockchain): %d\n" +
+              "  Difference: %d seconds\n\n" +
+              "This means you're trying to run a node with a different genesis.json\n" +
+              "than the one used to create this chain. This is not allowed.\n\n" +
+              "Solutions:\n" +
+              "  1. Use the correct genesis.json for this network\n" +
+              "  2. Delete the chain data and start fresh with current genesis.json",
+              expectedTimestamp, actualTimestamp, timeDiff
+          );
+          log.error(error);
+          throw new RuntimeException("Genesis block verification failed: timestamp mismatch");
+      }
+
+      // Verify difficulty
+      UInt256 expectedDifficulty = genesisConfig.getInitialDifficultyUInt256();
+      UInt256 actualDifficulty = genesisBlock.getHeader().getDifficulty();
+
+      if (!expectedDifficulty.equals(actualDifficulty)) {
+          String error = String.format(
+              "Genesis block difficulty mismatch!\n" +
+              "  Expected (from genesis.json): %s\n" +
+              "  Actual (from blockchain): %s\n\n" +
+              "Chain was created with different genesis configuration.",
+              expectedDifficulty.toHexString(), actualDifficulty.toHexString()
+          );
+          log.error(error);
+          throw new RuntimeException("Genesis block verification failed: difficulty mismatch");
+      }
+
+      log.info("✓ Genesis block verification passed");
+      log.info("  - Timestamp: {} (matches config)", actualTimestamp);
+      log.info("  - Difficulty: {} (matches config)", actualDifficulty.toHexString());
+      log.info("  - Network: {}", genesisConfig.getNetworkId());
+  }
+
+  /**
+   * Create genesis block from configuration
+   *
+   * @throws RuntimeException if creation fails
+   */
+  private void createGenesisBlock() {
+      log.info("Creating genesis block...");
+
+      // Get coinbase key
+      if (wallet == null || wallet.getDefKey() == null) {
+          throw new RuntimeException("Wallet is required for genesis block creation");
+      }
+
+      ECKeyPair coinbaseKey = wallet.getDefKey();
+      log.info("  - Using wallet key for coinbase");
+
+      // Use configured timestamp or XDAG_ERA
+      long timestamp = genesisConfig.getTimestamp();
+      log.info("  - Genesis timestamp: {}", timestamp);
+
+      // Create genesis block via DagChain
+      Block genesisBlock = dagChain.createGenesisBlock(coinbaseKey, timestamp);
+      log.info("  - Genesis block created: {}", genesisBlock.getHash().toHexString());
+
+      // Import genesis block
+      DagImportResult result = dagChain.tryToConnect(genesisBlock);
+      if (!result.isMainBlock()) {
+          throw new RuntimeException("Failed to import genesis block: " + result.getStatus());
+      }
+
+      log.info("✓ Genesis block imported successfully");
+  }
+
+  /**
+   * Import snapshot from old XDAG chain
+   *
+   * @throws RuntimeException if import fails
+   */
+  private void importSnapshot() {
+      log.info("Importing snapshot...");
+      log.info("  - {}", genesisConfig.getSnapshot().getDescription());
+
+      // TODO Phase 12.5: Implement snapshot import
+      //  1. Read snapshot data file
+      //  2. Parse blocks and accounts
+      //  3. Import to DagStore and AccountStore
+      //  4. Create genesis block referencing snapshot state
+
+      throw new UnsupportedOperationException("Snapshot import not yet implemented (Phase 12.5)");
+  }
+
+  /**
+   * Apply initial balance allocations from genesis config
+   */
+  private void applyInitialAllocations() {
+      Map<String, String> alloc = genesisConfig.getAlloc();
+      if (alloc == null || alloc.isEmpty()) {
+          return;
+      }
+
+      log.info("Applying initial allocations ({} addresses)...", alloc.size());
+
+      int successCount = 0;
+      for (Map.Entry<String, String> entry : alloc.entrySet()) {
+          try {
+              String addressHex = entry.getKey();
+              UInt256 balance = genesisConfig.getAllocation(addressHex);
+
+              // Convert hex address to Bytes32
+              String hex = addressHex.startsWith("0x") ? addressHex.substring(2) : addressHex;
+              org.apache.tuweni.bytes.Bytes32 address = org.apache.tuweni.bytes.Bytes32.fromHexString(hex);
+
+              // Set balance directly (creates account if doesn't exist)
+              dagAccountManager.setBalance(address, balance);
+              successCount++;
+
+              log.debug("  - Allocated {} to {}", balance.toDecimalString(), addressHex.substring(0, 10) + "...");
+
+          } catch (Exception e) {
+              log.error("Failed to allocate balance for {}: {}", entry.getKey(), e.getMessage());
+          }
+      }
+
+      log.info("✓ Applied {} initial allocations", successCount);
   }
 
 }

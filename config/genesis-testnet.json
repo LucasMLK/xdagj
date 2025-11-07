@@ -1,0 +1,23 @@
+{
+  "networkId": "testnet",
+  "chainId": 2,
+  "timestamp": 1700000000,
+  "initialDifficulty": "0x1",
+  "epochLength": 64,
+  "extraData": "XDAG v5.1 Testnet Genesis",
+  "alloc": {
+    "0x0000000000000000000000000000000000000000000000000000000000000001": "1000000000000000000000",
+    "0x0000000000000000000000000000000000000000000000000000000000000002": "500000000000000000000"
+  },
+  "snapshot": {
+    "enabled": false,
+    "height": 0,
+    "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "timestamp": 0,
+    "dataFile": "",
+    "verify": true,
+    "format": "v1",
+    "expectedAccounts": 0,
+    "expectedBlocks": 0
+  }
+}
