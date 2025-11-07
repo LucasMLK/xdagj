@@ -121,6 +121,10 @@ public class DagKernel {
   private HybridSyncManager hybridSyncManager;
   private HybridSyncP2pAdapter hybridSyncP2pAdapter;
 
+  // Mining component (Phase 12.4)
+  private io.xdag.consensus.miner.MiningManager miningManager;
+  private io.xdag.consensus.RandomX randomX;
+
   // Genesis configuration
   private GenesisConfig genesisConfig;
 
@@ -244,6 +248,18 @@ public class DagKernel {
       this.hybridSyncManager = new HybridSyncManager(this, dagChain, hybridSyncP2pAdapter);
       log.info("   ✓ HybridSyncManager initialized");
 
+      // 7. Create MiningManager (Phase 12.4)
+      // Note: RandomX might be null if not configured/needed
+      // TTL is taken from config (default is 8)
+      if (wallet != null) {
+          int ttl = config.getNodeSpec() != null ? config.getNodeSpec().getTTL() : 8;
+          this.miningManager = new io.xdag.consensus.miner.MiningManager(
+                  this, wallet, randomX, ttl);
+          log.info("   ✓ MiningManager initialized (TTL={})", ttl);
+      } else {
+          log.warn("   ⚠ MiningManager not initialized (wallet required)");
+      }
+
       log.info("   ✓ Consensus layer initialization complete");
   }
 
@@ -305,12 +321,21 @@ public class DagKernel {
               log.info("✓ HybridSyncManager started (auto-sync enabled)");
           }
 
+          // Start MiningManager (Phase 12.4)
+          if (miningManager != null) {
+              miningManager.start();
+              log.info("✓ MiningManager started (mining enabled)");
+          }
+
           running = true;
           log.info("========================================");
           log.info("✓ DagKernel started successfully");
           log.info("  - Storage: DagStore + TransactionStore + AccountStore + OrphanBlockStore");
           log.info("  - Cache: DagCache (13.8 MB L1) + DagEntityResolver");
           log.info("  - Consensus: DagChain + HybridSyncManager");
+          if (miningManager != null) {
+              log.info("  - Mining: MiningManager (enabled)");
+          }
           log.info("  - Main Chain Height: {}", dagChain.getMainChainLength());
           log.info("  - Max Difficulty: {}", dagChain.getChainStats().getMaxDifficulty().toDecimalString());
           log.info("========================================");
@@ -344,6 +369,12 @@ public class DagKernel {
       log.info("========================================");
 
       try {
+          // Stop MiningManager first (Phase 12.4)
+          if (miningManager != null) {
+              miningManager.stop();
+              log.info("✓ MiningManager stopped");
+          }
+
           // Stop HybridSyncManager first (if present)
           if (hybridSyncManager != null) {
               hybridSyncManager.stop();
