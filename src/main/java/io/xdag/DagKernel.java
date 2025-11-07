@@ -299,6 +299,12 @@ public class DagKernel {
           // Bootstrap genesis block if needed
           bootstrapGenesis();
 
+          // Start HybridSyncManager (auto-sync)
+          if (hybridSyncManager != null) {
+              hybridSyncManager.start();
+              log.info("✓ HybridSyncManager started (auto-sync enabled)");
+          }
+
           running = true;
           log.info("========================================");
           log.info("✓ DagKernel started successfully");
@@ -340,7 +346,7 @@ public class DagKernel {
       try {
           // Stop HybridSyncManager first (if present)
           if (hybridSyncManager != null) {
-              // HybridSyncManager cleanup if needed
+              hybridSyncManager.stop();
               log.info("✓ HybridSyncManager stopped");
           }
 

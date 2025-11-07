@@ -31,6 +31,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
 
 import java.util.*;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -104,6 +106,16 @@ public class HybridSyncManager {
      */
     public static final int TRANSACTIONS_BATCH_SIZE = 5000;
 
+    /**
+     * Sync check interval (30 seconds)
+     */
+    public static final long SYNC_CHECK_INTERVAL_MS = 30_000;
+
+    /**
+     * Sync retry interval after failure (5 minutes)
+     */
+    public static final long SYNC_RETRY_INTERVAL_MS = 300_000;
+
     // ========== Dependencies ==========
 
     private final DagKernel dagKernel;  // v5.1 standalone DagKernel
@@ -132,6 +144,28 @@ public class HybridSyncManager {
     private final AtomicLong syncedBlocks = new AtomicLong(0);
     private final AtomicLong totalBlocks = new AtomicLong(0);
     private final AtomicLong syncedTransactions = new AtomicLong(0);
+
+    // ========== Lifecycle Management ==========
+
+    /**
+     * Running state
+     */
+    private final AtomicBoolean running = new AtomicBoolean(false);
+
+    /**
+     * Sync scheduler for periodic sync checks
+     */
+    private ScheduledExecutorService syncScheduler;
+
+    /**
+     * Last sync attempt timestamp
+     */
+    private volatile long lastSyncAttemptTime = 0;
+
+    /**
+     * Last successful sync timestamp
+     */
+    private volatile long lastSuccessfulSyncTime = 0;
 
     // ========== Constructor ==========
 
@@ -267,6 +301,160 @@ public class HybridSyncManager {
      */
     public HybridSyncP2pAdapter getP2pAdapter() {
         return p2pAdapter;
+    }
+
+    /**
+     * Check if sync manager is running
+     *
+     * @return true if running, false otherwise
+     */
+    public boolean isRunning() {
+        return running.get();
+    }
+
+    // ========== Lifecycle Management ==========
+
+    /**
+     * Start the HybridSyncManager
+     *
+     * <p>This method starts the periodic sync scheduler that will:
+     * <ul>
+     *   <li>Check for available peers every 30 seconds</li>
+     *   <li>Automatically trigger sync when peers are available</li>
+     *   <li>Retry failed syncs after 5 minutes</li>
+     * </ul>
+     *
+     * <p>NOTE: This is a framework method that will work properly once P2P layer is integrated.
+     * Currently it sets up the scheduler but won't trigger actual syncs until peers are available.
+     */
+    public synchronized void start() {
+        if (running.getAndSet(true)) {
+            log.warn("HybridSyncManager already started");
+            return;
+        }
+
+        log.info("========================================");
+        log.info("Starting HybridSyncManager");
+        log.info("========================================");
+
+        // Create scheduler for periodic sync checks
+        syncScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread thread = new Thread(r, "HybridSync-Scheduler");
+            thread.setDaemon(true);
+            return thread;
+        });
+
+        // Schedule periodic sync checks (every 30 seconds)
+        syncScheduler.scheduleWithFixedDelay(
+                this::checkAndTriggerSync,
+                10,  // Initial delay: 10 seconds
+                SYNC_CHECK_INTERVAL_MS / 1000,  // Period: 30 seconds
+                TimeUnit.SECONDS
+        );
+
+        log.info("✓ HybridSyncManager started");
+        log.info("  - Periodic sync check: every {} seconds", SYNC_CHECK_INTERVAL_MS / 1000);
+        log.info("  - Sync retry interval: {} seconds", SYNC_RETRY_INTERVAL_MS / 1000);
+        log.info("========================================");
+    }
+
+    /**
+     * Stop the HybridSyncManager
+     *
+     * <p>This method:
+     * <ul>
+     *   <li>Stops the periodic sync scheduler</li>
+     *   <li>Waits for any ongoing sync to complete</li>
+     *   <li>Cleans up resources</li>
+     * </ul>
+     */
+    public synchronized void stop() {
+        if (!running.getAndSet(false)) {
+            log.warn("HybridSyncManager not running");
+            return;
+        }
+
+        log.info("========================================");
+        log.info("Stopping HybridSyncManager");
+        log.info("========================================");
+
+        // Shutdown scheduler
+        if (syncScheduler != null) {
+            syncScheduler.shutdown();
+            try {
+                // Wait up to 30 seconds for graceful shutdown
+                if (!syncScheduler.awaitTermination(30, TimeUnit.SECONDS)) {
+                    syncScheduler.shutdownNow();
+                    log.warn("Sync scheduler forcefully terminated");
+                }
+            } catch (InterruptedException e) {
+                syncScheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+            syncScheduler = null;
+        }
+
+        log.info("✓ HybridSyncManager stopped");
+        log.info("========================================");
+    }
+
+    /**
+     * Check if sync is needed and trigger if necessary
+     *
+     * <p>This method is called periodically by the sync scheduler.
+     * It checks:
+     * <ul>
+     *   <li>If there are available peers</li>
+     *   <li>If we're not currently syncing</li>
+     *   <li>If enough time has passed since last sync attempt</li>
+     * </ul>
+     *
+     * <p>NOTE: Currently this is a framework method. Once P2P layer is integrated,
+     * it will check for actual peer connections and trigger sync.
+     */
+    private void checkAndTriggerSync() {
+        try {
+            // Skip if already syncing
+            if (currentState != SyncState.IDLE && currentState != SyncState.COMPLETED) {
+                log.debug("Sync already in progress (state: {}), skipping check", currentState);
+                return;
+            }
+
+            // Check if enough time has passed since last attempt
+            long now = System.currentTimeMillis();
+            long timeSinceLastAttempt = now - lastSyncAttemptTime;
+
+            // If last sync failed, wait longer before retrying
+            if (lastSyncAttemptTime > 0 && timeSinceLastAttempt < SYNC_RETRY_INTERVAL_MS) {
+                log.debug("Waiting for retry interval ({} ms remaining)",
+                        SYNC_RETRY_INTERVAL_MS - timeSinceLastAttempt);
+                return;
+            }
+
+            // TODO Phase 12.4: Check for available peers
+            // Once P2P layer is integrated, this will:
+            // 1. Get list of connected peers from DagKernel
+            // 2. Select best peer based on height/latency
+            // 3. Trigger sync with selected peer
+            //
+            // For now, just log that we're ready to sync
+            log.debug("Sync check: No P2P integration yet, waiting for peers...");
+
+            // Example of what will be implemented:
+            // List<Channel> peers = getAvailablePeers();
+            // if (!peers.isEmpty()) {
+            //     Channel bestPeer = selectBestPeer(peers);
+            //     log.info("Triggering sync with peer: {}", bestPeer.getRemoteAddress());
+            //     lastSyncAttemptTime = now;
+            //     boolean success = startSync(bestPeer);
+            //     if (success) {
+            //         lastSuccessfulSyncTime = System.currentTimeMillis();
+            //     }
+            // }
+
+        } catch (Exception e) {
+            log.error("Error in sync check", e);
+        }
     }
 
     // ========== Phase 1: Query Remote Height ==========
