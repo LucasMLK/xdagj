@@ -76,6 +76,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.time.FastDateFormat;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
 import org.bouncycastle.util.encoders.Hex;
 
@@ -935,7 +936,7 @@ public class Commands {
             // Create BlockHeader
             BlockHeader header = BlockHeader.builder()
                     .timestamp(XdagTime.getCurrentTimestamp())
-                    .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
+                    .difficulty(UInt256.ZERO)
                     .nonce(Bytes32.ZERO)
                     .coinbase(fromAddress)
                     .hash(null)  // Will be calculated by Block.getHash()
@@ -1103,7 +1104,7 @@ public class Commands {
 
                 BlockHeader header = BlockHeader.builder()
                         .timestamp(XdagTime.getCurrentTimestamp())
-                        .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
+                        .difficulty(UInt256.ZERO)
                         .nonce(Bytes32.ZERO)
                         .coinbase(fromAddress)
                         .hash(null)
@@ -1177,7 +1178,12 @@ public class Commands {
      * @return Transaction result message (StringBuilder for compatibility)
      */
     public StringBuilder xferToNodeV2(Map<Bytes32, ECKeyPair> paymentsToNodesMap) {
-        // TODO v5.1: Rewrite to use Block Transaction system without Address class
+        /**
+         * TODO Phase 8.5: Rewrite to use Block Transaction system without Address class.
+         * This requires implementing amount tracking in Transaction objects for block rewards.
+         * Blocked by: Address.getAmount() no longer available in v5.1 architecture.
+         * Estimated effort: 6-8 hours.
+         */
         log.warn("Node reward distribution temporarily disabled - waiting for v5.1 Transaction migration");
         return new StringBuilder("Node reward distribution temporarily disabled - v5.1 migration in progress");
 

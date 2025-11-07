@@ -142,6 +142,16 @@ public class SimpleDecoder {
     }
 
     /**
+     * Reads a fixed number of bytes into the provided array
+     * @param bytes destination byte array
+     */
+    public void readBytes(byte[] bytes) {
+        require(bytes.length);
+        System.arraycopy(in, index, bytes, 0, bytes.length);
+        index += bytes.length;
+    }
+
+    /**
      * Reads a UTF-8 encoded string
      * @return decoded string
      * @throws SimpleCodecException if encoding is not supported

@@ -94,6 +94,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes32;
+import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
 
 @Slf4j
@@ -964,7 +965,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                 // Create BlockHeader
                 BlockHeader header = BlockHeader.builder()
                         .timestamp(XdagTime.getCurrentTimestamp())
-                        .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
+                        .difficulty(UInt256.ZERO)
                         .nonce(Bytes32.ZERO)
                         .coinbase(fromAddress)
                         .hash(null)  // Will be calculated by Block.getHash()
@@ -1122,7 +1123,7 @@ public class XdagApiImpl extends AbstractXdagLifecycle implements XdagApi {
                 // Create BlockHeader
                 BlockHeader header = BlockHeader.builder()
                         .timestamp(XdagTime.getCurrentTimestamp())
-                        .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
+                        .difficulty(UInt256.ZERO)
                         .nonce(Bytes32.ZERO)
                         .coinbase(accountFromAddress)
                         .hash(null)  // Will be calculated by Block.getHash()
