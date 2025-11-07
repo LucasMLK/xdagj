@@ -28,6 +28,7 @@ import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 import static io.xdag.utils.WalletUtils.WALLET_PASSWORD_PROMPT;
 
 import com.google.common.collect.Lists;
+import io.xdag.DagKernel;
 import io.xdag.Kernel;
 import io.xdag.Launcher;
 import io.xdag.Wallet;
@@ -249,7 +250,8 @@ public class XdagCli extends Launcher {
 
         // start kernel
         try {
-            startKernel(getConfig(), wallet);
+            DagKernel dagKernel = startDagKernel(getConfig(), wallet);
+            Launcher.registerShutdownHook("dagkernel", dagKernel::stop);
         } catch (Exception e) {
             System.err.println("Uncaught exception during kernel startup:" + e.getMessage());
             e.printStackTrace();
@@ -258,12 +260,34 @@ public class XdagCli extends Launcher {
     }
 
     /**
-     * Starts the kernel.
+     * Starts the legacy kernel (for backward compatibility)
      */
     protected Kernel startKernel(Config config, Wallet wallet) {
         Kernel kernel = new Kernel(config, wallet);
         kernel.testStart();
         return kernel;
+    }
+
+    /**
+     * Starts the DagKernel (v5.1 architecture)
+     *
+     * <p>This method initializes the v5.1 DagKernel which manages all core components:
+     * <ul>
+     *   <li>Storage Layer (DagStore, TransactionStore, AccountStore, OrphanBlockStore)</li>
+     *   <li>Cache Layer (DagCache, DagEntityResolver)</li>
+     *   <li>Consensus Layer (DagChain, HybridSyncManager)</li>
+     * </ul>
+     *
+     * <p>All component initialization and lifecycle management is handled internally by DagKernel.
+     *
+     * @param config XDAG configuration
+     * @param wallet Wallet instance (not used in v5.1 yet)
+     * @return DagKernel instance
+     */
+    protected DagKernel startDagKernel(Config config, Wallet wallet) {
+        DagKernel dagKernel = new DagKernel(config);
+        dagKernel.start();
+        return dagKernel;
     }
 
     protected void initHDAccount() {
