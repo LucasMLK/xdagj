@@ -125,6 +125,9 @@ public class DagKernel {
   private io.xdag.consensus.miner.MiningManager miningManager;
   private io.xdag.consensus.RandomX randomX;
 
+  // P2P service (Phase 12.5)
+  private io.xdag.p2p.P2pService p2pService;
+
   // Genesis configuration
   private GenesisConfig genesisConfig;
 
@@ -315,6 +318,9 @@ public class DagKernel {
           // Bootstrap genesis block if needed
           bootstrapGenesis();
 
+          // Start P2P service (Phase 12.5)
+          startP2pService();
+
           // Start HybridSyncManager (auto-sync)
           if (hybridSyncManager != null) {
               hybridSyncManager.start();
@@ -374,6 +380,9 @@ public class DagKernel {
               miningManager.stop();
               log.info("✓ MiningManager stopped");
           }
+
+          // Stop P2P service (Phase 12.5)
+          stopP2pService();
 
           // Stop HybridSyncManager first (if present)
           if (hybridSyncManager != null) {
@@ -480,6 +489,59 @@ public class DagKernel {
       log.info("✓ DagCache cleared");
 
       log.info("✓ DagKernel reset completed - all data erased");
+  }
+
+  // ========== P2P Service Management (Phase 12.5) ==========
+
+  /**
+   * Start P2P service for block broadcasting
+   *
+   * <p>Phase 12.5: Simplified P2P integration focused on block broadcasting.
+   * Does not use XdagP2pEventHandler since that requires legacy Kernel.
+   */
+  private void startP2pService() {
+      // P2P service requires a wallet/coinbase key
+      if (wallet == null || wallet.getDefKey() == null) {
+          log.warn("⚠ P2P service not started (wallet required)");
+          return;
+      }
+
+      try {
+          log.info("Initializing P2P service...");
+
+          // Create P2P configuration
+          ECKeyPair coinbase = wallet.getDefKey();
+          io.xdag.p2p.config.P2pConfig p2pConfig =
+                  io.xdag.p2p.P2pConfigFactory.createP2pConfig(config, coinbase);
+
+          // Create and start P2P service (without event handler for now)
+          // Phase 12.5: Minimal P2P for block broadcasting only
+          this.p2pService = new io.xdag.p2p.P2pService(p2pConfig);
+          this.p2pService.start();
+
+          log.info("✓ P2P service started (broadcasting enabled)");
+
+      } catch (Exception e) {
+          log.error("Failed to start P2P service: {}", e.getMessage(), e);
+          log.warn("⚠ Continuing without P2P (block broadcasting disabled)");
+          this.p2pService = null;
+      }
+  }
+
+  /**
+   * Stop P2P service
+   */
+  private void stopP2pService() {
+      if (p2pService != null) {
+          log.info("Stopping P2P service...");
+          try {
+              p2pService.stop();
+              log.info("✓ P2P service stopped");
+          } catch (Exception e) {
+              log.error("Error stopping P2P service: {}", e.getMessage());
+          }
+          p2pService = null;
+      }
   }
 
   // ========== Genesis Configuration and Bootstrap ==========

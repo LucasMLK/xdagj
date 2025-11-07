@@ -205,33 +205,52 @@ public class BlockBroadcaster {
     /**
      * Broadcast block to P2P network
      *
-     * <p>Phase 12.4: Framework method for P2P broadcasting.
-     * Once P2P layer is integrated, this will:
-     * <ul>
-     *   <li>Serialize block to bytes</li>
-     *   <li>Send to all connected peers</li>
-     *   <li>Track broadcast success/failure</li>
-     * </ul>
+     * <p>Phase 12.5: Integrated with P2P layer for actual broadcasting.
+     * Sends NEW_BLOCK message to all connected peers with TTL.
      *
      * @param block Block to broadcast
      */
     private void broadcastToNetwork(Block block) {
-        // TODO Phase 12.5: Integrate with P2P layer
-        // Once P2P layer is ready, this will:
-        // 1. Get list of connected peers from DagKernel
-        // 2. Serialize block to bytes
-        // 3. Send NEW_BLOCK message to all peers with TTL
-        // 4. Track broadcast metrics
+        // Check if P2P service is available
+        io.xdag.p2p.P2pService p2pService = dagKernel.getP2pService();
+        if (p2pService == null) {
+            log.warn("P2P service not available, cannot broadcast block {}",
+                    block.getHash().toHexString());
+            return;
+        }
 
-        log.info("Block {} ready for P2P broadcast (P2P integration pending)",
-                block.getHash().toHexString());
+        try {
+            // Create NewBlockMessage
+            io.xdag.net.message.consensus.NewBlockMessage message =
+                    new io.xdag.net.message.consensus.NewBlockMessage(block, ttl);
 
-        // Example of what will be implemented:
-        // List<Channel> peers = dagKernel.getP2pManager().getConnectedPeers();
-        // byte[] blockBytes = block.toBytes();
-        // for (Channel peer : peers) {
-        //     peer.send(new NewBlockMessage(blockBytes, ttl));
-        // }
+            // Serialize message
+            byte[] messageBody = message.getBody();
+
+            // Wrap in Bytes for P2P layer
+            org.apache.tuweni.bytes.Bytes messageBytes = org.apache.tuweni.bytes.Bytes.wrap(messageBody);
+
+            // Broadcast to all connected peers
+            int sentCount = 0;
+            for (io.xdag.p2p.channel.Channel channel : p2pService.getChannelManager().getChannels().values()) {
+                if (channel.isFinishHandshake()) {
+                    try {
+                        channel.send(messageBytes);
+                        sentCount++;
+                    } catch (Exception e) {
+                        log.error("Error broadcasting block to {}: {}",
+                                channel.getRemoteAddress(), e.getMessage());
+                    }
+                }
+            }
+
+            log.info("Block {} broadcast to {} peers (ttl={})",
+                    block.getHash().toHexString().substring(0, 18) + "...",
+                    sentCount, ttl);
+
+        } catch (Exception e) {
+            log.error("Error broadcasting block to P2P network: {}", e.getMessage(), e);
+        }
     }
 
     /**
