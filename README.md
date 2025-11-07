@@ -64,29 +64,29 @@ xfertonewv2                            # With account aggregation
 
 ### Documentation
 
-**Project Overview**:
-- **[V5.1_REFACTOR_COMPLETE.md](V5.1_REFACTOR_COMPLETE.md)** ⭐ - Complete project report (all 6 phases)
-- **[V5.1_DEPLOYMENT_READINESS.md](V5.1_DEPLOYMENT_READINESS.md)** 🚀 - Deployment readiness report (testnet ready!)
+**📖 Essential Documentation** (Start Here!):
+- **[V5.1_PROJECT_STATUS.md](V5.1_PROJECT_STATUS.md)** 🎯 - **Project status summary and achievements**
+- **[docs/ARCHITECTURE_V5.1.md](docs/ARCHITECTURE_V5.1.md)** ⭐ - Complete v5.1 architecture overview
+- **[docs/refactor-history/REFACTOR_HISTORY_INDEX.md](docs/refactor-history/REFACTOR_HISTORY_INDEX.md)** 📚 - Refactoring history index (29 documents)
 - **[CHANGELOG.md](CHANGELOG.md)** - Complete v5.1 changes and migration guide
-- **[V5.1_IMPLEMENTATION_STATUS.md](V5.1_IMPLEMENTATION_STATUS.md)** - Implementation overview
 
-**Phase 1-6 Completion Reports** (Core Architecture):
-- **[PHASE5_COMPLETE.md](PHASE5_COMPLETE.md)** - Phase 5 overall (runtime migration)
-- **[PHASE5.5_COMPLETE.md](PHASE5.5_COMPLETE.md)** - Mining, Wallet, Sync migration
-- **[PHASE5.4_COMPLETE.md](PHASE5.4_COMPLETE.md)** - Blockchain interface deprecation
-- **[PHASE5.3_COMPLETE.md](PHASE5.3_COMPLETE.md)** - Main chain management deprecation
-- **[PHASE4_STORAGE_COMPLETION.md](PHASE4_STORAGE_COMPLETION.md)** - Storage layer complete
-- **[PHASE3.3_COMPLETE.md](PHASE3.3_COMPLETE.md)** - Network layer complete
-- **[PHASE6_ACTUAL_COMPLETION.md](PHASE6_ACTUAL_COMPLETION.md)** - Legacy cleanup complete
+**🎯 Component Documentation**:
+- **DagStore** (7 docs) - Storage layer → [docs/refactor-history/dagstore/](docs/refactor-history/dagstore/)
+- **DagChain** (7 docs) - Consensus layer → [docs/refactor-history/dagchain/](docs/refactor-history/dagchain/)
+- **DagKernel** (1 doc) - Standalone kernel → [docs/refactor-history/dagkernel/](docs/refactor-history/dagkernel/)
+- **HybridSync** (4 docs) - Sync protocol → [docs/refactor-history/hybrid-sync/](docs/refactor-history/hybrid-sync/)
 
-**Phase 7-9 Completion Reports** (Deep Cleanup & Pool System):
-- **[PHASE7.3_TODO_CLEANUP_REPORT.md](PHASE7.3_TODO_CLEANUP_REPORT.md)** - Phase 7.3 TODO cleanup
-- **[PHASE8.2_SUMMARY.md](PHASE8.2_SUMMARY.md)** ⭐ - Security & stability (P2 tasks)
-- **[PHASE9_SUMMARY.md](PHASE9_SUMMARY.md)** ⭐ - Pool system complete (block reward + node batch)
-- **[FUTURE_WORK.md](FUTURE_WORK.md)** - Remaining P3/P4 tasks and future improvements
+**✅ Latest Phase Reports**:
+- **[docs/refactor-history/dagchain/DAGCHAIN_PHASE11_COMPLETE.md](docs/refactor-history/dagchain/DAGCHAIN_PHASE11_COMPLETE.md)** - Complete Phase 11 integration & security (Phase 11)
+- **[docs/refactor-history/dagchain/DAGCHAIN_PHASE11.2_COMPLETE.md](docs/refactor-history/dagchain/DAGCHAIN_PHASE11.2_COMPLETE.md)** - Block creation methods (Phase 11.2)
+- **[docs/refactor-history/dagchain/DAGCHAIN_PHASE11.1_COMPLETE.md](docs/refactor-history/dagchain/DAGCHAIN_PHASE11.1_COMPLETE.md)** - Sync stats and listeners (Phase 11.1)
+- **[docs/refactor-history/dagchain/DAGCHAIN_PHASE10_COMPLETE.md](docs/refactor-history/dagchain/DAGCHAIN_PHASE10_COMPLETE.md)** - DagChain independence (Phase 10)
 
-**Technical Design**:
-- **[docs/refactor-design/](docs/refactor-design/)** - Architecture and design documents
+**🎓 Recommended Reading Order**:
+1. Overview: [V5.1_PROJECT_STATUS.md](V5.1_PROJECT_STATUS.md) - Project achievements and status
+2. Architecture: [ARCHITECTURE_V5.1.md](docs/ARCHITECTURE_V5.1.md) - Technical architecture details
+3. History: [REFACTOR_HISTORY_INDEX.md](docs/refactor-history/REFACTOR_HISTORY_INDEX.md) - Navigate all 29 docs
+4. Design: [docs/refactor-design/](docs/refactor-design/) - Design decisions and analysis
 
 ### Performance Benchmarks
 
@@ -103,9 +103,10 @@ xfertonewv2                            # With account aggregation
 
 ### Testing
 
-- **38/38 v5.1 Integration Tests** passing (100% success rate)
+- **45/45 v5.1 Integration Tests** passing (100% success rate)
+- Phase 11: 7 new tests for sync statistics, listeners, and block creation
 - All tests cover data layer, core layer, application layer, and end-to-end scenarios
-- See [ROUTE1_VERIFICATION_COMPLETE.md](ROUTE1_VERIFICATION_COMPLETE.md) for details
+- Security: Genesis block forgery attack prevention validated
 
 ### Migration Status
 
