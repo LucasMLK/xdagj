@@ -27,6 +27,7 @@ package io.xdag;
 import io.xdag.config.Config;
 import io.xdag.config.GenesisConfig;
 import io.xdag.consensus.HybridSyncManager;
+import io.xdag.consensus.HybridSyncP2pAdapter;
 import io.xdag.core.*;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.db.AccountStore;
@@ -118,6 +119,7 @@ public class DagKernel {
 
   private DagChain dagChain;
   private HybridSyncManager hybridSyncManager;
+  private HybridSyncP2pAdapter hybridSyncP2pAdapter;
 
   // Genesis configuration
   private GenesisConfig genesisConfig;
@@ -234,8 +236,12 @@ public class DagKernel {
       this.dagChain = new DagChainImpl(this);
       log.info("   ✓ DagChain initialized");
 
-      // 5. Create HybridSyncManager
-      this.hybridSyncManager = new HybridSyncManager(this, dagChain);
+      // 5. Create HybridSyncP2pAdapter (bridge to P2P layer)
+      this.hybridSyncP2pAdapter = new HybridSyncP2pAdapter();
+      log.info("   ✓ HybridSyncP2pAdapter initialized");
+
+      // 6. Create HybridSyncManager (inject adapter)
+      this.hybridSyncManager = new HybridSyncManager(this, dagChain, hybridSyncP2pAdapter);
       log.info("   ✓ HybridSyncManager initialized");
 
       log.info("   ✓ Consensus layer initialization complete");
@@ -336,6 +342,12 @@ public class DagKernel {
           if (hybridSyncManager != null) {
               // HybridSyncManager cleanup if needed
               log.info("✓ HybridSyncManager stopped");
+          }
+
+          // Stop HybridSyncP2pAdapter
+          if (hybridSyncP2pAdapter != null) {
+              // hybridSyncP2pAdapter cleanup if needed
+              log.info("✓ HybridSyncP2pAdapter stopped");
           }
 
           // Stop DagChain (if present)
