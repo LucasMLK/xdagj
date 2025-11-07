@@ -96,7 +96,7 @@ public interface BlockStore extends XdagLifecycle {
      * Save block info using new immutable BlockInfo
      * @param blockInfo The new BlockInfo (not LegacyBlockInfo)
      */
-    void saveBlockInfoV2(BlockInfo blockInfo);
+    void saveBlockInfo(BlockInfo blockInfo);
     /**
      * Get block references (for Solidification)
      * Returns all blocks that reference the given block

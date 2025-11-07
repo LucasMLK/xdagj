@@ -68,13 +68,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt256;
 
 @Slf4j
 @Getter
 public class BlockchainImpl implements Blockchain {
-
-    // Static gas fee accumulator
-    private static XAmount sumGas = XAmount.ZERO;
     
     // Thread factory for main chain checking
     private static final ThreadFactory factory = BasicThreadFactory.builder()
@@ -165,11 +163,11 @@ public class BlockchainImpl implements Blockchain {
             if (lastBlock != null && lastBlock.getInfo() != null) {
                 BigInteger lastDifficulty = lastBlock.getInfo().getDifficulty().toBigInteger();
                 chainStats = chainStats
-                    .withMaxDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty))
-                    .withDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty))
+                    .withMaxDifficulty(UInt256.valueOf(lastDifficulty))
+                    .withDifficulty(UInt256.valueOf(lastDifficulty))
                     // Phase 7.3.1: Set top block state (merged from XdagTopStatus)
                     .withTopBlock(lastBlock.getHash())
-                    .withTopDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty));
+                    .withTopDifficulty(UInt256.valueOf(lastDifficulty));
                 log.debug("Initialized blockchain state from last main block at height {}: diff={}, hash={}",
                          chainStats.getMainBlockCount(), lastDifficulty, lastBlock.getHash().toHexString());
             } else if (chainStats.getMainBlockCount() > 0) {
@@ -215,13 +213,13 @@ public class BlockchainImpl implements Blockchain {
         if (lastBlock != null && lastBlock.getInfo() != null) {
             BigInteger lastDifficulty = lastBlock.getInfo().getDifficulty().toBigInteger();
             chainStats = chainStats
-                .withMaxDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty))
-                .withDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty))
+                .withMaxDifficulty(UInt256.valueOf(lastDifficulty))
+                .withDifficulty(UInt256.valueOf(lastDifficulty))
                 // Phase 7.3.1: Set top block state (merged from XdagTopStatus)
                 .withPreTopBlock(lastBlock.getHash())
                 .withTopBlock(lastBlock.getHash())
-                .withTopDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty))
-                .withPreTopDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(lastDifficulty));
+                .withTopDifficulty(UInt256.valueOf(lastDifficulty))
+                .withPreTopDifficulty(UInt256.valueOf(lastDifficulty));
             log.debug("Initialized snapshot state from block at height {}: diff={}, hash={}",
                      snapshotHeight, lastDifficulty, lastBlock.getHash().toHexString());
         } else {
@@ -255,21 +253,6 @@ public class BlockchainImpl implements Blockchain {
         this.listeners.add(listener);
     }
 
-    // ========== Phase 4 Step 2.1: Block Support ==========
-
-    /**
-     * Try to connect a Block to the blockchain (v5.1 implementation)
-     *
-     * Phase 4 Step 2.1: This is the NEW implementation for Block that uses
-     * Link-based references instead of Address objects.
-     *
-     * @param block Block to connect (uses List<Link>)
-     * @return ImportResult indicating success or failure
-     */
-    public synchronized ImportResult tryToConnect(Block block) {
-        return tryToConnectV2(block);
-    }
-
     /**
      * Internal implementation for Block (v5.1 Link-based design)
      *
@@ -283,7 +266,7 @@ public class BlockchainImpl implements Blockchain {
      * @param block Block instance
      * @return ImportResult
      */
-    private synchronized ImportResult tryToConnectV2(Block block) {
+    public synchronized ImportResult tryToConnect(Block block) {
         try {
             ImportResult result = ImportResult.IMPORTED_NOT_BEST;
 
@@ -412,11 +395,11 @@ public class BlockchainImpl implements Blockchain {
                     .hash(block.getHash())
                     .timestamp(block.getTimestamp())
                     .height(0L)  // 0 = orphan block initially
-                    .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)  // Will be calculated
+                    .difficulty(UInt256.ZERO)  // Will be calculated
                     .build();
 
             // Save initial BlockInfo to database
-            blockStore.saveBlockInfoV2(initialInfo);
+            blockStore.saveBlockInfo(initialInfo);
 
             // Phase 4.5: Save raw Block data to storage
             // Attach BlockInfo to Block before saving (Block is immutable)
@@ -564,7 +547,7 @@ public class BlockchainImpl implements Blockchain {
 
         // Create Block with current difficulty
         long timestamp = XdagTime.getCurrentTimestamp();
-        org.apache.tuweni.units.bigints.UInt256 difficulty = chainStats.getDifficulty();
+        UInt256 difficulty = chainStats.getDifficulty();
 
         // Coinbase = wallet default key (reward block creator)
         Bytes32 coinbase = keyPair2Hash(wallet.getDefKey());
@@ -580,28 +563,10 @@ public class BlockchainImpl implements Blockchain {
         return rewardBlock;
     }
 
-    /**
-     * Create a genesis Block (v5.1 implementation - Phase 7.5)
-     *
-     * Phase 7.5: Genesis block creation for fresh node startup.
-     * This is called when xdagStats.getOurLastBlockHash() == null.
-     *
-     * Genesis block characteristics:
-     * 1. Empty links list (no previous blocks)
-     * 2. Minimal difficulty (1)
-     * 3. Zero nonce (no mining required for genesis)
-     * 4. Coinbase set to wallet's default key
-     * 5. Timestamp = current time or config genesis time
-     *
-     * @param key ECKeyPair for coinbase address
-     * @param timestamp Genesis block timestamp
-     * @return Block genesis block
-     * @see Block#createWithNonce(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, Bytes32, List)
-     */
     public Block createGenesisBlock(ECKeyPair key, long timestamp) {
         // Genesis block uses minimal difficulty
-        org.apache.tuweni.units.bigints.UInt256 genesisDifficulty =
-            org.apache.tuweni.units.bigints.UInt256.ONE;
+        UInt256 genesisDifficulty =
+            UInt256.ONE;
 
         // Get coinbase address from key
         Bytes32 coinbase = keyPair2Hash(key);
@@ -642,7 +607,7 @@ public class BlockchainImpl implements Blockchain {
      *
      * @return Block link block ready for import
      * @see #checkOrphan()
-     * @see Block#createCandidate(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, List)
+     * @see Block#createCandidate(long, UInt256, Bytes32, List)
      * @since Phase 8.3.1 v5.1
      */
     public Block createLinkBlock() {
@@ -650,7 +615,7 @@ public class BlockchainImpl implements Blockchain {
         long timestamp = XdagTime.getCurrentTimestamp();
 
         // Get current network difficulty
-        org.apache.tuweni.units.bigints.UInt256 difficulty = chainStats.getDifficulty();
+        UInt256 difficulty = chainStats.getDifficulty();
 
         // Get coinbase address (link block creator)
         Bytes32 coinbase = keyPair2Hash(wallet.getDefKey());
@@ -772,10 +737,9 @@ public class BlockchainImpl implements Blockchain {
         long maxMain = Math.max(chainStats.getTotalMainBlockCount(), remoteStats.getTotalMainBlockCount());
 
         // Update max difficulty (take maximum)
-        org.apache.tuweni.units.bigints.UInt256 localMaxDiff = chainStats.getMaxDifficulty();
-        org.apache.tuweni.units.bigints.UInt256 remoteMaxDiff = remoteStats.getMaxDifficulty();
-        org.apache.tuweni.units.bigints.UInt256 newMaxDiff =
-            localMaxDiff.compareTo(remoteMaxDiff) > 0 ? localMaxDiff : remoteMaxDiff;
+        UInt256 localMaxDiff = chainStats.getMaxDifficulty();
+        UInt256 remoteMaxDiff = remoteStats.getMaxDifficulty();
+        UInt256 newMaxDiff = localMaxDiff.compareTo(remoteMaxDiff) > 0 ? localMaxDiff : remoteMaxDiff;
 
         // Apply updates
         chainStats = chainStats
@@ -1062,20 +1026,6 @@ public class BlockchainImpl implements Blockchain {
     }
 
     /**
-     * Get blocks by time range (Phase 7.3 continuation)
-     *
-     * Uses BlockStore.getBlocksByTime() to retrieve blocks in time range.
-     *
-     * @param starttime Start timestamp
-     * @param endtime End timestamp
-     * @return List of Block in time range
-     */
-    @Override
-    public List<Block> getBlocksByTime(long starttime, long endtime) {
-        return blockStore.getBlocksByTime(starttime, endtime);
-    }
-
-    /**
      * List main blocks (Phase 7.3 continuation)
      *
      * Returns a list of main blocks starting from the latest height.
@@ -1170,7 +1120,7 @@ public class BlockchainImpl implements Blockchain {
         long timestamp = XdagTime.getCurrentTimestamp();
 
         // 3. Get current network difficulty
-        org.apache.tuweni.units.bigints.UInt256 difficulty = chainStats.getDifficulty();
+        UInt256 difficulty = chainStats.getDifficulty();
 
         // 4. Get coinbase address (our mining address)
         Bytes32 coinbase = keyPair2Hash(wallet.getDefKey());

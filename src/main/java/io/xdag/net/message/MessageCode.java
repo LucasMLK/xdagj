@@ -72,20 +72,7 @@ public enum MessageCode {
 //     */
 //    NODES(0x07),
 
-    // =======================================
-    // [0x10, 0x1f] Reserved for node
-    // =======================================
-//    BLOCKS_REQUEST(0x10),
-//    BLOCKS_REPLY(0x11),
-//    SUMS_REQUEST(0x12),
-//    SUMS_REPLY(0x13),
-//    BLOCKEXT_REQUEST(0x14),
-//    BLOCKEXT_REPLY(0x15),
     BLOCK_REQUEST(0x16),
-//    RECEIVE_BLOCK(0x17),
-    // Phase 7.3.0: Removed NEW_BLOCK and SYNC_BLOCK (use NEW_BLOCK_V5 and SYNC_BLOCK_V5)
-//    NEW_BLOCK(0x18),
-//    SYNC_BLOCK(0x19),
     SYNCBLOCK_REQUEST(0x1A),
 
     // v5.1 messages (Phase 3 - Network Layer Migration)
@@ -101,7 +88,81 @@ public enum MessageCode {
      * Uses Block structure instead of legacy Block
      * @see io.xdag.net.message.consensus.SyncBlockMessage
      */
-    SYNC_BLOCK(0x1C);
+    SYNC_BLOCK(0x1C),
+
+    // =======================================
+    // [0x1D, 0x24] Reserved for hybrid sync protocol
+    // =======================================
+
+    /**
+     * [0x1D] SYNC_HEIGHT_REQUEST - Query peer's main chain height
+     * Used by hybrid sync protocol to determine sync range
+     * @see io.xdag.net.message.consensus.SyncHeightRequestMessage
+     */
+    SYNC_HEIGHT_REQUEST(0x1D),
+
+    /**
+     * [0x1E] SYNC_HEIGHT_REPLY - Reply with main chain height information
+     * Contains current height, finalized height, and tip block hash
+     * @see io.xdag.net.message.consensus.SyncHeightReplyMessage
+     */
+    SYNC_HEIGHT_REPLY(0x1E),
+
+    /**
+     * [0x1F] SYNC_MAIN_BLOCKS_REQUEST - Request main blocks by height range
+     * Used for linear main chain synchronization (Phase 1 of hybrid sync)
+     * @see io.xdag.net.message.consensus.SyncMainBlocksRequestMessage
+     */
+    SYNC_MAIN_BLOCKS_REQUEST(0x1F),
+
+    /**
+     * [0x20] SYNC_MAIN_BLOCKS_REPLY - Reply with main blocks in height range
+     * Returns ordered list of main blocks for efficient batch sync
+     * @see io.xdag.net.message.consensus.SyncMainBlocksReplyMessage
+     */
+    SYNC_MAIN_BLOCKS_REPLY(0x20),
+
+    /**
+     * [0x21] SYNC_EPOCH_BLOCKS_REQUEST - Request all block hashes in an epoch
+     * Used for DAG area synchronization (Phase 2 of hybrid sync)
+     * @see io.xdag.net.message.consensus.SyncEpochBlocksRequestMessage
+     */
+    SYNC_EPOCH_BLOCKS_REQUEST(0x21),
+
+    /**
+     * [0x22] SYNC_EPOCH_BLOCKS_REPLY - Reply with block hashes in epoch
+     * Returns list of all block hashes in the requested epoch
+     * @see io.xdag.net.message.consensus.SyncEpochBlocksReplyMessage
+     */
+    SYNC_EPOCH_BLOCKS_REPLY(0x22),
+
+    /**
+     * [0x23] SYNC_BLOCKS_REQUEST - Batch request blocks by hash list
+     * Used for filling missing blocks during solidification
+     * @see io.xdag.net.message.consensus.SyncBlocksRequestMessage
+     */
+    SYNC_BLOCKS_REQUEST(0x23),
+
+    /**
+     * [0x24] SYNC_BLOCKS_REPLY - Reply with requested blocks
+     * Returns list of blocks matching requested hashes
+     * @see io.xdag.net.message.consensus.SyncBlocksReplyMessage
+     */
+    SYNC_BLOCKS_REPLY(0x24),
+
+    /**
+     * [0x25] SYNC_TRANSACTIONS_REQUEST - Batch request transactions by hash list
+     * Used for filling missing transactions during solidification
+     * @see io.xdag.net.message.consensus.SyncTransactionsRequestMessage
+     */
+    SYNC_TRANSACTIONS_REQUEST(0x25),
+
+    /**
+     * [0x26] SYNC_TRANSACTIONS_REPLY - Reply with requested transactions
+     * Returns list of transactions matching requested hashes
+     * @see io.xdag.net.message.consensus.SyncTransactionsReplyMessage
+     */
+    SYNC_TRANSACTIONS_REPLY(0x26);
 
     /**
      * [0x1D] Block_REQUEST - Request specific Block by hash (Phase 7.3)

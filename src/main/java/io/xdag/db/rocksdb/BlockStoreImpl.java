@@ -48,6 +48,7 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
 import org.bouncycastle.util.encoders.Hex;
 import org.objenesis.strategy.StdInstantiatorStrategy;
@@ -236,7 +237,7 @@ public class BlockStoreImpl implements BlockStore {
     // ========== Phase 2 Core Refactor: New Methods Implementation ==========
 
     @Override
-    public void saveBlockInfoV2(BlockInfo blockInfo) {
+    public void saveBlockInfo(BlockInfo blockInfo) {
         // Use CompactSerializer for new immutable BlockInfo
         try {
             byte[] serialized = io.xdag.serialization.CompactSerializer.serialize(blockInfo);
@@ -368,7 +369,7 @@ public class BlockStoreImpl implements BlockStore {
         // Note: Block.getInfo() may return null if not initialized
         BlockInfo info = block.getInfo();
         if (info != null) {
-            saveBlockInfoV2(info);
+            saveBlockInfo(info);
         } else {
             // Create minimal BlockInfo for blocks without metadata
             // This should not normally happen, but we handle it gracefully
@@ -380,11 +381,11 @@ public class BlockStoreImpl implements BlockStore {
                 // .type(0L) // DELETED in v5.1
                 // .flags(0) // DELETED in v5.1
                 .height(0L)
-                .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
+                .difficulty(UInt256.ZERO)
                 // .amount(XAmount.ZERO) // DELETED in v5.1
                 // .fee(XAmount.ZERO) // DELETED in v5.1
                 .build();
-            saveBlockInfoV2(minimalInfo);
+            saveBlockInfo(minimalInfo);
         }
 
         log.debug("Saved Block: {} ({} bytes)", hash.toHexString(), BlockBytes.length);

@@ -34,6 +34,7 @@ import lombok.Builder;
 import lombok.Value;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt256;
 
 /**
  * Block for XDAG v5.1 - Candidate Block
@@ -94,6 +95,17 @@ public class Block implements Serializable {
      * Usage:
      * - getInfo(): Get BlockInfo (may be null if not loaded)
      * - withInfo(info): Create new Block with BlockInfo attached
+     * -- GETTER --
+     *  Get BlockInfo (may be null if not loaded from BlockStore)
+     *  Phase 4 Step 2.3: BlockInfo contains runtime metadata:
+     *  - flags (BI_MAIN, BI_APPLIED, BI_REF, BI_MAIN_REF, etc.)
+     *  - difficulty, ref, maxDiffLink
+     *  - amount, fee
+     *  - remark, snapshot info
+     *  Note: Use withInfo() to attach BlockInfo after loading from BlockStore
+     *
+     * @return BlockInfo or null if not loaded
+
      */
     @Builder.Default
     BlockInfo info = null;
@@ -306,24 +318,7 @@ public class Block implements Serializable {
         return this.toBuilder().info(newInfo).build();
     }
 
-    /**
-     * Get BlockInfo (may be null if not loaded from BlockStore)
-     *
-     * Phase 4 Step 2.3: BlockInfo contains runtime metadata:
-     * - flags (BI_MAIN, BI_APPLIED, BI_REF, BI_MAIN_REF, etc.)
-     * - difficulty, ref, maxDiffLink
-     * - amount, fee
-     * - remark, snapshot info
-     *
-     * Note: Use withInfo() to attach BlockInfo after loading from BlockStore
-     *
-     * @return BlockInfo or null if not loaded
-     */
-    public BlockInfo getInfo() {
-        return info;
-    }
-
-    // ========== Link Operations ==========
+  // ========== Link Operations ==========
 
     /**
      * Get all links
@@ -401,7 +396,7 @@ public class Block implements Serializable {
         // Genesis block is identified by: empty links list and difficulty == 1
         boolean isGenesis = (links.isEmpty() &&
                            header.getDifficulty() != null &&
-                           header.getDifficulty().equals(org.apache.tuweni.units.bigints.UInt256.ONE));
+                           header.getDifficulty().equals(UInt256.ONE));
 
         if (!isGenesis && blockRefCount < MIN_BLOCK_LINKS) {
             return false;  // Non-genesis blocks must reference at least one prevMainBlock
@@ -421,8 +416,13 @@ public class Block implements Serializable {
             return false;
         }
 
-        // Check PoW
-        return isValidPoW();
+        // Check PoW (skip for genesis block)
+        // Genesis block doesn't need PoW verification as it's the first block
+        if (!isGenesis) {
+            return isValidPoW();
+        }
+
+        return true;  // Genesis block is valid if it passes all other checks
     }
 
     // ========== Factory Methods ==========
@@ -438,7 +438,7 @@ public class Block implements Serializable {
      */
     public static Block createCandidate(
             long timestamp,
-            org.apache.tuweni.units.bigints.UInt256 difficulty,
+            UInt256 difficulty,
             Bytes32 coinbase,
             List<Link> links) {
 
@@ -468,7 +468,7 @@ public class Block implements Serializable {
      */
     public static Block createWithNonce(
             long timestamp,
-            org.apache.tuweni.units.bigints.UInt256 difficulty,
+            UInt256 difficulty,
             Bytes32 nonce,
             Bytes32 coinbase,
             List<Link> links) {
@@ -592,8 +592,8 @@ public class Block implements Serializable {
 
         byte[] diffBytes = new byte[32];
         buffer.get(diffBytes);
-        org.apache.tuweni.units.bigints.UInt256 difficulty =
-            org.apache.tuweni.units.bigints.UInt256.fromBytes(Bytes.wrap(diffBytes));
+        UInt256 difficulty =
+            UInt256.fromBytes(Bytes.wrap(diffBytes));
 
         byte[] nonceBytes = new byte[32];
         buffer.get(nonceBytes);

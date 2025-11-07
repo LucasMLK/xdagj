@@ -31,94 +31,131 @@ import java.util.Map;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 
+/**
+ * Blockchain interface for XdagJ v5.1
+ *
+ * <p>This interface defines all core blockchain operations including:
+ * <ul>
+ *   <li>Block creation and connection</li>
+ *   <li>Block query and retrieval</li>
+ *   <li>Chain statistics and state management</li>
+ *   <li>Economic calculations (rewards, supply)</li>
+ * </ul>
+ *
+ * <p>Design principles:
+ * <ul>
+ *   <li>Uses Block (immutable) instead of legacy Block</li>
+ *   <li>Uses ChainStats (immutable) for statistics</li>
+ *   <li>Link-based references for efficient DAG structure</li>
+ * </ul>
+ *
+ * @since v5.1
+ */
 public interface Blockchain {
 
-    // Get pre-seed for snapshot initialization
+    /**
+     * Get pre-seed for snapshot initialization
+     *
+     * <p>The pre-seed is used during blockchain initialization from snapshot
+     * to ensure consistent state restoration.
+     *
+     * @return pre-seed bytes, or null if not available
+     */
     byte[] getPreSeed();
 
 
     /**
-     * Try to connect a new Block to the blockchain (Phase 4 Layer 3 Task 1.1)
+     * Try to connect a new Block to the blockchain
      *
-     * This method validates and imports a Block into the blockchain.
+     * <p>This method validates and imports a Block into the blockchain.
      * Block uses Link-based references instead of Address objects.
+     *
+     * <p>Possible results:
+     * <ul>
+     *   <li>IMPORTED_BEST - Block becomes new best block</li>
+     *   <li>IMPORTED_NOT_BEST - Block imported but not best</li>
+     *   <li>EXIST - Block already exists</li>
+     *   <li>NO_PARENT - Parent block not found</li>
+     *   <li>INVALID_BLOCK - Validation failed</li>
+     * </ul>
      *
      * @param block Block to connect
      * @return ImportResult indicating the result of the import operation
-     *
-     * @since Phase 4 v5.1
      */
     ImportResult tryToConnect(Block block);
 
     /**
-     * Create a Block mining main block (v5.1 implementation)
+     * Create a candidate block for mining
      *
-     * Phase 5.5: This is the NEW method for Block mining block creation.
-     * Replaces the deprecated createNewBlock() method for mining use case.
+     * <p>This method creates a new candidate block ready for Proof-of-Work mining.
+     * The block includes:
+     * <ul>
+     *   <li>Current timestamp</li>
+     *   <li>Current network difficulty</li>
+     *   <li>Nonce = 0 (to be found by mining)</li>
+     *   <li>Coinbase address (miner's address)</li>
+     *   <li>Links to previous main block and orphan blocks (max 16 block links)</li>
+     * </ul>
      *
-     * Key features:
-     * 1. Uses Link.toBlock() instead of Address objects for block references
-     * 2. Coinbase stored in BlockHeader (not as a link)
-     * 3. Returns Block with Link-based DAG structure
-     * 4. Uses current network difficulty from blockchain stats
-     * 5. Creates candidate block (nonce = 0, ready for POW mining)
+     * <p>Block structure uses Link-based references for efficient DAG representation.
+     * After mining finds a valid nonce, use {@link Block#withNonce(Bytes32)} to create
+     * the final block for import.
      *
-     * Block structure:
-     * - Header: timestamp, difficulty, nonce=0, coinbase
-     * - Links: [pretop_block (if exists), orphan_blocks...]
-     * - Max block links: 16 (from Block.MAX_BLOCK_LINKS)
-     *
-     * @return Block candidate block for mining (nonce = 0, needs POW)
-     * @see Block#createCandidate(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, List)
-     * @see Link#toBlock(Bytes32)
-     * @since Phase 5.5 v5.1
+     * @return candidate block for mining (nonce = 0, needs POW)
+     * @see Block#createCandidate(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, java.util.List)
+     * @see Block#withNonce(Bytes32)
      */
     Block createMainBlock();
 
     /**
-     * Create a genesis Block (v5.1 implementation)
+     * Create the genesis block for blockchain initialization
      *
-     * Phase 7.5: Genesis block creation for fresh node startup.
-     * Called when xdagStats.getOurLastBlockHash() == null (first-time node initialization).
+     * <p>The genesis block is the first block in the blockchain, created during
+     * fresh node startup. It has special characteristics:
+     * <ul>
+     *   <li>Empty links list (no previous blocks)</li>
+     *   <li>Minimal difficulty (difficulty = 1)</li>
+     *   <li>Zero nonce (no mining required)</li>
+     *   <li>Coinbase set to provided key</li>
+     *   <li>Specified timestamp (usually config genesis time)</li>
+     * </ul>
      *
-     * Genesis block characteristics:
-     * 1. Empty links list (no previous blocks to reference)
-     * 2. Minimal difficulty (difficulty = 1)
-     * 3. Zero nonce (no mining required for genesis)
-     * 4. Coinbase set to wallet's default key
-     * 5. Timestamp = current time or config genesis time
+     * <p>This method is called when starting a new blockchain from scratch,
+     * identified by absence of existing blocks.
      *
      * @param key ECKeyPair for coinbase address
-     * @param timestamp Genesis block timestamp
-     * @return Block genesis block
-     * @see Block#createWithNonce(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, Bytes32, List)
-     * @since Phase 7.5 v5.1
+     * @param timestamp genesis block timestamp (XDAG timestamp format)
+     * @return genesis block
+     * @see Block#createWithNonce(long, org.apache.tuweni.units.bigints.UInt256, Bytes32, Bytes32, java.util.List)
      */
     Block createGenesisBlock(ECKeyPair key, long timestamp);
 
     /**
-     * Create a reward Block for pool distribution (v5.1 implementation)
+     * Create a reward block for pool distribution
      *
-     * Phase 7.6: Pool reward distribution using Block architecture.
-     * Creates a Block containing Transaction references for reward distribution.
+     * <p>Creates a Block containing multiple Transaction references for distributing
+     * mining rewards to pool participants (foundation, pool operator, miners).
      *
-     * This method:
-     * 1. Creates Transaction objects for each recipient (foundation, pool)
-     * 2. Signs each Transaction with the source key
-     * 3. Saves Transactions to TransactionStore
-     * 4. Creates Block with Link.toTransaction() references
-     * 5. Returns Block (caller imports via tryToConnect)
+     * <p>Process:
+     * <ol>
+     *   <li>Creates Transaction objects for each recipient</li>
+     *   <li>Signs each Transaction with the source key</li>
+     *   <li>Saves Transactions to TransactionStore</li>
+     *   <li>Creates Block with Link.toTransaction() references</li>
+     * </ol>
      *
-     * @param sourceBlockHash Hash of source block (where funds come from)
-     * @param recipients List of recipient addresses
-     * @param amounts List of amounts for each recipient (must match recipients size)
+     * <p>The returned block must be imported via {@link #tryToConnect(Block)}
+     * by the caller to finalize the reward distribution.
+     *
+     * @param sourceBlockHash hash of source block (where funds come from)
+     * @param recipients list of recipient addresses
+     * @param amounts list of amounts for each recipient (must match recipients size)
      * @param sourceKey ECKeyPair for signing transactions (source of funds)
-     * @param nonce Account nonce for first transaction
-     * @param totalFee Total transaction fee (distributed across transactions)
+     * @param nonce account nonce for first transaction
+     * @param totalFee total transaction fee (distributed across transactions)
      * @return Block containing reward transactions
      * @see Transaction#createTransfer(Bytes32, Bytes32, XAmount, long, XAmount)
      * @see Link#toTransaction(Bytes32)
-     * @since Phase 7.6 v5.1
      */
     Block createRewardBlock(
             Bytes32 sourceBlockHash,
@@ -129,140 +166,162 @@ public interface Blockchain {
             XAmount totalFee);
 
     /**
-     * Get Block by its hash (v5.1 unified interface - Phase 8.3.2)
+     * Get Block by its hash
      *
-     * Phase 8.3.2: Blockchain interface migration to Block.
-     * This replaces the legacy Block getBlockByHash() method.
-     *
-     * @param hash Block hash
-     * @param isRaw Whether to include raw block data
-     * @return Block or null if not found
-     * @since Phase 8.3.2 v5.1
+     * @param hash block hash (32 bytes)
+     * @param isRaw whether to include raw block data (reserved for future use)
+     * @return Block instance, or null if not found
      */
     Block getBlockByHash(Bytes32 hash, boolean isRaw);
 
     /**
-     * Get Block by its height (v5.1 unified interface - Phase 8.3.2)
+     * Get Block by its height (main block number)
      *
-     * Phase 8.3.2: Blockchain interface migration to Block.
-     * This replaces the legacy Block getBlockByHeight() method.
+     * <p>Only main blocks have heights. Orphan blocks will not be found by this method.
      *
-     * @param height Block height (main block number)
-     * @return Block or null if not found
-     * @since Phase 8.3.2 v5.1
+     * @param height main block number (0-based)
+     * @return Block instance, or null if not found
      */
     Block getBlockByHeight(long height);
 
-    // Check and update main chain
+    /**
+     * Check and update the main chain
+     *
+     * <p>Scans the DAG to identify the best chain based on cumulative difficulty.
+     * Updates main chain pointers if a better chain is found.
+     * This is typically called periodically by a background thread.
+     */
     void checkNewMain();
 
-    // Get the latest main block number
+    /**
+     * Get the latest main block number
+     *
+     * @return current height of the main chain (number of main blocks - 1)
+     */
     long getLatestMainBlockNumber();
 
     /**
-     * Get list of main Blocks with specified count (v5.1 unified interface - Phase 8.3.2)
+     * Get list of recent main blocks
      *
-     * Phase 8.3.2: Blockchain interface migration to Block.
-     * This replaces the legacy List<Block> listMainBlocks() method.
+     * <p>Returns the most recent main blocks in descending order (newest first).
      *
-     * @param count Number of main blocks to retrieve
-     * @return List of Block main blocks
-     * @since Phase 8.3.2 v5.1
+     * @param count maximum number of main blocks to retrieve
+     * @return list of Block instances (may be empty if no main blocks exist)
      */
     List<Block> listMainBlocks(int count);
 
     /**
-     * Get list of mined Blocks with specified count (v5.1 unified interface - Phase 8.3.2)
+     * Get list of blocks mined by this node
      *
-     * Phase 8.3.2: Blockchain interface migration to Block.
-     * This replaces the legacy List<Block> listMinedBlocks() method.
+     * <p>Returns blocks where the coinbase address belongs to this node's wallet.
      *
-     * @param count Number of mined blocks to retrieve
-     * @return List of Block mined blocks
-     * @since Phase 8.3.2 v5.1
+     * @param count maximum number of mined blocks to retrieve
+     * @return list of Block instances (may be empty if none mined)
      */
     List<Block> listMinedBlocks(int count);
 
-    // Get memory blocks created by current node
+    /**
+     * Get memory blocks created by current node
+     *
+     * <p>Returns blocks that were created locally but not yet finalized
+     * to persistent storage. Used for tracking pending block creation.
+     *
+     * @return map of block hash to creation count
+     */
     Map<Bytes, Integer> getMemOurBlocks();
 
     /**
-     * Get blockchain statistics (v5.1 unified interface - Phase 7.3)
+     * Get current blockchain statistics
      *
-     * Phase 7.3: XdagStats was refactored into immutable ChainStats.
-     * ChainStats provides blockchain statistics without mutable state.
+     * <p>Returns immutable snapshot of blockchain state including:
+     * <ul>
+     *   <li>Block counts (total, main, orphan, extra)</li>
+     *   <li>Network state (hosts, max difficulty)</li>
+     *   <li>Top block information (hash, difficulty)</li>
+     * </ul>
      *
      * @return ChainStats containing current blockchain statistics
-     * @since Phase 7.3 v5.1
      */
     ChainStats getChainStats();
 
     /**
-     * Increment waiting sync count (Phase 7.3 ChainStats support)
+     * Increment waiting sync count
      *
-     * Increments the count of blocks waiting for parent blocks during sync.
+     * <p>Increments the counter of blocks waiting for parent blocks during sync.
      * Used by SyncManager when adding blocks to the waiting queue.
      *
-     * @since Phase 7.3 v5.1
+     * <p>This affects the value returned by {@link ChainStats#getWaitingSyncCount()}.
      */
     void incrementWaitingSyncCount();
 
     /**
-     * Decrement waiting sync count (Phase 7.3 ChainStats support)
+     * Decrement waiting sync count
      *
-     * Decrements the count of blocks waiting for parent blocks during sync.
+     * <p>Decrements the counter of blocks waiting for parent blocks during sync.
      * Used by SyncManager when removing blocks from the waiting queue.
      *
-     * @since Phase 7.3 v5.1
+     * <p>This affects the value returned by {@link ChainStats#getWaitingSyncCount()}.
      */
     void decrementWaitingSyncCount();
 
     /**
-     * Update blockchain stats from remote peer statistics (Phase 7.3 ChainStats support)
+     * Update blockchain statistics from remote peer
      *
-     * Updates global network statistics based on data received from remote peers.
-     * This includes:
-     * - Total network hosts
-     * - Total network blocks
-     * - Total network main blocks
-     * - Maximum network difficulty
-     *
+     * <p>Updates global network statistics based on data received from remote peers,
+     * including total network hosts, blocks, main blocks, and maximum difficulty.
      * Values are updated to reflect the maximum seen across the network.
      *
-     * @param remoteStats Statistics from remote peer (now ChainStats, XdagStats deleted)
-     * @since Phase 7.3 v5.1
+     * @param remoteStats statistics received from remote peer
      */
     void updateStatsFromRemote(ChainStats remoteStats);
 
-    // Phase 7.3.1: XdagTopStatus deleted - top block state merged into ChainStats
-    // Use chainStats.getTopBlock(), chainStats.getTopDifficulty(), etc.
-
-    // Calculate reward for given main block number
+    /**
+     * Calculate block mining reward
+     *
+     * <p>Calculates the reward amount for a given main block based on
+     * the reward schedule defined in the protocol specification.
+     *
+     * @param nmain main block number (height)
+     * @return reward amount in XAmount
+     */
     XAmount getReward(long nmain);
 
-    // Calculate total supply at given main block number
+    /**
+     * Calculate total XDAG supply
+     *
+     * <p>Calculates the cumulative XDAG supply at a given main block,
+     * based on all rewards issued up to that block.
+     *
+     * @param nmain main block number (height)
+     * @return total supply in XAmount
+     */
     XAmount getSupply(long nmain);
 
     /**
-     * Get Block objects within specified time range (v5.1 unified interface - Phase 8.3.2)
+     * Start main chain check thread
      *
-     * Phase 8.3.2: Blockchain interface migration to Block.
-     * This replaces the legacy List<Block> getBlocksByTime() method.
+     * <p>Starts a background thread that periodically calls {@link #checkNewMain()}
+     * to identify and update the best chain.
      *
-     * @param starttime Start time in XDAG timestamp format
-     * @param endtime End time in XDAG timestamp format
-     * @return List of Block objects in the time range
-     * @since Phase 8.3.2 v5.1
+     * @param period check period in milliseconds
      */
-    List<Block> getBlocksByTime(long starttime, long endtime);
-
-    // Start main chain check thread with given period
     void startCheckMain(long period);
 
-    // Stop main chain check thread
+    /**
+     * Stop main chain check thread
+     *
+     * <p>Stops the background thread started by {@link #startCheckMain(long)}.
+     */
     void stopCheckMain();
 
-    // Register blockchain event listener
+    /**
+     * Register blockchain event listener
+     *
+     * <p>Registers a listener to receive notifications about blockchain events
+     * such as new blocks, chain reorganizations, etc.
+     *
+     * @param listener event listener to register
+     */
     void registerListener(Listener listener);
 
 }

@@ -34,6 +34,7 @@ import java.math.BigInteger;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt256;
 
 @Getter
 @Setter
@@ -116,8 +117,8 @@ public abstract class XdagMessage extends Message  {
         // Create ChainStats from network data
         // Note: We only have network-wide stats from peers, so set local stats to same values
         chainStats = ChainStats.builder()
-                .difficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(maxdifficulty))
-                .maxDifficulty(org.apache.tuweni.units.bigints.UInt256.valueOf(maxdifficulty))
+                .difficulty(UInt256.valueOf(maxdifficulty))
+                .maxDifficulty(UInt256.valueOf(maxdifficulty))
                 .mainBlockCount(totalnmains)
                 .totalMainBlockCount(totalnmains)
                 .totalBlockCount(totalnblocks)

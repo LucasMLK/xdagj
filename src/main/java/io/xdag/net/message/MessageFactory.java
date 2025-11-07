@@ -26,8 +26,18 @@ package io.xdag.net.message;
 
 import io.xdag.net.message.consensus.BlockRequestMessage;
 import io.xdag.net.message.consensus.NewBlockMessage;
-import io.xdag.net.message.consensus.SyncBlockRequestMessage;
 import io.xdag.net.message.consensus.SyncBlockMessage;
+import io.xdag.net.message.consensus.SyncBlockRequestMessage;
+import io.xdag.net.message.consensus.SyncBlocksReplyMessage;
+import io.xdag.net.message.consensus.SyncBlocksRequestMessage;
+import io.xdag.net.message.consensus.SyncEpochBlocksReplyMessage;
+import io.xdag.net.message.consensus.SyncEpochBlocksRequestMessage;
+import io.xdag.net.message.consensus.SyncHeightReplyMessage;
+import io.xdag.net.message.consensus.SyncHeightRequestMessage;
+import io.xdag.net.message.consensus.SyncMainBlocksReplyMessage;
+import io.xdag.net.message.consensus.SyncMainBlocksRequestMessage;
+import io.xdag.net.message.consensus.SyncTransactionsReplyMessage;
+import io.xdag.net.message.consensus.SyncTransactionsRequestMessage;
 import io.xdag.net.message.p2p.DisconnectMessage;
 import io.xdag.net.message.p2p.HelloMessage;
 import io.xdag.net.message.p2p.InitMessage;
@@ -70,6 +80,17 @@ public class MessageFactory {
                 // Phase 3: Block messages
                 case NEW_BLOCK -> new NewBlockMessage(body);
                 case SYNC_BLOCK -> new SyncBlockMessage(body);
+                // Phase 1.5: Hybrid sync protocol messages
+                case SYNC_HEIGHT_REQUEST -> new SyncHeightRequestMessage(body);
+                case SYNC_HEIGHT_REPLY -> new SyncHeightReplyMessage(body);
+                case SYNC_MAIN_BLOCKS_REQUEST -> new SyncMainBlocksRequestMessage(body);
+                case SYNC_MAIN_BLOCKS_REPLY -> new SyncMainBlocksReplyMessage(body);
+                case SYNC_EPOCH_BLOCKS_REQUEST -> new SyncEpochBlocksRequestMessage(body);
+                case SYNC_EPOCH_BLOCKS_REPLY -> new SyncEpochBlocksReplyMessage(body);
+                case SYNC_BLOCKS_REQUEST -> new SyncBlocksRequestMessage(body);
+                case SYNC_BLOCKS_REPLY -> new SyncBlocksReplyMessage(body);
+                case SYNC_TRANSACTIONS_REQUEST -> new SyncTransactionsRequestMessage(body);
+                case SYNC_TRANSACTIONS_REPLY -> new SyncTransactionsReplyMessage(body);
             };
         } catch (Exception e) {
             throw new MessageException("Failed to decode message", e);
