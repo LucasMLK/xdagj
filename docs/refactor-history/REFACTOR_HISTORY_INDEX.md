@@ -1,6 +1,6 @@
 # XDAG v5.1 Refactor History Index
 
-**Last Updated**: 2025-11-07
+**Last Updated**: 2025-11-10
 
 This directory contains the complete refactoring history for XDAG v5.1, organized by component and phase.
 
@@ -14,12 +14,13 @@ docs/refactor-history/
 ├── dagchain/          (7 docs) - DagChain implementation phases
 ├── dagkernel/         (1 doc)  - DagKernel integration
 ├── hybrid-sync/       (4 docs) - HybridSyncManager and P2P adapter
+├── mining/            (3 docs) - Mining architecture (Phase 12)
 ├── phases/            (6 docs) - Phase implementation plans and tests
 ├── architecture/      (4 docs) - Architecture design and analysis
 └── REFACTOR_HISTORY_INDEX.md (this file)
 ```
 
-**Total**: 29 refactoring documents
+**Total**: 32 refactoring documents
 
 ---
 
@@ -105,7 +106,27 @@ Hybrid synchronization protocol combining Main Chain Sync and Epoch DAG Sync.
 
 ---
 
-### 5. Phases (6 documents)
+### 5. Mining (3 documents)
+
+Mining architecture redesign and P2P integration (Phase 12).
+
+| Document | Description | Phase |
+|----------|-------------|-------|
+| `IMPROVED_POW_DESIGN.md` | Mining architecture design | Phase 12 |
+| `PHASE_12_4_MINING_IMPLEMENTATION.md` | Mining implementation | Phase 12.4 |
+| `PHASE_12_5_P2P_INTEGRATION.md` | P2P integration for broadcasting | Phase 12.5 |
+
+**Key Achievements**:
+- ✅ Modular mining components (BlockGenerator, ShareValidator, BlockBroadcaster, MiningManager)
+- ✅ Clean separation from legacy XdagPow (740 lines → 1,503 lines well-organized)
+- ✅ P2P service integration with DagKernel
+- ✅ Block broadcasting to network
+- ✅ Graceful degradation when P2P unavailable
+- ✅ Fixed duplicate connection prevention in xdagj-p2p library
+
+---
+
+### 6. Phases (6 documents)
 
 Phase implementation plans and test summaries.
 
@@ -125,7 +146,7 @@ Phase implementation plans and test summaries.
 
 ---
 
-### 6. Architecture (4 documents)
+### 7. Architecture (4 documents)
 
 Architecture design, naming improvements, and protocol analysis.
 
@@ -153,6 +174,7 @@ Architecture design, naming improvements, and protocol analysis.
 | **DagChain** | ✅ Core Complete | 100% (核心功能) |
 | **DagKernel** | ✅ Complete | 100% |
 | **HybridSync** | ✅ Complete | 100% |
+| **Mining** | ✅ Complete | 100% |
 | **AccountStore** | ✅ Complete | 100% |
 | **Consensus** | ✅ Complete | 100% |
 
@@ -162,10 +184,12 @@ Architecture design, naming improvements, and protocol analysis.
 - **Phase 9**: DagChain integration ✅
 - **Phase 10**: Complete independence ✅
 - **Phase 11**: Block creation methods ✅
+- **Phase 12.4**: Mining architecture ✅
+- **Phase 12.5**: P2P integration ✅
 
 ---
 
-## 🎯 Current State (2025-11-07)
+## 🎯 Current State (2025-11-10)
 
 **v5.1 Core Components**: ✅ **Complete**
 
@@ -174,6 +198,8 @@ Architecture design, naming improvements, and protocol analysis.
 - ✅ Consensus Layer: DagChain (epoch-based DAG consensus)
 - ✅ Sync Layer: HybridSyncManager (Main Chain + Epoch DAG)
 - ✅ Processing Layer: DagAccountManager + DagTransactionProcessor + DagBlockProcessor
+- ✅ Mining Layer: MiningManager + BlockGenerator + ShareValidator + BlockBroadcaster
+- ✅ Network Layer: P2P service integration with block broadcasting
 
 **Next Steps**:
 - Testing and validation
@@ -188,7 +214,8 @@ Architecture design, naming improvements, and protocol analysis.
 1. **Storage questions?** → Check `dagstore/`
 2. **Consensus questions?** → Check `dagchain/`
 3. **Sync questions?** → Check `hybrid-sync/`
-4. **Architecture questions?** → Check `architecture/`
+4. **Mining questions?** → Check `IMPROVED_POW_DESIGN.md`, `PHASE_12_4_*.md`, `PHASE_12_5_*.md`
+5. **Architecture questions?** → Check `architecture/`
 
 ### By Phase
 1. **Phase 1-6**: Sync protocol design → `hybrid-sync/` + `phases/`
@@ -196,6 +223,8 @@ Architecture design, naming improvements, and protocol analysis.
 3. **Phase 9**: DagChain integration → `dagchain/`
 4. **Phase 10**: Independence refactor → `dagchain/DAGCHAIN_PHASE10_COMPLETE.md`
 5. **Phase 11**: Block creation → `dagchain/DAGCHAIN_PHASE11.*.md`
+6. **Phase 12.4**: Mining architecture → `PHASE_12_4_MINING_IMPLEMENTATION.md`
+7. **Phase 12.5**: P2P integration → `PHASE_12_5_P2P_INTEGRATION.md`
 
 ### By Topic
 - **Performance**: `DAGSTORE_CAPACITY_AND_PERFORMANCE.md`, `HYBRID_SYNC_PERFORMANCE_ANALYSIS.md`

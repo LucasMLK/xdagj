@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Phase 12: Mining & P2P Integration (2025-11-10)
+
+#### Mining Architecture (Phase 12.4)
+- **Modular Mining System**: Redesigned mining architecture with clear separation of concerns
+  - **BlockGenerator**: Generates candidate blocks for mining
+  - **ShareValidator**: Thread-safe share validation with atomic operations
+  - **BlockBroadcaster**: Imports and broadcasts mined blocks
+  - **MiningManager**: Coordinates the entire mining process
+  - Replaced legacy XdagPow (740 lines) with clean architecture (1,503 lines, well-organized)
+  - Simplified lifecycle management: 1 ScheduledExecutorService (vs 4 in legacy)
+
+#### P2P Integration (Phase 12.5)
+- **Block Broadcasting**: Real network communication for mined blocks
+  - P2P service integration with DagKernel
+  - Broadcasts to all connected peers using NewBlockMessage
+  - Graceful degradation when P2P unavailable
+- **Fixed Duplicate Connections**: xdagj-p2p library improvement
+  - Implemented `hasActiveConnectionTo()` method in ChannelManager
+  - Prevents unnecessary reconnection attempts every 30 seconds
+  - Verifies Netty channel activity before connections
+  - Special handling for loopback addresses (local testing)
+  - Tested: 0 duplicate connections in 90+ seconds
+- **Updated xdagj-p2p**: Version 0.1.5 → 0.1.6
+  - Published to Maven Central
+
+### Changed - Phase 12 Improvements
+
+#### Mining Performance
+- Thread-safe share validation supports concurrent submissions
+- Optimized block generation using DagChain.createCandidateBlock()
+- Better resource management with single executor service
+
+#### Network Stability
+- Eliminated duplicate P2P connection attempts
+- Improved connection lifecycle management
+- Better logging for network diagnostics
+
 ### Added - v5.1 Architecture Migration (2025-10-30)
 
 #### Core Data Structures
