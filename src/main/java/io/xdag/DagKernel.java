@@ -28,6 +28,8 @@ import io.xdag.config.Config;
 import io.xdag.config.GenesisConfig;
 import io.xdag.consensus.HybridSyncManager;
 import io.xdag.consensus.HybridSyncP2pAdapter;
+import io.xdag.consensus.RandomX;
+import io.xdag.consensus.miner.MiningManager;
 import io.xdag.core.*;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.db.AccountStore;
@@ -43,6 +45,9 @@ import io.xdag.db.rocksdb.RocksdbFactory;
 import io.xdag.db.rocksdb.TransactionStoreImpl;
 import io.xdag.db.store.DagCache;
 import io.xdag.db.store.DagEntityResolver;
+import io.xdag.p2p.P2pConfigFactory;
+import io.xdag.p2p.P2pService;
+import io.xdag.p2p.config.P2pConfig;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -122,11 +127,11 @@ public class DagKernel {
   private HybridSyncP2pAdapter hybridSyncP2pAdapter;
 
   // Mining component (Phase 12.4)
-  private io.xdag.consensus.miner.MiningManager miningManager;
-  private io.xdag.consensus.RandomX randomX;
+  private MiningManager miningManager;
+  private RandomX randomX;
 
   // P2P service (Phase 12.5)
-  private io.xdag.p2p.P2pService p2pService;
+  private P2pService p2pService;
 
   // Genesis configuration
   private GenesisConfig genesisConfig;
@@ -256,7 +261,7 @@ public class DagKernel {
       // TTL is taken from config (default is 8)
       if (wallet != null) {
           int ttl = config.getNodeSpec() != null ? config.getNodeSpec().getTTL() : 8;
-          this.miningManager = new io.xdag.consensus.miner.MiningManager(
+          this.miningManager = new MiningManager(
                   this, wallet, randomX, ttl);
           log.info("   ✓ MiningManager initialized (TTL={})", ttl);
       } else {
@@ -511,12 +516,11 @@ public class DagKernel {
 
           // Create P2P configuration
           ECKeyPair coinbase = wallet.getDefKey();
-          io.xdag.p2p.config.P2pConfig p2pConfig =
-                  io.xdag.p2p.P2pConfigFactory.createP2pConfig(config, coinbase);
+          P2pConfig p2pConfig = P2pConfigFactory.createP2pConfig(config, coinbase);
 
           // Create and start P2P service (without event handler for now)
           // Phase 12.5: Minimal P2P for block broadcasting only
-          this.p2pService = new io.xdag.p2p.P2pService(p2pConfig);
+          this.p2pService = new P2pService(p2pConfig);
           this.p2pService.start();
 
           log.info("✓ P2P service started (broadcasting enabled)");

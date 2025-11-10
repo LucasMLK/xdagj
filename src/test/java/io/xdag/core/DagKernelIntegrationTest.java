@@ -25,6 +25,7 @@
 package io.xdag.core;
 
 import io.xdag.DagKernel;
+import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import org.apache.tuweni.bytes.Bytes;
@@ -58,11 +59,15 @@ public class DagKernelIntegrationTest {
     private DagKernel dagKernel;
     private Config config;
     private Path tempDir;
+    private Wallet testWallet;
 
     @Before
     public void setUp() throws IOException {
         // Create unique temporary directory for each test
         tempDir = Files.createTempDirectory("dagkernel-test-");
+
+        // Create a test genesis.json file in temp directory
+        createTestGenesisFile();
 
         // Use DevnetConfig with custom database directory
         config = new DevnetConfig() {
@@ -70,10 +75,37 @@ public class DagKernelIntegrationTest {
             public String getStoreDir() {
                 return tempDir.toString();
             }
+
+            @Override
+            public String getRootDir() {
+                return tempDir.toString();
+            }
         };
 
-        // Create real DagKernel (not mocked)
-        dagKernel = new DagKernel(config);
+        // Create a test wallet with random account
+        testWallet = new Wallet(config);
+        testWallet.unlock("test-password");  // Use test password
+        testWallet.addAccountRandom();  // Add random account as default
+
+        // Create real DagKernel with wallet (not mocked)
+        dagKernel = new DagKernel(config, testWallet);
+    }
+
+    /**
+     * Create a minimal test genesis.json file
+     */
+    private void createTestGenesisFile() throws IOException {
+        String genesisJson = "{\n" +
+                "  \"networkId\": \"devnet\",\n" +
+                "  \"chainId\": 999,\n" +
+                "  \"timestamp\": 1514764800,\n" +
+                "  \"initialDifficulty\": \"0x1000\",\n" +
+                "  \"epochLength\": 64,\n" +
+                "  \"alloc\": {}\n" +
+                "}";
+
+        Path genesisFile = tempDir.resolve("genesis.json");
+        Files.writeString(genesisFile, genesisJson);
     }
 
     @After
