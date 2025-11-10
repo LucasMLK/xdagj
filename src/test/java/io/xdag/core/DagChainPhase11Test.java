@@ -25,6 +25,7 @@
 package io.xdag.core;
 
 import io.xdag.DagKernel;
+import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.crypto.keys.ECKeyPair;
@@ -66,11 +67,15 @@ public class DagChainPhase11Test {
     private DagChainImpl dagChain;
     private Config config;
     private Path tempDir;
+    private Wallet testWallet;
 
     @Before
     public void setUp() throws IOException {
         // Create unique temporary directory
         tempDir = Files.createTempDirectory("dagchain-phase11-test-");
+
+        // Create test genesis.json file
+        TestGenesisHelper.createTestGenesisFile(tempDir);
 
         // Use DevnetConfig with custom database directory
         config = new DevnetConfig() {
@@ -78,10 +83,20 @@ public class DagChainPhase11Test {
             public String getStoreDir() {
                 return tempDir.toString();
             }
+
+            @Override
+            public String getRootDir() {
+                return tempDir.toString();
+            }
         };
 
-        // Create and start DagKernel
-        dagKernel = new DagKernel(config);
+        // Create test wallet with random account
+        testWallet = new Wallet(config);
+        testWallet.unlock("test-password");
+        testWallet.addAccountRandom();
+
+        // Create and start DagKernel with wallet
+        dagKernel = new DagKernel(config, testWallet);
         dagKernel.start();
 
         // Create DagChainImpl instance

@@ -21,10 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.net.message.consensus;
+package io.xdag.p2p.message;
 
-import io.xdag.net.message.MessageCode;
-import io.xdag.p2p.message.Message;
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
 import lombok.Getter;
@@ -134,7 +132,7 @@ public class SyncMainBlocksRequestMessage extends Message {
      * @throws IllegalArgumentException if deserialization fails
      */
     public SyncMainBlocksRequestMessage(byte[] body) {
-        super(MessageCode.SYNC_MAIN_BLOCKS_REQUEST, SyncMainBlocksReplyMessage.class);
+        super(XdagMessageCode.SYNC_MAIN_BLOCKS_REQUEST, SyncMainBlocksReplyMessage.class);
 
         SimpleDecoder dec = new SimpleDecoder(body);
 
@@ -165,7 +163,7 @@ public class SyncMainBlocksRequestMessage extends Message {
      * @param isRaw true = full block data, false = BlockInfo only
      */
     public SyncMainBlocksRequestMessage(long fromHeight, long toHeight, int maxBlocks, boolean isRaw) {
-        super(MessageCode.SYNC_MAIN_BLOCKS_REQUEST, SyncMainBlocksReplyMessage.class);
+        super(XdagMessageCode.SYNC_MAIN_BLOCKS_REQUEST, SyncMainBlocksReplyMessage.class);
 
         this.fromHeight = fromHeight;
         this.toHeight = toHeight;
@@ -173,32 +171,18 @@ public class SyncMainBlocksRequestMessage extends Message {
         this.isRaw = isRaw;
 
         // Serialize message body
-        SimpleEncoder enc = encode();
+        SimpleEncoder enc = new SimpleEncoder();
+        encode(enc);
         this.body = enc.toBytes();
     }
 
-    /**
-     * Encode message to bytes
-     *
-     * <p>Format:
-     * [8 bytes fromHeight] + [8 bytes toHeight] + [4 bytes maxBlocks] + [1 byte isRaw]
-     *
-     * @return encoder with serialized data
-     */
-    private SimpleEncoder encode() {
-        SimpleEncoder enc = new SimpleEncoder();
-
-        // Serialize heights
+    @Override
+    public void encode(SimpleEncoder enc) {
+        // Serialize fields
         enc.writeLong(fromHeight);
         enc.writeLong(toHeight);
-
-        // Serialize batch size
         enc.writeInt(maxBlocks);
-
-        // Serialize isRaw flag
         enc.writeBoolean(isRaw);
-
-        return enc;
     }
 
     @Override

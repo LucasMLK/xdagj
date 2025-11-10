@@ -129,47 +129,50 @@ private void broadcastToNetwork(Block block) {
 ```
 
 **After (Phase 12.5)**:
+
 ```java
+import io.xdag.p2p.message.NewBlockMessage;
+
 private void broadcastToNetwork(Block block) {
-    // Check if P2P service is available
-    io.xdag.p2p.P2pService p2pService = dagKernel.getP2pService();
-    if (p2pService == null) {
-        log.warn("P2P service not available, cannot broadcast block");
-        return;
-    }
+  // Check if P2P service is available
+  io.xdag.p2p.P2pService p2pService = dagKernel.getP2pService();
+  if (p2pService == null) {
+    log.warn("P2P service not available, cannot broadcast block");
+    return;
+  }
 
-    try {
-        // Create NewBlockMessage
-        io.xdag.net.message.consensus.NewBlockMessage message =
-                new io.xdag.net.message.consensus.NewBlockMessage(block, ttl);
+  try {
+    // Create NewBlockMessage
+    io.xdag.p2p.message.NewBlockMessage message =
+        new io.xdag.p2p.message.NewBlockMessage(block, ttl);
 
-        // Serialize message
-        byte[] messageBody = message.getBody();
-        org.apache.tuweni.bytes.Bytes messageBytes =
-                org.apache.tuweni.bytes.Bytes.wrap(messageBody);
+    // Serialize message
+    byte[] messageBody = message.getBody();
+    org.apache.tuweni.bytes.Bytes messageBytes =
+        org.apache.tuweni.bytes.Bytes.wrap(messageBody);
 
-        // Broadcast to all connected peers
-        int sentCount = 0;
-        for (io.xdag.p2p.channel.Channel channel :
-                p2pService.getChannelManager().getChannels().values()) {
-            if (channel.isFinishHandshake()) {
-                try {
-                    channel.send(messageBytes);
-                    sentCount++;
-                } catch (Exception e) {
-                    log.error("Error broadcasting to {}: {}",
-                            channel.getRemoteAddress(), e.getMessage());
-                }
-            }
+    // Broadcast to all connected peers
+    int sentCount = 0;
+    for (io.xdag.p2p.channel.Channel channel :
+        p2pService.getChannelManager().getChannels().values()) {
+      if (channel.isFinishHandshake()) {
+        try {
+          channel.send(messageBytes);
+          sentCount++;
+        } catch (Exception e) {
+          log.error("Error broadcasting to {}: {}",
+              channel.getRemoteAddress(), e.getMessage());
         }
-
-        log.info("Block {} broadcast to {} peers (ttl={})",
-                block.getHash().toHexString().substring(0, 18) + "...",
-                sentCount, ttl);
-
-    } catch (Exception e) {
-        log.error("Error broadcasting block: {}", e.getMessage(), e);
+      }
     }
+
+    log.info("Block {} broadcast to {} peers (ttl={})",
+        block.getHash().toHexString().substring(0, 18) + "...",
+        sentCount, ttl);
+
+  } catch (Exception e) {
+    log.error("Error broadcasting block: {}", e.getMessage(), e);
+  }
 }
 ```
 

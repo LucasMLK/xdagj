@@ -21,22 +21,34 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.net;
+package io.xdag.config;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+/**
+ * Enum representing node capabilities in the XDAG network
+ */
+public enum Capability {
+    /**
+     * Full node capability - stores complete blockchain data
+     */
+    FULL_NODE("full"),
 
-import org.junit.Test;
+    /**
+     * Light node capability - stores minimal blockchain data
+     */
+    LIGHT_NODE("light");
 
-public class CapabilityTest {
+    private final String name;
 
-    @Test
-    public void testIsSupported() {
-        assertFalse(CapabilityTreeSet.emptyList().isSupported(Capability.FULL_NODE));
-        assertFalse(CapabilityTreeSet.of("FULL_NODE").isSupported(Capability.LIGHT_NODE));
-        assertTrue(CapabilityTreeSet.of("FULL_NODE").isSupported(Capability.FULL_NODE));
-        assertTrue(CapabilityTreeSet.of(Capability.FULL_NODE).isSupported(Capability.FULL_NODE));
-        assertEquals(CapabilityTreeSet.of(Capability.FULL_NODE), CapabilityTreeSet.of(Capability.FULL_NODE));
+    Capability(String name) {
+        this.name = name;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    @Override
+    public String toString() {
+        return name;
     }
 }

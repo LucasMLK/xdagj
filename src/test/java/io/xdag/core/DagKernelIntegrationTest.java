@@ -96,12 +96,24 @@ public class DagKernelIntegrationTest {
      */
     private void createTestGenesisFile() throws IOException {
         String genesisJson = "{\n" +
-                "  \"networkId\": \"devnet\",\n" +
+                "  \"networkId\": \"test\",\n" +
                 "  \"chainId\": 999,\n" +
-                "  \"timestamp\": 1514764800,\n" +
+                "  \"timestamp\": 1516406400,\n" +
                 "  \"initialDifficulty\": \"0x1000\",\n" +
                 "  \"epochLength\": 64,\n" +
-                "  \"alloc\": {}\n" +
+                "  \"extraData\": \"XDAG v5.1 Test Genesis\",\n" +
+                "  \"alloc\": {},\n" +
+                "  \"snapshot\": {\n" +
+                "    \"enabled\": false,\n" +
+                "    \"height\": 0,\n" +
+                "    \"hash\": \"0x0000000000000000000000000000000000000000000000000000000000000000\",\n" +
+                "    \"timestamp\": 0,\n" +
+                "    \"dataFile\": \"\",\n" +
+                "    \"verify\": false,\n" +
+                "    \"format\": \"v1\",\n" +
+                "    \"expectedAccounts\": 0,\n" +
+                "    \"expectedBlocks\": 0\n" +
+                "  }\n" +
                 "}";
 
         Path genesisFile = tempDir.resolve("genesis.json");
@@ -141,7 +153,11 @@ public class DagKernelIntegrationTest {
      * Test 1: DagKernel construction
      *
      * <p>Verify that DagKernel can be constructed successfully
-     * and all components are initialized.
+     * and storage/cache layer components are initialized.
+     *
+     * <p>Note: Consensus layer components (DagAccountManager, DagTransactionProcessor,
+     * DagBlockProcessor) are only initialized in start() method, so they won't be
+     * available until start() is called.
      */
     @Test
     public void testDagKernelConstruction() {
@@ -152,20 +168,20 @@ public class DagKernelIntegrationTest {
         assertNotNull("Config should be set", dagKernel.getConfig());
         assertEquals("Config should be DevnetConfig", config, dagKernel.getConfig());
 
-        // Verify storage layer components
+        // Verify storage layer components (initialized in constructor)
         assertNotNull("DagStore should be initialized", dagKernel.getDagStore());
         assertNotNull("TransactionStore should be initialized", dagKernel.getTransactionStore());
         assertNotNull("AccountStore should be initialized", dagKernel.getAccountStore());
         assertNotNull("OrphanBlockStore should be initialized", dagKernel.getOrphanBlockStore());
 
-        // Verify cache layer components
+        // Verify cache layer components (initialized in constructor)
         assertNotNull("DagCache should be initialized", dagKernel.getDagCache());
         assertNotNull("EntityResolver should be initialized", dagKernel.getEntityResolver());
 
-        // Verify Dag processing components (Phase 10)
-        assertNotNull("DagAccountManager should be initialized", dagKernel.getDagAccountManager());
-        assertNotNull("DagTransactionProcessor should be initialized", dagKernel.getDagTransactionProcessor());
-        assertNotNull("DagBlockProcessor should be initialized", dagKernel.getDagBlockProcessor());
+        // Note: Consensus layer components are NOT initialized until start() is called
+        // See DagKernel.java line 210: "Note: DagChain and HybridSyncManager will be
+        // initialized in start() method because DagChainImpl needs a fully constructed
+        // DagKernel instance"
     }
 
     /**
@@ -408,11 +424,16 @@ public class DagKernelIntegrationTest {
     /**
      * Test 11: Component dependency chain
      *
-     * <p>Verify the correct dependency chain:
+     * <p>Verify the correct dependency chain after DagKernel is started:
      * DagBlockProcessor -> DagTransactionProcessor -> DagAccountManager -> AccountStore
+     *
+     * <p>Note: Consensus layer components are only initialized in start() method.
      */
     @Test
     public void testComponentDependencyChain() {
+        // Must start DagKernel first to initialize consensus layer components
+        dagKernel.start();
+
         // Verify DagBlockProcessor has access to DagTransactionProcessor
         // (indirectly through constructor injection)
 

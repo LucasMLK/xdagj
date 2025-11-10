@@ -24,10 +24,21 @@
 
 package io.xdag.consensus;
 
-import io.xdag.net.message.consensus.*;
+import io.xdag.p2p.P2pService;
 import io.xdag.p2p.channel.Channel;
+import io.xdag.p2p.channel.ChannelManager;
+import io.xdag.p2p.message.SyncBlocksReplyMessage;
+import io.xdag.p2p.message.SyncBlocksRequestMessage;
+import io.xdag.p2p.message.SyncEpochBlocksReplyMessage;
+import io.xdag.p2p.message.SyncEpochBlocksRequestMessage;
+import io.xdag.p2p.message.SyncHeightReplyMessage;
+import io.xdag.p2p.message.SyncHeightRequestMessage;
+import io.xdag.p2p.message.SyncMainBlocksReplyMessage;
+import io.xdag.p2p.message.SyncMainBlocksRequestMessage;
+import io.xdag.p2p.message.SyncTransactionsReplyMessage;
+import io.xdag.p2p.message.SyncTransactionsRequestMessage;
+import java.net.InetSocketAddress;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 
 import java.util.List;
@@ -86,6 +97,13 @@ public class HybridSyncP2pAdapter {
      */
     private static final int MAX_PENDING_REQUESTS = 100;
 
+    // ========== Dependencies ==========
+
+    /**
+     * P2P service for channel management (Phase 12.5)
+     */
+    private P2pService p2pService;
+
     // ========== State ==========
 
     /**
@@ -142,7 +160,7 @@ public class HybridSyncP2pAdapter {
      * @return CompletableFuture with height reply, or null on timeout/error
      */
     public CompletableFuture<SyncHeightReplyMessage> requestHeight(
-            io.xdag.p2p.channel.Channel channel) {
+            Channel channel) {
 
         String requestId = UUID.randomUUID().toString();
         CompletableFuture<SyncHeightReplyMessage> future = new CompletableFuture<>();
@@ -164,7 +182,8 @@ public class HybridSyncP2pAdapter {
             log.debug("Sending SyncHeightRequest to {} (requestId={})",
                     channel.getRemoteAddress(), requestId);
 
-            channel.send(Bytes.wrap(request.getBody()));
+            // Send Message object directly - Channel will handle encoding
+            channel.send(request);
 
             // Setup timeout
             scheduleTimeout(requestId, future, DEFAULT_TIMEOUT_MS,
@@ -190,7 +209,7 @@ public class HybridSyncP2pAdapter {
      * @return CompletableFuture with blocks reply
      */
     public CompletableFuture<SyncMainBlocksReplyMessage> requestMainBlocks(
-            io.xdag.p2p.channel.Channel channel,
+            Channel channel,
             long fromHeight,
             long toHeight,
             int maxBlocks,
@@ -214,7 +233,8 @@ public class HybridSyncP2pAdapter {
             log.debug("Sending SyncMainBlocksRequest [{}, {}] to {} (requestId={})",
                     fromHeight, toHeight, channel.getRemoteAddress(), requestId);
 
-            channel.send(Bytes.wrap(request.getBody()));
+            // Send Message object directly - Channel will handle encoding
+            channel.send(request);
 
             scheduleTimeout(requestId, future, DEFAULT_TIMEOUT_MS,
                     () -> pendingMainBlocksRequests.remove(requestId));
@@ -236,7 +256,7 @@ public class HybridSyncP2pAdapter {
      * @return CompletableFuture with epoch blocks reply
      */
     public CompletableFuture<SyncEpochBlocksReplyMessage> requestEpochBlocks(
-            io.xdag.p2p.channel.Channel channel,
+            Channel channel,
             long epoch) {
 
         String requestId = UUID.randomUUID().toString();
@@ -256,7 +276,8 @@ public class HybridSyncP2pAdapter {
             log.debug("Sending SyncEpochBlocksRequest epoch={} to {} (requestId={})",
                     epoch, channel.getRemoteAddress(), requestId);
 
-            channel.send(Bytes.wrap(request.getBody()));
+            // Send Message object directly - Channel will handle encoding
+            channel.send(request);
 
             scheduleTimeout(requestId, future, DEFAULT_TIMEOUT_MS,
                     () -> pendingEpochBlocksRequests.remove(requestId));
@@ -279,7 +300,7 @@ public class HybridSyncP2pAdapter {
      * @return CompletableFuture with blocks reply
      */
     public CompletableFuture<SyncBlocksReplyMessage> requestBlocks(
-            io.xdag.p2p.channel.Channel channel,
+            Channel channel,
             List<Bytes32> hashes,
             boolean isRaw) {
 
@@ -300,7 +321,8 @@ public class HybridSyncP2pAdapter {
             log.debug("Sending SyncBlocksRequest count={} to {} (requestId={})",
                     hashes.size(), channel.getRemoteAddress(), requestId);
 
-            channel.send(Bytes.wrap(request.getBody()));
+            // Send Message object directly - Channel will handle encoding
+            channel.send(request);
 
             scheduleTimeout(requestId, future, DEFAULT_TIMEOUT_MS,
                     () -> pendingBlocksRequests.remove(requestId));
@@ -342,7 +364,8 @@ public class HybridSyncP2pAdapter {
             log.debug("Sending SyncTransactionsRequest count={} to {} (requestId={})",
                     hashes.size(), channel.getRemoteAddress(), requestId);
 
-            channel.send(Bytes.wrap(request.getBody()));
+            // Send Message object directly - Channel will handle encoding
+            channel.send(request);
 
             scheduleTimeout(requestId, future, DEFAULT_TIMEOUT_MS,
                     () -> pendingTransactionsRequests.remove(requestId));
@@ -479,6 +502,64 @@ public class HybridSyncP2pAdapter {
                         new TimeoutException("Request timed out after " + timeoutMs + "ms"));
             }
         }, timeoutMs, TimeUnit.MILLISECONDS);
+    }
+
+    // ========== P2P Service Management (Phase 12.5) ==========
+
+    /**
+     * Set P2P service for channel management
+     *
+     * <p>This method should be called after P2P service is started to enable
+     * the adapter to query available channels for synchronization.
+     *
+     * @param p2pService P2P service instance
+     */
+    public void setP2pService(P2pService p2pService) {
+        this.p2pService = p2pService;
+        log.info("P2P service connected to HybridSyncP2pAdapter");
+    }
+
+    /**
+     * Get list of available channels for synchronization
+     *
+     * <p>Returns all active P2P channels from ChannelManager.
+     * These channels can be used to request sync data from remote peers.
+     *
+     * @return list of active channels, or empty list if P2P service not connected
+     */
+    public List<Channel> getAvailableChannels() {
+        if (p2pService == null) {
+            log.debug("P2P service not connected, no channels available");
+            return java.util.Collections.emptyList();
+        }
+
+        try {
+            ChannelManager channelManager = p2pService.getChannelManager();
+            if (channelManager == null) {
+                log.warn("ChannelManager not available");
+                return java.util.Collections.emptyList();
+            }
+
+            // Get all active channels from ChannelManager
+            Map<InetSocketAddress, Channel> channels =
+                    channelManager.getChannels();
+
+            if (channels == null || channels.isEmpty()) {
+                log.debug("No active channels available");
+                return java.util.Collections.emptyList();
+            }
+
+            // Convert map values to list
+            java.util.List<Channel> channelList =
+                    new java.util.ArrayList<>(channels.values());
+
+            log.debug("Found {} active channels", channelList.size());
+            return channelList;
+
+        } catch (Exception e) {
+            log.error("Error getting available channels", e);
+            return java.util.Collections.emptyList();
+        }
     }
 
     // ========== Lifecycle ==========

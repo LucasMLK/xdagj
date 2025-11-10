@@ -21,10 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.net.message.consensus;
+package io.xdag.p2p.message;
 
-import io.xdag.net.message.MessageCode;
-import io.xdag.p2p.message.Message;
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
 import lombok.Getter;
@@ -134,7 +132,7 @@ public class SyncTransactionsRequestMessage extends Message {
      * @throws IllegalArgumentException if deserialization fails
      */
     public SyncTransactionsRequestMessage(byte[] body) {
-        super(MessageCode.SYNC_TRANSACTIONS_REQUEST, SyncTransactionsReplyMessage.class);
+        super(XdagMessageCode.SYNC_TRANSACTIONS_REQUEST, SyncTransactionsReplyMessage.class);
 
         SimpleDecoder dec = new SimpleDecoder(body);
 
@@ -165,26 +163,18 @@ public class SyncTransactionsRequestMessage extends Message {
      * @param hashes list of transaction hashes to request
      */
     public SyncTransactionsRequestMessage(List<Bytes32> hashes) {
-        super(MessageCode.SYNC_TRANSACTIONS_REQUEST, SyncTransactionsReplyMessage.class);
+        super(XdagMessageCode.SYNC_TRANSACTIONS_REQUEST, SyncTransactionsReplyMessage.class);
 
         this.hashes = hashes;
 
         // Serialize message body
-        SimpleEncoder enc = encode();
+        SimpleEncoder enc = new SimpleEncoder();
+        encode(enc);
         this.body = enc.toBytes();
     }
 
-    /**
-     * Encode message to bytes
-     *
-     * <p>Format:
-     * [4 bytes hashCount] + [32 bytes per hash]
-     *
-     * @return encoder with serialized data
-     */
-    private SimpleEncoder encode() {
-        SimpleEncoder enc = new SimpleEncoder();
-
+    @Override
+    public void encode(SimpleEncoder enc) {
         // Serialize hash count
         enc.writeInt(hashes.size());
 
@@ -192,8 +182,6 @@ public class SyncTransactionsRequestMessage extends Message {
         for (Bytes32 hash : hashes) {
             enc.write(hash.toArray());
         }
-
-        return enc;
     }
 
     @Override

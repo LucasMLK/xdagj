@@ -50,7 +50,7 @@ public class DevnetConfig extends AbstractConfig {
     public DevnetConfig() {
         super("devnet", "xdag-devnet", Network.DEVNET, Constants.DEVNET_VERSION);
         this.waitEpoch = 1;
-        this.xdagEra = 0x16900000000L;
+        this.xdagEra = 1516406400L;  // 2018-01-20 00:00:00 UTC (correct XDAG_ERA)
         this.mainStartAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 42).toLong());
         this.apolloForkHeight = 1000;
         this.apolloForkAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 39).toLong());

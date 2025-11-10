@@ -25,19 +25,21 @@ package io.xdag.net.message;
 
 import static org.junit.Assert.assertNull;
 
+import io.xdag.p2p.message.MessageException;
+import io.xdag.p2p.message.XdagMessageFactory;
 import org.junit.Test;
 
 public class MessageFactoryTest {
 
     @Test
     public void testNonExist() throws MessageException {
-        MessageFactory factory = new MessageFactory();
+        XdagMessageFactory factory = new XdagMessageFactory();
         assertNull(factory.create((byte) 0xff, new byte[1]));
     }
 
     @Test(expected = MessageException.class)
     public void testWrongCodec() throws MessageException {
-        MessageFactory factory = new MessageFactory();
+        XdagMessageFactory factory = new XdagMessageFactory();
         factory.create((byte) 0x01, new byte[1]);
     }
 }

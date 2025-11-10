@@ -21,11 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.net.message.consensus;
+package io.xdag.p2p.message;
 
 import io.xdag.core.Transaction;
-import io.xdag.net.message.MessageCode;
-import io.xdag.p2p.message.Message;
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
 import lombok.Getter;
@@ -139,7 +137,7 @@ public class SyncTransactionsReplyMessage extends Message {
      * @throws IllegalArgumentException if deserialization fails
      */
     public SyncTransactionsReplyMessage(byte[] body) {
-        super(MessageCode.SYNC_TRANSACTIONS_REPLY, null);
+        super(XdagMessageCode.SYNC_TRANSACTIONS_REPLY, null);
 
         SimpleDecoder dec = new SimpleDecoder(body);
 
@@ -196,26 +194,18 @@ public class SyncTransactionsReplyMessage extends Message {
      * @param transactions list of transactions (may contain nulls)
      */
     public SyncTransactionsReplyMessage(List<Transaction> transactions) {
-        super(MessageCode.SYNC_TRANSACTIONS_REPLY, null);
+        super(XdagMessageCode.SYNC_TRANSACTIONS_REPLY, null);
 
         this.transactions = transactions;
 
         // Serialize message body
-        SimpleEncoder enc = encode();
+        SimpleEncoder enc = new SimpleEncoder();
+        encode(enc);
         this.body = enc.toBytes();
     }
 
-    /**
-     * Encode message to bytes
-     *
-     * <p>Format:
-     * [4 bytes txCount] + for each tx: [32 bytes hash] + [1 byte hasTx] + (if hasTx: [4 bytes size] + [variable data])
-     *
-     * @return encoder with serialized data
-     */
-    private SimpleEncoder encode() {
-        SimpleEncoder enc = new SimpleEncoder();
-
+    @Override
+    public void encode(SimpleEncoder enc) {
         // Write transaction count
         enc.writeInt(transactions.size());
 
@@ -240,8 +230,6 @@ public class SyncTransactionsReplyMessage extends Message {
                 enc.writeBoolean(false);
             }
         }
-
-        return enc;
     }
 
     @Override

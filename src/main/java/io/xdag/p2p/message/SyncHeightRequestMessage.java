@@ -21,10 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.net.message.consensus;
+package io.xdag.p2p.message;
 
-import io.xdag.net.message.MessageCode;
-import io.xdag.p2p.message.Message;
+import io.xdag.p2p.utils.SimpleEncoder;
 
 /**
  * SyncHeightRequestMessage - Query peer's main chain height
@@ -65,7 +64,7 @@ public class SyncHeightRequestMessage extends Message {
      * @param body serialized message body (empty)
      */
     public SyncHeightRequestMessage(byte[] body) {
-        super(MessageCode.SYNC_HEIGHT_REQUEST, SyncHeightReplyMessage.class);
+        super(XdagMessageCode.SYNC_HEIGHT_REQUEST, SyncHeightReplyMessage.class);
         this.body = body;
     }
 
@@ -75,9 +74,14 @@ public class SyncHeightRequestMessage extends Message {
      * <p>Creates an empty message to query peer's height.
      */
     public SyncHeightRequestMessage() {
-        super(MessageCode.SYNC_HEIGHT_REQUEST, SyncHeightReplyMessage.class);
+        super(XdagMessageCode.SYNC_HEIGHT_REQUEST, SyncHeightReplyMessage.class);
         // Empty message body
         this.body = new byte[0];
+    }
+
+    @Override
+    public void encode(SimpleEncoder enc) {
+        // Empty message body - no data to encode
     }
 
     @Override

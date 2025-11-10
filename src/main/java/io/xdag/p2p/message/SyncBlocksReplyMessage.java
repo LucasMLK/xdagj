@@ -21,11 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.net.message.consensus;
+package io.xdag.p2p.message;
 
 import io.xdag.core.Block;
-import io.xdag.net.message.MessageCode;
-import io.xdag.p2p.message.Message;
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
 import lombok.Getter;
@@ -133,7 +131,7 @@ public class SyncBlocksReplyMessage extends Message {
      * @throws IllegalArgumentException if deserialization fails
      */
     public SyncBlocksReplyMessage(byte[] body) {
-        super(MessageCode.SYNC_BLOCKS_REPLY, null);
+        super(XdagMessageCode.SYNC_BLOCKS_REPLY, null);
 
         SimpleDecoder dec = new SimpleDecoder(body);
 
@@ -190,26 +188,18 @@ public class SyncBlocksReplyMessage extends Message {
      * @param blocks list of blocks (may contain nulls)
      */
     public SyncBlocksReplyMessage(List<Block> blocks) {
-        super(MessageCode.SYNC_BLOCKS_REPLY, null);
+        super(XdagMessageCode.SYNC_BLOCKS_REPLY, null);
 
         this.blocks = blocks;
 
         // Serialize message body
-        SimpleEncoder enc = encode();
+        SimpleEncoder enc = new SimpleEncoder();
+        encode(enc);
         this.body = enc.toBytes();
     }
 
-    /**
-     * Encode message to bytes
-     *
-     * <p>Format:
-     * [4 bytes blockCount] + for each block: [32 bytes hash] + [1 byte hasBlock] + (if hasBlock: [4 bytes size] + [variable data])
-     *
-     * @return encoder with serialized data
-     */
-    private SimpleEncoder encode() {
-        SimpleEncoder enc = new SimpleEncoder();
-
+    @Override
+    public void encode(SimpleEncoder enc) {
         // Write block count
         enc.writeInt(blocks.size());
 
@@ -234,8 +224,6 @@ public class SyncBlocksReplyMessage extends Message {
                 enc.writeBoolean(false);
             }
         }
-
-        return enc;
     }
 
     @Override

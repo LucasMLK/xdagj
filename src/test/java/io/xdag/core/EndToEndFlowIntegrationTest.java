@@ -25,6 +25,7 @@
 package io.xdag.core;
 
 import io.xdag.DagKernel;
+import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.crypto.keys.ECKeyPair;
@@ -67,6 +68,7 @@ public class EndToEndFlowIntegrationTest {
     private DagKernel dagKernel;
     private Config config;
     private Path tempDir;
+    private Wallet testWallet;
 
     // Core components
     private DagAccountManager accountManager;
@@ -84,16 +86,29 @@ public class EndToEndFlowIntegrationTest {
         // Create unique temporary directory
         tempDir = Files.createTempDirectory("e2e-flow-test-");
 
+        // Create test genesis.json file
+        TestGenesisHelper.createTestGenesisFile(tempDir);
+
         // Use DevnetConfig with custom database directory
         config = new DevnetConfig() {
             @Override
             public String getStoreDir() {
                 return tempDir.toString();
             }
+
+            @Override
+            public String getRootDir() {
+                return tempDir.toString();
+            }
         };
 
-        // Create and start DagKernel
-        dagKernel = new DagKernel(config);
+        // Create test wallet with random account
+        testWallet = new Wallet(config);
+        testWallet.unlock("test-password");
+        testWallet.addAccountRandom();
+
+        // Create and start DagKernel with wallet
+        dagKernel = new DagKernel(config, testWallet);
         dagKernel.start();
 
         // Get components

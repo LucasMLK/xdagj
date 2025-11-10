@@ -25,6 +25,7 @@
 package io.xdag.core;
 
 import io.xdag.DagKernel;
+import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.crypto.keys.ECKeyPair;
@@ -60,6 +61,7 @@ public class DagChainIntegrationTest {
     private DagKernel dagKernel;
     private Config config;
     private Path tempDir;
+    private Wallet testWallet;
 
     // Components to test
     private DagBlockProcessor blockProcessor;
@@ -75,16 +77,29 @@ public class DagChainIntegrationTest {
         // Create unique temporary directory
         tempDir = Files.createTempDirectory("dagchain-integration-test-");
 
+        // Create test genesis.json file
+        createTestGenesisFile();
+
         // Use DevnetConfig with custom database directory
         config = new DevnetConfig() {
             @Override
             public String getStoreDir() {
                 return tempDir.toString();
             }
+
+            @Override
+            public String getRootDir() {
+                return tempDir.toString();
+            }
         };
 
-        // Create and start DagKernel
-        dagKernel = new DagKernel(config);
+        // Create test wallet with random account
+        testWallet = new Wallet(config);
+        testWallet.unlock("test-password");
+        testWallet.addAccountRandom();
+
+        // Create and start DagKernel with wallet
+        dagKernel = new DagKernel(config, testWallet);
         dagKernel.start();
 
         // Get components
@@ -100,6 +115,35 @@ public class DagChainIntegrationTest {
         accountManager.ensureAccountExists(senderAddress);
         accountManager.setBalance(senderAddress, UInt256.valueOf(10_000_000_000L)); // 10 XDAG
         accountManager.ensureAccountExists(receiverAddress);
+    }
+
+    /**
+     * Create a minimal test genesis.json file
+     */
+    private void createTestGenesisFile() throws IOException {
+        String genesisJson = "{\n" +
+                "  \"networkId\": \"test\",\n" +
+                "  \"chainId\": 999,\n" +
+                "  \"timestamp\": 1516406400,\n" +
+                "  \"initialDifficulty\": \"0x1000\",\n" +
+                "  \"epochLength\": 64,\n" +
+                "  \"extraData\": \"XDAG v5.1 Test Genesis\",\n" +
+                "  \"alloc\": {},\n" +
+                "  \"snapshot\": {\n" +
+                "    \"enabled\": false,\n" +
+                "    \"height\": 0,\n" +
+                "    \"hash\": \"0x0000000000000000000000000000000000000000000000000000000000000000\",\n" +
+                "    \"timestamp\": 0,\n" +
+                "    \"dataFile\": \"\",\n" +
+                "    \"verify\": false,\n" +
+                "    \"format\": \"v1\",\n" +
+                "    \"expectedAccounts\": 0,\n" +
+                "    \"expectedBlocks\": 0\n" +
+                "  }\n" +
+                "}";
+
+        Path genesisFile = tempDir.resolve("genesis.json");
+        Files.writeString(genesisFile, genesisJson);
     }
 
     @After

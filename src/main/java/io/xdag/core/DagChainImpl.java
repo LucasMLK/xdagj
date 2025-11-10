@@ -28,13 +28,10 @@ import static io.xdag.config.Constants.MAIN_CHAIN_PERIOD;
 import static io.xdag.config.Constants.MIN_GAS;
 
 import io.xdag.DagKernel;
-import io.xdag.Kernel;
 import io.xdag.crypto.keys.ECKeyPair;
-import io.xdag.db.BlockStore;
 import io.xdag.db.DagStore;
 import io.xdag.db.OrphanBlockStore;
 import io.xdag.db.TransactionStore;
-import io.xdag.db.rocksdb.DagStoreImpl;
 import io.xdag.db.store.DagEntityResolver;
 import io.xdag.db.store.ResolvedLinks;
 import io.xdag.listener.Listener;

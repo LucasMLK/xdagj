@@ -27,7 +27,7 @@ package io.xdag.cli;
 import static io.xdag.utils.BasicUtils.address2Hash;
 import static io.xdag.utils.BasicUtils.pubAddress2Hash;
 
-import io.xdag.Kernel;
+import io.xdag.DagKernel;
 import io.xdag.Wallet;
 import io.xdag.utils.BasicUtils;
 import io.xdag.utils.WalletUtils;
@@ -64,7 +64,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
     public static final String prompt = "xdag> ";
     public Map<String, CommandMethods> commandExecute = new HashMap<>();
     @Setter
-    private Kernel kernel;
+    private DagKernel dagKernel;
     private Commands commands;
     @Setter
     private LineReader reader;
@@ -111,7 +111,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
             }
 
             // Verify wallet password (required by v5.1 method)
-            Wallet wallet = new Wallet(kernel.getConfig());
+            Wallet wallet = new Wallet(dagKernel.getConfig());
             if (!wallet.unlock(readPassword())) {
                 println("The password is incorrect");
                 return;
@@ -154,7 +154,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
             }
 
             // Verify wallet password
-            Wallet wallet = new Wallet(kernel.getConfig());
+            Wallet wallet = new Wallet(dagKernel.getConfig());
             if (!wallet.unlock(readPassword())) {
                 println("The password is incorrect");
                 return;
@@ -458,7 +458,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
                 return;
             }
 
-            Wallet wallet = new Wallet(kernel.getConfig());
+            Wallet wallet = new Wallet(dagKernel.getConfig());
             if (!wallet.unlock(readPassword())) {
                 println("The password is incorrect");
                 return;
@@ -538,7 +538,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
             }
 
             // Verify wallet password
-            Wallet wallet = new Wallet(kernel.getConfig());
+            Wallet wallet = new Wallet(dagKernel.getConfig());
             if (!wallet.unlock(readPassword())) {
                 println("The password is incorrect");
                 return;
@@ -658,7 +658,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         } while (StringUtils.isEmpty(line));
 
         if (isTelnet) {
-            return line.equals(kernel.getConfig().getAdminSpec().getAdminTelnetPassword());
+            return line.equals(dagKernel.getConfig().getAdminSpec().getAdminTelnetPassword());
         }
 
         return true;
@@ -676,7 +676,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
     @Override
     public void shell(Terminal terminal, Map<String, String> environment) {
         if (commands == null) {
-            commands = new Commands(kernel);
+            commands = new Commands(dagKernel);
         }
         Parser parser = new DefaultParser();
         SystemRegistryImpl systemRegistry = new SystemRegistryImpl(parser, terminal, null, null);

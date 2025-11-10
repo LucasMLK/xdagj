@@ -23,91 +23,77 @@
  */
 package io.xdag.p2p.message;
 
+import io.xdag.core.ChainStats;
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.bytes.MutableBytes;
 
 /**
- * SyncEpochBlocksRequestMessage - Request all block hashes in an epoch
+ * BlockRequestMessage - Request a specific block by hash
  *
- * <p>Hybrid Sync Protocol - Epoch Blocks Request (0x21)
- *
- * <p><strong>Purpose</strong>:
- * Request all block hashes for a specific epoch. Used for Phase 2
- * (DAG Area Synchronization) of hybrid sync to get all candidate
- * blocks in an epoch.
+ * <p>This message is used to request a specific block from a peer,
+ * typically when a missing parent block is detected.
  *
  * <p><strong>Message Format</strong>:
  * <pre>
- * [8 bytes] epoch    - Epoch number (timestamp / 64)
+ * [32 bytes] hash              - Block hash to request
+ * [variable] chainStats        - Current chain statistics
  * </pre>
- *
- * <p><strong>Fields</strong>:
- * <ul>
- *   <li>{@code epoch}: Epoch number, calculated as timestamp / 64</li>
- * </ul>
- *
- * <p><strong>Epoch Definition</strong>:
- * <pre>
- * epoch = timestamp / 64
- * </pre>
- *
- * <p><strong>Typical Data Size</strong>:
- * <ul>
- *   <li>Average blocks per epoch: 10-50</li>
- *   <li>Each hash: 32 bytes</li>
- *   <li>Total response size: 320-1600 bytes</li>
- * </ul>
  *
  * <p><strong>Usage</strong>:
  * <pre>{@code
- * // Request all blocks in epoch 5000
- * SyncEpochBlocksRequestMessage request = new SyncEpochBlocksRequestMessage(5000);
+ * // Request a block by hash
+ * BlockRequestMessage request = new BlockRequestMessage(hash, chainStats);
  * channel.sendMessage(request);
  *
- * // Wait for reply
- * SyncEpochBlocksReplyMessage reply =
- *     channel.waitForResponse(SyncEpochBlocksReplyMessage.class);
- * List<Bytes32> hashes = reply.getHashes();
- *
- * // Filter for missing blocks
- * List<Bytes32> missingHashes = hashes.stream()
- *     .filter(hash -> !blockStore.hasBlock(hash))
- *     .collect(Collectors.toList());
+ * // Peer responds with NewBlockMessage or SyncBlockMessage
  * }</pre>
  *
- * @see SyncEpochBlocksReplyMessage for the response message
- * @see <a href="../../../../../HYBRID_SYNC_MESSAGES.md">Hybrid Sync Protocol</a>
- * @since v5.1 Phase 1.5
+ * @see NewBlockMessage for the typical response
+ * @since v5.1 Phase 7.3
  */
 @Getter
 @Setter
-public class SyncEpochBlocksRequestMessage extends Message {
+public class BlockRequestMessage extends Message {
 
     /**
-     * Epoch number (timestamp / 64)
+     * Hash of the requested block
      */
-    private long epoch;
+    private Bytes hash;
+
+    /**
+     * Current chain statistics (for peer synchronization)
+     */
+    private ChainStats chainStats;
 
     /**
      * Constructor for receiving message from network
      *
      * <p>Deserializes message body:
      * <ol>
-     *   <li>Read epoch (long, 8 bytes)</li>
+     *   <li>Read hash (32 bytes)</li>
+     *   <li>Read chainStats (variable size)</li>
      * </ol>
      *
      * @param body serialized message body
      * @throws IllegalArgumentException if deserialization fails
      */
-    public SyncEpochBlocksRequestMessage(byte[] body) {
-        super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REQUEST, SyncEpochBlocksReplyMessage.class);
+    public BlockRequestMessage(byte[] body) {
+        super(XdagMessageCode.BLOCK_REQUEST, NewBlockMessage.class);
 
         SimpleDecoder dec = new SimpleDecoder(body);
 
-        // Deserialize epoch
-        this.epoch = dec.readLong();
+        // Deserialize hash (32 bytes)
+        byte[] hashBytes = new byte[32];
+        dec.readBytes(hashBytes);
+        this.hash = Bytes32.wrap(hashBytes);
+
+        // Deserialize chain stats
+        this.chainStats = ChainStats.fromBytes(dec.readBytes());
 
         // Set body for reference
         this.body = body;
@@ -118,15 +104,18 @@ public class SyncEpochBlocksRequestMessage extends Message {
      *
      * <p>Serializes message:
      * <ol>
-     *   <li>Write epoch (long, 8 bytes)</li>
+     *   <li>Write hash (32 bytes)</li>
+     *   <li>Write chainStats (variable size)</li>
      * </ol>
      *
-     * @param epoch epoch number
+     * @param hash block hash to request
+     * @param chainStats current chain statistics
      */
-    public SyncEpochBlocksRequestMessage(long epoch) {
-        super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REQUEST, SyncEpochBlocksReplyMessage.class);
+    public BlockRequestMessage(MutableBytes hash, ChainStats chainStats) {
+        super(XdagMessageCode.BLOCK_REQUEST, NewBlockMessage.class);
 
-        this.epoch = epoch;
+        this.hash = Bytes32.wrap(hash);
+        this.chainStats = chainStats;
 
         // Serialize message body
         SimpleEncoder enc = new SimpleEncoder();
@@ -134,17 +123,29 @@ public class SyncEpochBlocksRequestMessage extends Message {
         this.body = enc.toBytes();
     }
 
+    /**
+     * Encode message to bytes
+     *
+     * <p>Format:
+     * [32 bytes hash] + [variable chainStats]
+     *
+     * @return encoder with serialized data
+     */
+
     @Override
     public void encode(SimpleEncoder enc) {
-        // Serialize epoch
-        enc.writeLong(epoch);
+        // Serialize hash (32 bytes)
+        enc.write(hash.toArray());
+
+        // Serialize chain stats
+        enc.writeBytes(chainStats.toBytes());
     }
 
     @Override
     public String toString() {
         return String.format(
-            "SyncEpochBlocksRequestMessage[epoch=%d, size=%d bytes]",
-            epoch,
+            "BlockRequestMessage[hash=%s, size=%d bytes]",
+            hash != null ? hash.toHexString().substring(0, 16) + "..." : "null",
             body != null ? body.length : 0
         );
     }

@@ -35,9 +35,7 @@ import io.xdag.config.spec.RandomxSpec;
 import io.xdag.config.spec.SnapshotSpec;
 import io.xdag.config.spec.WalletSpec;
 import io.xdag.core.XAmount;
-import io.xdag.net.Capability;
-import io.xdag.net.CapabilityTreeSet;
-import io.xdag.net.message.MessageCode;
+import io.xdag.p2p.message.XdagMessageCode;
 import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.Collections;
@@ -85,9 +83,9 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     protected int netChannelIdleTimeout = 2 * 60 * 1000;
 
     // Prioritized network messages (Phase 7.3.0: Updated to Block messages)
-    protected Set<MessageCode> netPrioritizedMessages = new HashSet<>(Arrays.asList(
-            MessageCode.NEW_BLOCK,  // Phase 7.3.0: Changed from NEW_BLOCK
-            MessageCode.BLOCK_REQUEST));
+    protected Set<XdagMessageCode> netPrioritizedMessages = new HashSet<>(Arrays.asList(
+            XdagMessageCode.NEW_BLOCK,  // Phase 7.3.0: Changed from NEW_BLOCK
+            XdagMessageCode.BLOCK_REQUEST));
 
     // Node configuration
     protected String nodeIp;
@@ -204,7 +202,7 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     }
 
     @Override
-    public Set<MessageCode> getNetPrioritizedMessages() {
+    public Set<XdagMessageCode> getNetPrioritizedMessages() {
         return this.netPrioritizedMessages;
     }
 
@@ -410,6 +408,26 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     @Override
     public boolean getEnableGenerateBlock() {
         return enableGenerateBlock;
+    }
+
+    @Override
+    public long getXdagEra() {
+        return xdagEra;
+    }
+
+    @Override
+    public XAmount getMainStartAmount() {
+        return mainStartAmount;
+    }
+
+    @Override
+    public long getApolloForkHeight() {
+        return apolloForkHeight;
+    }
+
+    @Override
+    public XAmount getApolloForkAmount() {
+        return apolloForkAmount;
     }
 
     @Override

@@ -21,10 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.net.message.consensus;
+package io.xdag.p2p.message;
 
-import io.xdag.net.message.MessageCode;
-import io.xdag.p2p.message.Message;
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
 import lombok.Getter;
@@ -127,7 +125,7 @@ public class SyncEpochBlocksReplyMessage extends Message {
      * @throws IllegalArgumentException if deserialization fails
      */
     public SyncEpochBlocksReplyMessage(byte[] body) {
-        super(MessageCode.SYNC_EPOCH_BLOCKS_REPLY, null);
+        super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REPLY, null);
 
         SimpleDecoder dec = new SimpleDecoder(body);
 
@@ -163,27 +161,19 @@ public class SyncEpochBlocksReplyMessage extends Message {
      * @param hashes list of block hashes in this epoch
      */
     public SyncEpochBlocksReplyMessage(long epoch, List<Bytes32> hashes) {
-        super(MessageCode.SYNC_EPOCH_BLOCKS_REPLY, null);
+        super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REPLY, null);
 
         this.epoch = epoch;
         this.hashes = hashes;
 
         // Serialize message body
-        SimpleEncoder enc = encode();
+        SimpleEncoder enc = new SimpleEncoder();
+        encode(enc);
         this.body = enc.toBytes();
     }
 
-    /**
-     * Encode message to bytes
-     *
-     * <p>Format:
-     * [8 bytes epoch] + [4 bytes hashCount] + [32 bytes per hash]
-     *
-     * @return encoder with serialized data
-     */
-    private SimpleEncoder encode() {
-        SimpleEncoder enc = new SimpleEncoder();
-
+    @Override
+    public void encode(SimpleEncoder enc) {
         // Serialize epoch
         enc.writeLong(epoch);
 
@@ -194,8 +184,6 @@ public class SyncEpochBlocksReplyMessage extends Message {
         for (Bytes32 hash : hashes) {
             enc.write(hash.toArray());
         }
-
-        return enc;
     }
 
     @Override

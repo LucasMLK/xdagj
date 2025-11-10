@@ -39,27 +39,25 @@ import static io.xdag.utils.BasicUtils.hash2Address;
 import static io.xdag.utils.BasicUtils.hash2byte;
 import static io.xdag.utils.BasicUtils.keyPair2Hash;
 import static io.xdag.utils.BasicUtils.pubAddress2Hash;
-import static io.xdag.utils.BasicUtils.xdagHashRate;
 import static io.xdag.utils.WalletUtils.checkAddress;
 import static io.xdag.utils.WalletUtils.fromBase58;
 
 import com.google.common.collect.Lists;
-import io.xdag.Kernel;
+import io.xdag.DagKernel;
 import io.xdag.core.BlockHeader;
 import io.xdag.core.BlockInfo;
 import io.xdag.core.Block;
 import io.xdag.core.ChainStats;
-import io.xdag.core.ImportResult;
+import io.xdag.core.DagImportResult;
 import io.xdag.core.Link;
 import io.xdag.core.Transaction;
 import io.xdag.core.XAmount;
 import io.xdag.core.XUnit;
-import io.xdag.core.XdagState;
 import io.xdag.crypto.encoding.Base58;
 import io.xdag.crypto.exception.AddressFormatException;
 import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.keys.ECKeyPair;
-import io.xdag.net.Channel;
+import io.xdag.p2p.channel.Channel;
 import io.xdag.pool.ChannelSupervise;
 import io.xdag.utils.XdagTime;
 import java.math.BigDecimal;
@@ -87,7 +85,7 @@ import org.bouncycastle.util.encoders.Hex;
 @Slf4j
 public class Commands {
 
-    private final Kernel kernel;
+    private final DagKernel dagKernel;
 
     // Block state string constants (Phase 7.1: Replacing BlockState enum)
     private static final String MAIN_STATE = "Main";
@@ -95,8 +93,99 @@ public class Commands {
     private static final String REJECTED_STATE = "Rejected";
     private static final String PENDING_STATE = "Pending";
 
-    public Commands(Kernel kernel) {
-        this.kernel = kernel;
+    public Commands(DagKernel dagKernel) {
+        this.dagKernel = dagKernel;
+    }
+
+    // ========== v5.1 AccountStore Helper Methods ==========
+
+    /**
+     * Convert XAmount to UInt256 for AccountStore
+     */
+    private static UInt256 xAmountToUInt256(XAmount amount) {
+        // XAmount stores nano units (1 XDAG = 10^9 nano)
+        // UInt256 stores wei units (1 XDAG = 10^9 wei)
+        return UInt256.valueOf(amount.toXAmount().toLong());
+    }
+
+    /**
+     * Convert UInt256 to XAmount for display
+     */
+    private static XAmount uint256ToXAmount(UInt256 balance) {
+        // Convert from wei to nano units
+        return XAmount.ofXAmount(balance.toLong());
+    }
+
+    /**
+     * Get account balance from AccountStore with XAmount conversion
+     */
+    private XAmount getAccountBalance(Bytes32 address) {
+        UInt256 balance = dagKernel.getAccountStore().getBalance(address);
+        return uint256ToXAmount(balance);
+    }
+
+    /**
+     * Get account nonce from AccountStore
+     */
+    private long getAccountNonce(Bytes32 address) {
+        return dagKernel.getAccountStore().getNonce(address).toLong();
+    }
+
+    /**
+     * Update account nonce in AccountStore
+     */
+    private void updateAccountNonce(Bytes32 address, long nonce) {
+        dagKernel.getAccountStore().setNonce(address, UInt64.valueOf(nonce));
+    }
+
+    /**
+     * List addresses, balances and nonces (v5.1 implementation)
+     *
+     * Phase 8.1: Restored using v5.1 AccountStore.
+     * Shows account addresses with balances and transaction nonces.
+     *
+     * v5.1 Simplifications:
+     * - Uses AccountStore.getBalance() for account balances
+     * - Uses AccountStore.getNonce() instead of txQuantity
+     * - No longer shows "Confirmed TX Quantity" (simplified in v5.1)
+     *
+     * @param num Number of addresses to display
+     * @return Formatted account list
+     */
+    public String account(int num) {
+        StringBuilder str = new StringBuilder();
+        List<ECKeyPair> list = dagKernel.getWallet().getAccounts();
+
+        // Sort by balance descending
+        list.sort((o1, o2) -> {
+            Bytes32 addr1 = Bytes32.wrap(toBytesAddress(o1).toArray());
+            Bytes32 addr2 = Bytes32.wrap(toBytesAddress(o2).toArray());
+            XAmount balance1 = getAccountBalance(addr1);
+            XAmount balance2 = getAccountBalance(addr2);
+            return balance2.compareTo(balance1); // Descending order
+        });
+
+        for (ECKeyPair keyPair : list) {
+            if (num == 0) {
+                break;
+            }
+
+            Bytes32 addr = Bytes32.wrap(toBytesAddress(keyPair).toArray());
+            XAmount balance = getAccountBalance(addr);
+            long nonce = getAccountNonce(addr);
+
+            str.append(AddressUtils.toBase58Address(keyPair))
+                    .append(" ")
+                    .append(balance.toDecimal(9, XUnit.XDAG).toPlainString())
+                    .append(" XDAG")
+                    .append("  [Nonce: ")
+                    .append(nonce)
+                    .append("]")
+                    .append("\n");
+            num--;
+        }
+
+        return str.toString();
     }
 
     /**
@@ -231,49 +320,49 @@ public class Commands {
         return PENDING_STATE;
     }
 
-    /**
-     * List addresses, balances and current transaction quantity
-     * @param num Number of addresses to display
-     */
-    public String account(int num) {
-        StringBuilder str = new StringBuilder();
-        List<ECKeyPair> list = kernel.getWallet().getAccounts();
-
-        // Sort by balance descending, then by key index descending
-        list.sort((o1, o2) -> {
-            int compareResult = compareAmountTo(kernel.getAddressStore().getBalanceByAddress(toBytesAddress(o2).toArray()),
-                    kernel.getAddressStore().getBalanceByAddress(toBytesAddress(o1).toArray()));
-            if (compareResult >= 0) {
-                return 1;
-            } else {
-                return -1;
-            }
-
-        });
-
-        for (ECKeyPair keyPair : list) {
-            if (num == 0) {
-                break;
-            }
-
-            UInt64 txQuantity = kernel.getAddressStore().getTxQuantity(toBytesAddress(keyPair).toArray());
-            UInt64 exeTxNonceNum = kernel.getAddressStore().getExecutedNonceNum(toBytesAddress(keyPair).toArray());
-
-            str.append(AddressUtils.toBase58Address(keyPair))
-                    .append(" ")
-                    .append(kernel.getAddressStore().getBalanceByAddress(toBytesAddress(keyPair).toArray()).toDecimal(9, XUnit.XDAG).toPlainString())
-                    .append(" XDAG")
-                    .append("  [Current TX Quantity: ")
-                    .append(txQuantity.toUInt64())
-                    .append(", Confirmed TX Quantity: ")
-                    .append(exeTxNonceNum.toUInt64())
-                    .append("]")
-                    .append("\n");
-            num--;
-        }
-
-        return str.toString();
-    }
+//    /**
+//     * List addresses, balances and current transaction quantity
+//     * @param num Number of addresses to display
+//     */
+//    public String account(int num) {
+//        StringBuilder str = new StringBuilder();
+//        List<ECKeyPair> list = dagKernel.getWallet().getAccounts();
+//
+//        // Sort by balance descending, then by key index descending
+//        list.sort((o1, o2) -> {
+//            int compareResult = compareAmountTo(dagKernel.getAddressStore().getBalanceByAddress(toBytesAddress(o2).toArray()),
+//                dagKernel.getAddressStore().getBalanceByAddress(toBytesAddress(o1).toArray()));
+//            if (compareResult >= 0) {
+//                return 1;
+//            } else {
+//                return -1;
+//            }
+//
+//        });
+//
+//        for (ECKeyPair keyPair : list) {
+//            if (num == 0) {
+//                break;
+//            }
+//
+//            UInt64 txQuantity = dagKernel.getAddressStore().getTxQuantity(toBytesAddress(keyPair).toArray());
+//            UInt64 exeTxNonceNum = dagKernel.getAddressStore().getExecutedNonceNum(toBytesAddress(keyPair).toArray());
+//
+//            str.append(AddressUtils.toBase58Address(keyPair))
+//                    .append(" ")
+//                    .append(dagKernel.getAddressStore().getBalanceByAddress(toBytesAddress(keyPair).toArray()).toDecimal(9, XUnit.XDAG).toPlainString())
+//                    .append(" XDAG")
+//                    .append("  [Current TX Quantity: ")
+//                    .append(txQuantity.toUInt64())
+//                    .append(", Confirmed TX Quantity: ")
+//                    .append(exeTxNonceNum.toUInt64())
+//                    .append("]")
+//                    .append("\n");
+//            num--;
+//        }
+//
+//        return str.toString();
+//    }
 
     /**
      * Get balance for address (Phase 8.1: Fully restored using Transaction APIs)
@@ -288,18 +377,20 @@ public class Commands {
      */
     public String balance(String address) throws AddressFormatException {
         if (StringUtils.isEmpty(address)) {
-            // Account balance lookup (unchanged from v1)
+            // Account balance lookup (v5.1: Using AccountStore)
             XAmount ourBalance = XAmount.ZERO;
-            List<ECKeyPair> list = kernel.getWallet().getAccounts();
+            List<ECKeyPair> list = dagKernel.getWallet().getAccounts();
             for (ECKeyPair k : list) {
-                ourBalance = ourBalance.add(kernel.getAddressStore().getBalanceByAddress(toBytesAddress(k).toArray()));
+                Bytes32 addr = Bytes32.wrap(toBytesAddress(k).toArray());
+                ourBalance = ourBalance.add(getAccountBalance(addr));
             }
             return String.format("Balance: %s XDAG", ourBalance.toDecimal(9, XUnit.XDAG).toPlainString());
         } else {
             // Check if it's an account address or block address
             if (checkAddress(address)) {
                 // Account address (Base58 format)
-                XAmount balance = kernel.getAddressStore().getBalanceByAddress(fromBase58(address).toArray());
+                Bytes32 addr = Bytes32.wrap(fromBase58(address).toArray());
+                XAmount balance = getAccountBalance(addr);
                 return String.format("Account balance: %s XDAG", balance.toDecimal(9, XUnit.XDAG).toPlainString());
             } else {
                 // Block address - calculate balance from Transactions
@@ -315,13 +406,13 @@ public class Commands {
                 }
 
                 // Get Block
-                Block block = kernel.getBlockchain().getBlockByHash(hash, false);
+                Block block = dagKernel.getDagChain().getBlockByHash(hash, false);
                 if (block == null) {
                     return "Block not found";
                 }
 
                 // v5.1: Calculate balance from Transactions
-                List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByBlock(hash);
+                List<Transaction> transactions = dagKernel.getTransactionStore().getTransactionsByBlock(hash);
                 XAmount totalAmount = XAmount.ZERO;
 
                 for (Transaction tx : transactions) {
@@ -338,56 +429,127 @@ public class Commands {
 
     public String txQuantity(String address) throws AddressFormatException {
         if (StringUtils.isEmpty(address)) {
-            UInt64 ourTxQuantity = UInt64.ZERO;
-            UInt64 exeTxQuantit = UInt64.ZERO;
-            List<ECKeyPair> list = kernel.getWallet().getAccounts();
+            // v5.1: Using nonce from AccountStore (replaces txQuantity)
+            long totalNonce = 0;
+            List<ECKeyPair> list = dagKernel.getWallet().getAccounts();
             for (ECKeyPair key : list) {
-                ourTxQuantity = ourTxQuantity.add(kernel.getAddressStore().getTxQuantity(toBytesAddress(key).toArray()));
-                exeTxQuantit = exeTxQuantit.add(kernel.getAddressStore().getExecutedNonceNum(toBytesAddress(key).toArray()));
+                Bytes32 addr = Bytes32.wrap(toBytesAddress(key).toArray());
+                totalNonce += getAccountNonce(addr);
             }
-            return String.format("Current Transaction Quantity: %s, executed Transaction Quantity: %s \n", ourTxQuantity.toLong(), exeTxQuantit.toLong());
+            return String.format("Total Transaction Nonce: %d\n", totalNonce);
         } else {
-            UInt64 addressTxQuantity = UInt64.ZERO;
-            UInt64 addressExeTxQuantity = UInt64.ZERO;
             if (checkAddress(address)) {
-                addressTxQuantity = addressTxQuantity.add(kernel.getAddressStore().getTxQuantity(fromBase58(address).toArray()));
-                addressExeTxQuantity = addressExeTxQuantity.add(kernel.getAddressStore().getExecutedNonceNum(fromBase58(address).toArray()));
-                return String.format("Current Transaction Quantity: %s, executed Transaction Quantity: %s \n", addressTxQuantity.toLong(), addressExeTxQuantity.toLong());
+                // v5.1: Get nonce for account address
+                Bytes32 addr = Bytes32.wrap(fromBase58(address).toArray());
+                long nonce = getAccountNonce(addr);
+                return String.format("Transaction Nonce: %d\n", nonce);
             } else {
                 return "The account address format is incorrect! \n";
             }
         }
     }
 
+//    /**
+//     * Get current blockchain stats
+//     */
+//    public String stats() {
+//        // Phase 7.3: Use ChainStats directly (XdagStats deleted)
+//        // Phase 7.3.1: XdagTopStatus merged into ChainStats (deleted)
+//        ChainStats chainStats = dagKernel.getDagChain().getChainStats();
+//
+//        // Calculate difficulties
+//        BigInteger currentDiff = chainStats.getTopDifficulty() != null ? chainStats.getTopDifficulty().toBigInteger() : BigInteger.ZERO;
+//        BigInteger netDiff = chainStats.getMaxDifficulty().toBigInteger();
+//        BigInteger maxDiff = netDiff.max(currentDiff);
+//
+//        // Get finalized store statistics (Phase 2 refactor)
+//        String finalizedStats = "";
+//        if (dagKernel.getFinalizedBlockStore() != null) {
+//            long totalBlocks = dagKernel.getFinalizedBlockStore().getTotalBlockCount();
+//            long totalMain = dagKernel.getFinalizedBlockStore().getTotalMainBlockCount();
+//            long storageSize = dagKernel.getFinalizedBlockStore().getStorageSize();
+//
+//            finalizedStats = String.format("""
+//
+//                            Finalized Storage:
+//                         finalized blocks: %d
+//                           finalized main: %d
+//                          storage size MB: %d""",
+//                    totalBlocks,
+//                    totalMain,
+//                    storageSize / (1024 * 1024));
+//        }
+//
+//        return String.format("""
+//                        Statistics for ours and maximum known parameters:
+//                                    hosts: %d of %d
+//                                   blocks: %d of %d
+//                              main blocks: %d of %d
+//                             extra blocks: %d
+//                            orphan blocks: %d
+//                         wait sync blocks: %d
+//                         chain difficulty: %s of %s
+//                              XDAG supply: %s of %s
+//                          XDAG in address: %s
+//                        4 hr hashrate KHs: %.9f of %.9f
+//                        Number of Address: %d%s""",
+//                dagKernel.getNetDB().getSize(), kernel.getNetDBMgr().getWhiteDB().getSize(),
+//                chainStats.getTotalBlockCount(), Math.max(chainStats.getTotalBlockCount(), chainStats.getTotalBlockCount()),
+//                chainStats.getMainBlockCount(), Math.max(chainStats.getTotalMainBlockCount(), chainStats.getMainBlockCount()),
+//                chainStats.getExtraCount(),
+//                chainStats.getNoRefCount(),
+//                chainStats.getWaitingSyncCount(),
+//                currentDiff.toString(16),
+//                maxDiff.toString(16),
+//                kernel.getBlockchain().getSupply(chainStats.getMainBlockCount()).toDecimal(9, XUnit.XDAG).toPlainString(),
+//                kernel.getBlockchain().getSupply(Math.max(chainStats.getMainBlockCount(), chainStats.getTotalMainBlockCount())).toDecimal(9, XUnit.XDAG).toPlainString(),
+//                kernel.getAddressStore().getAllBalance().toDecimal(9, XUnit.XDAG).toPlainString(),
+//                kernel.getAddressStore().getAddressSize().toLong(),
+//                finalizedStats
+//        );
+//    }
+
     /**
-     * Get current blockchain stats
+     * Get current blockchain statistics (v5.1 implementation)
+     *
+     * Phase 8.1: Restored using v5.1 ChainStats.
+     * Shows comprehensive blockchain statistics.
+     *
+     * v5.1 Simplifications:
+     * - Uses ChainStats for all chain metrics
+     * - P2P statistics temporarily unavailable (pending P2pService implementation)
+     * - Finalized block statistics temporarily unavailable (pending implementation)
+     * - Supply calculation temporarily unavailable (pending implementation)
+     * - Shows available metrics: blocks, difficulty, orphans, sync status
+     *
+     * @return Formatted statistics string
      */
     public String stats() {
-        // Phase 7.3: Use ChainStats directly (XdagStats deleted)
-        // Phase 7.3.1: XdagTopStatus merged into ChainStats (deleted)
-        ChainStats chainStats = kernel.getBlockchain().getChainStats();
+        ChainStats chainStats = dagKernel.getDagChain().getChainStats();
 
         // Calculate difficulties
-        BigInteger currentDiff = chainStats.getTopDifficulty() != null ? chainStats.getTopDifficulty().toBigInteger() : BigInteger.ZERO;
-        BigInteger netDiff = chainStats.getMaxDifficulty().toBigInteger();
-        BigInteger maxDiff = netDiff.max(currentDiff);
+        UInt256 currentDiff = chainStats.getTopDifficulty() != null ?
+                chainStats.getTopDifficulty() : UInt256.ZERO;
+        UInt256 netDiff = chainStats.getMaxDifficulty();
+        UInt256 maxDiff = netDiff.compareTo(currentDiff) > 0 ? netDiff : currentDiff;
 
-        // Get finalized store statistics (Phase 2 refactor)
-        String finalizedStats = "";
-        if (kernel.getFinalizedBlockStore() != null) {
-            long totalBlocks = kernel.getFinalizedBlockStore().getTotalBlockCount();
-            long totalMain = kernel.getFinalizedBlockStore().getTotalMainBlockCount();
-            long storageSize = kernel.getFinalizedBlockStore().getStorageSize();
+        // Get P2P statistics (v5.1: Using P2pService if available)
+        int connectedHosts = 0;
+        int totalHosts = chainStats.getTotalHostCount();
+        if (dagKernel.getP2pService() != null) {
+            // TODO: Implement P2pService.getActiveChannelCount()
+            // connectedHosts = dagKernel.getP2pService().getActiveChannelCount();
+            connectedHosts = 0; // Placeholder
+        }
 
-            finalizedStats = String.format("""
-
-                            Finalized Storage:
-                         finalized blocks: %d
-                           finalized main: %d
-                          storage size MB: %d""",
-                    totalBlocks,
-                    totalMain,
-                    storageSize / (1024 * 1024));
+        // Get account balance totals (v5.1: Using AccountStore)
+        XAmount totalBalance = XAmount.ZERO;
+        int accountCount = 0;
+        List<ECKeyPair> accounts = dagKernel.getWallet().getAccounts();
+        for (ECKeyPair account : accounts) {
+            Bytes32 addr = Bytes32.wrap(toBytesAddress(account).toArray());
+            totalBalance = totalBalance.add(getAccountBalance(addr));
+            accountCount++;
         }
 
         return String.format("""
@@ -399,31 +561,33 @@ public class Commands {
                             orphan blocks: %d
                          wait sync blocks: %d
                          chain difficulty: %s of %s
-                              XDAG supply: %s of %s
-                          XDAG in address: %s
-                        4 hr hashrate KHs: %.9f of %.9f
-                        Number of Address: %d%s""",
-                kernel.getNetDB().getSize(), kernel.getNetDBMgr().getWhiteDB().getSize(),
+                          XDAG in wallets: %s
+                        Number of wallets: %d
+                              Sync status: %.1f%%""",
+                connectedHosts, totalHosts,
                 chainStats.getTotalBlockCount(), Math.max(chainStats.getTotalBlockCount(), chainStats.getTotalBlockCount()),
                 chainStats.getMainBlockCount(), Math.max(chainStats.getTotalMainBlockCount(), chainStats.getMainBlockCount()),
                 chainStats.getExtraCount(),
                 chainStats.getNoRefCount(),
                 chainStats.getWaitingSyncCount(),
-                currentDiff.toString(16),
-                maxDiff.toString(16),
-                kernel.getBlockchain().getSupply(chainStats.getMainBlockCount()).toDecimal(9, XUnit.XDAG).toPlainString(),
-                kernel.getBlockchain().getSupply(Math.max(chainStats.getMainBlockCount(), chainStats.getTotalMainBlockCount())).toDecimal(9, XUnit.XDAG).toPlainString(),
-                kernel.getAddressStore().getAllBalance().toDecimal(9, XUnit.XDAG).toPlainString(),
-                kernel.getAddressStore().getAddressSize().toLong(),
-                finalizedStats
+                currentDiff.toHexString(),
+                maxDiff.toHexString(),
+                totalBalance.toDecimal(9, XUnit.XDAG).toPlainString(),
+                accountCount,
+                chainStats.getSyncProgress()
         );
     }
 
     /**
-     * Connect to remote node
+     * Connect to remote node (v5.1: Using P2pService)
      */
     public void connect(String server, int port) {
-        kernel.getNodeMgr().doConnect(server, port);
+        if (dagKernel.getP2pService() != null) {
+            // TODO: Implement P2pService connect method
+            log.warn("P2P connect not yet implemented in v5.1");
+        } else {
+            log.warn("P2pService not available");
+        }
     }
 
     /**
@@ -437,7 +601,7 @@ public class Commands {
      */
     public String block(Bytes32 blockhash) {
         try {
-            Block block = kernel.getBlockchain().getBlockByHash(blockhash, true);
+            Block block = dagKernel.getDagChain().getBlockByHash(blockhash, true);
             if (block == null) {
                 return "Block not found";
             }
@@ -585,7 +749,7 @@ public class Commands {
      * @return Formatted list of main blocks
      */
     public String mainblocks(int n) {
-        List<Block> blockList = kernel.getBlockchain().listMainBlocks(n);
+        List<Block> blockList = dagKernel.getDagChain().listMainBlocks(n);
 
         if (CollectionUtils.isEmpty(blockList)) {
             return "empty";
@@ -605,7 +769,7 @@ public class Commands {
      * @return Formatted list of mined blocks
      */
     public String minedBlocks(int n) {
-        List<Block> blockList = kernel.getBlockchain().listMinedBlocks(n);
+        List<Block> blockList = dagKernel.getDagChain().listMinedBlocks(n);
 
         if (CollectionUtils.isEmpty(blockList)) {
             return "empty";
@@ -620,7 +784,7 @@ public class Commands {
      */
     public void run() {
         try {
-            kernel.testStart();
+            dagKernel.start();
         } catch (Exception e) {
             log.error(e.getMessage(), e);
         }
@@ -630,79 +794,84 @@ public class Commands {
      * Stop test mode
      */
     public void stop() {
-        kernel.testStop();
+      dagKernel.stop();
     }
 
     /**
-     * List active connections
+     * List active connections (v5.1: Using P2pService)
      */
     public String listConnect() {
-        List<Channel> channelList = kernel.getChannelMgr().getActiveChannels();
-        StringBuilder stringBuilder = new StringBuilder();
-        for (Channel channel : channelList) {
-            stringBuilder.append(channel).append(" ")
-                    .append(System.lineSeparator());
+        if (dagKernel.getP2pService() != null) {
+            // TODO: Implement P2pService channel list
+            return "P2P channel listing not yet implemented in v5.1";
+        } else {
+            return "P2pService not available";
         }
-
-        return stringBuilder.toString();
     }
 
     /**
-     * Show websocket channel pool
+     * Show websocket channel pool (v5.1: Mining pool disabled)
      */
     public String pool() {
-        return ChannelSupervise.showChannel();
+        // TODO: Re-implement pool functionality in v5.1
+        return "Mining pool functionality temporarily disabled in v5.1\n" +
+               "Will be re-implemented in future version";
     }
 
     /**
-     * Generate new key pair
+     * Generate new key pair (v5.1: Simplified without XdagState)
      */
     public String keygen() {
-        kernel.getXdagState().tempSet(XdagState.KEYS);
-        kernel.getWallet().addAccountRandom();
-
-        kernel.getWallet().flush();
-        int size = kernel.getWallet().getAccounts().size();
-        kernel.getXdagState().rollback();
-        return "Key " + (size - 1) + " generated and set as default,now key size is:" + size;
+        dagKernel.getWallet().addAccountRandom();
+        dagKernel.getWallet().flush();
+        int size = dagKernel.getWallet().getAccounts().size();
+        return "Key " + (size - 1) + " generated and set as default, now key size is: " + size;
     }
 
     /**
-     * Get current XDAG state
+     * Get current XDAG state (v5.1: Using DagChain stats)
      */
     public String state() {
-        return kernel.getXdagState().toString();
+        ChainStats stats = dagKernel.getDagChain().getChainStats();
+        return String.format("XDAG State (v5.1):\n" +
+                "  Main Blocks: %d\n" +
+                "  Total Blocks: %d\n" +
+                "  Difficulty: %s\n" +
+                "  Orphans: %d\n" +
+                "  Waiting Sync: %d",
+                stats.getMainBlockCount(),
+                stats.getTotalBlockCount(),
+                stats.getDifficulty().toHexString(),
+                stats.getNoRefCount(),
+                stats.getWaitingSyncCount());
     }
 
     /**
      * Get maximum transferable balance
      */
     public String balanceMaxXfer() {
-        return getBalanceMaxXfer(kernel);
+        return getBalanceMaxXfer(dagKernel);
     }
 
     /**
-     * Calculate maximum transferable balance (Phase 8.1: Restored using AddressStore)
+     * Calculate maximum transferable balance (Phase 8.1: Using AccountStore)
      *
-     * Phase 8.1: Simplified v5.1 implementation using address balances.
+     * v5.1: Simplified implementation using account balances from AccountStore.
      * In v5.1, balances are tracked by addresses (not blocks), so we sum
-     * confirmed address balances instead of iterating block balances.
+     * confirmed address balances directly.
      *
-     * Note: AddressStore already handles balance confirmation logic,
-     * so we don't need to check block timestamps manually.
-     *
-     * @param kernel Kernel instance
+     * @param dagKernel Kernel instance
      * @return Formatted maximum transferable balance
      */
-    public static String getBalanceMaxXfer(Kernel kernel) {
-        // v5.1: Sum up all account balances (already confirmed by AddressStore)
+    public static String getBalanceMaxXfer(DagKernel dagKernel) {
+        // v5.1: Sum up all account balances
         XAmount totalBalance = XAmount.ZERO;
-        List<ECKeyPair> accounts = kernel.getWallet().getAccounts();
+        List<ECKeyPair> accounts = dagKernel.getWallet().getAccounts();
 
         for (ECKeyPair account : accounts) {
-            byte[] addressBytes = toBytesAddress(account).toArray();
-            XAmount balance = kernel.getAddressStore().getBalanceByAddress(addressBytes);
-            totalBalance = totalBalance.add(balance);
+            Bytes32 address = Bytes32.wrap(toBytesAddress(account).toArray());
+            UInt256 balance = dagKernel.getAccountStore().getBalance(address);
+            totalBalance = totalBalance.add(uint256ToXAmount(balance));
         }
 
         return String.format("%s", totalBalance.toDecimal(9, XUnit.XDAG).toPlainString());
@@ -722,16 +891,15 @@ public class Commands {
      * @return Formatted transaction history
      */
     public String address(Bytes32 wrap, int page) {
-        // Get address balance
-        byte[] addressBytes = hash2byte(wrap.mutableCopy()).toArray();
-        XAmount balance = kernel.getAddressStore().getBalanceByAddress(addressBytes);
+        // Get address balance (v5.1: Using AccountStore)
+        XAmount balance = getAccountBalance(wrap);
 
         String overview = " OverView\n" +
-                String.format(" address: %s\n", Base58.encodeCheck(addressBytes)) +
+                String.format(" address: %s\n", Base58.encodeCheck(hash2byte(wrap.mutableCopy()).toArray())) +
                 String.format(" balance: %s\n", balance.toDecimal(9, XUnit.XDAG).toPlainString());
 
         // Get transaction history
-        List<Transaction> transactions = kernel.getTransactionStore().getTransactionsByAddress(wrap);
+        List<Transaction> transactions = dagKernel.getTransactionStore().getTransactionsByAddress(wrap);
 
         if (transactions.isEmpty()) {
             return overview + "\nNo transaction history found.";
@@ -757,9 +925,9 @@ public class Commands {
 
             // Phase 9.1: Get transaction timestamp from containing block
             String timeStr = "";
-            Bytes32 blockHash = kernel.getTransactionStore().getBlockByTransaction(tx.getHash());
+            Bytes32 blockHash = dagKernel.getTransactionStore().getBlockByTransaction(tx.getHash());
             if (blockHash != null) {
-                Block block = kernel.getBlockchain().getBlockByHash(blockHash, false);
+                Block block = dagKernel.getDagChain().getBlockByHash(blockHash, false);
                 if (block != null) {
                     long timestamp = XdagTime.xdagTimestampToMs(block.getTimestamp());
                     timeStr = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(timestamp);
@@ -786,31 +954,25 @@ public class Commands {
 
 
     /**
-     * Get block finalization service statistics (Phase 3)
+     * Get block finalization service statistics (v5.1: Not available)
      *
      * @return Finalization statistics string
      */
     public String finalizeStats() {
-        if (kernel.getBlockFinalizationService() == null) {
-            return "Block Finalization Service is not running.";
-        }
-
-        return kernel.getBlockFinalizationService().getStatistics();
+        // TODO: Re-implement block finalization in v5.1
+        return "Block Finalization Service not available in v5.1\n" +
+               "Will be re-implemented in future version";
     }
 
     /**
-     * Manually trigger block finalization (Phase 3)
-     * For administrative or testing purposes
+     * Manually trigger block finalization (v5.1: Not available)
      *
      * @return Number of blocks finalized
      */
     public String manualFinalize() {
-        if (kernel.getBlockFinalizationService() == null) {
-            return "Block Finalization Service is not running.";
-        }
-
-        long count = kernel.getBlockFinalizationService().manualFinalize();
-        return String.format("Manual finalization completed. %d blocks finalized.", count);
+        // TODO: Re-implement block finalization in v5.1
+        return "Block Finalization Service not available in v5.1\n" +
+               "Will be re-implemented in future version";
     }
 
     // ========== Phase 4 Layer 3: v5.1 Transaction Methods ==========
@@ -875,21 +1037,20 @@ public class Commands {
                 return "Invalid recipient address format.";
             }
 
-            // Find account with sufficient balance
+            // Find account with sufficient balance (v5.1: Using AccountStore)
             ECKeyPair fromAccount = null;
             Bytes32 fromAddress = null;
             long currentNonce = 0;
 
-            for (ECKeyPair account : kernel.getWallet().getAccounts()) {
-                byte[] addr = toBytesAddress(account).toArray();
-                XAmount balance = kernel.getAddressStore().getBalanceByAddress(addr);
+            for (ECKeyPair account : dagKernel.getWallet().getAccounts()) {
+                Bytes32 addr = Bytes32.wrap(toBytesAddress(account).toArray());
+                XAmount balance = getAccountBalance(addr);
 
                 if (balance.compareTo(totalRequired) >= 0) {
                     fromAccount = account;
                     fromAddress = keyPair2Hash(account);
-                    // Get current nonce
-                    UInt64 txQuantity = kernel.getAddressStore().getTxQuantity(addr);
-                    currentNonce = txQuantity.toLong() + 1;
+                    // Get current nonce (v5.1: Using AccountStore)
+                    currentNonce = getAccountNonce(addr) + 1;
                     break;
                 }
             }
@@ -928,7 +1089,7 @@ public class Commands {
             }
 
             // Save Transaction to TransactionStore
-            kernel.getTransactionStore().saveTransaction(signedTx);
+            dagKernel.getTransactionStore().saveTransaction(signedTx);
 
             // Create Block with Transaction link
             List<Link> links = Lists.newArrayList(Link.toTransaction(signedTx.getHash()));
@@ -949,18 +1110,19 @@ public class Commands {
                     .info(null)  // Will be initialized by tryToConnectV2()
                     .build();
 
-            // Validate and add block
-            // Phase 4 Layer 3 Task 1.1: Blockchain interface now supports Block
-            ImportResult result = kernel.getBlockchain().tryToConnect(block);
+            // Validate and add block (v5.1: DagImportResult)
+            DagImportResult result = dagKernel.getDagChain().tryToConnect(block);
 
-            if (result == ImportResult.IMPORTED_BEST || result == ImportResult.IMPORTED_NOT_BEST) {
-                // Update nonce in address store
-                byte[] fromAddr = toBytesAddress(fromAccount).toArray();
-                kernel.getAddressStore().updateTxQuantity(fromAddr, UInt64.valueOf(currentNonce));
+            if (result.isMainBlock()) {
+                // Update nonce in AccountStore (v5.1)
+                Bytes32 fromAddr = Bytes32.wrap(toBytesAddress(fromAccount).toArray());
+                updateAccountNonce(fromAddr, currentNonce);
 
-                // Phase 4 Layer 3 Task 1.2: Broadcast Block using new network method
-                int ttl = kernel.getConfig().getNodeSpec().getTTL();
-                kernel.broadcastBlock(block, ttl);
+                // v5.1: Broadcast block using P2pService
+                if (dagKernel.getP2pService() != null) {
+                    // TODO: Implement P2pService broadcast method
+                    log.info("Block broadcast not yet implemented in v5.1: {}", hash2Address(block.getHash()));
+                }
 
                 // Phase 2 Task 2.1: Build success message with optional remark
                 StringBuilder successMsg = new StringBuilder();
@@ -984,8 +1146,7 @@ public class Commands {
                 }
 
                 successMsg.append(String.format("  Nonce: %d\n", currentNonce));
-                successMsg.append(String.format("  Status: %s\n", result.name()));
-                successMsg.append(String.format("\n✅ Block broadcasted to network (TTL=%d)", ttl));
+                successMsg.append(String.format("  Status: %s\n", result.getStatus()));
 
                 return successMsg.toString();
             } else {
@@ -993,8 +1154,8 @@ public class Commands {
                     "Transaction failed!\n" +
                     "  Result: %s\n" +
                     "  Error: %s",
-                    result.name(),
-                    result.getErrorInfo() != null ? result.getErrorInfo() : "Unknown error"
+                    result.getStatus(),
+                    result.getErrorMessage() != null ? result.getErrorMessage() : "Unknown error"
                 );
             }
 
@@ -1024,17 +1185,17 @@ public class Commands {
             result.append("Account Balance Transfer (v5.1):\n\n");
 
             // Target address (default key)
-            Bytes32 toAddress = keyPair2Hash(kernel.getWallet().getDefKey());
+            Bytes32 toAddress = keyPair2Hash(dagKernel.getWallet().getDefKey());
             String remark = "account balance to new address";
 
-            // v5.1: Collect address balances directly (no block iteration needed)
+            // v5.1: Collect address balances directly using AccountStore
             Map<Integer, XAmount> accountBalances = new HashMap<>();
-            List<ECKeyPair> accounts = kernel.getWallet().getAccounts();
+            List<ECKeyPair> accounts = dagKernel.getWallet().getAccounts();
 
             for (int i = 0; i < accounts.size(); i++) {
                 ECKeyPair account = accounts.get(i);
-                byte[] addressBytes = toBytesAddress(account).toArray();
-                XAmount balance = kernel.getAddressStore().getBalanceByAddress(addressBytes);
+                Bytes32 address = Bytes32.wrap(toBytesAddress(account).toArray());
+                XAmount balance = getAccountBalance(address);
 
                 if (balance.compareTo(XAmount.ZERO) > 0) {
                     accountBalances.put(i, balance);
@@ -1067,13 +1228,12 @@ public class Commands {
                 XAmount transferAmount = balance.subtract(fee);
 
                 // Get account key
-                ECKeyPair fromAccount = kernel.getWallet().getAccounts().get(accountIndex);
+                ECKeyPair fromAccount = dagKernel.getWallet().getAccounts().get(accountIndex);
                 Bytes32 fromAddress = keyPair2Hash(fromAccount);
 
-                // Get current nonce
-                byte[] addr = toBytesAddress(fromAccount).toArray();
-                UInt64 txQuantity = kernel.getAddressStore().getTxQuantity(addr);
-                long currentNonce = txQuantity.toLong() + 1;
+                // Get current nonce (v5.1: Using AccountStore)
+                Bytes32 addr = Bytes32.wrap(toBytesAddress(fromAccount).toArray());
+                long currentNonce = getAccountNonce(addr) + 1;
 
                 // Create Transaction
                 Bytes remarkData = Bytes.wrap(remark.getBytes(StandardCharsets.UTF_8));
@@ -1097,7 +1257,7 @@ public class Commands {
                 }
 
                 // Save Transaction to TransactionStore
-                kernel.getTransactionStore().saveTransaction(signedTx);
+                dagKernel.getTransactionStore().saveTransaction(signedTx);
 
                 // Create Block with Transaction link
                 List<Link> links = Lists.newArrayList(Link.toTransaction(signedTx.getHash()));
@@ -1116,16 +1276,18 @@ public class Commands {
                         .info(null)
                         .build();
 
-                // Validate and add block
-                ImportResult importResult = kernel.getBlockchain().tryToConnect(block);
+                // Validate and add block (v5.1: DagImportResult)
+                DagImportResult importResult = dagKernel.getDagChain().tryToConnect(block);
 
-                if (importResult == ImportResult.IMPORTED_BEST || importResult == ImportResult.IMPORTED_NOT_BEST) {
-                    // Update nonce
-                    kernel.getAddressStore().updateTxQuantity(addr, UInt64.valueOf(currentNonce));
+                if (importResult.isMainBlock()) {
+                    // Update nonce (v5.1: Using AccountStore)
+                    updateAccountNonce(addr, currentNonce);
 
-                    // Broadcast
-                    int ttl = kernel.getConfig().getNodeSpec().getTTL();
-                    kernel.broadcastBlock(block, ttl);
+                    // Broadcast (v5.1: Using P2pService)
+                    if (dagKernel.getP2pService() != null) {
+                        // TODO: Implement P2pService broadcast method
+                        log.info("Block broadcast not yet implemented in v5.1: {}", hash2Address(block.getHash()));
+                    }
 
                     // Update stats
                     successCount++;
@@ -1140,7 +1302,7 @@ public class Commands {
                     result.append(String.format("  Account %d: %.9f XDAG (❌ %s)\n",
                             accountIndex,
                             balance.toDecimal(9, XUnit.XDAG).doubleValue(),
-                            importResult.name()));
+                            importResult.getStatus()));
                 }
             }
 
@@ -1156,88 +1318,5 @@ public class Commands {
             log.error("xferToNewV2 failed: " + e.getMessage(), e);
             return "Block balance transfer failed: " + e.getMessage();
         }
-    }
-
-    /**
-     * Distribute node rewards using v5.1 Transaction architecture
-     *
-     * Phase 4 Layer 3 Phase 4: Node reward distribution migration using v5.1 design.
-     *
-     * This method distributes accumulated node rewards to the default key address.
-     * Unlike legacy xferToNode(), this uses Transaction objects for each reward.
-     *
-     * Key differences from xferToNode():
-     * 1. Uses Transaction instead of Address
-     * 2. Uses Block instead of Block
-     * 3. Creates one Transaction per account balance
-     * 4. Simpler logic: account-to-account transfers (not block-as-input)
-     *
-     * @param paymentsToNodesMap Map of block hashes and keypairs for node payments
-     *                            (from PoolAwardManagerImpl batching)
-     *                            Temporarily using Bytes32 as key until full migration
-     * @return Transaction result message (StringBuilder for compatibility)
-     */
-    public StringBuilder xferToNodeV2(Map<Bytes32, ECKeyPair> paymentsToNodesMap) {
-        /**
-         * TODO Phase 8.5: Rewrite to use Block Transaction system without Address class.
-         * This requires implementing amount tracking in Transaction objects for block rewards.
-         * Blocked by: Address.getAmount() no longer available in v5.1 architecture.
-         * Estimated effort: 6-8 hours.
-         */
-        log.warn("Node reward distribution temporarily disabled - waiting for v5.1 Transaction migration");
-        return new StringBuilder("Node reward distribution temporarily disabled - v5.1 migration in progress");
-
-        /*
-        try {
-            StringBuilder result = new StringBuilder();
-            result.append("Node Reward Distribution (v5.1):\n\n");
-
-            // Target address (default key)
-            Bytes32 toAddress = keyPair2Hash(kernel.getWallet().getDefKey());
-            String remark = "Pay to " + kernel.getConfig().getNodeSpec().getNodeTag();
-
-            // Aggregate amounts by account (multiple blocks may belong to same account)
-            Map<Integer, XAmount> accountRewards = new HashMap<>();
-            Map<Integer, ECKeyPair> accountKeys = new HashMap<>();
-
-            // Build account index lookup
-            List<ECKeyPair> allAccounts = kernel.getWallet().getAccounts();
-            Map<ECKeyPair, Integer> keyToIndex = new HashMap<>();
-            for (int i = 0; i < allAccounts.size(); i++) {
-                keyToIndex.put(allAccounts.get(i), i);
-            }
-
-            // Aggregate rewards by account
-            for (Map.Entry<Bytes32, ECKeyPair> entry : paymentsToNodesMap.entrySet()) {
-                Bytes32 blockHash = entry.getKey();
-                ECKeyPair key = entry.getValue();
-
-                Integer accountIndex = keyToIndex.get(key);
-                if (accountIndex == null) {
-                    result.append(String.format("  Warning: Unknown account key for block %s (skipped)\n",
-                            hash2Address(blockHash)));
-                    continue;
-                }
-
-                // TODO: Need to get amount from somewhere - Address.getAmount() not available
-                // XAmount currentReward = accountRewards.getOrDefault(accountIndex, XAmount.ZERO);
-                // accountRewards.put(accountIndex, currentReward.add(???));
-                accountKeys.put(accountIndex, key);
-            }
-
-            if (accountRewards.isEmpty()) {
-                return new StringBuilder("No valid node rewards to distribute.");
-            }
-
-            result.append(String.format("Found %d accounts with node rewards\n\n", accountRewards.size()));
-
-            // ... rest of implementation
-            return result;
-
-        } catch (Exception e) {
-            log.error("xferToNodeV2 failed: " + e.getMessage(), e);
-            return new StringBuilder("Node reward distribution failed: " + e.getMessage());
-        }
-        */
     }
 }

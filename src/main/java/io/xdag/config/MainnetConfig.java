@@ -48,7 +48,7 @@ public class MainnetConfig extends AbstractConfig {
     public MainnetConfig() {
         super("mainnet", "xdag-mainnet", Network.MAINNET, Constants.MAINNET_VERSION);
         this.network = Network.MAINNET;
-        this.xdagEra = 0x16940000000L;
+        this.xdagEra = 1516406400L;  // 2018-01-20 00:00:00 UTC (correct XDAG_ERA)
         this.mainStartAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 42).toLong());
         this.apolloForkHeight = 1017323;
         this.apolloForkAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 39).toLong());

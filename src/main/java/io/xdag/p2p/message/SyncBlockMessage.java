@@ -21,11 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.net.message.consensus;
+package io.xdag.p2p.message;
 
 import io.xdag.core.Block;
-import io.xdag.net.message.MessageCode;
-import io.xdag.p2p.message.Message;
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
 import lombok.Getter;
@@ -92,7 +90,7 @@ public class SyncBlockMessage extends Message {
      * @throws IllegalArgumentException if deserialization fails
      */
     public SyncBlockMessage(byte[] body) {
-        super(MessageCode.SYNC_BLOCK, null);
+        super(XdagMessageCode.SYNC_BLOCK, null);
 
         SimpleDecoder dec = new SimpleDecoder(body);
 
@@ -118,7 +116,7 @@ public class SyncBlockMessage extends Message {
      * @param ttl time-to-live (usually 1 for sync)
      */
     public SyncBlockMessage(Block block, int ttl) {
-        super(MessageCode.SYNC_BLOCK, null);
+        super(XdagMessageCode.SYNC_BLOCK, null);
 
         this.block = block;
         this.ttl = ttl;

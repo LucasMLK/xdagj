@@ -21,10 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.net.message.consensus;
+package io.xdag.p2p.message;
 
-import io.xdag.net.message.MessageCode;
-import io.xdag.p2p.message.Message;
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
 import lombok.Getter;
@@ -108,7 +106,7 @@ public class SyncHeightReplyMessage extends Message {
      * @throws IllegalArgumentException if deserialization fails
      */
     public SyncHeightReplyMessage(byte[] body) {
-        super(MessageCode.SYNC_HEIGHT_REPLY, null);
+        super(XdagMessageCode.SYNC_HEIGHT_REPLY, null);
 
         SimpleDecoder dec = new SimpleDecoder(body);
 
@@ -140,25 +138,18 @@ public class SyncHeightReplyMessage extends Message {
      * @param mainBlockHash hash of main chain tip block
      */
     public SyncHeightReplyMessage(long mainHeight, long finalizedHeight, Bytes32 mainBlockHash) {
-        super(MessageCode.SYNC_HEIGHT_REPLY, null);
+        super(XdagMessageCode.SYNC_HEIGHT_REPLY, null);
 
         this.mainHeight = mainHeight;
         this.finalizedHeight = finalizedHeight;
         this.mainBlockHash = mainBlockHash;
 
         // Serialize message body
-        SimpleEncoder enc = encode();
+        SimpleEncoder enc = new SimpleEncoder();
+        encode(enc);
         this.body = enc.toBytes();
     }
 
-    /**
-     * Encode message to bytes
-     *
-     * <p>Format:
-     * [8 bytes mainHeight] + [8 bytes finalizedHeight] + [32 bytes mainBlockHash]
-     *
-     * @return encoder with serialized data
-     */
     @Override
     public void encode(SimpleEncoder enc) {
         // Serialize heights
@@ -167,19 +158,6 @@ public class SyncHeightReplyMessage extends Message {
 
         // Serialize block hash (32 bytes)
         enc.write(mainBlockHash.toArray());
-    }
-
-    private SimpleEncoder encode() {
-        SimpleEncoder enc = new SimpleEncoder();
-
-        // Serialize heights
-        enc.writeLong(mainHeight);
-        enc.writeLong(finalizedHeight);
-
-        // Serialize block hash (32 bytes)
-        enc.write(mainBlockHash.toArray());
-
-        return enc;
     }
 
     @Override

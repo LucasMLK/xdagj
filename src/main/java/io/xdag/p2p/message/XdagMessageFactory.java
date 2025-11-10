@@ -22,25 +22,18 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.net.message;
+package io.xdag.p2p.message;
 
-import io.xdag.net.message.consensus.NewBlockMessage;
-import io.xdag.net.message.consensus.SyncBlockMessage;
-import io.xdag.net.message.consensus.SyncBlockRequestMessage;
-import io.xdag.net.message.consensus.SyncBlocksReplyMessage;
-import io.xdag.net.message.consensus.SyncBlocksRequestMessage;
-import io.xdag.net.message.consensus.SyncEpochBlocksReplyMessage;
-import io.xdag.net.message.consensus.SyncEpochBlocksRequestMessage;
-import io.xdag.net.message.consensus.SyncHeightReplyMessage;
-import io.xdag.net.message.consensus.SyncHeightRequestMessage;
-import io.xdag.net.message.consensus.SyncMainBlocksReplyMessage;
-import io.xdag.net.message.consensus.SyncMainBlocksRequestMessage;
-import io.xdag.net.message.consensus.SyncTransactionsReplyMessage;
-import io.xdag.net.message.consensus.SyncTransactionsRequestMessage;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * XDAG application layer message factory.
+ *
+ * <p><b>Note:</b> Renamed from MessageFactory to XdagMessageFactory to avoid
+ * package namespace collision with xdagj-p2p's MessageFactory class.
+ */
 @Slf4j
-public class MessageFactory {
+public class XdagMessageFactory {
     /**
      * Decode a raw message.
      *
@@ -54,7 +47,7 @@ public class MessageFactory {
      */
     public Message create(byte code, byte[] body) throws MessageException {
 
-        MessageCode c = MessageCode.of(code);
+        XdagMessageCode c = XdagMessageCode.of(code);
         if (c == null) {
             //log.debug("Invalid message code: {}", Hex.encode0x(Bytes.of(code)));
             return null;

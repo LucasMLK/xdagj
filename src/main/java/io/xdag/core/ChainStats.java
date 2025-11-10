@@ -24,6 +24,8 @@
 
 package io.xdag.core;
 
+import io.xdag.p2p.utils.SimpleDecoder;
+import io.xdag.p2p.utils.SimpleEncoder;
 import java.io.Serializable;
 import lombok.Builder;
 import lombok.Value;
@@ -250,5 +252,155 @@ public class ChainStats implements Serializable {
                 balance.toDecimal(9, XUnit.XDAG).toPlainString(),
                 noRefCount,
                 getSyncProgress());
+    }
+
+    // ========== Serialization Methods ==========
+
+    /**
+     * Serialize ChainStats to bytes for network transmission
+     *
+     * Format:
+     * [32 bytes] difficulty
+     * [32 bytes] maxDifficulty
+     * [8 bytes] mainBlockCount
+     * [8 bytes] totalMainBlockCount
+     * [8 bytes] totalBlockCount
+     * [4 bytes] totalHostCount
+     * [8 bytes] waitingSyncCount
+     * [8 bytes] noRefCount
+     * [8 bytes] extraCount
+     * [8 bytes] balance (nano)
+     * [1 byte] topBlock null flag (0=null, 1=not null)
+     * [32 bytes] topBlock (if not null)
+     * [32 bytes] topDifficulty
+     * [1 byte] preTopBlock null flag
+     * [32 bytes] preTopBlock (if not null)
+     * [32 bytes] preTopDifficulty
+     */
+    public byte[] toBytes() {
+        SimpleEncoder enc = new SimpleEncoder();
+
+        // Write UInt256 fields (32 bytes each)
+        enc.write(difficulty.toBytes().toArray());
+        enc.write(maxDifficulty.toBytes().toArray());
+
+        // Write long fields
+        enc.writeLong(mainBlockCount);
+        enc.writeLong(totalMainBlockCount);
+        enc.writeLong(totalBlockCount);
+
+        // Write int field
+        enc.writeInt(totalHostCount);
+
+        // Write long fields
+        enc.writeLong(waitingSyncCount);
+        enc.writeLong(noRefCount);
+        enc.writeLong(extraCount);
+
+        // Write balance as long (nano)
+        enc.writeLong(balance.toXAmount().toLong());
+
+        // Write topBlock (nullable)
+        if (topBlock == null) {
+            enc.writeBoolean(false);
+        } else {
+            enc.writeBoolean(true);
+            enc.write(topBlock.toArray());
+        }
+
+        // Write topDifficulty
+        enc.write(topDifficulty.toBytes().toArray());
+
+        // Write preTopBlock (nullable)
+        if (preTopBlock == null) {
+            enc.writeBoolean(false);
+        } else {
+            enc.writeBoolean(true);
+            enc.write(preTopBlock.toArray());
+        }
+
+        // Write preTopDifficulty
+        enc.write(preTopDifficulty.toBytes().toArray());
+
+        return enc.toBytes();
+    }
+
+    /**
+     * Deserialize ChainStats from bytes received from network
+     */
+    public static ChainStats fromBytes(byte[] data) {
+        SimpleDecoder dec = new SimpleDecoder(data);
+
+        // Read UInt256 fields (32 bytes each)
+        byte[] difficultyBytes = new byte[32];
+        dec.readBytes(difficultyBytes);
+        UInt256 difficulty = UInt256.fromBytes(org.apache.tuweni.bytes.Bytes.wrap(difficultyBytes));
+
+        byte[] maxDifficultyBytes = new byte[32];
+        dec.readBytes(maxDifficultyBytes);
+        UInt256 maxDifficulty = UInt256.fromBytes(org.apache.tuweni.bytes.Bytes.wrap(maxDifficultyBytes));
+
+        // Read long fields
+        long mainBlockCount = dec.readLong();
+        long totalMainBlockCount = dec.readLong();
+        long totalBlockCount = dec.readLong();
+
+        // Read int field
+        int totalHostCount = dec.readInt();
+
+        // Read long fields
+        long waitingSyncCount = dec.readLong();
+        long noRefCount = dec.readLong();
+        long extraCount = dec.readLong();
+
+        // Read balance
+        long balanceNano = dec.readLong();
+        XAmount balance = XAmount.of(balanceNano);
+
+        // Read topBlock (nullable)
+        Bytes32 topBlock = null;
+        boolean hasTopBlock = dec.readBoolean();
+        if (hasTopBlock) {
+            byte[] topBlockBytes = new byte[32];
+            dec.readBytes(topBlockBytes);
+            topBlock = Bytes32.wrap(topBlockBytes);
+        }
+
+        // Read topDifficulty
+        byte[] topDifficultyBytes = new byte[32];
+        dec.readBytes(topDifficultyBytes);
+        UInt256 topDifficulty = UInt256.fromBytes(org.apache.tuweni.bytes.Bytes.wrap(topDifficultyBytes));
+
+        // Read preTopBlock (nullable)
+        Bytes32 preTopBlock = null;
+        boolean hasPreTopBlock = dec.readBoolean();
+        if (hasPreTopBlock) {
+            byte[] preTopBlockBytes = new byte[32];
+            dec.readBytes(preTopBlockBytes);
+            preTopBlock = Bytes32.wrap(preTopBlockBytes);
+        }
+
+        // Read preTopDifficulty
+        byte[] preTopDifficultyBytes = new byte[32];
+        dec.readBytes(preTopDifficultyBytes);
+        UInt256 preTopDifficulty = UInt256.fromBytes(org.apache.tuweni.bytes.Bytes.wrap(preTopDifficultyBytes));
+
+        // Build ChainStats using builder
+        return ChainStats.builder()
+                .difficulty(difficulty)
+                .maxDifficulty(maxDifficulty)
+                .mainBlockCount(mainBlockCount)
+                .totalMainBlockCount(totalMainBlockCount)
+                .totalBlockCount(totalBlockCount)
+                .totalHostCount(totalHostCount)
+                .waitingSyncCount(waitingSyncCount)
+                .noRefCount(noRefCount)
+                .extraCount(extraCount)
+                .balance(balance)
+                .topBlock(topBlock)
+                .topDifficulty(topDifficulty)
+                .preTopBlock(preTopBlock)
+                .preTopDifficulty(preTopDifficulty)
+                .build();
     }
 }

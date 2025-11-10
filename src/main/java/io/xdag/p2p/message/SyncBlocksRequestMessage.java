@@ -21,10 +21,8 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.net.message.consensus;
+package io.xdag.p2p.message;
 
-import io.xdag.net.message.MessageCode;
-import io.xdag.p2p.message.Message;
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
 import lombok.Getter;
@@ -124,7 +122,7 @@ public class SyncBlocksRequestMessage extends Message {
      * @throws IllegalArgumentException if deserialization fails
      */
     public SyncBlocksRequestMessage(byte[] body) {
-        super(MessageCode.SYNC_BLOCKS_REQUEST, SyncBlocksReplyMessage.class);
+        super(XdagMessageCode.SYNC_BLOCKS_REQUEST, SyncBlocksReplyMessage.class);
 
         SimpleDecoder dec = new SimpleDecoder(body);
 
@@ -160,13 +158,14 @@ public class SyncBlocksRequestMessage extends Message {
      * @param isRaw true = full block data, false = BlockInfo only
      */
     public SyncBlocksRequestMessage(List<Bytes32> hashes, boolean isRaw) {
-        super(MessageCode.SYNC_BLOCKS_REQUEST, SyncBlocksReplyMessage.class);
+        super(XdagMessageCode.SYNC_BLOCKS_REQUEST, SyncBlocksReplyMessage.class);
 
         this.hashes = hashes;
         this.isRaw = isRaw;
 
         // Serialize message body
-        SimpleEncoder enc = encode();
+        SimpleEncoder enc = new SimpleEncoder();
+        encode(enc);
         this.body = enc.toBytes();
     }
 
@@ -192,22 +191,6 @@ public class SyncBlocksRequestMessage extends Message {
         enc.writeBoolean(isRaw);
     }
 
-    private SimpleEncoder encode() {
-        SimpleEncoder enc = new SimpleEncoder();
-
-        // Serialize hash count
-        enc.writeInt(hashes.size());
-
-        // Serialize each hash (32 bytes)
-        for (Bytes32 hash : hashes) {
-            enc.write(hash.toArray());
-        }
-
-        // Serialize isRaw flag
-        enc.writeBoolean(isRaw);
-
-        return enc;
-    }
 
     @Override
     public String toString() {

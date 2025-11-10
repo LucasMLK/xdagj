@@ -28,21 +28,21 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import io.xdag.Kernel;
+import io.xdag.DagKernel;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
-import io.xdag.core.BlockchainImpl;
+import io.xdag.core.DagChain;
 import io.xdag.core.XAmount;
 import io.xdag.core.XUnit;
 import io.xdag.crypto.keys.ECKeyPair;
-import io.xdag.db.AddressStore;
-import io.xdag.db.BlockStore;
-import io.xdag.db.TransactionHistoryStore;
+import io.xdag.db.AccountStore;
+import io.xdag.db.DagStore;
 import io.xdag.db.TransactionStore;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
 import org.junit.Before;
 import org.junit.Test;
@@ -56,13 +56,12 @@ import org.junit.Test;
  */
 public class CommandsV5IntegrationTest {
 
-    private Kernel mockKernel;
+    private DagKernel mockKernel;
     private Wallet mockWallet;
-    private AddressStore mockAddressStore;
-    private BlockStore mockBlockStore;
+    private AccountStore mockAccountStore;
+    private DagStore mockDagStore;
     private TransactionStore mockTransactionStore;
-    private TransactionHistoryStore mockTxHistoryStore;
-    private BlockchainImpl mockBlockchain;
+    private DagChain mockDagChain;
     private Config config;
 
     private ECKeyPair senderAccount;
@@ -76,22 +75,20 @@ public class CommandsV5IntegrationTest {
         config = new DevnetConfig();
 
         // Create mock objects
-        mockKernel = mock(Kernel.class);
+        mockKernel = mock(DagKernel.class);
         mockWallet = mock(Wallet.class);
-        mockAddressStore = mock(AddressStore.class);
-        mockBlockStore = mock(BlockStore.class);
+        mockAccountStore = mock(AccountStore.class);
+        mockDagStore = mock(DagStore.class);
         mockTransactionStore = mock(TransactionStore.class);
-        mockTxHistoryStore = mock(TransactionHistoryStore.class);
-        mockBlockchain = mock(BlockchainImpl.class);
+        mockDagChain = mock(DagChain.class);
 
         // Setup Kernel mocks
         when(mockKernel.getConfig()).thenReturn(config);
         when(mockKernel.getWallet()).thenReturn(mockWallet);
-        when(mockKernel.getAddressStore()).thenReturn(mockAddressStore);
-        when(mockKernel.getBlockStore()).thenReturn(mockBlockStore);
+        when(mockKernel.getAccountStore()).thenReturn(mockAccountStore);
+        when(mockKernel.getDagStore()).thenReturn(mockDagStore);
         when(mockKernel.getTransactionStore()).thenReturn(mockTransactionStore);
-        when(mockKernel.getTxHistoryStore()).thenReturn(mockTxHistoryStore);
-        when(mockKernel.getBlockchain()).thenReturn(mockBlockchain);
+        when(mockKernel.getDagChain()).thenReturn(mockDagChain);
 
         // Create test accounts
         senderAccount = ECKeyPair.generate();
@@ -107,15 +104,14 @@ public class CommandsV5IntegrationTest {
         when(mockWallet.getAccounts()).thenReturn(accounts);
         when(mockWallet.getDefKey()).thenReturn(senderAccount);
 
-        // Setup default balance and nonce for sender
-        when(mockAddressStore.getBalanceByAddress(senderAddress.toArray()))
-            .thenReturn(XAmount.of(1000, XUnit.XDAG));
-        when(mockAddressStore.getTxQuantity(senderAddress.toArray())).thenReturn(UInt64.ZERO);
-        when(mockAddressStore.getExecutedNonceNum(senderAddress.toArray())).thenReturn(UInt64.ZERO);
+        // Setup default balance and nonce for sender (v5.1: AccountStore uses UInt256)
+        when(mockAccountStore.getBalance(senderAddress))
+            .thenReturn(UInt256.valueOf(XAmount.of(1000, XUnit.XDAG).toXAmount().toLong()));
+        when(mockAccountStore.getNonce(senderAddress)).thenReturn(UInt64.ZERO);
 
         // Setup recipient balance
-        when(mockAddressStore.getBalanceByAddress(recipientAddress.toArray()))
-            .thenReturn(XAmount.ZERO);
+        when(mockAccountStore.getBalance(recipientAddress))
+            .thenReturn(UInt256.ZERO);
     }
 
     /**
@@ -187,8 +183,8 @@ public class CommandsV5IntegrationTest {
     @Test
     public void testXferV2_InsufficientBalance() {
         // 1. Setup insufficient balance
-        when(mockAddressStore.getBalanceByAddress(senderAddress.toArray()))
-            .thenReturn(XAmount.of(50, XUnit.XDAG));
+        when(mockAccountStore.getBalance(senderAddress))
+            .thenReturn(UInt256.valueOf(XAmount.of(50, XUnit.XDAG).toXAmount().toLong()));
 
         // 2. Test: xferV2 should fail with insufficient balance
         // StringBuilder result = commands.xferV2(

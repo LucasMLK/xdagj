@@ -29,7 +29,6 @@ import static io.xdag.utils.WalletUtils.WALLET_PASSWORD_PROMPT;
 
 import com.google.common.collect.Lists;
 import io.xdag.DagKernel;
-import io.xdag.Kernel;
 import io.xdag.Launcher;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
@@ -38,10 +37,8 @@ import io.xdag.crypto.bip.Bip39Mnemonic;
 import io.xdag.crypto.encoding.Base58;
 import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.keys.ECKeyPair;
-import io.xdag.db.SnapshotStore;
 import io.xdag.db.rocksdb.DatabaseName;
 import io.xdag.db.rocksdb.RocksdbKVSource;
-import io.xdag.db.rocksdb.SnapshotStoreImpl;
 import io.xdag.utils.BytesUtils;
 import io.xdag.utils.XdagTime;
 import java.io.BufferedInputStream;
@@ -252,6 +249,14 @@ public class XdagCli extends Launcher {
         try {
             DagKernel dagKernel = startDagKernel(getConfig(), wallet);
             Launcher.registerShutdownHook("dagkernel", dagKernel::stop);
+
+            // Keep main thread alive to prevent JVM from exiting
+            // The background threads (MiningManager, HybridSyncManager) will keep running
+            System.out.println("XDAG node is running. Press Ctrl+C to stop.");
+            Thread.currentThread().join();
+        } catch (InterruptedException e) {
+            System.out.println("Node interrupted, shutting down...");
+            Thread.currentThread().interrupt();
         } catch (Exception e) {
             System.err.println("Uncaught exception during kernel startup:" + e.getMessage());
             e.printStackTrace();
@@ -259,38 +264,6 @@ public class XdagCli extends Launcher {
         }
     }
 
-    /**
-     * Starts the legacy kernel (for backward compatibility)
-     */
-    protected Kernel startKernel(Config config, Wallet wallet) {
-        Kernel kernel = new Kernel(config, wallet);
-        kernel.testStart();
-        return kernel;
-    }
-
-    /**
-     * Starts the DagKernel (v5.1 architecture)
-     *
-     * <p>This method initializes the v5.1 DagKernel which manages all core components:
-     * <ul>
-     *   <li>Storage Layer (DagStore, TransactionStore, AccountStore, OrphanBlockStore)</li>
-     *   <li>Cache Layer (DagCache, DagEntityResolver)</li>
-     *   <li>Consensus Layer (DagChain, HybridSyncManager)</li>
-     * </ul>
-     *
-     * <p>All component initialization and lifecycle management is handled internally by DagKernel.
-     *
-     * <p>Phase 12: Now supports genesis.json configuration for:
-     * <ul>
-     *   <li>Network-specific genesis parameters</li>
-     *   <li>Initial balance allocations</li>
-     *   <li>Snapshot import from old XDAG chain</li>
-     * </ul>
-     *
-     * @param config XDAG configuration
-     * @param wallet Wallet for genesis block creation
-     * @return DagKernel instance
-     */
     protected DagKernel startDagKernel(Config config, Wallet wallet) {
         DagKernel dagKernel = new DagKernel(config, wallet);
         dagKernel.start();
@@ -535,31 +508,36 @@ public class XdagCli extends Launcher {
     }
 
     // Phase 7.1.2: Removed boolean parameter - always deserialize to LegacyBlockInfo directly
+    // TODO v5.1: Snapshot functionality temporarily disabled, will be re-implemented later
+    // SnapshotStore was removed in v5.1 refactoring
     public void makeSnapshot() {
-        System.out.println("make snapshot start");
-        long start = System.currentTimeMillis();
-        this.getConfig().getSnapshotSpec().setSnapshotJ(true);
-        RocksdbKVSource blockSource = new RocksdbKVSource(DatabaseName.TIME.toString());
-        blockSource.setConfig(getConfig());
-        blockSource.init();
-        RocksdbKVSource snapshotSource = new RocksdbKVSource("SNAPSHOT/BLOCKS");
-        snapshotSource.setConfig(getConfig());
-        snapshotSource.init();
-        RocksdbKVSource indexSource = new RocksdbKVSource(DatabaseName.INDEX.toString());
-        indexSource.setConfig(getConfig());
-        indexSource.init();
-        SnapshotStore snapshotStore = new SnapshotStoreImpl(snapshotSource);
-
-        snapshotStore.makeSnapshot(blockSource,indexSource);
-
-        Path source = Paths.get(getConfig().getRootDir() + "/rocksdb/xdagdb/ADDRESS");
-        Path target = Paths.get(getConfig().getRootDir() + "/rocksdb/xdagdb/SNAPSHOT/ADDRESS");
-        copyDir(source.toString(),target.toString());
-        long end = System.currentTimeMillis();
-        System.out.println("make snapshot done");
-        System.out.println("time：" + (end - start) + "ms");
-        System.out.println("snapshot height: " + snapshotStore.getHeight());
-        System.out.println("next start frame: " + Long.toHexString(XdagTime.getEndOfEpoch(snapshotStore.getNextTime()) + 1));
+        System.out.println("Snapshot functionality temporarily disabled in v5.1");
+        System.out.println("Will be re-implemented in future version");
+        System.out.println("Please use --enable-snapshot option to load existing snapshots");
+//        System.out.println("make snapshot start");
+//        long start = System.currentTimeMillis();
+//        this.getConfig().getSnapshotSpec().setSnapshotJ(true);
+//        RocksdbKVSource blockSource = new RocksdbKVSource(DatabaseName.TIME.toString());
+//        blockSource.setConfig(getConfig());
+//        blockSource.init();
+//        RocksdbKVSource snapshotSource = new RocksdbKVSource("SNAPSHOT/BLOCKS");
+//        snapshotSource.setConfig(getConfig());
+//        snapshotSource.init();
+//        RocksdbKVSource indexSource = new RocksdbKVSource(DatabaseName.INDEX.toString());
+//        indexSource.setConfig(getConfig());
+//        indexSource.init();
+//        SnapshotStore snapshotStore = new SnapshotStoreImpl(snapshotSource);
+//
+//        snapshotStore.makeSnapshot(blockSource,indexSource);
+//
+//        Path source = Paths.get(getConfig().getRootDir() + "/rocksdb/xdagdb/ADDRESS");
+//        Path target = Paths.get(getConfig().getRootDir() + "/rocksdb/xdagdb/SNAPSHOT/ADDRESS");
+//        copyDir(source.toString(),target.toString());
+//        long end = System.currentTimeMillis();
+//        System.out.println("make snapshot done");
+//        System.out.println("time：" + (end - start) + "ms");
+//        System.out.println("snapshot height: " + snapshotStore.getHeight());
+//        System.out.println("next start frame: " + Long.toHexString(XdagTime.getEndOfEpoch(snapshotStore.getNextTime()) + 1));
     }
 
     /**

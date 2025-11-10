@@ -21,11 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.net.message.consensus;
+package io.xdag.p2p.message;
 
 import io.xdag.core.Block;
-import io.xdag.net.message.MessageCode;
-import io.xdag.p2p.message.Message;
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
 import lombok.Getter;
@@ -131,7 +129,7 @@ public class SyncMainBlocksReplyMessage extends Message {
      * @throws IllegalArgumentException if deserialization fails
      */
     public SyncMainBlocksReplyMessage(byte[] body) {
-        super(MessageCode.SYNC_MAIN_BLOCKS_REPLY, null);
+        super(XdagMessageCode.SYNC_MAIN_BLOCKS_REPLY, null);
 
         SimpleDecoder dec = new SimpleDecoder(body);
 
@@ -181,23 +179,16 @@ public class SyncMainBlocksReplyMessage extends Message {
      * @param blocks list of main blocks (may contain nulls)
      */
     public SyncMainBlocksReplyMessage(List<Block> blocks) {
-        super(MessageCode.SYNC_MAIN_BLOCKS_REPLY, null);
+        super(XdagMessageCode.SYNC_MAIN_BLOCKS_REPLY, null);
 
         this.blocks = blocks;
 
         // Serialize message body
-        SimpleEncoder enc = encode();
+        SimpleEncoder enc = new SimpleEncoder();
+        encode(enc);
         this.body = enc.toBytes();
     }
 
-    /**
-     * Encode message to bytes
-     *
-     * <p>Format:
-     * [4 bytes blockCount] + for each block: [1 byte hasBlock] + (if hasBlock: [4 bytes size] + [variable data])
-     *
-     * @return encoder with serialized data
-     */
     @Override
     public void encode(SimpleEncoder enc) {
         // Write block count
@@ -220,30 +211,6 @@ public class SyncMainBlocksReplyMessage extends Message {
         }
     }
 
-    private SimpleEncoder encode() {
-        SimpleEncoder enc = new SimpleEncoder();
-
-        // Write block count
-        enc.writeInt(blocks.size());
-
-        // Write each block
-        for (Block block : blocks) {
-            if (block != null) {
-                // Block exists
-                enc.writeBoolean(true);
-
-                // Serialize block
-                byte[] blockBytes = block.toBytes();
-                enc.writeInt(blockBytes.length);
-                enc.write(blockBytes);
-            } else {
-                // Block missing
-                enc.writeBoolean(false);
-            }
-        }
-
-        return enc;
-    }
 
     @Override
     public String toString() {

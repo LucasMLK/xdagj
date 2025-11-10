@@ -501,8 +501,8 @@ public class DagKernel {
   /**
    * Start P2P service for block broadcasting
    *
-   * <p>Phase 12.5: Simplified P2P integration focused on block broadcasting.
-   * Does not use XdagP2pEventHandler since that requires legacy Kernel.
+   * <p>Phase 12.5+: P2P integration with application layer event handler.
+   * Registers XdagP2pEventHandler to enable HybridSync protocol.
    */
   private void startP2pService() {
       // P2P service requires a wallet/coinbase key
@@ -518,14 +518,29 @@ public class DagKernel {
           ECKeyPair coinbase = wallet.getDefKey();
           P2pConfig p2pConfig = P2pConfigFactory.createP2pConfig(config, coinbase);
 
-          // Create and start P2P service (without event handler for now)
-          // Phase 12.5: Minimal P2P for block broadcasting only
+          // Create application layer event handler
+          io.xdag.p2p.XdagP2pEventHandler eventHandler = new io.xdag.p2p.XdagP2pEventHandler(this);
+
+          // Connect HybridSyncP2pAdapter to event handler
+          eventHandler.setHybridSyncAdapter(hybridSyncP2pAdapter);
+
+          // Register event handler with P2P config
+          p2pConfig.addP2pEventHandle(eventHandler);
+
+          // Create and start P2P service
           this.p2pService = new P2pService(p2pConfig);
           this.p2pService.start();
 
+          // Connect P2P service to HybridSyncP2pAdapter for channel management
+          if (hybridSyncP2pAdapter != null) {
+              hybridSyncP2pAdapter.setP2pService(this.p2pService);
+              log.info("✓ P2P service connected to HybridSyncP2pAdapter");
+          }
+
           log.info("✓ P2P service started (broadcasting enabled)");
 
-      } catch (Exception e) {
+      } catch (Throwable e) {
+          // Catch both Exception and Error (including NoSuchFieldError from P2P refactoring)
           log.error("Failed to start P2P service: {}", e.getMessage(), e);
           log.warn("⚠ Continuing without P2P (block broadcasting disabled)");
           this.p2pService = null;
@@ -789,7 +804,8 @@ public class DagKernel {
       // Import genesis block
       DagImportResult result = dagChain.tryToConnect(genesisBlock);
       if (!result.isMainBlock()) {
-          throw new RuntimeException("Failed to import genesis block: " + result.getStatus());
+          throw new RuntimeException("Failed to import genesis block: " + result.getStatus() +
+                  (result.getErrorMessage() != null ? " - " + result.getErrorMessage() : ""));
       }
 
       log.info("✓ Genesis block imported successfully");

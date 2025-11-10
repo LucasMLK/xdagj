@@ -24,8 +24,8 @@
 
 package io.xdag.core;
 
-import io.xdag.Kernel;
-import io.xdag.db.BlockStore;
+import io.xdag.DagKernel;
+import io.xdag.db.DagStore;
 import io.xdag.db.store.FinalizedBlockStore;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -63,18 +63,20 @@ public class BlockFinalizationService {
      */
     private static final long CHECK_INTERVAL_MINUTES = 60;
 
-    private final Kernel kernel;
-    private final BlockStore blockStore;
-    private final FinalizedBlockStore finalizedBlockStore;
+    private final DagKernel kernel;
+    private final DagStore dagStore;
+    // TODO v5.1: FinalizedBlockStore temporarily disabled
+    // private final FinalizedBlockStore finalizedBlockStore;
     private final ScheduledExecutorService scheduler;
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
     private final AtomicLong lastFinalizedEpoch = new AtomicLong(-1);
     private final AtomicLong totalFinalizedBlocks = new AtomicLong(0);
 
-    public BlockFinalizationService(Kernel kernel) {
+    public BlockFinalizationService(DagKernel kernel) {
         this.kernel = kernel;
-        this.blockStore = kernel.getBlockStore();
-        this.finalizedBlockStore = kernel.getFinalizedBlockStore();
+        this.dagStore = kernel.getDagStore();
+        // TODO v5.1: FinalizedBlockStore temporarily disabled
+        // this.finalizedBlockStore = kernel.getFinalizedBlockStore();
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "BlockFinalizationService");
             thread.setDaemon(true);

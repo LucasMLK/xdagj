@@ -28,6 +28,7 @@ import io.xdag.DagKernel;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
 import io.xdag.core.DagImportResult;
+import io.xdag.p2p.message.NewBlockMessage;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.atomic.AtomicLong;
@@ -221,8 +222,8 @@ public class BlockBroadcaster {
 
         try {
             // Create NewBlockMessage
-            io.xdag.net.message.consensus.NewBlockMessage message =
-                    new io.xdag.net.message.consensus.NewBlockMessage(block, ttl);
+            NewBlockMessage message =
+                    new NewBlockMessage(block, ttl);
 
             // Serialize message
             byte[] messageBody = message.getBody();

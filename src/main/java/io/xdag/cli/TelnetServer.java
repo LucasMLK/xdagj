@@ -24,7 +24,7 @@
 
 package io.xdag.cli;
 
-import io.xdag.Kernel;
+import io.xdag.DagKernel;
 import io.xdag.core.AbstractXdagLifecycle;
 import lombok.extern.slf4j.Slf4j;
 import org.jline.builtins.telnet.Telnet;
@@ -37,7 +37,7 @@ import org.jline.terminal.TerminalBuilder;
 @Slf4j
 public class TelnetServer extends AbstractXdagLifecycle {
 
-    private final Kernel kernel;
+    private final DagKernel kernel;
     private final String ip;
     private final int port;
     private Terminal terminal;
@@ -48,7 +48,7 @@ public class TelnetServer extends AbstractXdagLifecycle {
      * Constructor for TelnetServer
      * @param kernel Kernel instance for XDAG operations
      */
-    public TelnetServer(final Kernel kernel) {
+    public TelnetServer(final DagKernel kernel) {
         this.ip = kernel.getConfig().getAdminSpec().getAdminTelnetIp();
         this.port = kernel.getConfig().getAdminSpec().getAdminTelnetPort();
         this.kernel = kernel;
@@ -63,7 +63,7 @@ public class TelnetServer extends AbstractXdagLifecycle {
         try {
             terminal = TerminalBuilder.builder().build();
             xShell = new Shell();
-            xShell.setKernel(kernel);
+            xShell.setDagKernel(kernel);
             telnetServer = new Telnet(terminal, xShell);
             telnetServer.telnetd(new String[]{"-i" + ip, "-p" + port, "start"});
         } catch (Exception e) {

@@ -22,11 +22,12 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.db.store;
+package io.xdag.db.rocksdb;
 
 import com.google.common.hash.BloomFilter;
 import com.google.common.hash.Funnels;
 import io.xdag.core.BlockInfo;
+import io.xdag.db.store.FinalizedBlockStore;
 import java.util.List;
 import java.util.Optional;
 import lombok.extern.slf4j.Slf4j;

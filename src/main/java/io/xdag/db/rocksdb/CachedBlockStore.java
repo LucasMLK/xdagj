@@ -22,11 +22,12 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.db.store;
+package io.xdag.db.rocksdb;
 
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import io.xdag.core.BlockInfo;
+import io.xdag.db.store.FinalizedBlockStore;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;

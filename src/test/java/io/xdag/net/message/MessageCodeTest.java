@@ -26,21 +26,22 @@ package io.xdag.net.message;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+import io.xdag.p2p.message.XdagMessageCode;
 import org.junit.Test;
 
 public class MessageCodeTest {
 
     @Test
     public void testConverting() {
-        for (MessageCode code : MessageCode.values()) {
-            assertEquals(code, MessageCode.of(code.getCode()));
-            assertEquals(code, MessageCode.of(code.toByte()));
+        for (XdagMessageCode code : XdagMessageCode.values()) {
+            assertEquals(code, XdagMessageCode.of(code.getCode()));
+            assertEquals(code, XdagMessageCode.of(code.toByte()));
         }
     }
 
     @Test
     public void testNegativeByte() {
         byte b = (byte) 0xff;
-        assertNull(MessageCode.of(b));
+        assertNull(XdagMessageCode.of(b));
     }
 }

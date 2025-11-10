@@ -37,7 +37,7 @@ import io.xdag.config.Config;
 import io.xdag.config.MainnetConfig;
 import io.xdag.core.AbstractXdagLifecycle;
 import io.xdag.core.Block;
-import io.xdag.core.Blockchain;
+import io.xdag.core.DagChain;
 import io.xdag.crypto.randomx.RandomXCache;
 import io.xdag.crypto.randomx.RandomXFlag;
 import io.xdag.crypto.randomx.RandomXTemplate;
@@ -68,7 +68,7 @@ public class RandomX extends AbstractXdagLifecycle {
     protected long randomXForkTime = Long.MAX_VALUE;
     protected long randomXPoolMemIndex;
     protected long randomXHashEpochIndex;
-    protected Blockchain blockchain;
+    protected DagChain dagchain;
     protected boolean isFullMem;
     protected boolean isLargePages;
 
@@ -112,7 +112,7 @@ public class RandomX extends AbstractXdagLifecycle {
                 nextMemory.seedHeight = block.getInfo().getHeight();
                 log.debug("Set switch time to {}", Long.toHexString(nextMemory.switchTime));
 
-                hash = blockchain.getBlockByHeight(block.getInfo().getHeight() - randomXForkLag).getInfo()
+                hash = dagchain.getMainBlockAtPosition(block.getInfo().getHeight() - randomXForkLag).getInfo()
                         .getHash().toArray();
                 if (nextMemory.seed == null || !equalBytes(nextMemory.seed, hash)) {
                     nextMemory.seed = Arrays.reverse(hash);
@@ -277,10 +277,10 @@ public class RandomX extends AbstractXdagLifecycle {
         // Phase 8.3.2: Blockchain interface now returns Block
         randomXForkTime = XdagTime
                 .getEpoch(
-                        blockchain.getBlockByHeight(config.getSnapshotSpec().getSnapshotHeight() - lag).getTimestamp());
+                        dagchain.getMainBlockAtPosition(config.getSnapshotSpec().getSnapshotHeight() - lag).getTimestamp());
         Block block;
         for (long i = lag; i >= 0; i--) {
-            block = blockchain.getBlockByHeight(config.getSnapshotSpec().getSnapshotHeight() - i);
+            block = dagchain.getMainBlockAtPosition(config.getSnapshotSpec().getSnapshotHeight() - i);
             if (block == null) {
                 continue;
             }
@@ -291,7 +291,7 @@ public class RandomX extends AbstractXdagLifecycle {
     public void randomXLoadingForkTimeSnapshot(byte[] preseed) {
         // If the snapshot is being restarted before the next seed change cycle, use the initial preseed
         // Phase 7.3: Use ChainStats directly (XdagStats deleted)
-        if (blockchain.getChainStats().getMainBlockCount() < config.getSnapshotSpec().getSnapshotHeight() + (isTestNet
+        if (dagchain.getChainStats().getMainBlockCount() < config.getSnapshotSpec().getSnapshotHeight() + (isTestNet
                 ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS)) {
             randomXLoadingSnapshot(preseed);
         } else {
@@ -304,8 +304,8 @@ public class RandomX extends AbstractXdagLifecycle {
         Block block;
         long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
         // Phase 7.3: Use ChainStats directly (XdagStats deleted)
-        if (blockchain.getChainStats().getMainBlockCount() >= config.getSnapshotSpec().getSnapshotHeight()) {
-            block = blockchain.getBlockByHeight(
+        if (dagchain.getChainStats().getMainBlockCount() >= config.getSnapshotSpec().getSnapshotHeight()) {
+            block = dagchain.getMainBlockAtPosition(
                     config.getSnapshotSpec().getSnapshotHeight());
             randomXForkTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag;
 
@@ -319,9 +319,9 @@ public class RandomX extends AbstractXdagLifecycle {
         Block block;
         long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
         // Phase 7.3: Use ChainStats directly (XdagStats deleted)
-        if (blockchain.getChainStats().getMainBlockCount() >= config.getSnapshotSpec().getSnapshotHeight()) {
+        if (dagchain.getChainStats().getMainBlockCount() >= config.getSnapshotSpec().getSnapshotHeight()) {
             if (config.getSnapshotSpec().getSnapshotHeight() > RANDOMX_FORK_HEIGHT) {
-                block = blockchain.getBlockByHeight(
+                block = dagchain.getMainBlockAtPosition(
                         config.getSnapshotSpec().getSnapshotHeight() - config.getSnapshotSpec().getSnapshotHeight() % seedEpoch);
                 randomXForkTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag;
             }
@@ -334,8 +334,8 @@ public class RandomX extends AbstractXdagLifecycle {
         // Phase 8.3.2: Blockchain interface now returns Block
         Block block;
         // Phase 7.3: Use ChainStats directly (XdagStats deleted)
-        if (blockchain.getChainStats().getMainBlockCount() >= randomXForkSeedHeight) {
-            block = blockchain.getBlockByHeight(randomXForkSeedHeight);
+        if (dagchain.getChainStats().getMainBlockCount() >= randomXForkSeedHeight) {
+            block = dagchain.getMainBlockAtPosition(randomXForkSeedHeight);
             randomXForkTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag;
 
             long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
@@ -348,18 +348,19 @@ public class RandomX extends AbstractXdagLifecycle {
     // Phase 8.3.2: Blockchain interface now returns Block
     Block block;
     // Phase 7.3: Use ChainStats directly (XdagStats deleted)
-    long seedHeight = blockchain.getChainStats().getMainBlockCount() & ~seedEpoch;
+    long seedHeight = dagchain.getChainStats().getMainBlockCount() & ~seedEpoch;
     long preSeedHeight = seedHeight - seedEpoch - 1;
 
     if (preSeedHeight >= randomXForkSeedHeight) {
         randomXHashEpochIndex = 0;
         randomXPoolMemIndex = -1;
 
-        block = blockchain.getBlockByHeight(preSeedHeight);
+        block = dagchain.getMainBlockAtPosition(preSeedHeight);
         long memoryIndex = randomXHashEpochIndex + 1;
         RandomXMemory memory = globalMemory[(int) (memoryIndex) & 1];
         memory.seed = Arrays
-                .reverse(blockchain.getBlockByHeight(preSeedHeight - randomXForkLag).getInfo().getHash().toArray());
+                .reverse(
+                    dagchain.getMainBlockAtPosition(preSeedHeight - randomXForkLag).getInfo().getHash().toArray());
         memory.switchTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag + 1;
         memory.seedTime = block.getTimestamp();
         memory.seedHeight = block.getInfo().getHeight();
@@ -370,11 +371,11 @@ public class RandomX extends AbstractXdagLifecycle {
     }
 
     if (seedHeight >= randomXForkSeedHeight) {
-        block = blockchain.getBlockByHeight(seedHeight);
+        block = dagchain.getMainBlockAtPosition(seedHeight);
         long memoryIndex = randomXHashEpochIndex + 1;
         RandomXMemory memory = globalMemory[(int) (memoryIndex) & 1];
         memory.seed = Arrays
-                .reverse(blockchain.getBlockByHeight(seedHeight - randomXForkLag).getInfo().getHash().toArray());
+                .reverse(dagchain.getMainBlockAtPosition(seedHeight - randomXForkLag).getInfo().getHash().toArray());
         memory.switchTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag + 1;
         memory.seedTime = block.getTimestamp();
         memory.seedHeight = block.getInfo().getHeight();
@@ -382,7 +383,8 @@ public class RandomX extends AbstractXdagLifecycle {
         randomXPoolUpdateSeed(memoryIndex);
         randomXHashEpochIndex = memoryIndex;
         // Phase 7.3: Use ChainStats directly (XdagStats deleted)
-        if (XdagTime.getEpoch(blockchain.getBlockByHeight(blockchain.getChainStats().getMainBlockCount()).getTimestamp())
+        if (XdagTime.getEpoch(
+            dagchain.getMainBlockAtPosition(dagchain.getChainStats().getMainBlockCount()).getTimestamp())
                 >= memory.getSwitchTime()) {
             memory.isSwitched = 1;
         } else {

@@ -26,8 +26,11 @@ package io.xdag.consensus;
 
 import io.xdag.DagKernel;
 import io.xdag.core.*;
-import io.xdag.net.message.consensus.*;
 import io.xdag.p2p.channel.Channel;
+import io.xdag.p2p.message.SyncBlocksReplyMessage;
+import io.xdag.p2p.message.SyncEpochBlocksReplyMessage;
+import io.xdag.p2p.message.SyncHeightReplyMessage;
+import io.xdag.p2p.message.SyncMainBlocksReplyMessage;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;

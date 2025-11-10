@@ -24,8 +24,6 @@
 
 package io.xdag.db.rocksdb;
 
-import static io.xdag.db.DagStore.*;
-
 import io.xdag.config.Config;
 import io.xdag.core.Block;
 import io.xdag.core.BlockHeader;
@@ -33,6 +31,7 @@ import io.xdag.core.BlockInfo;
 import io.xdag.core.ChainStats;
 import io.xdag.db.DagStore;
 import io.xdag.db.store.DagCache;
+import io.xdag.utils.CompactSerializer;
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -1135,7 +1134,7 @@ public class DagStoreImpl implements DagStore {
         }
 
         try {
-            return io.xdag.serialization.CompactSerializer.serialize(stats);
+            return CompactSerializer.serialize(stats);
         } catch (Exception e) {
             log.error("Failed to serialize ChainStats", e);
             return new byte[0];
@@ -1156,7 +1155,7 @@ public class DagStoreImpl implements DagStore {
         }
 
         try {
-            return io.xdag.serialization.CompactSerializer.deserializeChainStats(data);
+            return CompactSerializer.deserializeChainStats(data);
         } catch (Exception e) {
             log.error("Failed to deserialize ChainStats", e);
             return null;

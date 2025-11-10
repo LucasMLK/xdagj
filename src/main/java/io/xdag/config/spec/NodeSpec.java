@@ -25,7 +25,7 @@
 package io.xdag.config.spec;
 
 import io.xdag.Network;
-import io.xdag.net.message.MessageCode;
+import io.xdag.p2p.message.XdagMessageCode;
 import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Set;
@@ -47,7 +47,7 @@ public interface NodeSpec {
 
     // Network handshake and messaging
     int getNetHandshakeExpiry();
-    Set<MessageCode> getNetPrioritizedMessages();
+    Set<XdagMessageCode> getNetPrioritizedMessages();
     int getNetMaxInboundConnectionsPerIp();
     int getNetMaxInboundConnections();
     int getNetChannelIdleTimeout();

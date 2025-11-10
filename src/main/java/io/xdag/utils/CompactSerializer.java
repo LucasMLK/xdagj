@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.serialization;
+package io.xdag.utils;
 
 import io.xdag.core.BlockInfo;
 import io.xdag.core.ChainStats;

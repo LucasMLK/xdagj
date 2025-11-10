@@ -21,11 +21,9 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.net.message.consensus;
+package io.xdag.p2p.message;
 
 import io.xdag.core.Block;
-import io.xdag.net.message.MessageCode;
-import io.xdag.p2p.message.Message;
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
 import lombok.Getter;
@@ -86,7 +84,7 @@ public class NewBlockMessage extends Message {
      * @throws IllegalArgumentException if deserialization fails
      */
     public NewBlockMessage(byte[] body) {
-        super(MessageCode.NEW_BLOCK, null);
+        super(XdagMessageCode.NEW_BLOCK, null);
 
         SimpleDecoder dec = new SimpleDecoder(body);
 
@@ -112,42 +110,26 @@ public class NewBlockMessage extends Message {
      * @param ttl time-to-live (number of hops)
      */
     public NewBlockMessage(Block block, int ttl) {
-        super(MessageCode.NEW_BLOCK, null);
+        super(XdagMessageCode.NEW_BLOCK, null);
 
         this.block = block;
         this.ttl = ttl;
 
         // Serialize message body
-        SimpleEncoder enc = encode();
+        SimpleEncoder enc = new SimpleEncoder();
+        encode(enc);
         this.body = enc.toBytes();
     }
 
-    /**
-     * Encode message to bytes
-     *
-     * Format:
-     * [Block size (4 bytes)] + [Block bytes (variable)] + [TTL (4 bytes)]
-     *
-     * @return encoder with serialized data
-     */
     @Override
-    private SimpleEncoder encode() {
-        SimpleEncoder enc = new SimpleEncoder();
-
+    public void encode(SimpleEncoder enc) {
         // Serialize Block
         byte[] blockBytes = this.block.toBytes();
         enc.writeBytes(blockBytes);
 
         // Serialize TTL
         enc.writeInt(ttl);
-
-        return enc;
     }
-
-  @Override
-  public void encode(SimpleEncoder enc) {
-
-  }
 
   @Override
     public String toString() {

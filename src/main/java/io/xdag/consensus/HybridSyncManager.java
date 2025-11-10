@@ -26,7 +26,13 @@ package io.xdag.consensus;
 
 import io.xdag.DagKernel;
 import io.xdag.core.*;
-import io.xdag.net.message.consensus.*;
+import io.xdag.p2p.channel.Channel;
+import io.xdag.p2p.message.SyncBlocksReplyMessage;
+import io.xdag.p2p.message.SyncEpochBlocksReplyMessage;
+import io.xdag.p2p.message.SyncHeightReplyMessage;
+import io.xdag.p2p.message.SyncMainBlocksReplyMessage;
+import io.xdag.p2p.message.SyncTransactionsReplyMessage;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
 
@@ -120,7 +126,9 @@ public class HybridSyncManager {
 
     private final DagKernel dagKernel;  // v5.1 standalone DagKernel
     private final DagChain dagChain;  // v5.1 DagChain interface
-    private final HybridSyncP2pAdapter p2pAdapter;
+
+  @Getter
+  private final HybridSyncP2pAdapter p2pAdapter;
 
     // ========== State Tracking ==========
 
@@ -136,7 +144,8 @@ public class HybridSyncManager {
         COMPLETED                // Synchronization completed
     }
 
-    private volatile SyncState currentState = SyncState.IDLE;
+  @Getter
+  private volatile SyncState currentState = SyncState.IDLE;
 
     /**
      * Progress tracking
@@ -285,25 +294,7 @@ public class HybridSyncManager {
         return Math.min(1.0, (double) syncedBlocks.get() / total);
     }
 
-    /**
-     * Get current synchronization state
-     *
-     * @return current state
-     */
-    public SyncState getCurrentState() {
-        return currentState;
-    }
-
-    /**
-     * Get P2P adapter for connecting to network layer
-     *
-     * @return HybridSyncP2pAdapter instance
-     */
-    public HybridSyncP2pAdapter getP2pAdapter() {
-        return p2pAdapter;
-    }
-
-    /**
+  /**
      * Check if sync manager is running
      *
      * @return true if running, false otherwise
@@ -431,26 +422,31 @@ public class HybridSyncManager {
                 return;
             }
 
-            // TODO Phase 12.4: Check for available peers
-            // Once P2P layer is integrated, this will:
-            // 1. Get list of connected peers from DagKernel
-            // 2. Select best peer based on height/latency
-            // 3. Trigger sync with selected peer
-            //
-            // For now, just log that we're ready to sync
-            log.debug("Sync check: No P2P integration yet, waiting for peers...");
+            // Get available P2P channels (Phase 12.5)
+            List<Channel> peers = p2pAdapter.getAvailableChannels();
 
-            // Example of what will be implemented:
-            // List<Channel> peers = getAvailablePeers();
-            // if (!peers.isEmpty()) {
-            //     Channel bestPeer = selectBestPeer(peers);
-            //     log.info("Triggering sync with peer: {}", bestPeer.getRemoteAddress());
-            //     lastSyncAttemptTime = now;
-            //     boolean success = startSync(bestPeer);
-            //     if (success) {
-            //         lastSuccessfulSyncTime = System.currentTimeMillis();
-            //     }
-            // }
+            if (peers.isEmpty()) {
+                log.debug("No P2P peers available for sync");
+                return;
+            }
+
+            // Select first available peer (TODO: implement peer selection strategy)
+            Channel selectedPeer = peers.getFirst();
+            log.info("Triggering sync with peer: {} ({} peers available)",
+                    selectedPeer.getRemoteAddress(), peers.size());
+
+            // Update last attempt time
+            lastSyncAttemptTime = now;
+
+            // Start synchronization
+            boolean success = startSync(selectedPeer);
+
+            if (success) {
+                lastSuccessfulSyncTime = System.currentTimeMillis();
+                log.info("Sync completed successfully");
+            } else {
+                log.warn("Sync failed, will retry in {} seconds", SYNC_RETRY_INTERVAL_MS / 1000);
+            }
 
         } catch (Exception e) {
             log.error("Error in sync check", e);
@@ -487,13 +483,13 @@ public class HybridSyncManager {
 
         try {
             // Cast to P2P channel
-            io.xdag.p2p.channel.Channel p2pChannel = (io.xdag.p2p.channel.Channel) channel;
+            Channel p2pChannel = (Channel) channel;
 
             // Send request via adapter
             var future = p2pAdapter.requestHeight(p2pChannel);
 
             // Wait for reply (with 30 second timeout)
-            SyncHeightReplyMessage reply = future.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            SyncHeightReplyMessage reply = future.get(30, TimeUnit.SECONDS);
 
             if (reply == null) {
                 log.error("Received null height reply");
@@ -510,7 +506,7 @@ public class HybridSyncManager {
                     reply.getMainBlockHash()
             );
 
-        } catch (java.util.concurrent.TimeoutException e) {
+        } catch (TimeoutException e) {
             log.error("Query remote height timed out", e);
             return null;
         } catch (Exception e) {
@@ -593,14 +589,14 @@ public class HybridSyncManager {
 
         try {
             // Cast to P2P channel
-            io.xdag.p2p.channel.Channel p2pChannel = (io.xdag.p2p.channel.Channel) channel;
+            Channel p2pChannel = (Channel) channel;
 
             // Send request via adapter
             var future = p2pAdapter.requestMainBlocks(
                     p2pChannel, fromHeight, toHeight, MAIN_CHAIN_BATCH_SIZE, false);
 
             // Wait for reply (with 30 second timeout)
-            SyncMainBlocksReplyMessage reply = future.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            SyncMainBlocksReplyMessage reply = future.get(30, TimeUnit.SECONDS);
 
             if (reply == null) {
                 log.error("Received null main blocks reply");
@@ -610,7 +606,7 @@ public class HybridSyncManager {
             log.debug("Received {} main blocks", reply.getBlocks().size());
             return reply.getBlocks();
 
-        } catch (java.util.concurrent.TimeoutException e) {
+        } catch (TimeoutException e) {
             log.error("Request main blocks timed out", e);
             return Collections.emptyList();
         } catch (Exception e) {
@@ -697,13 +693,13 @@ public class HybridSyncManager {
 
         try {
             // Cast to P2P channel
-            io.xdag.p2p.channel.Channel p2pChannel = (io.xdag.p2p.channel.Channel) channel;
+            Channel p2pChannel = (Channel) channel;
 
             // Send request via adapter
             var future = p2pAdapter.requestEpochBlocks(p2pChannel, epoch);
 
             // Wait for reply (with 30 second timeout)
-            SyncEpochBlocksReplyMessage reply = future.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            SyncEpochBlocksReplyMessage reply = future.get(30, TimeUnit.SECONDS);
 
             if (reply == null) {
                 log.error("Received null epoch blocks reply");
@@ -713,7 +709,7 @@ public class HybridSyncManager {
             log.debug("Received {} block hashes for epoch {}", reply.getHashes().size(), epoch);
             return reply.getHashes();
 
-        } catch (java.util.concurrent.TimeoutException e) {
+        } catch (TimeoutException e) {
             log.error("Request epoch blocks timed out", e);
             return Collections.emptyList();
         } catch (Exception e) {
@@ -734,13 +730,13 @@ public class HybridSyncManager {
 
         try {
             // Cast to P2P channel
-            io.xdag.p2p.channel.Channel p2pChannel = (io.xdag.p2p.channel.Channel) channel;
+            Channel p2pChannel = (Channel) channel;
 
             // Send request via adapter
             var future = p2pAdapter.requestBlocks(p2pChannel, hashes, false);
 
             // Wait for reply (with 30 second timeout)
-            SyncBlocksReplyMessage reply = future.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            SyncBlocksReplyMessage reply = future.get(30, TimeUnit.SECONDS);
 
             if (reply == null) {
                 log.error("Received null blocks reply");
@@ -750,7 +746,7 @@ public class HybridSyncManager {
             log.debug("Received {} blocks", reply.getBlocks().size());
             return reply.getBlocks();
 
-        } catch (java.util.concurrent.TimeoutException e) {
+        } catch (TimeoutException e) {
             log.error("Request blocks timed out", e);
             return Collections.emptyList();
         } catch (Exception e) {
@@ -873,13 +869,13 @@ public class HybridSyncManager {
 
         try {
             // Cast to P2P channel
-            io.xdag.p2p.channel.Channel p2pChannel = (io.xdag.p2p.channel.Channel) channel;
+            Channel p2pChannel = (Channel) channel;
 
             // Send request via adapter
             var future = p2pAdapter.requestTransactions(p2pChannel, hashes);
 
             // Wait for reply (with 30 second timeout)
-            SyncTransactionsReplyMessage reply = future.get(30, java.util.concurrent.TimeUnit.SECONDS);
+            SyncTransactionsReplyMessage reply = future.get(30, TimeUnit.SECONDS);
 
             if (reply == null) {
                 log.error("Received null transactions reply");
@@ -889,7 +885,7 @@ public class HybridSyncManager {
             log.debug("Received {} transactions", reply.getTransactions().size());
             return reply.getTransactions();
 
-        } catch (java.util.concurrent.TimeoutException e) {
+        } catch (TimeoutException e) {
             log.error("Request transactions timed out", e);
             return Collections.emptyList();
         } catch (Exception e) {
