@@ -527,13 +527,13 @@ public class DagChainImpl implements DagChain {
 
         // 1. Add prevMainBlock reference (if chain has blocks)
         long currentMainHeight = chainStats.getMainBlockCount();
-        log.warn("⚡ DEBUG: collectCandidateLinks() - mainBlockCount={}", currentMainHeight);
+        log.debug("Collecting candidate links: mainBlockCount={}", currentMainHeight);
 
         if (currentMainHeight > 0) {
             Block prevMainBlock = dagStore.getMainBlockAtPosition(currentMainHeight, false);
             if (prevMainBlock != null) {
                 links.add(Link.toBlock(prevMainBlock.getHash()));
-                log.warn("⚡ DEBUG: Added prevMainBlock reference: height={}, hash={}",
+                log.debug("Added prevMainBlock reference: height={}, hash={}",
                         currentMainHeight, prevMainBlock.getHash().toHexString().substring(0, 16) + "...");
             }
         }
@@ -549,13 +549,12 @@ public class DagChainImpl implements DagChain {
             if (orphanHashes != null && !orphanHashes.isEmpty()) {
                 for (Bytes32 orphanHash : orphanHashes) {
                     links.add(Link.toBlock(orphanHash));
-                    log.warn("⚡ DEBUG: Added orphan block reference: {}", orphanHash.toHexString().substring(0, 16) + "...");
                 }
-                log.warn("⚡ DEBUG: Added {} orphan block references", orphanHashes.size());
+                log.debug("Added {} orphan block references", orphanHashes.size());
             }
         }
 
-        log.warn("⚡ DEBUG: collectCandidateLinks() returning {} links", links.size());
+        log.debug("Collected {} candidate links", links.size());
         return links;
     }
 
