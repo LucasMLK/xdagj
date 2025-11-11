@@ -250,6 +250,13 @@ public class XdagCli extends Launcher {
             DagKernel dagKernel = startDagKernel(getConfig(), wallet);
             Launcher.registerShutdownHook("dagkernel", dagKernel::stop);
 
+            // Start telnet server for remote administration
+            TelnetServer telnetServer = new TelnetServer(dagKernel);
+            telnetServer.start();
+            Launcher.registerShutdownHook("telnet", telnetServer::stop);
+            System.out.println("Telnet server started on " + getConfig().getAdminSpec().getAdminTelnetIp() +
+                             ":" + getConfig().getAdminSpec().getAdminTelnetPort());
+
             // Keep main thread alive to prevent JVM from exiting
             // The background threads (MiningManager, HybridSyncManager) will keep running
             System.out.println("XDAG node is running. Press Ctrl+C to stop.");
@@ -422,12 +429,17 @@ public class XdagCli extends Launcher {
      */
     public Wallet createNewWallet() {
         System.out.println("Create New Wallet...");
-        String newPassword = readNewPassword("EnterNewPassword:", "ReEnterNewPassword:");
+
+        // Use password from --password flag if provided, otherwise prompt
+        String newPassword = getPassword();
         if (newPassword == null) {
-            return null;
+            newPassword = readNewPassword("EnterNewPassword:", "ReEnterNewPassword:");
+            if (newPassword == null) {
+                return null;
+            }
+            setPassword(newPassword);
         }
 
-        setPassword(newPassword);
         Wallet wallet = loadWallet();
 
         if (!wallet.unlock(newPassword) || !wallet.flush()) {
@@ -473,20 +485,28 @@ public class XdagCli extends Launcher {
             printer.println("HdWallet Initializing...");
             try {
                 String phrase = Bip39Mnemonic.generateString();
-            printer.println("HdWallet Mnemonic:" + phrase);
+                printer.println("HdWallet Mnemonic:" + phrase);
 
-            String repeat = readLine("HdWallet Mnemonic Repeat:");
-            repeat = String.join(" ", repeat.trim().split("\\s+"));
+                // In non-interactive mode (password from --password flag), skip mnemonic repetition
+                // This is safe for testing/automation - mnemonic is logged above
+                if (getPassword() == null || System.console() != null) {
+                    // Interactive mode: require mnemonic repetition
+                    String repeat = readLine("HdWallet Mnemonic Repeat:");
+                    repeat = String.join(" ", repeat.trim().split("\\s+"));
 
-            if (!repeat.equals(phrase)) {
-                printer.println("HdWallet Initialized Failure");
-                return false;
-            }
+                    if (!repeat.equals(phrase)) {
+                        printer.println("HdWallet Initialized Failure");
+                        return false;
+                    }
+                } else {
+                    // Non-interactive mode: auto-confirm
+                    printer.println("Non-interactive mode: Auto-initializing HD wallet (mnemonic logged above)");
+                }
 
-            wallet.initializeHdWallet(phrase);
-            wallet.flush();
-            printer.println("HdWallet Initialized Successfully!");
-            return true;
+                wallet.initializeHdWallet(phrase);
+                wallet.flush();
+                printer.println("HdWallet Initialized Successfully!");
+                return true;
             } catch (Exception e) {
                 printer.println("HdWallet Initialization Failed: " + e.getMessage());
                 return false;
