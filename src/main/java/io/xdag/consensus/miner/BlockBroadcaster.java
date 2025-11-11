@@ -225,18 +225,14 @@ public class BlockBroadcaster {
             NewBlockMessage message =
                     new NewBlockMessage(block, ttl);
 
-            // Serialize message
-            byte[] messageBody = message.getBody();
-
-            // Wrap in Bytes for P2P layer
-            org.apache.tuweni.bytes.Bytes messageBytes = org.apache.tuweni.bytes.Bytes.wrap(messageBody);
-
             // Broadcast to all connected peers
+            // Phase 12.5 FIX: Send Message object directly, not raw bytes
+            // Channel.send(Message) will handle proper encoding with message code prefix
             int sentCount = 0;
             for (io.xdag.p2p.channel.Channel channel : p2pService.getChannelManager().getChannels().values()) {
                 if (channel.isFinishHandshake()) {
                     try {
-                        channel.send(messageBytes);
+                        channel.send(message);  // Send Message object, not bytes
                         sentCount++;
                     } catch (Exception e) {
                         log.error("Error broadcasting block to {}: {}",

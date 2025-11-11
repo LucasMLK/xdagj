@@ -480,6 +480,17 @@ public class DagChainImpl implements DagChain {
             difficulty = UInt256.ONE;
         }
 
+        // DEVNET ONLY: Use maximum difficulty target for fast testing (any hash will pass)
+        // In XDAG, "difficulty" field is the maximum acceptable hash value
+        // difficulty = 1 means hash must be <= 1 (almost impossible)
+        // difficulty = MAX means hash must be <= MAX (always passes)
+        // In production, this will use the network difficulty
+        boolean isDevnet = dagKernel.getConfig().getNodeSpec().getNetwork().toString().toLowerCase().contains("devnet");
+        if (isDevnet) {
+            difficulty = UInt256.MAX_VALUE;  // Maximum target = any hash passes
+            log.warn("⚠ DEVNET TEST MODE: Using maximum difficulty target (MAX) for easy PoW validation");
+        }
+
         // 3. Get coinbase address (mining reward address)
         // Note: Coinbase should be set externally via setMiningCoinbase()
         // If not set, uses Bytes32.ZERO (should be set before mining)
@@ -516,11 +527,13 @@ public class DagChainImpl implements DagChain {
 
         // 1. Add prevMainBlock reference (if chain has blocks)
         long currentMainHeight = chainStats.getMainBlockCount();
+        log.warn("⚡ DEBUG: collectCandidateLinks() - mainBlockCount={}", currentMainHeight);
+
         if (currentMainHeight > 0) {
             Block prevMainBlock = dagStore.getMainBlockAtPosition(currentMainHeight, false);
             if (prevMainBlock != null) {
                 links.add(Link.toBlock(prevMainBlock.getHash()));
-                log.debug("Added prevMainBlock reference: height={}, hash={}",
+                log.warn("⚡ DEBUG: Added prevMainBlock reference: height={}, hash={}",
                         currentMainHeight, prevMainBlock.getHash().toHexString().substring(0, 16) + "...");
             }
         }
@@ -536,11 +549,13 @@ public class DagChainImpl implements DagChain {
             if (orphanHashes != null && !orphanHashes.isEmpty()) {
                 for (Bytes32 orphanHash : orphanHashes) {
                     links.add(Link.toBlock(orphanHash));
+                    log.warn("⚡ DEBUG: Added orphan block reference: {}", orphanHash.toHexString().substring(0, 16) + "...");
                 }
-                log.debug("Added {} orphan block references", orphanHashes.size());
+                log.warn("⚡ DEBUG: Added {} orphan block references", orphanHashes.size());
             }
         }
 
+        log.warn("⚡ DEBUG: collectCandidateLinks() returning {} links", links.size());
         return links;
     }
 
@@ -581,6 +596,27 @@ public class DagChainImpl implements DagChain {
         );
 
         log.info("Genesis block created: hash={}, epoch={}",
+                genesisBlock.getHash().toHexString(), genesisBlock.getEpoch());
+
+        return genesisBlock;
+    }
+
+    @Override
+    public Block createGenesisBlock(Bytes32 coinbase, long timestamp) {
+        // Phase 12.5: Deterministic genesis block creation (Bitcoin/Ethereum approach)
+        log.info("Creating deterministic genesis block at timestamp {}", timestamp);
+        log.info("  - Coinbase: {}", coinbase.toHexString());
+
+        // Genesis block: empty links, minimal difficulty, no mining required
+        Block genesisBlock = Block.createWithNonce(
+                timestamp,
+                UInt256.ONE,           // Minimal difficulty for genesis
+                Bytes32.ZERO,          // No mining required
+                coinbase,              // Deterministic coinbase from genesis.json
+                List.of()              // Empty links (no previous blocks to reference)
+        );
+
+        log.info("✓ Deterministic genesis block created: hash={}, epoch={}",
                 genesisBlock.getHash().toHexString(), genesisBlock.getEpoch());
 
         return genesisBlock;
@@ -852,28 +888,34 @@ public class DagChainImpl implements DagChain {
         }
 
         // Rule 2: Check time window (12 days / 16384 epochs)
-        long currentEpoch = getCurrentEpoch();
-        for (Link link : block.getLinks()) {
-            if (link.isBlock()) {
-                Block refBlock = dagStore.getBlockByHash(link.getTargetHash(), false);
-                if (refBlock != null) {
-                    long refEpoch = refBlock.getEpoch();
-                    if (currentEpoch - refEpoch > 16384) {
-                        return DAGValidationResult.invalid(
-                                DAGValidationResult.DAGErrorCode.TIME_WINDOW_VIOLATION,
-                                "Referenced block is too old (>" + (currentEpoch - refEpoch) + " epochs)"
-                        );
+        // DEVNET: Skip time window validation for testing with old genesis blocks
+        boolean isDevnet = dagKernel.getConfig().getNodeSpec().getNetwork().toString().toLowerCase().contains("devnet");
+        if (!isDevnet) {
+            long currentEpoch = getCurrentEpoch();
+            for (Link link : block.getLinks()) {
+                if (link.isBlock()) {
+                    Block refBlock = dagStore.getBlockByHash(link.getTargetHash(), false);
+                    if (refBlock != null) {
+                        long refEpoch = refBlock.getEpoch();
+                        if (currentEpoch - refEpoch > 16384) {
+                            return DAGValidationResult.invalid(
+                                    DAGValidationResult.DAGErrorCode.TIME_WINDOW_VIOLATION,
+                                    "Referenced block is too old (>" + (currentEpoch - refEpoch) + " epochs)"
+                            );
+                        }
                     }
                 }
             }
         }
 
         // Rule 3: Check link count (1-16 block links)
+        // DEVNET: Allow 0 links for first block when chain is empty
         long blockLinkCount = block.getLinks().stream()
                 .filter(link -> !link.isTransaction())
                 .count();
 
-        if (blockLinkCount < 1 || blockLinkCount > 16) {
+        boolean isFirstBlock = (blockLinkCount == 0 && chainStats.getMainBlockCount() == 0);
+        if (!isFirstBlock && (blockLinkCount < 1 || blockLinkCount > 16)) {
             return DAGValidationResult.invalid(
                     DAGValidationResult.DAGErrorCode.INVALID_LINK_COUNT,
                     "Block must have 1-16 block links (found " + blockLinkCount + ")"

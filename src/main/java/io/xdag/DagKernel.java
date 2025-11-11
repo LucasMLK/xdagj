@@ -50,6 +50,7 @@ import io.xdag.p2p.P2pService;
 import io.xdag.p2p.config.P2pConfig;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 import java.io.File;
@@ -780,25 +781,39 @@ public class DagKernel {
   /**
    * Create genesis block from configuration
    *
-   * @throws RuntimeException if creation fails
+   * <p>Phase 12.5+: REQUIRES deterministic genesisCoinbase from genesis.json (Bitcoin/Ethereum approach).
+   * All nodes must create identical genesis blocks using the network-defined coinbase address.
+   *
+   * @throws RuntimeException if creation fails or if genesisCoinbase is not configured
    */
   private void createGenesisBlock() {
       log.info("Creating genesis block...");
 
-      // Get coinbase key
-      if (wallet == null || wallet.getDefKey() == null) {
-          throw new RuntimeException("Wallet is required for genesis block creation");
-      }
-
-      ECKeyPair coinbaseKey = wallet.getDefKey();
-      log.info("  - Using wallet key for coinbase");
-
-      // Use configured timestamp or XDAG_ERA
+      // Use configured timestamp from genesis.json
       long timestamp = genesisConfig.getTimestamp();
       log.info("  - Genesis timestamp: {}", timestamp);
 
-      // Create genesis block via DagChain
-      Block genesisBlock = dagChain.createGenesisBlock(coinbaseKey, timestamp);
+      // Phase 12.5+: genesisCoinbase is REQUIRED for deterministic genesis (Bitcoin/Ethereum approach)
+      if (!genesisConfig.hasGenesisCoinbase()) {
+          throw new RuntimeException(
+              "genesisCoinbase is required in genesis.json!\n\n" +
+              "XDAG v5.1 requires deterministic genesis block creation.\n" +
+              "All nodes must create IDENTICAL genesis blocks (Bitcoin/Ethereum approach).\n\n" +
+              "Please add to your genesis.json:\n" +
+              "  \"genesisCoinbase\": \"0xDEADBEEFDEADBEEF...\"\n\n" +
+              "Example:\n" +
+              "  \"genesisCoinbase\": \"0x0000000000000000000000000000000000000000000000000000000000000000\""
+          );
+      }
+
+      // Use deterministic coinbase from genesis.json
+      Bytes32 genesisCoinbase = genesisConfig.getGenesisCoinbaseBytes32();
+      log.info("  - Using deterministic genesisCoinbase from genesis.json");
+      log.info("  - Coinbase: {}", genesisCoinbase.toHexString());
+      log.info("  - This ensures all nodes create IDENTICAL genesis blocks");
+
+      // Create genesis block via DagChain using deterministic coinbase
+      Block genesisBlock = dagChain.createGenesisBlock(genesisCoinbase, timestamp);
       log.info("  - Genesis block created: {}", genesisBlock.getHash().toHexString());
 
       // Import genesis block

@@ -131,6 +131,25 @@ public class GenesisConfig {
     @JsonProperty("extraData")
     private String extraData = "XDAG v5.1 Genesis";
 
+    /**
+     * Genesis block coinbase address (32 bytes hex string)
+     *
+     * <p>CRITICAL: This field makes genesis block deterministic (like Bitcoin/Ethereum).
+     * All nodes on the same network MUST use the same genesisCoinbase to create
+     * identical genesis blocks.
+     *
+     * <p>Examples:
+     * <ul>
+     *   <li>Mainnet: 0x0000000000000000000000000000000000000000000000000000000000000000</li>
+     *   <li>Testnet: 0x1111111111111111111111111111111111111111111111111111111111111111</li>
+     *   <li>Devnet:  0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF</li>
+     * </ul>
+     *
+     * <p>If not specified, falls back to wallet key (DEPRECATED - for backward compatibility only)
+     */
+    @JsonProperty("genesisCoinbase")
+    private String genesisCoinbase = null;
+
     // ========== Initial Allocations ==========
 
     /**
@@ -246,6 +265,35 @@ public class GenesisConfig {
     }
 
     /**
+     * Get genesis coinbase address as Bytes32
+     *
+     * <p>Returns configured genesisCoinbase, or null if not set.
+     * Caller should fall back to wallet key if this returns null.
+     *
+     * @return Bytes32 coinbase address, or null if not configured
+     */
+    public Bytes32 getGenesisCoinbaseBytes32() {
+        if (genesisCoinbase == null || genesisCoinbase.trim().isEmpty()) {
+            return null;
+        }
+
+        String hex = genesisCoinbase.startsWith("0x")
+                ? genesisCoinbase.substring(2)
+                : genesisCoinbase;
+
+        return Bytes32.fromHexString(hex);
+    }
+
+    /**
+     * Check if genesis coinbase is configured
+     *
+     * @return true if genesisCoinbase is set
+     */
+    public boolean hasGenesisCoinbase() {
+        return genesisCoinbase != null && !genesisCoinbase.trim().isEmpty();
+    }
+
+    /**
      * Check if genesis has any pre-allocations
      *
      * @return true if alloc is not empty
@@ -286,6 +334,23 @@ public class GenesisConfig {
             getInitialDifficultyUInt256();
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid difficulty format: " + initialDifficulty, e);
+        }
+
+        // Validate genesisCoinbase if present
+        if (hasGenesisCoinbase()) {
+            String address = genesisCoinbase;
+            // Check address format (should be 32 bytes hex with 0x prefix)
+            if (!address.matches("^0x[0-9a-fA-F]{64}$")) {
+                throw new IllegalArgumentException("Invalid genesisCoinbase format: " + address +
+                        " (must be 32 bytes hex with 0x prefix, e.g., 0x0000...0000)");
+            }
+
+            // Try to parse to ensure it's valid
+            try {
+                getGenesisCoinbaseBytes32();
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Failed to parse genesisCoinbase: " + genesisCoinbase, e);
+            }
         }
 
         // Validate allocations

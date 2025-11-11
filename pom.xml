@@ -44,7 +44,6 @@
         <mysql-connector.version>8.4.0</mysql-connector.version>
         <h2.version>2.3.232</h2.version>
         <gson.version>2.13.1</gson.version>
-        <surefire.test.excludes>**/*RandomXSyncTest.java,**/*SyncTest.java,**/*SnapshotJTest.java</surefire.test.excludes>
         <byte-buddy-agent.version>1.15.11</byte-buddy-agent.version>
     </properties>
 
@@ -104,9 +103,6 @@
                 <version>3.5.3</version>
                 <configuration>
                     <argLine>-javaagent:${project.build.directory}/agents/byte-buddy-agent.jar -Xmx2048m</argLine>
-                    <excludes>
-                        <exclude>${surefire.test.excludes}</exclude>
-                    </excludes>
                 </configuration>
             </plugin>
 

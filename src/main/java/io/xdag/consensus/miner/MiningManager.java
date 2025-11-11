@@ -215,7 +215,17 @@ public class MiningManager {
         long nextEpoch = XdagTime.getEndOfEpoch(currentTime);
         long initialDelay = Math.max(1, nextEpoch - currentTime);
 
-        log.info("Mining will start in {} seconds (at next epoch boundary)", initialDelay);
+        // DEVNET ONLY: Use short delay for testing (10 seconds)
+        // In production, this will use the full epoch delay
+        boolean isDevnet = dagKernel.getConfig().getNodeSpec().getNetwork().toString().toLowerCase().contains("devnet");
+        if (isDevnet && initialDelay > 30) {
+            log.warn("⚠ DEVNET TEST MODE: Reducing mining delay from {} to 10 seconds", initialDelay);
+            initialDelay = 10;
+        }
+
+        log.info("Mining will start in {} seconds ({})",
+                initialDelay,
+                isDevnet && initialDelay <= 30 ? "devnet fast mode" : "at next epoch boundary");
 
         // Schedule periodic mining (every 64 seconds)
         miningScheduler.scheduleAtFixedRate(
@@ -331,9 +341,24 @@ public class MiningManager {
             // TODO Phase 12.5: Integrate with pool interface
             // sendTaskToPools(task);
 
+            // DEVNET TEST MODE: Auto-submit a test share for immediate block creation
+            boolean isDevnet = dagKernel.getConfig().getNodeSpec().getNetwork().toString().toLowerCase().contains("devnet");
+            if (isDevnet) {
+                log.warn("⚠ DEVNET TEST MODE: Auto-submitting test share for immediate block creation");
+                // Use the candidate block's nonce as the test share
+                Bytes32 testNonce = candidateBlock.getHeader().getNonce();
+                shareValidator.validateShare(testNonce, task);
+            }
+
             // Step 5: Schedule timeout for end of epoch
             long timeout = XdagTime.getEndOfEpoch(candidateBlock.getTimestamp());
             long timeToTimeout = timeout - XdagTime.getCurrentTimestamp();
+
+            // DEVNET TEST MODE: Use short timeout for faster testing
+            if (isDevnet && timeToTimeout > 20) {
+                log.warn("⚠ DEVNET TEST MODE: Reducing timeout from {} to 15 seconds", timeToTimeout);
+                timeToTimeout = 15;
+            }
 
             log.info("Mining cycle will timeout in {} seconds", timeToTimeout);
 

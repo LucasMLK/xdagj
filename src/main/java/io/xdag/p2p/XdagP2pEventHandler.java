@@ -110,14 +110,20 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
 
     @Override
     public void onMessage(Channel channel, Bytes data) {
+        // Phase 12.5 DEBUG: Log all message receptions at INFO level
+        log.info("⚡ onMessage() called from {} (data size: {} bytes)",
+                channel.getRemoteAddress(), data.size());
+
         if (data.isEmpty()) {
             log.warn("Received empty message from {}", channel.getRemoteAddress());
             return;
         }
 
         byte messageType = data.get(0);
-        log.debug("Received message type 0x{} from {}",
-                String.format("%02X", messageType), channel.getRemoteAddress());
+        log.info("📨 Received message type 0x{} from {} (registered: {})",
+                String.format("%02X", messageType),
+                channel.getRemoteAddress(),
+                messageTypes.contains(messageType) ? "YES" : "NO");
 
         try {
             XdagMessageCode code = XdagMessageCode.of(messageType);
@@ -194,11 +200,23 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
             NewBlockMessage msg = new NewBlockMessage(body.toArray());
             Block block = msg.getBlock();
 
-            log.debug("Received NEW_BLOCK: {} from {}",
-                    block.getHash().toHexString(), channel.getRemoteAddress());
+            log.info("Received NEW_BLOCK: {} from {} (height={}, epoch={})",
+                    block.getHash().toHexString().substring(0, 18) + "...",
+                    channel.getRemoteAddress(),
+                    block.getInfo() != null ? block.getInfo().getHeight() : "unknown",
+                    block.getEpoch());
 
             // Phase 12.5: Import block directly via DagChain
-            dagChain.tryToConnect(block);
+            io.xdag.core.DagImportResult result = dagChain.tryToConnect(block);
+
+            if (result != null && result.isMainBlock()) {
+                log.info("✓ Received block imported as main block at position {}",
+                        result.getPosition());
+            } else if (result != null && result.isOrphan()) {
+                log.info("Received block imported as orphan");
+            } else if (result != null) {
+                log.warn("Received block import failed: {}", result.getErrorMessage());
+            }
 
         } catch (Exception e) {
             log.error("Error handling NEW_BLOCK from {}: {}",

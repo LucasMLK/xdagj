@@ -238,8 +238,59 @@ public interface DagChain {
      * @param timestamp genesis block timestamp (XDAG timestamp format)
      * @return genesis block ready for import
      * @see #tryToConnect(Block)
+     * @deprecated Use {@link #createGenesisBlock(Bytes32, long)} instead for deterministic genesis
      */
+    @Deprecated
     Block createGenesisBlock(ECKeyPair key, long timestamp);
+
+    /**
+     * Create the genesis block with deterministic coinbase (Bitcoin/Ethereum approach)
+     *
+     * <p>This is the RECOMMENDED way to create genesis blocks in XDAG v5.1.
+     * Unlike the deprecated {@link #createGenesisBlock(ECKeyPair, long)} which uses
+     * wallet keys (resulting in different genesis blocks per node), this method
+     * uses a predefined coinbase address from genesis.json.
+     *
+     * <p><strong>Why Deterministic Genesis?</strong>
+     * <ul>
+     *   <li>All nodes on the same network must create IDENTICAL genesis blocks</li>
+     *   <li>Genesis block hash defines the network identity (like Bitcoin/Ethereum)</li>
+     *   <li>Nodes with different genesis blocks cannot sync with each other</li>
+     *   <li>Coinbase address is network-defined in genesis.json, not wallet-dependent</li>
+     * </ul>
+     *
+     * <p><strong>Example genesis.json</strong>:
+     * <pre>
+     * {
+     *   "networkId": "mainnet",
+     *   "genesisCoinbase": "0x0000000000000000000000000000000000000000000000000000000000000000",
+     *   "timestamp": 1516406400,
+     *   ...
+     * }
+     * </pre>
+     *
+     * <p>All nodes using this genesis.json will create the SAME genesis block.
+     *
+     * <p>The genesis block has special characteristics:
+     * <ul>
+     *   <li>Empty links list (no previous blocks to reference)</li>
+     *   <li>Minimal difficulty (difficulty = 1)</li>
+     *   <li>Zero nonce (no mining required for genesis)</li>
+     *   <li>Coinbase set to genesisCoinbase from config</li>
+     *   <li>Specified timestamp (from genesis.json)</li>
+     *   <li>Position = 1 (first block in main chain)</li>
+     *   <li>Cumulative difficulty = initial work</li>
+     * </ul>
+     *
+     * <p>This method should only be called once per blockchain instance, when no blocks exist.
+     *
+     * @param coinbase Coinbase address from genesis.json (32 bytes)
+     * @param timestamp genesis block timestamp (XDAG timestamp format)
+     * @return genesis block ready for import
+     * @see #tryToConnect(Block)
+     * @since v5.1 Phase 12.5
+     */
+    Block createGenesisBlock(Bytes32 coinbase, long timestamp);
 
     /**
      * Create a reward block for pool distribution
