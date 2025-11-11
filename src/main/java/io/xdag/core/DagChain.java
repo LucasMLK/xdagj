@@ -218,38 +218,11 @@ public interface DagChain {
     Block createCandidateBlock();
 
     /**
-     * Create the genesis block for blockchain initialization
-     *
-     * <p>The genesis block is the first block in the DAG, created during fresh node startup.
-     * It has special characteristics:
-     * <ul>
-     *   <li>Empty links list (no previous blocks to reference)</li>
-     *   <li>Minimal difficulty (difficulty = 1)</li>
-     *   <li>Zero nonce (no mining required for genesis)</li>
-     *   <li>Coinbase set to provided key</li>
-     *   <li>Specified timestamp (usually from config: xdag.era time)</li>
-     *   <li>Position = 1 (first block in main chain)</li>
-     *   <li>Cumulative difficulty = initial work</li>
-     * </ul>
-     *
-     * <p>This method should only be called once per blockchain instance, when no blocks exist.
-     *
-     * @param key ECKeyPair for coinbase address (genesis block creator)
-     * @param timestamp genesis block timestamp (XDAG timestamp format)
-     * @return genesis block ready for import
-     * @see #tryToConnect(Block)
-     * @deprecated Use {@link #createGenesisBlock(Bytes32, long)} instead for deterministic genesis
-     */
-    @Deprecated
-    Block createGenesisBlock(ECKeyPair key, long timestamp);
-
-    /**
      * Create the genesis block with deterministic coinbase (Bitcoin/Ethereum approach)
      *
-     * <p>This is the RECOMMENDED way to create genesis blocks in XDAG v5.1.
-     * Unlike the deprecated {@link #createGenesisBlock(ECKeyPair, long)} which uses
-     * wallet keys (resulting in different genesis blocks per node), this method
-     * uses a predefined coinbase address from genesis.json.
+     * <p>This is the way to create genesis blocks in XDAG v5.1.
+     * All nodes must use a predefined coinbase address from genesis.json
+     * to ensure deterministic genesis block creation.
      *
      * <p><strong>Why Deterministic Genesis?</strong>
      * <ul>

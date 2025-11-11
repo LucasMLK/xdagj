@@ -573,35 +573,6 @@ public class DagChainImpl implements DagChain {
     }
 
     @Override
-    public Block createGenesisBlock(ECKeyPair key, long timestamp) {
-        // Phase 11.2: Genesis block creation using Block static factory method
-        log.info("Creating genesis block at timestamp {}", timestamp);
-
-        // Convert ECKeyPair to coinbase address (32 bytes)
-        // AddressUtils.toBytesAddress() returns 20 bytes, but we need 32 bytes for Bytes32
-        // Pad with 12 leading zeros to make it 32 bytes
-        Bytes addressBytes = io.xdag.crypto.keys.AddressUtils.toBytesAddress(key.getPublicKey());
-        byte[] coinbaseBytes = new byte[32];
-        // Copy 20-byte address to the last 20 bytes (留下前12字节为0)
-        System.arraycopy(addressBytes.toArray(), 0, coinbaseBytes, 12, 20);
-        Bytes32 coinbase = Bytes32.wrap(coinbaseBytes);
-
-        // Genesis block: empty links, minimal difficulty, no mining required
-        Block genesisBlock = Block.createWithNonce(
-                timestamp,
-                UInt256.ONE,           // Minimal difficulty for genesis
-                Bytes32.ZERO,          // No mining required
-                coinbase,
-                List.of()              // Empty links (no previous blocks to reference)
-        );
-
-        log.info("Genesis block created: hash={}, epoch={}",
-                genesisBlock.getHash().toHexString(), genesisBlock.getEpoch());
-
-        return genesisBlock;
-    }
-
-    @Override
     public Block createGenesisBlock(Bytes32 coinbase, long timestamp) {
         // Phase 12.5: Deterministic genesis block creation (Bitcoin/Ethereum approach)
         log.info("Creating deterministic genesis block at timestamp {}", timestamp);

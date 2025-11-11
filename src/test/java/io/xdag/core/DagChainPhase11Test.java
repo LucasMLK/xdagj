@@ -268,10 +268,10 @@ public class DagChainPhase11Test {
         System.out.println("Registered test listener");
 
         // Create and import a genesis block to trigger notification
-        ECKeyPair key = ECKeyPair.generate();
-        // SECURITY FIX: Use XDAG era timestamp for genesis block
+        // Use deterministic coinbase for test (Phase 12.5+)
+        Bytes32 testGenesisCoinbase = Bytes32.fromHexString("0x1111111111111111111111111111111111111111111111111111111111111111");
         long timestamp = config.getXdagEra();
-        Block genesisBlock = dagChain.createGenesisBlock(key, timestamp);
+        Block genesisBlock = dagChain.createGenesisBlock(testGenesisCoinbase, timestamp);
 
         System.out.println("\nCreated genesis block:");
         System.out.println("  Hash: " + genesisBlock.getHash().toHexString());
@@ -302,22 +302,21 @@ public class DagChainPhase11Test {
     // ==================== Phase 11.2: Block Creation Tests ====================
 
     /**
-     * Test 4: createGenesisBlock()
+     * Test 4: createGenesisBlock() - Deterministic genesis (Phase 12.5+)
      */
     @Test
     public void testPhase11_2_CreateGenesisBlock() {
-        System.out.println("\n========== Test 4: Phase 11.2 - Create Genesis Block ==========");
+        System.out.println("\n========== Test 4: Phase 11.2 - Create Genesis Block (Deterministic) ==========");
 
-        // Create genesis block
-        ECKeyPair key = ECKeyPair.generate();
-        // SECURITY FIX: Use XDAG era timestamp for genesis block
+        // Create deterministic genesis block
+        Bytes32 testGenesisCoinbase = Bytes32.fromHexString("0x2222222222222222222222222222222222222222222222222222222222222222");
         long timestamp = config.getXdagEra();
 
-        System.out.println("Creating genesis block:");
+        System.out.println("Creating deterministic genesis block:");
         System.out.println("  Timestamp: " + timestamp);
-        System.out.println("  Key: " + key.getPublicKey().toString().substring(0, 16) + "...");
+        System.out.println("  Coinbase: " + testGenesisCoinbase.toHexString().substring(0, 16) + "...");
 
-        Block genesisBlock = dagChain.createGenesisBlock(key, timestamp);
+        Block genesisBlock = dagChain.createGenesisBlock(testGenesisCoinbase, timestamp);
 
         // Verify genesis block properties
         assertNotNull("Genesis block should not be null", genesisBlock);
@@ -389,11 +388,10 @@ public class DagChainPhase11Test {
     public void testPhase11_2_CreateCandidateBlock_WithMainChain() {
         System.out.println("\n========== Test 6: Phase 11.2 - Candidate Block with Main Chain ==========");
 
-        // First, create and import a genesis block
-        ECKeyPair key = ECKeyPair.generate();
-        // SECURITY FIX: Use XDAG era timestamp for genesis block
+        // First, create and import a deterministic genesis block
+        Bytes32 testGenesisCoinbase = Bytes32.fromHexString("0x3333333333333333333333333333333333333333333333333333333333333333");
         long timestamp = config.getXdagEra();
-        Block genesisBlock = dagChain.createGenesisBlock(key, timestamp);
+        Block genesisBlock = dagChain.createGenesisBlock(testGenesisCoinbase, timestamp);
 
         System.out.println("Creating genesis block:");
         System.out.println("  Hash: " + genesisBlock.getHash().toHexString());

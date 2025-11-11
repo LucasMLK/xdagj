@@ -47,6 +47,7 @@ public class TestGenesisHelper {
                 "  \"chainId\": 999,\n" +
                 "  \"timestamp\": 1516406400,\n" +
                 "  \"initialDifficulty\": \"0x1000\",\n" +
+                "  \"genesisCoinbase\": \"0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\",\n" +
                 "  \"epochLength\": 64,\n" +
                 "  \"extraData\": \"XDAG v5.1 Test Genesis\",\n" +
                 "  \"alloc\": {},\n" +
