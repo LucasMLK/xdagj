@@ -58,7 +58,7 @@ import static org.mockito.Mockito.*;
 
 /**
  * Comprehensive unit tests for Shell CLI commands (v1.0)
- *
+ * <p>
  * Tests all 18 CLI commands:
  * - Account & Wallet: account, balance, address, nonce, maxbalance, keygen
  * - Transactions: transfer, consolidate
@@ -182,7 +182,7 @@ public class ShellTest {
     }
 
     @Test
-    public void testNonceCommand() throws Exception {
+    public void testNonceCommand() {
         // Setup mock data
         List<ECKeyPair> accounts = new ArrayList<>();
         accounts.add(ECKeyPair.generate());
