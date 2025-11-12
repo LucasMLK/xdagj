@@ -27,18 +27,19 @@ package io.xdag.core;
 import java.io.Serializable;
 import lombok.Builder;
 import lombok.Value;
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
  * BlockHeader for XDAG v5.1
- *
+ * <p>
  * Design principles (from CORE_DATA_STRUCTURES.md):
  * 1. Participates in hash calculation: timestamp, difficulty, nonce, coinbase
  * 2. Hash is a cached field: lazy computation, not serialized
  * 3. All blocks are candidate blocks: all have nonce and coinbase
  * 4. Immutable design: thread-safe and cacheable
- *
+ * <p>
  * Size: 104 bytes (fixed)
  * - timestamp: 8 bytes
  * - difficulty: 32 bytes
@@ -73,11 +74,11 @@ public class BlockHeader implements Serializable {
     Bytes32 nonce;
 
     /**
-     * Miner address / coinbase (32 bytes)
+     * Miner address / coinbase (20 bytes)
      * Address that receives block reward and transaction fees
      * All blocks have coinbase (all compete for rewards)
      */
-    Bytes32 coinbase;
+    Bytes coinbase;
 
     /**
      * Block hash cache (32 bytes)
@@ -100,7 +101,7 @@ public class BlockHeader implements Serializable {
     /**
      * Check if this block satisfies the PoW difficulty requirement
      * Valid if: hash <= difficulty
-     *
+     * <p>
      * Note: hash must be set (not null) before calling this method
      *
      * @return true if hash <= difficulty
@@ -115,13 +116,13 @@ public class BlockHeader implements Serializable {
     /**
      * Get the size of this header in bytes (for serialization)
      *
-     * @return 104 bytes (fixed)
+     * @return 92 bytes (fixed)
      */
     public static int getSerializedSize() {
         return 8 +   // timestamp
                32 +  // difficulty
                32 +  // nonce
-               32;   // coinbase
+               20;   // coinbase
         // hash is NOT serialized (cached field)
     }
 

@@ -29,14 +29,12 @@ import io.xdag.consensus.RandomX;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
 import io.xdag.crypto.core.CryptoProvider;
+import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.utils.BytesUtils;
 import io.xdag.utils.XdagTime;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
-
-import static io.xdag.utils.BasicUtils.hash2byte;
-import static io.xdag.utils.BasicUtils.keyPair2Hash;
 
 /**
  * BlockGenerator - Generates candidate blocks for mining
@@ -158,7 +156,7 @@ public class BlockGenerator {
      */
     private Bytes32 generateInitialNonce(ECKeyPair coinbaseKey) {
         byte[] randomBytes = CryptoProvider.nextBytes(12);
-        byte[] walletAddress = hash2byte(keyPair2Hash(coinbaseKey));
+        byte[] walletAddress = AddressUtils.toBytesAddress(coinbaseKey).toArray();
         return Bytes32.wrap(BytesUtils.merge(randomBytes, walletAddress));
     }
 

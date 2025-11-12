@@ -51,57 +51,39 @@ import org.apache.tuweni.units.bigints.UInt256;
 /**
  * DagChain implementation for XDAG v5.1 epoch-based DAG consensus
  *
- * <p>This class implements the DagChain interface with proper epoch-based consensus
- * and cumulative difficulty calculation.
- *
- * <p>Phase 9 Integration: Uses DagKernel exclusively for all storage operations.
+ * <p>Implements epoch-based consensus with cumulative difficulty calculation.
+ * Uses DagKernel exclusively for all storage operations.
  *
  * @since v5.1
  */
 @Slf4j
 public class DagChainImpl implements DagChain {
 
-    private final DagKernel dagKernel;  // v5.1 standalone DagKernel (primary)
-    private final DagStore dagStore;  // Phase 9: DagStore from DagKernel
-    private final DagEntityResolver entityResolver;  // Phase 9: Unified link resolver from DagKernel
-    private final OrphanBlockStore orphanBlockStore;  // From DagKernel
-    private final TransactionStore transactionStore;  // From DagKernel
+    private final DagKernel dagKernel;
+    private final DagStore dagStore;
+    private final DagEntityResolver entityResolver;
+    private final OrphanBlockStore orphanBlockStore;
+    private final TransactionStore transactionStore;
 
-    // Thread-safe chain statistics
     private volatile ChainStats chainStats;
-
-    // Event listeners (Phase 11)
     private final List<Listener> listeners = new ArrayList<>();
-
-    // Mining coinbase address (Phase 11.2)
-    // Note: This is a temporary solution. In the future, coinbase should be provided
-    // by the POW component directly using Block.createCandidate()
-    private volatile Bytes32 miningCoinbase = Bytes32.ZERO;
+    private final ThreadLocal<Boolean> isRetryingOrphans = ThreadLocal.withInitial(() -> false);
+    private volatile Bytes miningCoinbase = Bytes.wrap(new byte[20]);
 
     /**
-     * Constructor with DagKernel (v5.1 standalone)
+     * Creates DagChain with DagKernel dependencies
      *
-     * <p>This constructor uses DagKernel exclusively for all operations.
-     * All components (DagStore, TransactionStore, OrphanBlockStore) are obtained from DagKernel.
-     *
-     * <p>Phase 10 Refactoring: Removed dependencies on Kernel and BlockchainImpl.
-     * DagChainImpl now operates independently with DagKernel only.
-     *
-     * @param dagKernel Standalone DagKernel for v5.1
+     * @param dagKernel kernel providing storage and entity resolution
      */
     public DagChainImpl(DagKernel dagKernel) {
         this.dagKernel = dagKernel;
-
-        // Get all components from DagKernel
         this.dagStore = dagKernel.getDagStore();
         this.entityResolver = dagKernel.getEntityResolver();
         this.orphanBlockStore = dagKernel.getOrphanBlockStore();
         this.transactionStore = dagKernel.getTransactionStore();
 
-        // Initialize chain stats from DagStore
         this.chainStats = dagStore.getChainStats();
         if (this.chainStats == null) {
-            // Create initial chain stats if none exist
             this.chainStats = ChainStats.builder()
                     .mainBlockCount(0)
                     .maxDifficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
@@ -110,7 +92,7 @@ public class DagChainImpl implements DagChain {
             dagStore.saveChainStats(this.chainStats);
         }
 
-        log.info("DagChainImpl initialized with DagKernel v5.1 (standalone)");
+        log.info("DagChainImpl initialized with DagKernel");
         log.info("  - DagStore: {}", dagStore.getClass().getSimpleName());
         log.info("  - DagEntityResolver: {}", entityResolver.getClass().getSimpleName());
         log.info("  - OrphanBlockStore: {}", orphanBlockStore.getClass().getSimpleName());
@@ -124,19 +106,19 @@ public class DagChainImpl implements DagChain {
         try {
             log.debug("Attempting to connect block: {}", block.getHash().toHexString());
 
-            // Phase 1: Basic validation
+            // Basic validation
             DagImportResult basicValidation = validateBasicRules(block);
             if (basicValidation != null) {
                 return basicValidation;
             }
 
-            // Phase 2: Link validation (Transaction and Block references)
+            // Link validation (Transaction and Block references)
             DagImportResult linkValidation = validateLinks(block);
             if (linkValidation != null) {
                 return linkValidation;
             }
 
-            // Phase 3: DAG rules validation
+            // DAG rules validation
             DAGValidationResult dagValidation = validateDAGRules(block);
             if (!dagValidation.isValid()) {
                 log.debug("Block {} failed DAG validation: {}",
@@ -144,7 +126,7 @@ public class DagChainImpl implements DagChain {
                 return DagImportResult.invalidDAG(dagValidation);
             }
 
-            // Phase 4: Calculate cumulative difficulty
+            // Calculate cumulative difficulty
             UInt256 cumulativeDifficulty;
             try {
                 cumulativeDifficulty = calculateCumulativeDifficulty(block);
@@ -156,7 +138,7 @@ public class DagChainImpl implements DagChain {
                 return DagImportResult.error(e, "Failed to calculate cumulative difficulty: " + e.getMessage());
             }
 
-            // Phase 5: Main chain determination
+            // Main chain determination
             boolean isBestChain = cumulativeDifficulty.compareTo(chainStats.getMaxDifficulty()) > 0;
             long height;
 
@@ -172,19 +154,59 @@ public class DagChainImpl implements DagChain {
                          block.getHash().toHexString(), cumulativeDifficulty.toDecimalString());
             }
 
-            // Phase 6: Epoch competition check
-            // Check if this block has the smallest hash in its epoch
+            // Epoch competition check and reorganization
             long blockEpoch = block.getEpoch();
             Block currentWinner = getWinnerBlockInEpoch(blockEpoch);
-            boolean epochWinner = currentWinner == null || block.getHash().compareTo(currentWinner.getHash()) < 0;
 
-            if (epochWinner) {
-                // This block wins the epoch competition
-                log.debug("Block {} wins epoch {} competition (smallest hash)",
-                         block.getHash().toHexString(), blockEpoch);
+            // DEBUG: Log epoch competition details
+            if (currentWinner == null) {
+                log.debug("No winner found in epoch {} when importing block {}",
+                        blockEpoch, block.getHash().toHexString().substring(0, 16));
+                // Check if there are ANY blocks in this epoch
+                List<Block> candidates = getCandidateBlocksInEpoch(blockEpoch);
+                log.debug("  Total candidates in epoch {}: {}", blockEpoch, candidates.size());
+                for (Block candidate : candidates) {
+                    log.debug("    Candidate: hash={}, height={}",
+                            candidate.getHash().toHexString().substring(0, 16),
+                            candidate.getInfo() != null ? candidate.getInfo().getHeight() : "null");
+                }
+            } else {
+                log.debug("Current winner in epoch {} is {} (height={})",
+                        blockEpoch,
+                        currentWinner.getHash().toHexString().substring(0, 16),
+                        currentWinner.getInfo().getHeight());
             }
 
-            // Phase 7: Save block and metadata
+            boolean epochWinner = currentWinner == null || block.getHash().compareTo(currentWinner.getHash()) < 0;
+
+            if (epochWinner && currentWinner != null && !currentWinner.getHash().equals(block.getHash())) {
+                // This block wins the epoch competition, demote previous winner
+                log.debug("Block {} wins epoch {} competition (smaller hash than {})",
+                         block.getHash().toHexString(), blockEpoch,
+                         currentWinner.getHash().toHexString());
+
+                // IMPORTANT: Save the replacement height BEFORE demotion
+                // The new winner will REPLACE the old winner at the SAME height
+                long replacementHeight = currentWinner.getInfo().getHeight();
+
+                demoteBlockToOrphan(currentWinner);
+
+                // The new winner takes the demoted block's height (REPLACEMENT, not addition)
+                height = replacementHeight;  // NOT mainBlockCount + 1
+                isBestChain = true;
+                log.info("Block {} promoted to main chain at height {} after winning epoch competition",
+                        block.getHash().toHexString(), height);
+            } else if (!epochWinner && isBestChain) {
+                // This block has higher cumulative difficulty but loses epoch competition
+                // Mark as orphan instead of main block
+                height = 0;
+                isBestChain = false;
+                log.debug("Block {} loses epoch {} competition (larger hash than {}), demoting to orphan",
+                         block.getHash().toHexString(), blockEpoch,
+                         currentWinner.getHash().toHexString());
+            }
+
+            // Save block and metadata
             BlockInfo blockInfo = BlockInfo.builder()
                     .hash(block.getHash())
                     .timestamp(block.getTimestamp())
@@ -196,8 +218,14 @@ public class DagChainImpl implements DagChain {
             Block blockWithInfo = block.toBuilder().info(blockInfo).build();
             dagStore.saveBlock(blockWithInfo);
 
-            // Phase 7.5: Process block transactions (Phase 10 Integration)
-            // Process transactions and update account state
+            // DEBUG: Log saved block details for troubleshooting
+            log.debug("Saved block: hash={}, epoch={}, timestamp={}, height={}",
+                    blockWithInfo.getHash().toHexString().substring(0, 16),
+                    blockWithInfo.getEpoch(),
+                    blockWithInfo.getTimestamp(),
+                    blockWithInfo.getInfo().getHeight());
+
+            // Process block transactions and update account state
             if (dagKernel != null) {
                 DagBlockProcessor blockProcessor = dagKernel.getDagBlockProcessor();
                 if (blockProcessor != null) {
@@ -207,9 +235,6 @@ public class DagChainImpl implements DagChain {
                     if (!processResult.isSuccess()) {
                         log.warn("Block {} transaction processing failed: {}",
                                 block.getHash().toHexString(), processResult.getError());
-                        // Note: Block is already saved to store. Transaction processing
-                        // failure is logged but does not prevent block import.
-                        // This allows the block to be processed later when dependencies are met.
                     } else {
                         log.debug("Block {} transactions processed successfully",
                                 block.getHash().toHexString());
@@ -217,19 +242,19 @@ public class DagChainImpl implements DagChain {
                 }
             }
 
-            // Phase 8: Remove orphan references
-            removeOrphanReferences(block);
-
-            // Phase 9: Index transactions
+            // Index transactions
             indexTransactions(block);
 
-            // Phase 10: Update chain statistics
+            // Update chain statistics
             if (isBestChain) {
                 updateChainStatsForNewMainBlock(blockInfo);
             }
 
-            // Phase 11: Notify listeners
+            // Notify listeners
             notifyListeners(blockWithInfo);
+
+            // Retry orphan blocks (dependency resolution)
+            retryOrphanBlocks();
 
             log.info("Successfully imported block {}: height={}, difficulty={}",
                     block.getHash().toHexString(), height, cumulativeDifficulty.toDecimalString());
@@ -267,8 +292,17 @@ public class DagChainImpl implements DagChain {
 
         // Check if block already exists
         if (dagStore.hasBlock(block.getHash())) {
-            log.debug("Block {} already exists", block.getHash().toHexString());
-            return DagImportResult.duplicate();
+            Block existingBlock = dagStore.getBlockByHash(block.getHash(), false);
+            if (existingBlock != null && existingBlock.getInfo() != null && existingBlock.getInfo().getHeight() == 0) {
+                // Orphan block exists - allow re-processing
+                // When dependencies arrive, orphan blocks should be re-evaluated for main chain inclusion
+                log.debug("Block {} exists as orphan, allowing re-processing",
+                        block.getHash().toHexString());
+                // Continue with validation
+            } else {
+                log.debug("Block {} already exists as non-orphan", block.getHash().toHexString());
+                return DagImportResult.duplicate();
+            }
         }
 
         // SECURITY: Validate genesis block (防止伪造创世区块攻击)
@@ -304,7 +338,7 @@ public class DagChainImpl implements DagChain {
 
     /**
      * Check if a block is a genesis block
-     *
+     * <p>
      * SECURITY: Genesis block identification
      * - Empty links (no parent blocks)
      * - Difficulty exactly equals 1 (minimal difficulty)
@@ -320,20 +354,35 @@ public class DagChainImpl implements DagChain {
 
     /**
      * Validate block links (Transaction and Block references)
-     *
-     * <p>Phase 9: Refactored to use DagEntityResolver for unified link resolution.
-     * This eliminates the need for separate Transaction and Block queries, and
-     * provides a clean Facade for all link validation.
      */
     private DagImportResult validateLinks(Block block) {
-        // Phase 9: Use DagEntityResolver to resolve all links in one call
         ResolvedLinks resolved = entityResolver.resolveAllLinks(block);
 
         // Check for missing references
         if (!resolved.hasAllReferences()) {
-            Bytes32 missing = resolved.getMissingReferences().get(0);
+            Bytes32 missing = resolved.getMissingReferences().getFirst();
             log.debug("Block {} has missing dependency: {}",
                      block.getHash().toHexString(), missing.toHexString());
+
+            // Save block to DagStore (for later retrieval)
+            // Create temporary BlockInfo with height=0 (orphan)
+            BlockInfo orphanInfo = BlockInfo.builder()
+                    .hash(block.getHash())
+                    .timestamp(block.getTimestamp())
+                    .height(0)  // Orphan status
+                    .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)  // Unknown until dependencies satisfied
+                    .build();
+            dagStore.saveBlockInfo(orphanInfo);
+            Block blockWithInfo = block.toBuilder().info(orphanInfo).build();
+            dagStore.saveBlock(blockWithInfo);
+
+            // Add to orphan queue for retry
+            orphanBlockStore.addOrphan(block.getHash(), block.getTimestamp());
+
+            log.debug("Saved orphan block {} to queue (missing dependency: {})",
+                    block.getHash().toHexString().substring(0, 16),
+                    missing.toHexString().substring(0, 16));
+
             return DagImportResult.missingDependency(
                     missing,
                     "Link target not found: " + missing.toHexString()
@@ -383,23 +432,6 @@ public class DagChainImpl implements DagChain {
     }
 
     /**
-     * Remove orphan references when block is connected
-     */
-    private void removeOrphanReferences(Block block) {
-        for (Link link : block.getLinks()) {
-            if (link.isBlock()) {
-                try {
-                    orphanBlockStore.deleteByHash(link.getTargetHash().toArray());
-                    log.debug("Removed orphan reference: {}", link.getTargetHash().toHexString());
-                } catch (Exception e) {
-                    log.warn("Failed to remove orphan reference {}: {}",
-                            link.getTargetHash().toHexString(), e.getMessage());
-                }
-            }
-        }
-    }
-
-    /**
      * Index transactions to block mapping
      */
     private void indexTransactions(Block block) {
@@ -419,10 +451,18 @@ public class DagChainImpl implements DagChain {
 
     /**
      * Update chain statistics for new main block
+     *
+     * <p>IMPORTANT: When a block replaces another via epoch competition, its height may be
+     * less than the current mainBlockCount. In this case, we should NOT decrease mainBlockCount.
+     * Only increase it when the new block truly extends the chain.
      */
     private synchronized void updateChainStatsForNewMainBlock(BlockInfo blockInfo) {
+        // Only update mainBlockCount if this block extends the chain
+        // (for epoch competition replacements, height < mainBlockCount, so we keep the higher value)
+        long newMainBlockCount = Math.max(chainStats.getMainBlockCount(), blockInfo.getHeight());
+
         chainStats = chainStats
-                .withMainBlockCount(blockInfo.getHeight())
+                .withMainBlockCount(newMainBlockCount)
                 .withMaxDifficulty(blockInfo.getDifficulty())
                 .withDifficulty(blockInfo.getDifficulty())
                 .withTopBlock(blockInfo.getHash())
@@ -466,40 +506,27 @@ public class DagChainImpl implements DagChain {
 
     @Override
     public Block createCandidateBlock() {
-        // Phase 11.2: Candidate block creation using Block static factory method
         log.info("Creating candidate block for mining");
 
-        // 1. Get current timestamp (aligned to epoch)
         long timestamp = XdagTime.getCurrentTimestamp();
         long epoch = timestamp / 64;
 
-        // 2. Get current network difficulty
         UInt256 difficulty = chainStats.getDifficulty();
         if (difficulty == null || difficulty.isZero()) {
-            // Default difficulty if not set
             difficulty = UInt256.ONE;
         }
 
-        // DEVNET ONLY: Use maximum difficulty target for fast testing (any hash will pass)
-        // In XDAG, "difficulty" field is the maximum acceptable hash value
-        // difficulty = 1 means hash must be <= 1 (almost impossible)
-        // difficulty = MAX means hash must be <= MAX (always passes)
-        // In production, this will use the network difficulty
+        // DEVNET ONLY: Use maximum difficulty target for fast testing
         boolean isDevnet = dagKernel.getConfig().getNodeSpec().getNetwork().toString().toLowerCase().contains("devnet");
         if (isDevnet) {
-            difficulty = UInt256.MAX_VALUE;  // Maximum target = any hash passes
+            difficulty = UInt256.MAX_VALUE;
             log.warn("⚠ DEVNET TEST MODE: Using maximum difficulty target (MAX) for easy PoW validation");
         }
 
-        // 3. Get coinbase address (mining reward address)
-        // Note: Coinbase should be set externally via setMiningCoinbase()
-        // If not set, uses Bytes32.ZERO (should be set before mining)
-        Bytes32 coinbase = miningCoinbase;
+        Bytes coinbase = miningCoinbase;
 
-        // 4. Build links: prevMainBlock + orphan blocks
         List<Link> links = collectCandidateLinks();
 
-        // 5. Create candidate block (nonce = 0, ready for mining)
         Block candidateBlock = Block.createCandidate(timestamp, difficulty, coinbase, links);
 
         log.info("Created mining candidate block: epoch={}, difficulty={}, links={}, hash={}",
@@ -514,7 +541,7 @@ public class DagChainImpl implements DagChain {
     /**
      * Collect links for candidate block creation
      *
-     * <p>Phase 11.2: Collects block references for mining candidate:
+     * <p>Collects block references for mining candidate:
      * <ol>
      *   <li>Previous main block (parent with highest cumulative difficulty)</li>
      *   <li>Recent orphan blocks (for network health and connectivity)</li>
@@ -525,12 +552,11 @@ public class DagChainImpl implements DagChain {
     private List<Link> collectCandidateLinks() {
         List<Link> links = new ArrayList<>();
 
-        // 1. Add prevMainBlock reference (if chain has blocks)
         long currentMainHeight = chainStats.getMainBlockCount();
         log.debug("Collecting candidate links: mainBlockCount={}", currentMainHeight);
 
         if (currentMainHeight > 0) {
-            Block prevMainBlock = dagStore.getMainBlockAtPosition(currentMainHeight, false);
+            Block prevMainBlock = dagStore.getMainBlockByHeight(currentMainHeight, false);
             if (prevMainBlock != null) {
                 links.add(Link.toBlock(prevMainBlock.getHash()));
                 log.debug("Added prevMainBlock reference: height={}, hash={}",
@@ -538,7 +564,6 @@ public class DagChainImpl implements DagChain {
             }
         }
 
-        // 2. Add orphan block references (up to MAX_BLOCK_LINKS - 1)
         int maxOrphans = Block.MAX_BLOCK_LINKS - links.size();
         if (maxOrphans > 0) {
             long timestamp = XdagTime.getCurrentTimestamp();
@@ -561,29 +586,24 @@ public class DagChainImpl implements DagChain {
     /**
      * Set mining coinbase address
      *
-     * <p>Phase 11.2: Sets the coinbase address for candidate block creation.
-     * This should be called before mining starts.
-     *
-     * @param coinbase mining reward address (32 bytes)
+     * @param coinbase mining reward address (20 bytes)
      */
-    public void setMiningCoinbase(Bytes32 coinbase) {
+    public void setMiningCoinbase(Bytes coinbase) {
         this.miningCoinbase = coinbase;
         log.info("Mining coinbase address set: {}", coinbase.toHexString().substring(0, 16) + "...");
     }
 
     @Override
-    public Block createGenesisBlock(Bytes32 coinbase, long timestamp) {
-        // Phase 12.5: Deterministic genesis block creation (Bitcoin/Ethereum approach)
+    public Block createGenesisBlock(Bytes coinbase, long timestamp) {
         log.info("Creating deterministic genesis block at timestamp {}", timestamp);
         log.info("  - Coinbase: {}", coinbase.toHexString());
 
-        // Genesis block: empty links, minimal difficulty, no mining required
         Block genesisBlock = Block.createWithNonce(
                 timestamp,
-                UInt256.ONE,           // Minimal difficulty for genesis
-                Bytes32.ZERO,          // No mining required
-                coinbase,              // Deterministic coinbase from genesis.json
-                List.of()              // Empty links (no previous blocks to reference)
+                UInt256.ONE,
+                Bytes32.ZERO,
+                coinbase,
+                List.of()
         );
 
         log.info("✓ Deterministic genesis block created: hash={}, epoch={}",
@@ -600,16 +620,14 @@ public class DagChainImpl implements DagChain {
             ECKeyPair sourceKey,
             long nonce,
             XAmount totalFee) {
-        // TODO Phase 11: Implement reward block creation
-        // This will create reward distribution blocks for mining pools
-        throw new UnsupportedOperationException("createRewardBlock() not yet implemented in standalone DagChainImpl");
+        throw new UnsupportedOperationException("createRewardBlock() not yet implemented");
     }
 
-    // ==================== Main Chain Queries (Position-Based) ====================
+    // ==================== Main Chain Queries (Height-Based) ====================
 
     @Override
-    public Block getMainBlockAtPosition(long position) {
-        return dagStore.getMainBlockAtPosition(position, false);
+    public Block getMainBlockByHeight(long height) {
+        return dagStore.getMainBlockByHeight(height, false);
     }
 
     @Override
@@ -618,8 +636,8 @@ public class DagChainImpl implements DagChain {
     }
 
     @Override
-    public long getEpochOfMainBlock(long position) {
-        Block block = getMainBlockAtPosition(position);
+    public long getEpochOfMainBlock(long height) {
+        Block block = getMainBlockByHeight(height);
         if (block == null) {
             return -1;
         }
@@ -684,18 +702,71 @@ public class DagChainImpl implements DagChain {
 
     @Override
     public long[] getEpochTimeRange(long epoch) {
+        // IMPORTANT: Time range must be [startTime, endTime) with EXCLUSIVE end
+        // Blocks with timestamp = endTime belong to NEXT epoch!
+        // Example: epoch 23693854 → [1516406656, 1516406720)
+        //   timestamp 1516406656 belongs to epoch 23693854 ✓
+        //   timestamp 1516406719 belongs to epoch 23693854 ✓
+        //   timestamp 1516406720 belongs to epoch 23693855 ✗ (next epoch!)
         return new long[] { epoch * 64, (epoch + 1) * 64 };
     }
 
     @Override
     public List<Block> getCandidateBlocksInEpoch(long epoch) {
         long[] timeRange = getEpochTimeRange(epoch);
-        return dagStore.getBlocksByTimeRange(timeRange[0], timeRange[1]);
+        List<Block> allBlocks = dagStore.getBlocksByTimeRange(timeRange[0], timeRange[1]);
+
+        // IMPORTANT: Filter out blocks with timestamp >= endTime (they belong to next epoch)
+        // This ensures we only get blocks that truly belong to this epoch
+        List<Block> filtered = new ArrayList<>();
+        for (Block block : allBlocks) {
+            if (block.getTimestamp() < timeRange[1]) {
+                filtered.add(block);
+            }
+        }
+
+        return filtered;
     }
 
     @Override
     public Block getWinnerBlockInEpoch(long epoch) {
         List<Block> candidates = getCandidateBlocksInEpoch(epoch);
+
+        // FALLBACK: If time-range query returns empty, scan recent main blocks manually
+        // This works around potential DagStore indexing/caching issues
+        if (candidates.isEmpty() && chainStats.getMainBlockCount() > 0) {
+            log.debug("Time-range query returned 0 blocks for epoch {}, using fallback scan", epoch);
+            candidates = new ArrayList<>();
+
+            // Scan last 100 main blocks for blocks in this epoch
+            long scanStart = Math.max(1, chainStats.getMainBlockCount() - 100);
+            log.debug("  Fallback scan range: height {} to {}", scanStart, chainStats.getMainBlockCount());
+
+            for (long height = chainStats.getMainBlockCount(); height >= scanStart; height--) {
+                Block block = dagStore.getMainBlockByHeight(height, false);
+                if (block != null) {
+                    long blockEpoch = block.getEpoch();
+                    log.debug("    Height {}: block={}, epoch={}, match={}",
+                            height,
+                            block.getHash().toHexString().substring(0, 16),
+                            blockEpoch,
+                            blockEpoch == epoch);
+
+                    if (blockEpoch == epoch) {
+                        candidates.add(block);
+                        log.debug("  ✓ Found block at height {} in epoch {} via fallback scan", height, epoch);
+                    }
+                }
+            }
+
+            if (!candidates.isEmpty()) {
+                log.info("Fallback scan found {} blocks in epoch {} (time-range query failed)",
+                        candidates.size(), epoch);
+            } else {
+                log.warn("Fallback scan found NO blocks in epoch {} (scanned heights {} to {})",
+                        epoch, scanStart, chainStats.getMainBlockCount());
+            }
+        }
 
         if (candidates.isEmpty()) {
             return null;
@@ -719,7 +790,7 @@ public class DagChainImpl implements DagChain {
     }
 
     @Override
-    public long getPositionOfWinnerBlock(long epoch) {
+    public long getWinnerBlockHeight(long epoch) {
         Block winner = getWinnerBlockInEpoch(epoch);
         if (winner == null || winner.getInfo() == null) {
             return -1;
@@ -775,16 +846,12 @@ public class DagChainImpl implements DagChain {
 
     @Override
     public List<Block> listMinedBlocks(int count) {
-        // TODO Phase 11: Implement mined blocks tracking
-        // This requires tracking blocks created by this node's key
-        throw new UnsupportedOperationException("listMinedBlocks() not yet implemented in standalone DagChainImpl");
+        throw new UnsupportedOperationException("listMinedBlocks() not yet implemented");
     }
 
     @Override
     public Map<Bytes, Integer> getMemOurBlocks() {
-        // TODO Phase 11: Implement our blocks memory tracking
-        // This requires maintaining a cache of blocks created by this node
-        throw new UnsupportedOperationException("getMemOurBlocks() not yet implemented in standalone DagChainImpl");
+        throw new UnsupportedOperationException("getMemOurBlocks() not yet implemented");
     }
 
     // ==================== Cumulative Difficulty ====================
@@ -1087,16 +1154,12 @@ public class DagChainImpl implements DagChain {
 
     @Override
     public void startCheckMain(long period) {
-        // TODO Phase 11: Implement periodic chain maintenance
-        // This should start a scheduled task to run checkNewMain() periodically
-        throw new UnsupportedOperationException("startCheckMain() not yet implemented in standalone DagChainImpl");
+        throw new UnsupportedOperationException("startCheckMain() not yet implemented");
     }
 
     @Override
     public void stopCheckMain() {
-        // TODO Phase 11: Implement periodic chain maintenance
-        // This should stop the scheduled task for checkNewMain()
-        throw new UnsupportedOperationException("stopCheckMain() not yet implemented in standalone DagChainImpl");
+        throw new UnsupportedOperationException("stopCheckMain() not yet implemented");
     }
 
     // ==================== Statistics and State ====================
@@ -1126,7 +1189,7 @@ public class DagChainImpl implements DagChain {
     public void updateStatsFromRemote(ChainStats remoteStats) {
         synchronized (this) {
             // Update total hosts (take maximum)
-            int maxHosts = (int) Math.max(chainStats.getTotalHostCount(), remoteStats.getTotalHostCount());
+            int maxHosts = Math.max(chainStats.getTotalHostCount(), remoteStats.getTotalHostCount());
 
             // Update total blocks (take maximum)
             long maxBlocks = Math.max(chainStats.getTotalBlockCount(), remoteStats.getTotalBlockCount());
@@ -1155,16 +1218,12 @@ public class DagChainImpl implements DagChain {
 
     @Override
     public XAmount getReward(long nmain) {
-        // TODO Phase 11: Implement block reward calculation
-        // Calculate mining reward based on main block count
-        throw new UnsupportedOperationException("getReward() not yet implemented in standalone DagChainImpl");
+        throw new UnsupportedOperationException("getReward() not yet implemented");
     }
 
     @Override
     public XAmount getSupply(long nmain) {
-        // TODO Phase 11: Implement total supply calculation
-        // Calculate total coin supply based on main block count
-        throw new UnsupportedOperationException("getSupply() not yet implemented in standalone DagChainImpl");
+        throw new UnsupportedOperationException("getSupply() not yet implemented");
     }
 
     // ==================== Lifecycle Management ====================
@@ -1179,8 +1238,149 @@ public class DagChainImpl implements DagChain {
 
     @Override
     public byte[] getPreSeed() {
-        // TODO Phase 11: Implement pre-seed for RandomX
-        // Generate seed for POW algorithm
-        throw new UnsupportedOperationException("getPreSeed() not yet implemented in standalone DagChainImpl");
+        throw new UnsupportedOperationException("getPreSeed() not yet implemented");
+    }
+
+    /**
+     * Retry orphan blocks that may now have satisfied dependencies
+     *
+     * <p>After successfully importing a block, some orphan blocks may now have all
+     * their dependencies satisfied. This method retrieves orphan blocks from the queue
+     * and attempts to import them again.
+     */
+    private void retryOrphanBlocks() {
+        // Prevent recursive retry (avoid infinite loop)
+        if (isRetryingOrphans.get()) {
+            return;
+        }
+
+        try {
+            isRetryingOrphans.set(true);
+
+            // Keep retrying until no more orphans can be imported (cascading retry for chain dependencies)
+            int totalSuccessCount = 0;
+            int pass = 1;
+            boolean madeProgress;
+
+            do {
+                madeProgress = false;
+                long[] sendTime = new long[2];
+                sendTime[0] = Long.MAX_VALUE;  // No timestamp filtering - retry all orphans
+
+                // Get up to 100 orphan blocks to retry
+                List<Bytes32> orphanHashes = orphanBlockStore.getOrphan(100, sendTime);
+
+                if (orphanHashes == null || orphanHashes.isEmpty()) {
+                    break;  // No orphans to retry
+                }
+
+                log.debug("Orphan retry pass {}: {} orphans to process", pass, orphanHashes.size());
+
+                int successCount = 0;
+                int failCount = 0;
+
+                for (Bytes32 orphanHash : orphanHashes) {
+                    try {
+                        // Retrieve orphan block from DagStore
+                        Block orphanBlock = dagStore.getBlockByHash(orphanHash, false);
+                        if (orphanBlock == null) {
+                            log.warn("Orphan block {} not found in DagStore", orphanHash.toHexString().substring(0, 16));
+                            orphanBlockStore.deleteByHash(orphanHash.toArray());
+                            continue;
+                        }
+
+                        // Attempt to import
+                        DagImportResult result = tryToConnect(orphanBlock);
+
+                        if (result.isMainBlock() || result.isOrphan()) {
+                            successCount++;
+                            totalSuccessCount++;
+                            madeProgress = true;
+                            // Successfully imported - remove from orphan queue
+                            orphanBlockStore.deleteByHash(orphanHash.toArray());
+                            log.debug("Successfully imported orphan block {} (status: {})",
+                                    orphanHash.toHexString().substring(0, 16), result.getStatus());
+                        } else if (result.getStatus() == DagImportResult.ImportStatus.MISSING_DEPENDENCY) {
+                            failCount++;
+                            // Still missing dependencies, keep in queue
+                        } else if (result.getStatus() == DagImportResult.ImportStatus.DUPLICATE) {
+                            // Already imported, remove from queue
+                            orphanBlockStore.deleteByHash(orphanHash.toArray());
+                        } else {
+                            failCount++;
+                            log.warn("Orphan block {} import failed: {}",
+                                    orphanHash.toHexString().substring(0, 16), result.getStatus());
+                        }
+
+                    } catch (Exception e) {
+                        failCount++;
+                        log.error("Error retrying orphan block {}: {}",
+                                orphanHash.toHexString().substring(0, 16), e.getMessage());
+                    }
+                }
+
+                if (successCount > 0) {
+                    log.info("Orphan retry pass {} completed: {} succeeded, {} still pending",
+                            pass, successCount, failCount);
+                }
+
+                pass++;
+            } while (madeProgress && pass <= 10);  // Max 10 passes to prevent infinite loop
+
+            if (totalSuccessCount > 0) {
+                log.info("Orphan block retry completed: {} total blocks imported across {} passes",
+                        totalSuccessCount, pass - 1);
+            }
+
+        } finally {
+            isRetryingOrphans.set(false);
+        }
+    }
+
+    /**
+     * Demote a block from main chain to orphan status
+     *
+     * <p>This is called during epoch competition when a new winner emerges.
+     * The previous epoch winner must be demoted to orphan (height=0) to maintain
+     * consensus rule: only one main block per epoch.
+     *
+     * <p>When a block is demoted, we must also adjust the chain stats to ensure
+     * the next main block gets the correct height. The mainBlockCount is decremented
+     * so that the new winner can take the demoted block's height.
+     *
+     * @param block the block to demote
+     */
+    private synchronized void demoteBlockToOrphan(Block block) {
+        if (block == null || block.getInfo() == null) {
+            log.warn("Attempted to demote null block or block without info");
+            return;
+        }
+
+        long previousHeight = block.getInfo().getHeight();
+        if (previousHeight == 0) {
+            log.debug("Block {} is already an orphan, skipping demotion",
+                    block.getHash().toHexString());
+            return;
+        }
+
+        // Update BlockInfo to mark as orphan (height = 0)
+        BlockInfo updatedInfo = block.getInfo().toBuilder()
+                .height(0)
+                .build();
+
+        dagStore.saveBlockInfo(updatedInfo);
+
+        // IMPORTANT: Also save the Block with updated info to update cache and indices
+        // This ensures that getBlockByHash() and time-range queries return the updated block
+        Block updatedBlock = block.toBuilder().info(updatedInfo).build();
+        dagStore.saveBlock(updatedBlock);
+
+        // NOTE: We do NOT modify mainBlockCount here!
+        // The mainBlockCount should only be updated by updateChainStatsForNewMainBlock()
+        // using Math.max(currentCount, newBlockHeight) to ensure correctness during replacements.
+        // Decrementing here would break the chain when demoting non-tail blocks.
+
+        log.info("Demoted block {} from height {} to orphan (epoch competition loser)",
+                block.getHash().toHexString(), previousHeight);
     }
 }

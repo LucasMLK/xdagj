@@ -42,8 +42,8 @@ public class TransactionTest {
 
     @Test
     public void testCreateTransfer() {
-        Bytes32 from = Bytes32.random();
-        Bytes32 to = Bytes32.random();
+        Bytes from = Bytes.random(20);
+        Bytes to = Bytes.random(20);
         XAmount amount = XAmount.of(100, XUnit.XDAG);
         long nonce = 1;
         XAmount fee = XAmount.of(1, XUnit.MILLI_XDAG);
@@ -61,8 +61,8 @@ public class TransactionTest {
 
     @Test
     public void testCreateWithData() {
-        Bytes32 from = Bytes32.random();
-        Bytes32 to = Bytes32.random();
+        Bytes from = Bytes.random(20);
+        Bytes to = Bytes.random(20);
         XAmount amount = XAmount.of(50, XUnit.XDAG);
         long nonce = 2;
         XAmount fee = XAmount.of(2, XUnit.MILLI_XDAG);
@@ -77,8 +77,8 @@ public class TransactionTest {
 
     @Test
     public void testCreateWithDataTooLarge() {
-        Bytes32 from = Bytes32.random();
-        Bytes32 to = Bytes32.random();
+        Bytes from = Bytes.random(20);
+        Bytes to = Bytes.random(20);
         Bytes tooLargeData = Bytes.random(Transaction.MAX_DATA_LENGTH + 1);
 
         assertThrows(IllegalArgumentException.class, () -> {
@@ -89,8 +89,8 @@ public class TransactionTest {
     @Test
     public void testHashCalculation() {
         Transaction tx = Transaction.createTransfer(
-            Bytes32.random(),
-            Bytes32.random(),
+            Bytes.random(20),
+            Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             1,
             XAmount.of(1, XUnit.MILLI_XDAG)
@@ -105,8 +105,8 @@ public class TransactionTest {
 
     @Test
     public void testHashDeterministic() {
-        Bytes32 from = Bytes32.random();
-        Bytes32 to = Bytes32.random();
+        Bytes from = Bytes.random(20);
+        Bytes to = Bytes.random(20);
         XAmount amount = XAmount.of(100, XUnit.XDAG);
         long nonce = 1;
         XAmount fee = XAmount.of(1, XUnit.MILLI_XDAG);
@@ -122,8 +122,8 @@ public class TransactionTest {
     public void testBasicValidation() {
         // Valid transaction
         Transaction validTx = Transaction.createTransfer(
-            Bytes32.random(),
-            Bytes32.random(),
+            Bytes.random(20),
+            Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             1,
             XAmount.of(1, XUnit.MILLI_XDAG)
@@ -132,8 +132,8 @@ public class TransactionTest {
 
         // Invalid: negative amount
         Transaction invalidAmount = Transaction.builder()
-                .from(Bytes32.random())
-                .to(Bytes32.random())
+                .from(Bytes.random(20))
+                .to(Bytes.random(20))
                 .amount(XAmount.of(-100, XUnit.XDAG))
                 .nonce(1)
                 .fee(XAmount.ZERO)
@@ -142,8 +142,8 @@ public class TransactionTest {
 
         // Invalid: negative nonce
         Transaction invalidNonce = Transaction.builder()
-                .from(Bytes32.random())
-                .to(Bytes32.random())
+                .from(Bytes.random(20))
+                .to(Bytes.random(20))
                 .amount(XAmount.ZERO)
                 .nonce(-1)
                 .fee(XAmount.ZERO)
@@ -152,8 +152,8 @@ public class TransactionTest {
 
         // Invalid: data too large
         Transaction invalidData = Transaction.builder()
-                .from(Bytes32.random())
-                .to(Bytes32.random())
+                .from(Bytes.random(20))
+                .to(Bytes.random(20))
                 .amount(XAmount.ZERO)
                 .nonce(1)
                 .fee(XAmount.ZERO)
@@ -168,8 +168,8 @@ public class TransactionTest {
 
         // No data - base fee only
         Transaction tx1 = Transaction.builder()
-                .from(Bytes32.random())
-                .to(Bytes32.random())
+                .from(Bytes.random(20))
+                .to(Bytes.random(20))
                 .amount(XAmount.ZERO)
                 .nonce(1)
                 .fee(baseFee)
@@ -179,8 +179,8 @@ public class TransactionTest {
 
         // Data <= 256 bytes - base fee only
         Transaction tx2 = Transaction.builder()
-                .from(Bytes32.random())
-                .to(Bytes32.random())
+                .from(Bytes.random(20))
+                .to(Bytes.random(20))
                 .amount(XAmount.ZERO)
                 .nonce(1)
                 .fee(baseFee)
@@ -190,8 +190,8 @@ public class TransactionTest {
 
         // Data > 256 bytes - should be higher
         Transaction tx3 = Transaction.builder()
-                .from(Bytes32.random())
-                .to(Bytes32.random())
+                .from(Bytes.random(20))
+                .to(Bytes.random(20))
                 .amount(XAmount.ZERO)
                 .nonce(1)
                 .fee(baseFee)
@@ -203,15 +203,15 @@ public class TransactionTest {
     @Test
     public void testGetSize() {
         Transaction tx = Transaction.createTransfer(
-            Bytes32.random(),
-            Bytes32.random(),
+            Bytes.random(20),
+            Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             1,
             XAmount.of(1, XUnit.MILLI_XDAG)
         );
 
-        int expectedSize = 32 +  // from
-                          32 +  // to
+        int expectedSize = 20 +  // from (v5.1: 20-byte address)
+                          20 +  // to (v5.1: 20-byte address)
                           8 +   // amount
                           8 +   // nonce
                           8 +   // fee
@@ -227,8 +227,8 @@ public class TransactionTest {
     @Test
     public void testToString() {
         Transaction tx = Transaction.createTransfer(
-            Bytes32.random(),
-            Bytes32.random(),
+            Bytes.random(20),
+            Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             5,
             XAmount.of(1, XUnit.MILLI_XDAG)
@@ -247,10 +247,10 @@ public class TransactionTest {
 
     @Test
     public void testImmutability() {
-        Bytes32 from = Bytes32.random();
+        Bytes from = Bytes.random(20);
         Transaction tx1 = Transaction.createTransfer(
             from,
-            Bytes32.random(),
+            Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             1,
             XAmount.ZERO

@@ -178,53 +178,50 @@ public class DagStoreImpl implements DagStore {
             throw new IllegalArgumentException("Block or BlockInfo is null");
         }
 
-        WriteBatch batch = new WriteBatch();
-        try {
-            Bytes32 hash = block.getHash();
-            BlockInfo info = block.getInfo();
+      try (WriteBatch batch = new WriteBatch()) {
+        Bytes32 hash = block.getHash();
+        BlockInfo info = block.getInfo();
 
-            // 1. Save block data
-            byte[] blockKey = buildBlockKey(hash);
-            byte[] blockData = serializeBlock(block);
-            batch.put(blockKey, blockData);
+        // 1. Save block data
+        byte[] blockKey = buildBlockKey(hash);
+        byte[] blockData = serializeBlock(block);
+        batch.put(blockKey, blockData);
 
-            // 2. Save BlockInfo
-            byte[] infoKey = buildBlockInfoKey(hash);
-            byte[] infoData = serializeBlockInfo(info);
-            batch.put(infoKey, infoData);
+        // 2. Save BlockInfo
+        byte[] infoKey = buildBlockInfoKey(hash);
+        byte[] infoData = serializeBlockInfo(info);
+        batch.put(infoKey, infoData);
 
-            // 3. Index by time
-            byte[] timeKey = buildTimeIndexKey(block.getTimestamp(), hash);
-            batch.put(timeKey, EMPTY_VALUE);
+        // 3. Index by time
+        byte[] timeKey = buildTimeIndexKey(block.getTimestamp(), hash);
+        batch.put(timeKey, EMPTY_VALUE);
 
-            // 4. Index by epoch
-            byte[] epochKey = buildEpochIndexKey(block.getEpoch(), hash);
-            batch.put(epochKey, EMPTY_VALUE);
+        // 4. Index by epoch
+        byte[] epochKey = buildEpochIndexKey(block.getEpoch(), hash);
+        batch.put(epochKey, EMPTY_VALUE);
 
-            // 5. Index by height (if main block)
-            if (info.getHeight() > 0) {
-                byte[] heightKey = buildHeightIndexKey(info.getHeight());
-                batch.put(heightKey, hash.toArray());
-            }
-
-            // 6. Write batch atomically
-            db.write(writeOptions, batch);
-
-            // 7. Update L1 cache
-            cache.putBlock(hash, block);
-            cache.putBlockInfo(hash, info);
-            if (info.getHeight() > 0) {
-                cache.putHashByHeight(info.getHeight(), hash);
-            }
-
-            log.debug("Saved block: {} (height={})", hash.toHexString(), info.getHeight());
-
-        } catch (RocksDBException e) {
-            log.error("Failed to save block: {}", block.getHash().toHexString(), e);
-            throw new RuntimeException("Failed to save block", e);
-        } finally {
-            batch.close();
+        // 5. Index by height (if main block)
+        if (info.getHeight() > 0) {
+          byte[] heightKey = buildHeightIndexKey(info.getHeight());
+          batch.put(heightKey, hash.toArray());
         }
+
+        // 6. Write batch atomically
+        db.write(writeOptions, batch);
+
+        // 7. Update L1 cache
+        cache.putBlock(hash, block);
+        cache.putBlockInfo(hash, info);
+        if (info.getHeight() > 0) {
+          cache.putHashByHeight(info.getHeight(), hash);
+        }
+
+        log.debug("Saved block: {} (height={})", hash.toHexString(), info.getHeight());
+
+      } catch (RocksDBException e) {
+        log.error("Failed to save block: {}", block.getHash().toHexString(), e);
+        throw new RuntimeException("Failed to save block", e);
+      }
     }
 
     @Override
@@ -318,52 +315,49 @@ public class DagStoreImpl implements DagStore {
             return;
         }
 
-        WriteBatch batch = new WriteBatch();
-        try {
-            // Delete block data
-            byte[] blockKey = buildBlockKey(hash);
-            batch.delete(blockKey);
+      try (WriteBatch batch = new WriteBatch()) {
+        // Delete block data
+        byte[] blockKey = buildBlockKey(hash);
+        batch.delete(blockKey);
 
-            // Delete BlockInfo
-            byte[] infoKey = buildBlockInfoKey(hash);
-            batch.delete(infoKey);
+        // Delete BlockInfo
+        byte[] infoKey = buildBlockInfoKey(hash);
+        batch.delete(infoKey);
 
-            // Note: Indexes are not deleted for performance
-            // They will be cleaned up during compaction
+        // Note: Indexes are not deleted for performance
+        // They will be cleaned up during compaction
 
-            db.write(writeOptions, batch);
+        db.write(writeOptions, batch);
 
-            // Invalidate cache
-            cache.invalidateBlock(hash);
-            cache.invalidateBlockInfo(hash);
+        // Invalidate cache
+        cache.invalidateBlock(hash);
+        cache.invalidateBlockInfo(hash);
 
-            log.debug("Deleted block: {}", hash.toHexString());
+        log.debug("Deleted block: {}", hash.toHexString());
 
-        } catch (RocksDBException e) {
-            log.error("Failed to delete block: {}", hash.toHexString(), e);
-            throw new RuntimeException("Failed to delete block", e);
-        } finally {
-            batch.close();
-        }
+      } catch (RocksDBException e) {
+        log.error("Failed to delete block: {}", hash.toHexString(), e);
+        throw new RuntimeException("Failed to delete block", e);
+      }
     }
 
     // ==================== Main Chain Queries ====================
 
     @Override
-    public Block getMainBlockAtPosition(long position, boolean isRaw) {
-        if (position <= 0) {
+    public Block getMainBlockByHeight(long height, boolean isRaw) {
+        if (height <= 0) {
             return null;
         }
 
         // L1 Cache check for height-to-hash mapping
-        Bytes32 hash = cache.getHashByHeight(position);
+        Bytes32 hash = cache.getHashByHeight(height);
         if (hash != null) {
             return getBlockByHash(hash, isRaw);
         }
 
         // L2 + Disk read
         try {
-            byte[] heightKey = buildHeightIndexKey(position);
+            byte[] heightKey = buildHeightIndexKey(height);
             byte[] hashData = db.get(readOptions, heightKey);
             if (hashData == null || hashData.length != 32) {
                 return null;
@@ -372,12 +366,12 @@ public class DagStoreImpl implements DagStore {
             hash = Bytes32.wrap(hashData);
 
             // Update cache
-            cache.putHashByHeight(position, hash);
+            cache.putHashByHeight(height, hash);
 
             return getBlockByHash(hash, isRaw);
 
         } catch (RocksDBException e) {
-            log.error("Failed to get main block at position {}", position, e);
+            log.error("Failed to get main block at height {}", height, e);
             return null;
         }
     }
@@ -395,7 +389,7 @@ public class DagStoreImpl implements DagStore {
         long start = Math.max(1, length - count + 1);
 
         for (long pos = length; pos >= start; pos--) {
-            Block block = getMainBlockAtPosition(pos, false);
+            Block block = getMainBlockByHeight(pos, false);
             if (block != null) {
                 blocks.add(block);
             }
@@ -622,7 +616,7 @@ public class DagStoreImpl implements DagStore {
     }
 
     @Override
-    public long getPositionOfWinnerBlock(long epoch) {
+    public long getWinnerBlockHeight(long epoch) {
         Block winner = getWinnerBlockInEpoch(epoch);
         if (winner == null || winner.getInfo() == null) {
             return -1;
@@ -848,37 +842,34 @@ public class DagStoreImpl implements DagStore {
             return;
         }
 
-        WriteBatch batch = new WriteBatch();
-        try {
-            for (Block block : blocks) {
-                if (block == null || block.getInfo() == null) {
-                    continue;
-                }
+      try (WriteBatch batch = new WriteBatch()) {
+        for (Block block : blocks) {
+          if (block == null || block.getInfo() == null) {
+            continue;
+          }
 
-                Bytes32 hash = block.getHash();
-                BlockInfo info = block.getInfo();
+          Bytes32 hash = block.getHash();
+          BlockInfo info = block.getInfo();
 
-                // Add to batch
-                batch.put(buildBlockKey(hash), serializeBlock(block));
-                batch.put(buildBlockInfoKey(hash), serializeBlockInfo(info));
-                batch.put(buildTimeIndexKey(block.getTimestamp(), hash), EMPTY_VALUE);
-                batch.put(buildEpochIndexKey(block.getEpoch(), hash), EMPTY_VALUE);
+          // Add to batch
+          batch.put(buildBlockKey(hash), serializeBlock(block));
+          batch.put(buildBlockInfoKey(hash), serializeBlockInfo(info));
+          batch.put(buildTimeIndexKey(block.getTimestamp(), hash), EMPTY_VALUE);
+          batch.put(buildEpochIndexKey(block.getEpoch(), hash), EMPTY_VALUE);
 
-                if (info.getHeight() > 0) {
-                    batch.put(buildHeightIndexKey(info.getHeight()), hash.toArray());
-                }
-            }
-
-            db.write(writeOptions, batch);
-
-            log.debug("Batch saved {} blocks", blocks.size());
-
-        } catch (RocksDBException e) {
-            log.error("Failed to batch save blocks", e);
-            throw new RuntimeException("Failed to batch save blocks", e);
-        } finally {
-            batch.close();
+          if (info.getHeight() > 0) {
+            batch.put(buildHeightIndexKey(info.getHeight()), hash.toArray());
+          }
         }
+
+        db.write(writeOptions, batch);
+
+        log.debug("Batch saved {} blocks", blocks.size());
+
+      } catch (RocksDBException e) {
+        log.error("Failed to batch save blocks", e);
+        throw new RuntimeException("Failed to batch save blocks", e);
+      }
     }
 
     @Override

@@ -161,7 +161,7 @@ public class DagKernel {
       this.wallet = wallet;
 
       log.info("========================================");
-      log.info("Initializing DagKernel v5.1 (Standalone)");
+      log.info("Initializing DagKernel");
       log.info("========================================");
 
       // Load genesis configuration
@@ -212,7 +212,7 @@ public class DagKernel {
       // because DagChainImpl needs a fully constructed DagKernel instance
 
       log.info("========================================");
-      log.info("DagKernel v5.1 initialization complete");
+      log.info("DagKernel initialization complete");
       log.info("========================================");
   }
 
@@ -724,10 +724,10 @@ public class DagKernel {
    * @throws RuntimeException if genesis block doesn't match config
    */
   private void verifyGenesisBlock() {
-      // Get genesis block (position 0 in main chain)
-      Block genesisBlock = dagStore.getMainBlockAtPosition(0, true);
+      // Get genesis block (height 0 means orphan block)
+      Block genesisBlock = dagStore.getMainBlockByHeight(0, true);
       if (genesisBlock == null) {
-          log.warn("Cannot verify genesis block: main chain position 0 not found");
+          log.warn("Cannot verify genesis block: main chain height 0 not found");
           log.warn("This may happen if main chain index is not yet built");
           return;
       }
@@ -800,14 +800,22 @@ public class DagKernel {
               "XDAG v5.1 requires deterministic genesis block creation.\n" +
               "All nodes must create IDENTICAL genesis blocks (Bitcoin/Ethereum approach).\n\n" +
               "Please add to your genesis.json:\n" +
-              "  \"genesisCoinbase\": \"0xDEADBEEFDEADBEEF...\"\n\n" +
-              "Example:\n" +
-              "  \"genesisCoinbase\": \"0x0000000000000000000000000000000000000000000000000000000000000000\""
+              "  \"genesisCoinbase\": \"4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi\"\n\n" +
+              "Format: base58check encoded 20-byte XDAG address (recommended)\n" +
+              "Legacy: 0x-prefixed 32-byte hex (backward compatibility only)"
           );
       }
 
-      // Use deterministic coinbase from genesis.json
-      Bytes32 genesisCoinbase = genesisConfig.getGenesisCoinbaseBytes32();
+      // Use deterministic coinbase from genesis.json (20-byte address)
+      org.apache.tuweni.bytes.Bytes genesisCoinbase = genesisConfig.getGenesisCoinbaseBytes();
+      if (genesisCoinbase == null || genesisCoinbase.size() != 20) {
+          throw new RuntimeException(
+              "Invalid genesisCoinbase in genesis.json!\n" +
+              "Expected 20-byte address, got: " +
+              (genesisCoinbase != null ? genesisCoinbase.size() + " bytes" : "null")
+          );
+      }
+
       log.info("  - Using deterministic genesisCoinbase from genesis.json");
       log.info("  - Coinbase: {}", genesisCoinbase.toHexString());
       log.info("  - This ensures all nodes create IDENTICAL genesis blocks");
@@ -858,18 +866,18 @@ public class DagKernel {
       int successCount = 0;
       for (Map.Entry<String, String> entry : alloc.entrySet()) {
           try {
-              String addressHex = entry.getKey();
-              UInt256 balance = genesisConfig.getAllocation(addressHex);
+              String addressStr = entry.getKey();
+              UInt256 balance = genesisConfig.getAllocation(addressStr);
 
-              // Convert hex address to Bytes32
-              String hex = addressHex.startsWith("0x") ? addressHex.substring(2) : addressHex;
-              org.apache.tuweni.bytes.Bytes32 address = org.apache.tuweni.bytes.Bytes32.fromHexString(hex);
+              // Parse address (supports both base58check and hex formats)
+              org.apache.tuweni.bytes.Bytes address = GenesisConfig.parseAddress(addressStr);
 
               // Set balance directly (creates account if doesn't exist)
               dagAccountManager.setBalance(address, balance);
               successCount++;
 
-              log.debug("  - Allocated {} to {}", balance.toDecimalString(), addressHex.substring(0, 10) + "...");
+              log.debug("  - Allocated {} to {}", balance.toDecimalString(),
+                      addressStr.length() > 20 ? addressStr.substring(0, 20) + "..." : addressStr);
 
           } catch (Exception e) {
               log.error("Failed to allocate balance for {}: {}", entry.getKey(), e.getMessage());

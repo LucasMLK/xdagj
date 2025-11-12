@@ -41,7 +41,7 @@ import org.apache.tuweni.bytes.Bytes32;
  * <ul>
  *   <li><strong>Block-centric</strong>: Focus on Block storage and DAG structure</li>
  *   <li><strong>Epoch-aware</strong>: Support epoch-based queries</li>
- *   <li><strong>Position-based</strong>: Clear distinction between position and epoch</li>
+ *   <li><strong>Height-based</strong>: Clear distinction between height and epoch</li>
  *   <li><strong>Performance-optimized</strong>: Multi-tier caching (L1 + L2)</li>
  * </ul>
  *
@@ -141,19 +141,19 @@ public interface DagStore extends XdagLifecycle {
      */
     void deleteBlock(Bytes32 hash);
 
-    // ==================== Main Chain Queries (Position-Based) ====================
+    // ==================== Main Chain Queries (Height-Based) ====================
 
     /**
-     * Get main block at specific position in main chain
+     * Get main block at specific height in main chain
      *
-     * <p><strong>Position</strong>: Sequential number in main chain (1, 2, 3, ...)
-     * <p><strong>NOT 1:1 with Epoch</strong>: Position 100 might be from Epoch 1003
+     * <p><strong>Height</strong>: Sequential number in main chain (1, 2, 3, ...)
+     * <p><strong>NOT 1:1 with Epoch</strong>: Height 100 might be from Epoch 1003
      *
-     * @param position Main chain position (1-based, 1 = first main block)
+     * @param height Main chain height (1-based, 1 = first main block)
      * @param isRaw true to load full raw data, false for BlockInfo only
-     * @return Block at position, or null if position is invalid
+     * @return Block at height, or null if height is invalid
      */
-    Block getMainBlockAtPosition(long position, boolean isRaw);
+    Block getMainBlockByHeight(long height, boolean isRaw);
 
     /**
      * Get main chain length (number of main blocks)
@@ -224,14 +224,14 @@ public interface DagStore extends XdagLifecycle {
     Block getWinnerBlockInEpoch(long epoch);
 
     /**
-     * Get position of winning block in a specific epoch
+     * Get height of winning block in a specific epoch
      *
-     * <p>Provides Epoch → Position mapping
+     * <p>Provides Epoch → Height mapping
      *
      * @param epoch Epoch number
-     * @return Main chain position, or -1 if no winner
+     * @return Main chain height, or -1 if no winner
      */
-    long getPositionOfWinnerBlock(long epoch);
+    long getWinnerBlockHeight(long epoch);
 
     /**
      * Get blocks within time range

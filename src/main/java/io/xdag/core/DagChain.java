@@ -48,21 +48,21 @@ import org.apache.tuweni.units.bigints.UInt256;
  *   <li><strong>Main Block</strong>: Winning block becomes part of main chain</li>
  * </ul>
  *
- * <h3>2. Position vs Epoch</h3>
+ * <h3>2. Height vs Epoch</h3>
  * <ul>
- *   <li><strong>Position</strong>: Sequential number in main chain (1, 2, 3, ...)</li>
+ *   <li><strong>Height</strong>: Sequential number in main chain (1, 2, 3, ...)</li>
  *   <li><strong>Epoch</strong>: Time window (may have no blocks - empty epoch)</li>
- *   <li><strong>NOT 1:1 Mapping</strong>: Position 100 might correspond to Epoch 1003</li>
+ *   <li><strong>NOT 1:1 Mapping</strong>: Height 100 might correspond to Epoch 1003</li>
  * </ul>
  *
  * <pre>
  * Example:
- * Epoch 1000 → Block A wins → Position 1
- * Epoch 1001 → Block B wins → Position 2
+ * Epoch 1000 → Block A wins → Height 1
+ * Epoch 1001 → Block B wins → Height 2
  * Epoch 1002 → (no blocks) → (no main block)
- * Epoch 1003 → Block C wins → Position 3
+ * Epoch 1003 → Block C wins → Height 3
  *
- * getMainBlockAtPosition(3) → Block C (from Epoch 1003, not 1003)
+ * getMainBlockByHeight(3) → Block C (from Epoch 1003, not 1003)
  * getWinnerBlockInEpoch(1002) → null (empty epoch)
  * </pre>
  *
@@ -164,13 +164,13 @@ public interface DagChain {
      * The result includes:
      * <ul>
      *   <li>Epoch competition status (whether block won its epoch)</li>
-     *   <li>Block position in main chain (if main block)</li>
-     *   <li>Cumulative difficulty calculated for the block</li>
+     *   <li>Block height in main chain (if main block)</li>
+     *   <li>Cumulative difficulty calculated for the block)</li>
      *   <li>Detailed error information (if import failed)</li>
      * </ul>
      *
      * @param block block to import (must be fully constructed with valid PoW)
-     * @return import result indicating success/failure and chain position
+     * @return import result indicating success/failure and chain height
      * @see DagImportResult
      * @see #validateDAGRules(Block)
      * @see #calculateCumulativeDifficulty(Block)
@@ -236,7 +236,7 @@ public interface DagChain {
      * <pre>
      * {
      *   "networkId": "mainnet",
-     *   "genesisCoinbase": "0x0000000000000000000000000000000000000000000000000000000000000000",
+     *   "genesisCoinbase": "0x00000000000000000000000000000000000000000000",
      *   "timestamp": 1516406400,
      *   ...
      * }
@@ -251,19 +251,19 @@ public interface DagChain {
      *   <li>Zero nonce (no mining required for genesis)</li>
      *   <li>Coinbase set to genesisCoinbase from config</li>
      *   <li>Specified timestamp (from genesis.json)</li>
-     *   <li>Position = 1 (first block in main chain)</li>
+     *   <li>Height = 1 (first block in main chain)</li>
      *   <li>Cumulative difficulty = initial work</li>
      * </ul>
      *
      * <p>This method should only be called once per blockchain instance, when no blocks exist.
      *
-     * @param coinbase Coinbase address from genesis.json (32 bytes)
+     * @param coinbase Coinbase address from genesis.json (20 bytes)
      * @param timestamp genesis block timestamp (XDAG timestamp format)
      * @return genesis block ready for import
      * @see #tryToConnect(Block)
      * @since v5.1 Phase 12.5
      */
-    Block createGenesisBlock(Bytes32 coinbase, long timestamp);
+    Block createGenesisBlock(Bytes coinbase, long timestamp);
 
     /**
      * Create a reward block for pool distribution
@@ -311,63 +311,63 @@ public interface DagChain {
             long nonce,
             XAmount totalFee);
 
-    // ==================== Main Chain Queries (Position-Based) ====================
+    // ==================== Main Chain Queries (Height-Based) ====================
 
     /**
-     * Get main block by its position in the main chain
+     * Get main block by its height in the main chain
      *
-     * <p><strong>What is "position"?</strong>
-     * Position is the sequential number of a main block in the main chain.
+     * <p><strong>What is "height"?</strong>
+     * Height is the sequential number of a main block in the main chain.
      * Main chain = sequence of all epoch winning blocks in chronological order.
      *
-     * <p><strong>Position vs Epoch</strong>:
+     * <p><strong>Height vs Epoch</strong>:
      * <ul>
-     *   <li><strong>Position</strong>: Sequential (1, 2, 3, ...) - always continuous</li>
+     *   <li><strong>Height</strong>: Sequential (1, 2, 3, ...) - always continuous</li>
      *   <li><strong>Epoch</strong>: Time window (64 seconds) - may have gaps (empty epochs)</li>
-     *   <li><strong>Not 1:1</strong>: Position 100 might correspond to Epoch 1003 (not Epoch 100)</li>
+     *   <li><strong>Not 1:1</strong>: Height 100 might correspond to Epoch 1003 (not Epoch 100)</li>
      * </ul>
      *
      * <p><strong>Example</strong>:
      * <pre>
-     * Position 1: Block A (from Epoch 1000)
-     * Position 2: Block B (from Epoch 1001)
-     * Position 3: Block C (from Epoch 1003) ← skipped Epoch 1002 (no blocks)
-     * Position 4: Block D (from Epoch 1004)
+     * Height 1: Block A (from Epoch 1000)
+     * Height 2: Block B (from Epoch 1001)
+     * Height 3: Block C (from Epoch 1003) ← skipped Epoch 1002 (no blocks)
+     * Height 4: Block D (from Epoch 1004)
      * </pre>
      *
-     * <p>Only main blocks have positions (height &gt; 0). Orphan blocks have height = 0.
+     * <p>Only main blocks have heights (height &gt; 0). Orphan blocks have height = 0.
      *
-     * @param position main chain position (1-based, position=1 is first main block after genesis)
-     * @return main block at this position, or null if position is invalid
+     * @param height main chain height (1-based, height=1 is first main block after genesis)
+     * @return main block at this height, or null if height is invalid
      * @see #getMainChainLength()
      * @see #getEpochOfMainBlock(long)
      * @see #getWinnerBlockInEpoch(long)
      */
-    Block getMainBlockAtPosition(long position);
+    Block getMainBlockByHeight(long height);
 
     /**
      * Get the length of the main chain
      *
      * <p>Returns the total number of main blocks in the main chain.
-     * Equivalent to the position of the latest main block.
+     * Equivalent to the height of the latest main block.
      *
      * <p><strong>Example</strong>:
      * <pre>
      * If main chain has 500 blocks:
      *   getMainChainLength() → 500
-     *   getMainBlockAtPosition(500) → latest main block
-     *   getMainBlockAtPosition(501) → null (doesn't exist yet)
+     *   getMainBlockByHeight(500) → latest main block
+     *   getMainBlockByHeight(501) → null (doesn't exist yet)
      * </pre>
      *
      * @return main chain length (number of main blocks)
-     * @see #getMainBlockAtPosition(long)
+     * @see #getMainBlockByHeight(long)
      */
     long getMainChainLength();
 
     /**
-     * Get the epoch number of a main block at given position
+     * Get the epoch number of a main block at given height
      *
-     * <p>This method provides Position → Epoch mapping.
+     * <p>This method provides Height → Epoch mapping.
      * Useful for understanding which time window a main block belongs to.
      *
      * <p><strong>Example</strong>:
@@ -377,13 +377,13 @@ public interface DagChain {
      * getEpochOfMainBlock(3) → 1003  (third main block is in Epoch 1003, skipped 1002)
      * </pre>
      *
-     * @param position main chain position (1-based)
-     * @return epoch number of the main block at this position, or -1 if position is invalid
-     * @throws IllegalArgumentException if position &lt;= 0
-     * @see #getMainBlockAtPosition(long)
-     * @see #getPositionOfWinnerBlock(long)
+     * @param height main chain height (1-based)
+     * @return epoch number of the main block at this height, or -1 if height is invalid
+     * @throws IllegalArgumentException if height &lt;= 0
+     * @see #getMainBlockByHeight(long)
+     * @see #getWinnerBlockHeight(long)
      */
-    long getEpochOfMainBlock(long position);
+    long getEpochOfMainBlock(long height);
 
     /**
      * List recent main blocks
@@ -399,7 +399,7 @@ public interface DagChain {
      *
      * @param count maximum number of main blocks to retrieve
      * @return list of main blocks in descending order (may be empty if no main blocks exist)
-     * @see #getMainBlockAtPosition(long)
+     * @see #getMainBlockByHeight(long)
      * @see #getMainChainLength()
      */
     List<Block> listMainBlocks(int count);
@@ -525,35 +525,35 @@ public interface DagChain {
      * @param epoch epoch number (timestamp / 64)
      * @return winning block for this epoch, or null if no valid winner
      * @see #getCandidateBlocksInEpoch(long)
-     * @see #getPositionOfWinnerBlock(long)
+     * @see #getWinnerBlockHeight(long)
      */
     Block getWinnerBlockInEpoch(long epoch);
 
     /**
-     * Get the position of the winning block in a specific epoch
+     * Get the height of the winning block in a specific epoch
      *
-     * <p>This method provides Epoch → Position mapping.
-     * Returns the main chain position of the epoch's winning block.
+     * <p>This method provides Epoch → Height mapping.
+     * Returns the main chain height of the epoch's winning block.
      *
      * <p><strong>Example</strong>:
      * <pre>
-     * Epoch 1000 → Block_A wins → position=1
-     * Epoch 1001 → Block_B wins → position=2
-     * Epoch 1002 → (no blocks)  → position=-1
-     * Epoch 1003 → Block_C wins → position=3
+     * Epoch 1000 → Block_A wins → height=1
+     * Epoch 1001 → Block_B wins → height=2
+     * Epoch 1002 → (no blocks)  → height=-1
+     * Epoch 1003 → Block_C wins → height=3
      *
-     * getPositionOfWinnerBlock(1000) → 1
-     * getPositionOfWinnerBlock(1001) → 2
-     * getPositionOfWinnerBlock(1002) → -1 (no winner)
-     * getPositionOfWinnerBlock(1003) → 3
+     * getWinnerBlockHeight(1000) → 1
+     * getWinnerBlockHeight(1001) → 2
+     * getWinnerBlockHeight(1002) → -1 (no winner)
+     * getWinnerBlockHeight(1003) → 3
      * </pre>
      *
      * @param epoch epoch number
-     * @return main chain position of winning block, or -1 if epoch has no winning block
+     * @return main chain height of winning block, or -1 if epoch has no winning block
      * @see #getWinnerBlockInEpoch(long)
      * @see #getEpochOfMainBlock(long)
      */
-    long getPositionOfWinnerBlock(long epoch);
+    long getWinnerBlockHeight(long epoch);
 
     /**
      * Get statistics for a specific epoch
@@ -583,7 +583,7 @@ public interface DagChain {
      * @param hash block hash (32 bytes)
      * @param isRaw whether to include raw block data (true) or just BlockInfo metadata (false)
      * @return block instance, or null if not found
-     * @see #getMainBlockAtPosition(long)
+     * @see #getMainBlockByHeight(long)
      * @see #getWinnerBlockInEpoch(long)
      */
     Block getBlockByHash(Bytes32 hash, boolean isRaw);
@@ -749,7 +749,7 @@ public interface DagChain {
      *
      * @param hash block hash to check
      * @return true if block is on main chain (directly or indirectly)
-     * @see #getMainBlockAtPosition(long)
+     * @see #getMainBlockByHeight(long)
      * @see #getBlockReferences(Bytes32)
      */
     boolean isBlockInMainChain(Bytes32 hash);
@@ -883,7 +883,7 @@ public interface DagChain {
      * <p>Calculates the reward amount for a given main block based on
      * the reward schedule defined in the protocol specification.
      *
-     * @param nmain main block number (position in main chain)
+     * @param nmain main block number (height in main chain)
      * @return reward amount
      * @see #getSupply(long)
      */
@@ -895,7 +895,7 @@ public interface DagChain {
      * <p>Calculates the cumulative XDAG supply at a given main block,
      * based on all rewards issued up to that block.
      *
-     * @param nmain main block number (position in main chain)
+     * @param nmain main block number (height in main chain)
      * @return total supply
      * @see #getReward(long)
      */

@@ -229,7 +229,7 @@ public class TransactionStoreImpl implements TransactionStore {
     }
 
     @Override
-    public List<Transaction> getTransactionsByAddress(Bytes32 address) {
+    public List<Transaction> getTransactionsByAddress(org.apache.tuweni.bytes.Bytes address) {
         try {
             byte[] key = BytesUtils.merge(TX_ADDRESS_INDEX, address.toArray());
             byte[] value = indexSource.get(key);
@@ -248,7 +248,7 @@ public class TransactionStoreImpl implements TransactionStore {
     }
 
     @Override
-    public void indexTransactionToAddress(Bytes32 address, Bytes32 txHash) {
+    public void indexTransactionToAddress(org.apache.tuweni.bytes.Bytes address, Bytes32 txHash) {
         try {
             byte[] key = BytesUtils.merge(TX_ADDRESS_INDEX, address.toArray());
             byte[] existingValue = indexSource.get(key);

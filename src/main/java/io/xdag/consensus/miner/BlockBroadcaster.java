@@ -145,9 +145,9 @@ public class BlockBroadcaster {
             if (importStatus == DagImportResult.ImportStatus.SUCCESS) {
                 if (result.isMainBlock()) {
                     // Block became a main block!
-                    log.info("Mined block {} imported as main block at position {}",
+                    log.info("Mined block {} imported as main block at height {}",
                             block.getHash().toHexString(),
-                            result.getPosition());
+                            result.getHeight());
 
                     // Step 3: Broadcast to P2P network
                     broadcastToNetwork(block);

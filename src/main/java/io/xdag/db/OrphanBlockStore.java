@@ -57,4 +57,12 @@ public interface OrphanBlockStore extends XdagLifecycle {
 
     long getOrphanSize();
 
+    /**
+     * Add a block to orphan queue (has missing dependencies)
+     *
+     * @param hash orphan block hash
+     * @param timestamp block timestamp
+     */
+    void addOrphan(Bytes32 hash, long timestamp);
+
 }

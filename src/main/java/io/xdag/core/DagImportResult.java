@@ -61,8 +61,8 @@ public class DagImportResult {
     /** Block's epoch number */
     private final long epoch;
 
-    /** Block's position in main chain (0 if orphan) */
-    private final long position;
+    /** Block's height in main chain (0 if orphan) */
+    private final long height;
 
     /** Block's cumulative difficulty */
     private final UInt256 cumulativeDifficulty;
@@ -162,7 +162,7 @@ public class DagImportResult {
      */
     public static DagImportResult mainBlock(
             long epoch,
-            long position,
+            long height,
             UInt256 cumulativeDifficulty,
             boolean epochWinner) {
         return DagImportResult.builder()
@@ -170,7 +170,7 @@ public class DagImportResult {
                 .blockState(BlockState.MAIN_BLOCK)
                 .epochWinner(epochWinner)
                 .epoch(epoch)
-                .position(position)
+                .height(height)
                 .cumulativeDifficulty(cumulativeDifficulty)
                 .errorDetails(ErrorDetails.builder()
                         .errorType(ErrorType.NONE)
@@ -190,7 +190,7 @@ public class DagImportResult {
                 .blockState(BlockState.ORPHAN)
                 .epochWinner(epochWinner)
                 .epoch(epoch)
-                .position(0)  // Orphans have no position
+                .height(0)  // Orphans have no height
                 .cumulativeDifficulty(cumulativeDifficulty)
                 .errorDetails(ErrorDetails.builder()
                         .errorType(ErrorType.NONE)
@@ -337,7 +337,7 @@ public class DagImportResult {
 
         if (status == ImportStatus.SUCCESS) {
             sb.append(", epoch=").append(epoch);
-            sb.append(", position=").append(position);
+            sb.append(", height=").append(height);
             sb.append(", epochWinner=").append(epochWinner);
             sb.append(", cumulativeDifficulty=").append(
                     cumulativeDifficulty != null ? cumulativeDifficulty.toDecimalString() : "null"

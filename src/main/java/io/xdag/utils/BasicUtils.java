@@ -99,12 +99,28 @@ public class BasicUtils {
     }
 
     /**
-     * Convert hash to public address
-     * @param hash Input hash
+     * Convert hash to public address (LEGACY - for 32-byte padded hashes)
+     * @param hash Input hash (32 bytes with padding)
+     * @return Base58 encoded public address
+     * @deprecated Use address2PubAddress(Bytes) for 20-byte addresses
+     */
+    @Deprecated
+    public static String hash2PubAddress(Bytes32 hash) {
+        // Extract the 20-byte address from padded 32-byte hash (bytes 8-27)
+        Bytes addressBytes = hash.slice(8, 20);
+        return Base58.encodeCheck(addressBytes.toArray());
+    }
+
+    /**
+     * Convert 20-byte address to public address string
+     * @param address 20-byte address (hash160)
      * @return Base58 encoded public address
      */
-    public static String hash2PubAddress(Bytes32 hash) {
-       return Base58.encodeCheck(hash2byte(hash.mutableCopy()));
+    public static String address2PubAddress(Bytes address) {
+        if (address.size() != 20) {
+            throw new IllegalArgumentException("Address must be exactly 20 bytes, got: " + address.size());
+        }
+        return Base58.encodeCheck(address.toArray());
     }
 
     /**
@@ -129,49 +145,6 @@ public class BasicUtils {
         MutableBytes32 res = MutableBytes32.create();
         res.set(8, ret.reverse().slice(0, 24));
         return res;
-    }
-
-    /**
-     * Convert public address to hash
-     * @param address Base58 encoded public address
-     * @return Hash as Bytes32
-     */
-    public static Bytes32 pubAddress2Hash(String address) throws AddressFormatException {
-        Bytes ret = Bytes.wrap(WalletUtils.fromBase58(address));
-        MutableBytes32 res = MutableBytes32.create();
-        res.set(8, ret);
-        return res;
-    }
-
-    /**
-     * Convert key pair to hash
-     * @param keyPair Input key pair
-     * @return Hash as Bytes32
-     */
-    public static Bytes32 keyPair2Hash(ECKeyPair keyPair) {
-        Bytes ret = Bytes.wrap(toBytesAddress(keyPair));
-        MutableBytes32 res = MutableBytes32.create();
-        res.set(8, ret);
-        return res;
-    }
-
-    /**
-     * Extract bytes from hash
-     * @param hash Input hash as MutableBytes32
-     * @return Byte array
-     */
-    public static Bytes hash2byte(MutableBytes32 hash){
-        return hash.slice(8,20);
-    }
-
-    /**
-     * Extract bytes from hash
-     * @param hash Input hash as Bytes32
-     * @return Byte array
-     */
-    public static byte[] hash2byte(Bytes32 hash){
-        Bytes bytes = hash.slice(8,20);
-        return bytes.toArray();
     }
 
     /**

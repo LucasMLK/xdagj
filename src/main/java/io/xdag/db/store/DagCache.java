@@ -42,7 +42,7 @@ import org.apache.tuweni.bytes.Bytes32;
  *   <li><strong>Blocks</strong>: Recently accessed Block objects (raw data)</li>
  *   <li><strong>BlockInfo</strong>: Block metadata (lightweight)</li>
  *   <li><strong>Transactions</strong>: Recently accessed Transaction objects</li>
- *   <li><strong>Height-to-Hash</strong>: Main chain position mappings</li>
+ *   <li><strong>Height-to-Hash</strong>: Main chain height mappings</li>
  *   <li><strong>Epoch Winners</strong>: Cached epoch competition results</li>
  * </ul>
  *
@@ -88,7 +88,7 @@ public class DagCache {
     /** Transaction cache - most recently accessed Transaction objects */
     private final Cache<Bytes32, Transaction> transactionCache;
 
-    /** Height-to-Hash cache - main chain position mapping */
+    /** Height-to-Hash cache - main chain height mapping */
     private final Cache<Long, Bytes32> heightToHashCache;
 
     /** Epoch winner cache - epoch competition results */
@@ -245,9 +245,9 @@ public class DagCache {
     // ==================== Height-to-Hash Cache Operations ====================
 
     /**
-     * Get block hash by main chain position
+     * Get block hash by main chain height
      *
-     * @param height Main chain position
+     * @param height Main chain height
      * @return Block hash or null if not in cache
      */
     public Bytes32 getHashByHeight(long height) {
@@ -257,7 +257,7 @@ public class DagCache {
     /**
      * Put height-to-hash mapping into cache
      *
-     * @param height Main chain position
+     * @param height Main chain height
      * @param hash Block hash
      */
     public void putHashByHeight(long height, Bytes32 hash) {
@@ -269,7 +269,7 @@ public class DagCache {
     /**
      * Invalidate height-to-hash mapping
      *
-     * @param height Main chain position
+     * @param height Main chain height
      */
     public void invalidateHeight(long height) {
         heightToHashCache.invalidate(height);

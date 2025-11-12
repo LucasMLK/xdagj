@@ -117,17 +117,21 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
         orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(currentsize - 1, false));
     }
 
-    // Temporarily disabled - waiting for migration to Block
-    /*
-    public void addOrphan(Block block) {
-        orphanSource.put(BytesUtils.merge(ORPHAN_PREFEX, block.getHash().toArray()),
-                BytesUtils.longToBytes(block.getTimestamp(), true));
+    /**
+     * Add orphan block to queue (v5.1)
+     *
+     * @param hash orphan block hash (Bytes32)
+     * @param timestamp block timestamp
+     */
+    @Override
+    public void addOrphan(Bytes32 hash, long timestamp) {
+        orphanSource.put(BytesUtils.merge(ORPHAN_PREFEX, hash.toArray()),
+                BytesUtils.longToBytes(timestamp, true));
         long currentsize = BytesUtils.bytesToLong(orphanSource.get(ORPHAN_SIZE), 0, false);
-        log.debug("orphan current size:{}", currentsize);
-//        log.debug(":" + Hex.toHexString(orphanSource.get(ORPHAN_SIZE)));
         orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(currentsize + 1, false));
+        log.debug("Added orphan block {}: timestamp={}, queue size={}",
+                hash.toHexString().substring(0, 16), timestamp, currentsize + 1);
     }
-    */
 
     public long getOrphanSize() {
         long currentsize = BytesUtils.bytesToLong(orphanSource.get(ORPHAN_SIZE), 0, false);

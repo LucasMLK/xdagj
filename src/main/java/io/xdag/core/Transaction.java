@@ -57,14 +57,14 @@ public class Transaction implements Serializable {
     // ========== Transaction Data (participates in hash calculation) ==========
 
     /**
-     * Source account address (32 bytes)
+     * Source account address (20 bytes, hash160)
      */
-    Bytes32 from;
+    Bytes from;
 
     /**
-     * Target account address (32 bytes)
+     * Target account address (20 bytes, hash160)
      */
-    Bytes32 to;
+    Bytes to;
 
     /**
      * Transfer amount
@@ -144,10 +144,18 @@ public class Transaction implements Serializable {
      * @return transaction hash (32 bytes)
      */
     private Bytes32 calculateHash() {
+        // Validate address sizes
+        if (from.size() != 20) {
+            throw new IllegalStateException("from address must be exactly 20 bytes, got: " + from.size());
+        }
+        if (to.size() != 20) {
+            throw new IllegalStateException("to address must be exactly 20 bytes, got: " + to.size());
+        }
+
         // Serialize transaction data for hashing
         ByteBuffer buffer = ByteBuffer.allocate(
-                32 +  // from
-                32 +  // to
+                20 +  // from (hash160)
+                20 +  // to (hash160)
                 8 +   // amount
                 8 +   // nonce
                 8 +   // fee
@@ -200,7 +208,8 @@ public class Transaction implements Serializable {
      *
      * Verification process:
      * 1. Recover public key from signature: recovered = ECRecover(hash, v, r, s)
-     * 2. Check if recovered public key matches from address
+     * 2. Derive address from recovered public key: SHA256 → RIPEMD160 (20 bytes)
+     * 3. Check if recovered address matches from address
      *
      * @return true if signature is valid
      */
@@ -218,9 +227,8 @@ public class Transaction implements Serializable {
                 return false;
             }
 
-            // Compare recovered address with from address
-            // Address derivation: address = Keccak256(public_key)
-            Bytes32 recoveredAddress = HashUtils.keccak256(recoveredKey.toBytes());
+            // Derive address from public key: SHA256 → RIPEMD160 (hash160)
+            Bytes recoveredAddress = HashUtils.sha256hash160(recoveredKey.toBytes());
             return recoveredAddress.equals(from);
 
         } catch (Exception e) {
@@ -291,8 +299,8 @@ public class Transaction implements Serializable {
      * @return size in bytes
      */
     public int getSize() {
-        return 32 +  // from
-               32 +  // to
+        return 20 +  // from (hash160)
+               20 +  // to (hash160)
                8 +   // amount
                8 +   // nonce
                8 +   // fee
@@ -322,14 +330,22 @@ public class Transaction implements Serializable {
     /**
      * Create a simple transfer transaction (no data)
      *
-     * @param from source address
-     * @param to target address
+     * @param from source address (20 bytes, hash160)
+     * @param to target address (20 bytes, hash160)
      * @param amount transfer amount
      * @param nonce account nonce
      * @param fee transaction fee
      * @return unsigned transaction
+     * @throws IllegalArgumentException if addresses are not exactly 20 bytes
      */
-    public static Transaction createTransfer(Bytes32 from, Bytes32 to, XAmount amount, long nonce, XAmount fee) {
+    public static Transaction createTransfer(Bytes from, Bytes to, XAmount amount, long nonce, XAmount fee) {
+        if (from.size() != 20) {
+            throw new IllegalArgumentException("from address must be exactly 20 bytes, got: " + from.size());
+        }
+        if (to.size() != 20) {
+            throw new IllegalArgumentException("to address must be exactly 20 bytes, got: " + to.size());
+        }
+
         return Transaction.builder()
                 .from(from)
                 .to(to)
@@ -343,16 +359,22 @@ public class Transaction implements Serializable {
     /**
      * Create a transaction with data (for smart contract calls)
      *
-     * @param from source address
-     * @param to target address
+     * @param from source address (20 bytes, hash160)
+     * @param to target address (20 bytes, hash160)
      * @param amount transfer amount
      * @param nonce account nonce
      * @param fee transaction fee
      * @param data transaction data (max 1KB)
      * @return unsigned transaction
-     * @throws IllegalArgumentException if data size exceeds MAX_DATA_LENGTH
+     * @throws IllegalArgumentException if data size exceeds MAX_DATA_LENGTH or addresses are not 20 bytes
      */
-    public static Transaction createWithData(Bytes32 from, Bytes32 to, XAmount amount, long nonce, XAmount fee, Bytes data) {
+    public static Transaction createWithData(Bytes from, Bytes to, XAmount amount, long nonce, XAmount fee, Bytes data) {
+        if (from.size() != 20) {
+            throw new IllegalArgumentException("from address must be exactly 20 bytes, got: " + from.size());
+        }
+        if (to.size() != 20) {
+            throw new IllegalArgumentException("to address must be exactly 20 bytes, got: " + to.size());
+        }
         if (data.size() > MAX_DATA_LENGTH) {
             throw new IllegalArgumentException("Data size exceeds maximum: " + data.size() + " > " + MAX_DATA_LENGTH);
         }
@@ -372,9 +394,9 @@ public class Transaction implements Serializable {
     /**
      * Serialize transaction to bytes (for storage or network transmission)
      *
-     * Format (minimum 156 bytes + data length):
-     * [from - 32 bytes]
-     * [to - 32 bytes]
+     * Format (minimum 132 bytes + data length):
+     * [from - 20 bytes, hash160]
+     * [to - 20 bytes, hash160]
      * [amount - 8 bytes]
      * [nonce - 8 bytes]
      * [fee - 8 bytes]
@@ -415,22 +437,22 @@ public class Transaction implements Serializable {
      * @throws IllegalArgumentException if data is invalid
      */
     public static Transaction fromBytes(byte[] bytes) {
-        if (bytes.length < 155) {  // Minimum size without data (from+to+amount+nonce+fee+data_length+v+r+s)
+        if (bytes.length < 131) {  // Minimum size without data (20+20+8+8+8+2+1+32+32 = 131 bytes)
             throw new IllegalArgumentException(
-                "Invalid transaction data: too small (" + bytes.length + " bytes, minimum 155)"
+                "Invalid transaction data: too small (" + bytes.length + " bytes, minimum 131)"
             );
         }
 
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
 
-        // Deserialize transaction data
-        byte[] fromBytes = new byte[32];
+        // Deserialize transaction data - read 20-byte addresses
+        byte[] fromBytes = new byte[20];
         buffer.get(fromBytes);
-        Bytes32 from = Bytes32.wrap(fromBytes);
+        Bytes from = Bytes.wrap(fromBytes);
 
-        byte[] toBytes = new byte[32];
+        byte[] toBytes = new byte[20];
         buffer.get(toBytes);
-        Bytes32 to = Bytes32.wrap(toBytes);
+        Bytes to = Bytes.wrap(toBytes);
 
         long amountValue = buffer.getLong();
         XAmount amount = XAmount.ofXAmount(amountValue);

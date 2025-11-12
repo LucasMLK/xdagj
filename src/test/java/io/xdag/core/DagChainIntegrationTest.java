@@ -68,8 +68,8 @@ public class DagChainIntegrationTest {
     private DagAccountManager accountManager;
 
     // Test accounts
-    private Bytes32 senderAddress;
-    private Bytes32 receiverAddress;
+    private org.apache.tuweni.bytes.Bytes senderAddress;
+    private org.apache.tuweni.bytes.Bytes receiverAddress;
     private ECKeyPair senderKey;
 
     @Before
@@ -108,8 +108,8 @@ public class DagChainIntegrationTest {
 
         // Create test accounts
         senderKey = ECKeyPair.generate();
-        senderAddress = Bytes32.random();
-        receiverAddress = Bytes32.random();
+        senderAddress = org.apache.tuweni.bytes.Bytes.random(20);
+        receiverAddress = org.apache.tuweni.bytes.Bytes.random(20);
 
         // Initialize sender account with balance
         accountManager.ensureAccountExists(senderAddress);
@@ -128,6 +128,7 @@ public class DagChainIntegrationTest {
                 "  \"initialDifficulty\": \"0x1000\",\n" +
                 "  \"epochLength\": 64,\n" +
                 "  \"extraData\": \"XDAG v5.1 Test Genesis\",\n" +
+                "  \"genesisCoinbase\": \"0x0000000000000000000000001111111111111111111111111111111111111111\",\n" +
                 "  \"alloc\": {},\n" +
                 "  \"snapshot\": {\n" +
                 "    \"enabled\": false,\n" +
@@ -223,7 +224,7 @@ public class DagChainIntegrationTest {
                 System.currentTimeMillis(),
                 UInt256.ONE,
                 Bytes32.ZERO,
-                Bytes32.random(),
+                org.apache.tuweni.bytes.Bytes.random(20),
                 links
         );
 
@@ -331,7 +332,7 @@ public class DagChainIntegrationTest {
                 System.currentTimeMillis(),
                 UInt256.ONE,
                 Bytes32.ZERO,
-                Bytes32.random(),
+                org.apache.tuweni.bytes.Bytes.random(20),
                 links
         );
 

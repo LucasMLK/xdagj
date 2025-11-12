@@ -57,7 +57,7 @@ import java.util.List;
  * <ul>
  *   <li>{@code transactions}: List of transactions matching request order</li>
  *   <li>Order corresponds to request hash list</li>
- *   <li>If a hash is not found, corresponding position is null</li>
+ *   <li>If a hash is not found, corresponding height is null</li>
  *   <li>transactions.size() == request.hashes.size()</li>
  *   <li>transactions.get(i) corresponds to request.hashes.get(i)</li>
  * </ul>

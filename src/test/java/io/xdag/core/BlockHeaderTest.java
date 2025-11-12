@@ -30,6 +30,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.Test;
@@ -41,7 +42,7 @@ public class BlockHeaderTest {
 
     @Test
     public void testSerializedSize() {
-        assertEquals(104, BlockHeader.getSerializedSize());
+        assertEquals(92, BlockHeader.getSerializedSize());
     }
 
     @Test
@@ -50,7 +51,7 @@ public class BlockHeaderTest {
                 .timestamp(0)
                 .difficulty(UInt256.ONE)
                 .nonce(Bytes32.ZERO)
-                .coinbase(Bytes32.ZERO)
+                .coinbase(Bytes.wrap(new byte[20]))
                 .build();
         assertEquals(0, header1.getEpoch());
 
@@ -58,7 +59,7 @@ public class BlockHeaderTest {
                 .timestamp(63)
                 .difficulty(UInt256.ONE)
                 .nonce(Bytes32.ZERO)
-                .coinbase(Bytes32.ZERO)
+                .coinbase(Bytes.wrap(new byte[20]))
                 .build();
         assertEquals(0, header2.getEpoch());
 
@@ -66,7 +67,7 @@ public class BlockHeaderTest {
                 .timestamp(64)
                 .difficulty(UInt256.ONE)
                 .nonce(Bytes32.ZERO)
-                .coinbase(Bytes32.ZERO)
+                .coinbase(Bytes.wrap(new byte[20]))
                 .build();
         assertEquals(1, header3.getEpoch());
 
@@ -74,7 +75,7 @@ public class BlockHeaderTest {
                 .timestamp(128)
                 .difficulty(UInt256.ONE)
                 .nonce(Bytes32.ZERO)
-                .coinbase(Bytes32.ZERO)
+                .coinbase(Bytes.wrap(new byte[20]))
                 .build();
         assertEquals(2, header4.getEpoch());
     }
@@ -88,7 +89,7 @@ public class BlockHeaderTest {
                 .timestamp(100)
                 .difficulty(difficulty)
                 .nonce(Bytes32.ZERO)
-                .coinbase(Bytes32.ZERO)
+                .coinbase(Bytes.wrap(new byte[20]))
                 .build();
 
         // Hash that satisfies difficulty (smaller than target)
@@ -108,7 +109,7 @@ public class BlockHeaderTest {
                 .timestamp(100)
                 .difficulty(UInt256.ONE)
                 .nonce(Bytes32.ZERO)
-                .coinbase(Bytes32.ZERO)
+                .coinbase(Bytes.wrap(new byte[20]))
                 .hash(null)
                 .build();
 
@@ -118,7 +119,7 @@ public class BlockHeaderTest {
     @Test
     public void testImmutability() {
         Bytes32 nonce1 = Bytes32.random();
-        Bytes32 coinbase1 = Bytes32.random();
+        Bytes coinbase1 = Bytes.random(20);
 
         BlockHeader header1 = BlockHeader.builder()
                 .timestamp(100)
@@ -145,7 +146,7 @@ public class BlockHeaderTest {
                 .timestamp(128)
                 .difficulty(UInt256.ONE)
                 .nonce(Bytes32.ZERO)
-                .coinbase(Bytes32.ZERO)
+                .coinbase(Bytes.wrap(new byte[20]))
                 .build();
 
         String str = header.toString();
@@ -161,7 +162,7 @@ public class BlockHeaderTest {
                 .timestamp(100)
                 .difficulty(UInt256.ONE)
                 .nonce(Bytes32.ZERO)
-                .coinbase(Bytes32.ZERO)
+                .coinbase(Bytes.wrap(new byte[20]))
                 .hash(hash1)
                 .build();
 

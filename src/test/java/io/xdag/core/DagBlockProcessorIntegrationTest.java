@@ -183,7 +183,7 @@ public class DagBlockProcessorIntegrationTest {
                 .timestamp(0)  // Invalid: must be > 0
                 .difficulty(org.apache.tuweni.units.bigints.UInt256.ONE)
                 .nonce(org.apache.tuweni.bytes.Bytes32.ZERO)
-                .coinbase(org.apache.tuweni.bytes.Bytes32.random())
+                .coinbase(org.apache.tuweni.bytes.Bytes.random(20))
                 .build();
 
         Block block = Block.builder()
@@ -213,7 +213,7 @@ public class DagBlockProcessorIntegrationTest {
                 .timestamp(System.currentTimeMillis())
                 .difficulty(org.apache.tuweni.units.bigints.UInt256.ONE)
                 .nonce(org.apache.tuweni.bytes.Bytes32.ZERO)
-                .coinbase(org.apache.tuweni.bytes.Bytes32.random())
+                .coinbase(org.apache.tuweni.bytes.Bytes.random(20))
                 .build();
 
         // Create block with null info
@@ -241,7 +241,7 @@ public class DagBlockProcessorIntegrationTest {
                 .timestamp(0L)  // Invalid timestamp
                 .difficulty(org.apache.tuweni.units.bigints.UInt256.ONE)
                 .nonce(org.apache.tuweni.bytes.Bytes32.ZERO)
-                .coinbase(org.apache.tuweni.bytes.Bytes32.random())
+                .coinbase(org.apache.tuweni.bytes.Bytes.random(20))
                 .build();
 
         // Create block info with valid fields
@@ -280,7 +280,7 @@ public class DagBlockProcessorIntegrationTest {
                 timestamp,
                 org.apache.tuweni.units.bigints.UInt256.ONE,
                 org.apache.tuweni.bytes.Bytes32.ZERO,
-                org.apache.tuweni.bytes.Bytes32.random(),  // coinbase
+                org.apache.tuweni.bytes.Bytes.random(20),  // coinbase
                 java.util.List.of()  // Empty links
         );
 
@@ -326,7 +326,7 @@ public class DagBlockProcessorIntegrationTest {
                     timestamp,
                     org.apache.tuweni.units.bigints.UInt256.ONE,
                     org.apache.tuweni.bytes.Bytes32.ZERO,
-                    org.apache.tuweni.bytes.Bytes32.random(),
+                    org.apache.tuweni.bytes.Bytes.random(20),
                     java.util.List.of()
             );
 
@@ -365,7 +365,7 @@ public class DagBlockProcessorIntegrationTest {
                 timestamp,
                 org.apache.tuweni.units.bigints.UInt256.ONE,
                 org.apache.tuweni.bytes.Bytes32.ZERO,
-                org.apache.tuweni.bytes.Bytes32.random(),
+                org.apache.tuweni.bytes.Bytes.random(20),
                 java.util.List.of()
         );
 
@@ -409,7 +409,7 @@ public class DagBlockProcessorIntegrationTest {
                 timestamp,
                 org.apache.tuweni.units.bigints.UInt256.ONE,
                 org.apache.tuweni.bytes.Bytes32.ZERO,
-                org.apache.tuweni.bytes.Bytes32.random(),
+                org.apache.tuweni.bytes.Bytes.random(20),
                 java.util.List.of()
         );
 

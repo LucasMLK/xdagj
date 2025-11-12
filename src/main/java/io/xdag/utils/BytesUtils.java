@@ -56,7 +56,7 @@ public class BytesUtils {
     /**
      * Converts 4 bytes from a byte array to an integer
      * @param input Source byte array
-     * @param offset Starting position in the array
+     * @param offset Starting height in the array
      * @param littleEndian If true, uses little-endian byte order
      * @return The integer value
      */
@@ -86,7 +86,7 @@ public class BytesUtils {
     /**
      * Converts 8 bytes from a byte array to a long
      * @param input Source byte array
-     * @param offset Starting position in the array
+     * @param offset Starting height in the array
      * @param littleEndian If true, uses little-endian byte order
      * @return The long value
      */
@@ -131,7 +131,7 @@ public class BytesUtils {
     /**
      * Converts 2 bytes from a byte array to a short
      * @param input Source byte array
-     * @param offset Starting position in the array
+     * @param offset Starting height in the array
      * @param littleEndian If true, uses little-endian byte order
      * @return The short value
      */

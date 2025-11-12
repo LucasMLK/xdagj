@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.net.message;
+package io.xdag.p2p;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;

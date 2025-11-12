@@ -54,7 +54,7 @@ import java.util.List;
  * <p><strong>Fields</strong>:
  * <ul>
  *   <li>{@code blocks}: List of main blocks in ascending height order</li>
- *   <li>If a height has no block, the corresponding position is null</li>
+ *   <li>If a height has no block, the corresponding entry is null</li>
  *   <li>List size = (toHeight - fromHeight + 1)</li>
  *   <li>blocks.get(i) corresponds to height (fromHeight + i)</li>
  * </ul>

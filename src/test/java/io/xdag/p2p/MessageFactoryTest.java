@@ -21,57 +21,26 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+package io.xdag.p2p;
 
-package io.xdag.core;
+import static org.junit.Assert.assertNull;
 
-import lombok.Getter;
-import lombok.Setter;
-import org.apache.tuweni.bytes.Bytes32;
+import io.xdag.p2p.message.MessageException;
+import io.xdag.p2p.message.XdagMessageFactory;
+import org.junit.Test;
 
-/**
- * Enum representing different results of block import operations
- * ERROR - Import failed with error
- * EXIST - Block already exists
- * NO_PARENT - Parent block not found
- * INVALID_BLOCK - Block validation failed
- * IN_MEM - Block is already in memory
- * IMPORTED_EXTRA - Block imported as extra
- * IMPORTED_NOT_BEST - Block imported but not in main chain
- * IMPORTED_BEST - Block imported into main chain
- */
-public enum ImportResult {
-    ERROR,
-    EXIST,
-    NO_PARENT,
-    INVALID_BLOCK,
-    IN_MEM,
+public class MessageFactoryTest {
 
-    IMPORTED_EXTRA,
-    IMPORTED_NOT_BEST,
-    IMPORTED_BEST;
-
-    // Hash of the block
-    private Bytes32 hash;
-
-    // Error message if import failed
-    @Setter
-    @Getter
-    private String errorInfo;
-
-    /**
-     * Get the hash of the block
-     * @return The hash as Bytes32
-     */
-    public Bytes32 getHash() {
-        return hash;
+    @Test
+    public void testNonExist() throws MessageException {
+        XdagMessageFactory factory = new XdagMessageFactory();
+        assertNull(factory.create((byte) 0xff, new byte[1]));
     }
 
-    /**
-     * Set the hash of the block
-     * @param hash The hash to set
-     */
-    public void setHash(Bytes32 hash) {
-        this.hash = hash;
+    @Test(expected = MessageException.class)
+    public void testWrongCodec() throws MessageException {
+        XdagMessageFactory factory = new XdagMessageFactory();
+        // Use valid message code (0x16 = BLOCK_REQUEST) with malformed body (1 byte is too short, needs 32+ bytes)
+        factory.create((byte) 0x16, new byte[1]);
     }
-
 }

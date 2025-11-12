@@ -24,8 +24,6 @@
 
 package io.xdag.wallet;
 
-import static io.xdag.utils.BasicUtils.hash2PubAddress;
-import static io.xdag.utils.BasicUtils.keyPair2Hash;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -206,9 +204,9 @@ public class WalletTest {
     public void testGetWalletAddress() {
         wallet.unlock(pwd);
         Log.info(wallet.getDefKey());
-        Log.info(keyPair2Hash(wallet.getDefKey()));
-        Log.info(hash2PubAddress(keyPair2Hash(wallet.getDefKey())));
-        assertTrue(WalletUtils.checkAddress(hash2PubAddress(keyPair2Hash(wallet.getDefKey()))));
+        Log.info(AddressUtils.toBytesAddress(wallet.getDefKey()));
+        Log.info(AddressUtils.toBase58Address(wallet.getDefKey()));
+        assertTrue(WalletUtils.checkAddress(AddressUtils.toBase58Address(wallet.getDefKey())));
     }
 
     @After

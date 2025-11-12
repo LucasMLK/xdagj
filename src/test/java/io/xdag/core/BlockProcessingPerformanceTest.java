@@ -29,7 +29,9 @@ import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.crypto.keys.ECKeyPair;
+import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.db.TransactionStore;
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
@@ -73,7 +75,7 @@ public class BlockProcessingPerformanceTest {
     private TransactionStore transactionStore;
 
     // Test accounts
-    private Bytes32 senderAddress;
+    private Bytes senderAddress;
     private ECKeyPair senderKey;
 
     @Before
@@ -114,9 +116,9 @@ public class BlockProcessingPerformanceTest {
 
         // Create test account with large balance
         senderKey = ECKeyPair.generate();
-        senderAddress = Bytes32.random();
+        senderAddress = Bytes.wrap(AddressUtils.toBytesAddress(senderKey));
         accountManager.ensureAccountExists(senderAddress);
-        accountManager.setBalance(senderAddress, UInt256.valueOf(1_000_000_000_000L)); // 1000 XDAG
+        accountManager.setBalance(senderAddress, UInt256.valueOf(10_000_000_000_000L)); // 10000 XDAG (enough for all tests)
     }
 
     @After
@@ -173,7 +175,10 @@ public class BlockProcessingPerformanceTest {
                 DagBlockProcessor.ProcessingResult result = blockProcessor.processBlock(block);
                 long endTime = System.nanoTime();
 
-                assertTrue("Block should process successfully", result.isSuccess());
+                if (!result.isSuccess()) {
+                    System.err.println("Block processing failed: " + result);
+                }
+                assertTrue("Block should process successfully. Result: " + result, result.isSuccess());
 
                 long latencyMs = (endTime - startTime) / 1_000_000;
                 latencies.add(latencyMs);
@@ -215,7 +220,7 @@ public class BlockProcessingPerformanceTest {
 
         // Warmup
         for (int i = 0; i < 10; i++) {
-            Block warmupBlock = createBlockWithTransactions(txPerBlock, -1000 + i * 100);
+            Block warmupBlock = createBlockWithTransactions(txPerBlock, i * 100);
             blockProcessor.processBlock(warmupBlock);
         }
 
@@ -265,10 +270,10 @@ public class BlockProcessingPerformanceTest {
 
         // Create 100 accounts
         int accountCount = 100;
-        List<Bytes32> addresses = new ArrayList<>();
+        List<Bytes> addresses = new ArrayList<>();
 
         for (int i = 0; i < accountCount; i++) {
-            Bytes32 address = Bytes32.random();
+            Bytes address = Bytes.random(20);
             addresses.add(address);
             accountManager.ensureAccountExists(address);
             accountManager.setBalance(address, UInt256.valueOf(1_000_000_000L));
@@ -284,7 +289,7 @@ public class BlockProcessingPerformanceTest {
         List<Long> latencies = new ArrayList<>();
 
         for (int i = 0; i < iterations; i++) {
-            Bytes32 address = addresses.get(i % accountCount);
+            Bytes address = addresses.get(i % accountCount);
 
             long startTime = System.nanoTime();
             UInt256 balance = accountManager.getBalance(address);
@@ -331,7 +336,7 @@ public class BlockProcessingPerformanceTest {
 
         for (int i = 0; i < iterations; i++) {
             // Create transaction
-            Bytes32 receiver = Bytes32.random();
+            Bytes receiver = Bytes.random(20);
             accountManager.ensureAccountExists(receiver);
 
             XAmount amount = XAmount.of(1, XUnit.XDAG);
@@ -383,17 +388,18 @@ public class BlockProcessingPerformanceTest {
 
     /**
      * Create a block with specified number of transactions
+     * Uses current nonce from AccountStore - nonce will be incremented by block processor
      */
-    private Block createBlockWithTransactions(int txCount, long nonceOffset) {
+    private Block createBlockWithTransactions(int txCount, long unusedNonceOffset) {
         List<Link> links = new ArrayList<>();
 
-        // Get current sender nonce
+        // Get current sender nonce (will be incremented by block processor after processing)
         UInt64 currentNonce = accountManager.getNonce(senderAddress);
-        long baseNonce = currentNonce.toLong() + nonceOffset;
+        long baseNonce = currentNonce.toLong();
 
-        // Create and save transactions
+        // Create and save transactions with sequential nonces
         for (int i = 0; i < txCount; i++) {
-            Bytes32 receiver = Bytes32.random();
+            Bytes receiver = Bytes.random(20);
             accountManager.ensureAccountExists(receiver);
 
             XAmount amount = XAmount.of(1, XUnit.XDAG);
@@ -419,7 +425,7 @@ public class BlockProcessingPerformanceTest {
                 timestamp,
                 UInt256.ONE,
                 Bytes32.ZERO,
-                Bytes32.random(),
+                senderAddress,  // Use 20-byte address for coinbase
                 links
         );
 

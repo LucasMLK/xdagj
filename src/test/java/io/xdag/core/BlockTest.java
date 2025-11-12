@@ -31,6 +31,7 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.Test;
@@ -48,7 +49,7 @@ public class BlockTest {
     public void testCreateCandidate() {
         long timestamp = 128;
         UInt256 difficulty = UInt256.ONE;
-        Bytes32 coinbase = Bytes32.random();
+        Bytes coinbase = Bytes.random(20);
         List<Link> links = List.of(
             Link.toTransaction(Bytes32.random()),
             Link.toBlock(Bytes32.random())
@@ -67,7 +68,7 @@ public class BlockTest {
         long timestamp = 64;
         UInt256 difficulty = UInt256.ONE;
         Bytes32 nonce = Bytes32.random();
-        Bytes32 coinbase = Bytes32.random();
+        Bytes coinbase = Bytes.random(20);
         List<Link> links = List.of(Link.toTransaction(Bytes32.random()));
 
         Block block = Block.createWithNonce(timestamp, difficulty, nonce, coinbase, links);
@@ -82,7 +83,7 @@ public class BlockTest {
         Block block = Block.createCandidate(
             100,
             UInt256.ONE,
-            Bytes32.ZERO,
+            Bytes.wrap(new byte[20]),
             List.of(Link.toTransaction(Bytes32.random()))
         );
 
@@ -105,7 +106,7 @@ public class BlockTest {
             Link.toBlock(block1)
         );
 
-        Block block = Block.createCandidate(100, UInt256.ONE, Bytes32.ZERO, links);
+        Block block = Block.createCandidate(100, UInt256.ONE, Bytes.wrap(new byte[20]), links);
 
         assertEquals(3, block.getLinks().size());
         assertEquals(2, block.getTransactionCount());
@@ -123,7 +124,7 @@ public class BlockTest {
     @Test
     public void testSerialization() {
         Bytes32 nonce = Bytes32.random();
-        Bytes32 coinbase = Bytes32.random();
+        Bytes coinbase = Bytes.random(20);
         List<Link> links = List.of(
             Link.toTransaction(Bytes32.random()),
             Link.toTransaction(Bytes32.random())
@@ -148,7 +149,7 @@ public class BlockTest {
             Link.toTransaction(Bytes32.random())
         );
 
-        Block block = Block.createCandidate(100, UInt256.ONE, Bytes32.ZERO, links);
+        Block block = Block.createCandidate(100, UInt256.ONE, Bytes.wrap(new byte[20]), links);
 
         int expectedSize = BlockHeader.getSerializedSize() + 4 + (2 * Link.LINK_SIZE);
         assertEquals(expectedSize, block.getSize());
@@ -161,7 +162,7 @@ public class BlockTest {
         for (int i = 0; i < Block.MAX_LINKS_PER_BLOCK + 1; i++) {
             tooManyLinks.add(Link.toTransaction(Bytes32.random()));
         }
-        Block blockExceedingLinks = Block.createCandidate(100, UInt256.ONE, Bytes32.ZERO, tooManyLinks);
+        Block blockExceedingLinks = Block.createCandidate(100, UInt256.ONE, Bytes.wrap(new byte[20]), tooManyLinks);
         assertTrue(blockExceedingLinks.exceedsMaxLinks());
 
         // Test exceeding size (need ~1,526,000 links to exceed 48MB)
@@ -169,7 +170,7 @@ public class BlockTest {
         for (int i = 0; i < 1_526_000; i++) {
             lotsOfLinks.add(Link.toTransaction(Bytes32.random()));
         }
-        Block blockExceedingSize = Block.createCandidate(100, UInt256.ONE, Bytes32.ZERO, lotsOfLinks);
+        Block blockExceedingSize = Block.createCandidate(100, UInt256.ONE, Bytes.wrap(new byte[20]), lotsOfLinks);
         assertTrue(blockExceedingSize.exceedsMaxSize());
         assertTrue(blockExceedingSize.exceedsMaxLinks());  // This also exceeds link count
     }
@@ -185,7 +186,7 @@ public class BlockTest {
             100,
             easyDifficulty,
             Bytes32.ZERO,
-            Bytes32.random(),
+            Bytes.random(20),
             List.of(Link.toBlock(Bytes32.random()), Link.toTransaction(Bytes32.random()))
         );
 
@@ -204,7 +205,7 @@ public class BlockTest {
             Link.toTransaction(Bytes32.random())
         );
         Block blockNoRefs = Block.createWithNonce(
-            100, easyDifficulty, Bytes32.ZERO, Bytes32.random(), noBlockLinks
+            100, easyDifficulty, Bytes32.ZERO, Bytes.random(20), noBlockLinks
         );
         assertFalse(blockNoRefs.isValid());  // Should fail: blockRefCount < MIN_BLOCK_LINKS
 
@@ -214,7 +215,7 @@ public class BlockTest {
             Link.toTransaction(Bytes32.random())
         );
         Block blockOneRef = Block.createWithNonce(
-            100, easyDifficulty, Bytes32.ZERO, Bytes32.random(), oneBlockLink
+            100, easyDifficulty, Bytes32.ZERO, Bytes.random(20), oneBlockLink
         );
         assertTrue(blockOneRef.isValid());  // Should pass: blockRefCount = 1
 
@@ -225,7 +226,7 @@ public class BlockTest {
         }
         maxBlockLinks.add(Link.toTransaction(Bytes32.random()));
         Block blockMaxRefs = Block.createWithNonce(
-            100, easyDifficulty, Bytes32.ZERO, Bytes32.random(), maxBlockLinks
+            100, easyDifficulty, Bytes32.ZERO, Bytes.random(20), maxBlockLinks
         );
         assertTrue(blockMaxRefs.isValid());  // Should pass: blockRefCount = 16
 
@@ -235,7 +236,7 @@ public class BlockTest {
             tooManyBlockLinks.add(Link.toBlock(Bytes32.random()));
         }
         Block blockTooManyRefs = Block.createWithNonce(
-            100, easyDifficulty, Bytes32.ZERO, Bytes32.random(), tooManyBlockLinks
+            100, easyDifficulty, Bytes32.ZERO, Bytes.random(20), tooManyBlockLinks
         );
         assertFalse(blockTooManyRefs.isValid());  // Should fail: blockRefCount > MAX_BLOCK_LINKS
     }
@@ -246,7 +247,7 @@ public class BlockTest {
                 .timestamp(0)
                 .difficulty(UInt256.ZERO)
                 .nonce(Bytes32.ZERO)
-                .coinbase(Bytes32.ZERO)
+                .coinbase(Bytes.wrap(new byte[20]))
                 .build();
 
         Block block = Block.builder()
@@ -262,7 +263,7 @@ public class BlockTest {
         List<Link> links1 = new ArrayList<>();
         links1.add(Link.toTransaction(Bytes32.random()));
 
-        Block block1 = Block.createCandidate(100, UInt256.ONE, Bytes32.ZERO, links1);
+        Block block1 = Block.createCandidate(100, UInt256.ONE, Bytes.wrap(new byte[20]), links1);
 
         // Modify original list
         links1.add(Link.toTransaction(Bytes32.random()));
@@ -276,8 +277,8 @@ public class BlockTest {
         Bytes32 nonce = Bytes32.random();
         List<Link> links = List.of(Link.toTransaction(Bytes32.random()));
 
-        Block block1 = Block.createWithNonce(100, UInt256.ONE, nonce, Bytes32.ZERO, links);
-        Block block2 = Block.createWithNonce(100, UInt256.ONE, nonce, Bytes32.ZERO, links);
+        Block block1 = Block.createWithNonce(100, UInt256.ONE, nonce, Bytes.wrap(new byte[20]), links);
+        Block block2 = Block.createWithNonce(100, UInt256.ONE, nonce, Bytes.wrap(new byte[20]), links);
 
         // Same content, same hash
         assertEquals(block1.getHash(), block2.getHash());
@@ -290,7 +291,7 @@ public class BlockTest {
             128,
             UInt256.ONE,
             Bytes32.ZERO,
-            Bytes32.random(),
+            Bytes.random(20),
             List.of(
                 Link.toTransaction(Bytes32.random()),
                 Link.toBlock(Bytes32.random())

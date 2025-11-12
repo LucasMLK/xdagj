@@ -25,10 +25,10 @@
 package io.xdag.cli;
 
 import static io.xdag.utils.BasicUtils.address2Hash;
-import static io.xdag.utils.BasicUtils.pubAddress2Hash;
 
 import io.xdag.DagKernel;
 import io.xdag.Wallet;
+import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.utils.BasicUtils;
 import io.xdag.utils.WalletUtils;
 import java.io.PrintWriter;
@@ -71,79 +71,49 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
 
     public Shell() {
         super();
+        // Account & Wallet Commands
         commandExecute.put("account", new CommandMethods(this::processAccount, this::defaultCompleter));
         commandExecute.put("balance", new CommandMethods(this::processBalance, this::defaultCompleter));
-        commandExecute.put("block", new CommandMethods(this::processBlock, this::defaultCompleter));
-        commandExecute.put("lastblocks", new CommandMethods(this::processLastBlocks, this::defaultCompleter));
-        commandExecute.put("mainblocks", new CommandMethods(this::processMainBlocks, this::defaultCompleter));
-        commandExecute.put("minedblocks", new CommandMethods(this::processMinedblocks, this::defaultCompleter));
-        commandExecute.put("state", new CommandMethods(this::processState, this::defaultCompleter));
-        commandExecute.put("stats", new CommandMethods(this::processStats, this::defaultCompleter));
-        commandExecute.put("xfer", new CommandMethods(this::processXfer, this::defaultCompleter));
-        commandExecute.put("xfertonew", new CommandMethods(this::processXferToNew, this::defaultCompleter));
-        // Phase 6 Task 6.2: v5.1 CLI commands
-        commandExecute.put("xferv2", new CommandMethods(this::processXferV2, this::defaultCompleter));
-        commandExecute.put("xfertonewv2", new CommandMethods(this::processXferToNewV2, this::defaultCompleter));
-        commandExecute.put("pool", new CommandMethods(this::processPool, this::defaultCompleter));
-        commandExecute.put("keygen", new CommandMethods(this::processKeygen, this::defaultCompleter));
-        commandExecute.put("net", new CommandMethods(this::processNet, this::defaultCompleter));
-        commandExecute.put("ttop", new CommandMethods(this::processTtop, this::defaultCompleter));
-        commandExecute.put("terminate", new CommandMethods(this::processTerminate, this::defaultCompleter));
         commandExecute.put("address", new CommandMethods(this::processAddress, this::defaultCompleter));
-        commandExecute.put("oldbalance", new CommandMethods(this::processOldBalance, this::defaultCompleter));
-        commandExecute.put("txQuantity", new CommandMethods(this::processTxQuantity, this::defaultCompleter));
+        commandExecute.put("nonce", new CommandMethods(this::processNonce, this::defaultCompleter));
+        commandExecute.put("maxbalance", new CommandMethods(this::processMaxBalance, this::defaultCompleter));
+        commandExecute.put("keygen", new CommandMethods(this::processKeygen, this::defaultCompleter));
+
+        // Transaction Commands
+        commandExecute.put("transfer", new CommandMethods(this::processTransfer, this::defaultCompleter));
+        commandExecute.put("consolidate", new CommandMethods(this::processConsolidate, this::defaultCompleter));
+
+        // Block & Chain Commands
+        commandExecute.put("block", new CommandMethods(this::processBlock, this::defaultCompleter));
+        commandExecute.put("chain", new CommandMethods(this::processChain, this::defaultCompleter));
+        commandExecute.put("mined", new CommandMethods(this::processMined, this::defaultCompleter));
+        commandExecute.put("epoch", new CommandMethods(this::processEpoch, this::defaultCompleter));
+
+        // Network & Mining Commands
+        commandExecute.put("network", new CommandMethods(this::processNetwork, this::defaultCompleter));
+        commandExecute.put("pool", new CommandMethods(this::processPool, this::defaultCompleter));
+        commandExecute.put("stats", new CommandMethods(this::processStats, this::defaultCompleter));
+        commandExecute.put("state", new CommandMethods(this::processState, this::defaultCompleter));
+
+        // System Commands
+        commandExecute.put("monitor", new CommandMethods(this::processMonitor, this::defaultCompleter));
+        commandExecute.put("stop", new CommandMethods(this::processStop, this::defaultCompleter));
+
         registerCommands(commandExecute);
     }
 
-    private void processXferToNew(CommandInput input) {
-        final String[] usage = {
-                "xfertonew -  transfer the old balance to new address \n",
-                "Usage: balance xfertonew",
-                "  -? --help                    Show help",
-                "",
-                "NOTE: This command now uses v5.1 Transaction architecture.",
-                "      Consider using 'xfertonewv2' command for explicit v5.1 features.",
-        };
-        try {
-            Options opt = parseOptions(usage, input.args());
-            if (opt.isSet("help")) {
-                throw new Options.HelpException(opt.usage());
-            }
-
-            // Verify wallet password (required by v5.1 method)
-            Wallet wallet = new Wallet(dagKernel.getConfig());
-            if (!wallet.unlock(readPassword())) {
-                println("The password is incorrect");
-                return;
-            }
-
-            // NOTE: Legacy 'xfertonew' command now uses v5.1 architecture (xferToNewV2)
-            println(commands.xferToNewV2());
-
-        } catch (Exception e) {
-            saveException(e);
-        }
-    }
-
     /**
-     * Process xfertonewv2 command - Transfer block balances using v5.1 Transaction architecture
-     * Phase 6 Task 6.2: CLI command for xferToNewV2()
+     * Process consolidate command - Consolidate account balances to default address
      */
-    private void processXferToNewV2(CommandInput input) {
+    private void processConsolidate(CommandInput input) {
         final String[] usage = {
-                "xfertonewv2 - transfer confirmed block balances to default address using v5.1 architecture",
-                "Usage: xfertonewv2",
+                "consolidate - consolidate all account balances to default address",
+                "Usage: consolidate",
                 "  -? --help         Show help",
                 "",
                 "Description:",
-                "  This command transfers all confirmed block balances (older than 2*CONFIRMATIONS_COUNT epochs)",
-                "  to the default account address using v5.1 Transaction architecture.",
-                "",
-                "  Key differences from 'xfertonew':",
-                "  - Uses v5.1 Transaction + Block architecture",
-                "  - Account-level aggregation (more efficient)",
-                "  - Independent Transaction objects (better validation)",
-                "  - Detailed transfer output with statistics",
+                "  This command transfers all confirmed account balances to the default address.",
+                "  Each account's balance (minus fee) will be transferred in a separate transaction.",
                 "",
                 "  Note: Requires wallet password for authorization.",
         };
@@ -160,8 +130,8 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
                 return;
             }
 
-            // Execute block balance transfer using v5.1 method
-            println(commands.xferToNewV2());
+            // Execute consolidation
+            println(commands.consolidate());
 
         } catch (Exception e) {
             saveException(e);
@@ -189,14 +159,14 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
             String address = argv.get(0);
             int page = StringUtils.isNumeric(argv.get(1))?Integer.parseInt(argv.get(1)):1;
             try {
-                Bytes32 hash;
+                org.apache.tuweni.bytes.Bytes addressBytes;
                 if (WalletUtils.checkAddress(address)) {
-                    hash = pubAddress2Hash(address);
+                    addressBytes = AddressUtils.fromBase58Address(address);
                 } else {
                     println("Incorrect address");
                     return;
                 }
-                println(commands.address(hash, page));
+                println(commands.address(addressBytes, page));
             } catch (Exception e) {
                 println("Argument is incorrect.");
             }
@@ -205,10 +175,13 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         }
     }
 
-    private void processOldBalance(CommandInput input) {
+    /**
+     * Process maxbalance command - Show maximum transferable balance
+     */
+    private void processMaxBalance(CommandInput input) {
         final String[] usage = {
-                "oldbalance -  print max balance we can transfer \n",
-                "Usage: balance oldbalance",
+                "maxbalance - print maximum transferable balance",
+                "Usage: maxbalance",
                 "  -? --help                    Show help",
         };
         try {
@@ -269,10 +242,13 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         }
     }
 
-    private void processTxQuantity(CommandInput input) {
+    /**
+     * Process nonce command - Show transaction nonce
+     */
+    private void processNonce(CommandInput input) {
         final String[] usage = {
-                "txQuantity -  print current transaction quantity of the address [ADDRESS] or current nonce of our address \n",
-                "Usage: txQuantity [ADDRESS](optional)",
+                "nonce - print transaction nonce of the address [ADDRESS] or total nonce of all addresses",
+                "Usage: nonce [ADDRESS](optional)",
                 "  -? --help                    Show help",
         };
         try {
@@ -328,26 +304,13 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         }
     }
 
-    private void processLastBlocks(CommandInput input) {
+    /**
+     * Process chain command - List main chain blocks
+     */
+    private void processChain(CommandInput input) {
         final String[] usage = {
-                "lastblocks - print latest [SIZE] (20 by default, max limit 100) main blocks",
-                "Usage: lastblocks [SIZE]",
-                "  -? --help                    Show help",
-        };
-        try {
-            Options opt = parseOptions(usage, input.args());
-            if (opt.isSet("help")) {
-                throw new Options.HelpException(opt.usage());
-            }
-        } catch (Exception e) {
-            saveException(e);
-        }
-    }
-
-    private void processMainBlocks(CommandInput input) {
-        final String[] usage = {
-                "mainblocks -  print latest [SIZE] (20 by default, max limit 100) main blocks",
-                "Usage: mainblocks [SIZE]",
+                "chain - print latest [SIZE] (20 by default, max limit 100) main chain blocks",
+                "Usage: chain [SIZE]",
                 "  -? --help                    Show help",
         };
         try {
@@ -366,10 +329,13 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         }
     }
 
-    private void processMinedblocks(CommandInput input) {
+    /**
+     * Process mined command - List mined blocks
+     */
+    private void processMined(CommandInput input) {
         final String[] usage = {
-                "mineblocks -  print list of [SIZE] (20 by default) main blocks mined by current pool",
-                "Usage: mineblocks [SIZE]",
+                "mined - print list of [SIZE] (20 by default) main blocks mined by this node",
+                "Usage: mined [SIZE]",
                 "  -? --help                    Show help",
         };
         try {
@@ -423,14 +389,18 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         }
     }
 
-    private void processXfer(CommandInput input) {
+    /**
+     * Process epoch command - Query epoch information (CLI Redesign v5.1)
+     */
+    private void processEpoch(CommandInput input) {
         final String[] usage = {
-                "xfer -  transfer [AMOUNT] XDAG to the address [ADDRESS]",
-                "Usage: transfer [AMOUNT] [ADDRESS] [REMARK]",
+                "epoch - query epoch information",
+                "Usage: epoch [EPOCH_NUMBER]",
                 "  -? --help                    Show help",
                 "",
-                "NOTE: This command now uses v5.1 Transaction architecture.",
-                "      Consider using 'xferv2' command for explicit v5.1 features and custom fees.",
+                "Examples:",
+                "  epoch                        # Show current epoch information",
+                "  epoch 23693854               # Show specific epoch information",
         };
         try {
             Options opt = parseOptions(usage, input.args());
@@ -439,48 +409,24 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
                 throw new Options.HelpException(opt.usage());
             }
 
-            if (argv.size() < 2) {
-                println("Lost some param");
-                return;
+            Long epochNumber = null;
+            if (!argv.isEmpty() && NumberUtils.isDigits(argv.getFirst())) {
+                epochNumber = Long.parseLong(argv.getFirst());
             }
 
-            double amount = BasicUtils.getDouble(argv.get(0));
-            String addressStr = argv.get(1);
-            String remark = argv.size() >= 3 ? argv.get(2) : null;
-
-            if (amount < 0) {
-                println("The transfer amount must be greater than 0");
-                return;
-            }
-
-            if (!WalletUtils.checkAddress(addressStr)) {
-                println("Incorrect address");
-                return;
-            }
-
-            Wallet wallet = new Wallet(dagKernel.getConfig());
-            if (!wallet.unlock(readPassword())) {
-                println("The password is incorrect");
-                return;
-            }
-
-            // NOTE: Legacy 'xfer' command now uses v5.1 architecture (xferV2)
-            // Using default MIN_GAS fee (100 milli XDAG = 0.1 XDAG)
-            println(commands.xferV2(amount, addressStr, remark, 100.0));
-
+            println(commands.epoch(epochNumber));
         } catch (Exception e) {
             saveException(e);
         }
     }
 
     /**
-     * Process xferv2 command - Transfer using v5.1 Transaction architecture
-     * Phase 6 Task 6.2: CLI command for xferV2()
+     * Process transfer command - Transfer XDAG to another address
      */
-    private void processXferV2(CommandInput input) {
+    private void processTransfer(CommandInput input) {
         final String[] usage = {
-                "xferv2 - transfer [AMOUNT] XDAG to the address [ADDRESS] using v5.1 architecture",
-                "Usage: xferv2 [AMOUNT] [ADDRESS] [REMARK] [FEE_MILLI_XDAG]",
+                "transfer - transfer XDAG to another address",
+                "Usage: transfer <AMOUNT> <ADDRESS> [REMARK] [FEE_MILLI_XDAG]",
                 "  AMOUNT            Amount to send in XDAG",
                 "  ADDRESS           Recipient address (Base58 format)",
                 "  REMARK            (Optional) Transaction remark",
@@ -488,9 +434,9 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
                 "  -? --help         Show help",
                 "",
                 "Examples:",
-                "  xferv2 10.5 2gHjwW7kNTj8VTg7yoS5fMT1APU7gGFSXm8jFL9qLMNYSZPM                    # Default fee (0.1 XDAG)",
-                "  xferv2 10.5 2gHjwW7kNTj8VTg7yoS5fMT1APU7gGFSXm8jFL9qLMNYSZPM \"payment\"         # With remark",
-                "  xferv2 10.5 2gHjwW7kNTj8VTg7yoS5fMT1APU7gGFSXm8jFL9qLMNYSZPM \"payment\" 200   # Custom fee",
+                "  transfer 10.5 2gHjwW7kNTj8VTg7yoS5fMT1APU7gGFSXm8jFL9qLMNYSZPM",
+                "  transfer 10.5 2gHjwW7k... \"payment for services\"",
+                "  transfer 10.5 2gHjwW7k... \"payment\" 200",
         };
         try {
             Options opt = parseOptions(usage, input.args());
@@ -501,7 +447,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
 
             if (argv.size() < 2) {
                 println("Missing required parameters: AMOUNT and ADDRESS");
-                println("Usage: xferv2 [AMOUNT] [ADDRESS] [REMARK] [FEE_MILLI_XDAG]");
+                println("Usage: transfer <AMOUNT> <ADDRESS> [REMARK] [FEE_MILLI_XDAG]");
                 return;
             }
 
@@ -544,8 +490,8 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
                 return;
             }
 
-            // Execute transfer using v5.1 method
-            println(commands.xferV2(amount, addressStr, remark, feeMilliXdag));
+            // Execute transfer
+            println(commands.transfer(amount, addressStr, remark, feeMilliXdag));
 
         } catch (Exception e) {
             saveException(e);
@@ -586,14 +532,17 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         }
     }
 
-    private void processNet(CommandInput input) {
+    /**
+     * Process network command - Network operations
+     */
+    private void processNetwork(CommandInput input) {
         Pattern p = Pattern.compile("^\\s*(.*?):(\\d+)\\s*(.*?)$");
         final String[] usage = {
-                "net - run transport layer command, try 'net --help'",
-                "Usage: net [OPTIONS]",
+                "network - network operations, try 'network --help'",
+                "Usage: network [OPTIONS]",
                 "  -? --help                        Show help",
-                "  -l --list                 list connections",
-                "  -c --connect=IP:PORT     connect to this host",
+                "  -l --list                        List connections",
+                "  -c --connect=IP:PORT             Connect to this host",
         };
         try {
             Options opt = parseOptions(usage, input.args());
@@ -620,7 +569,10 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         }
     }
 
-    private void processTtop(CommandInput input) {
+    /**
+     * Process monitor command - System monitor
+     */
+    private void processMonitor(CommandInput input) {
         try {
             TTop.ttop(input.terminal(), input.out(), input.err(), input.args());
         } catch (Exception e) {
@@ -628,10 +580,13 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         }
     }
 
-    private void processTerminate(CommandInput input) {
+    /**
+     * Process stop command - Stop node
+     */
+    private void processStop(CommandInput input) {
         final String[] usage = {
-                "terminate - terminate both daemon and this program",
-                "Usage: terminate",
+                "stop - stop the XDAG node",
+                "Usage: stop",
                 "  -? --help                       Displays command help"
         };
         try {
@@ -639,7 +594,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
             if (opt.isSet("help")) {
                 throw new Options.HelpException(opt.usage());
             }
-            // before terminate must verify admin password(config at AdminSpec)
+            // before stop must verify admin password(config at AdminSpec)
             if (!readPassword("Enter Admin password> ", true)) {
                 return;
             }

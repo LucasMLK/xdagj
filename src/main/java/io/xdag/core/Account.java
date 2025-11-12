@@ -37,12 +37,12 @@ import java.nio.ByteBuffer;
  * Account - Account model for XDAG v5.1
  *
  * <p>This is the core data structure for storing account state in the AccountStore.
- * It follows the account model with address (32 bytes), balance, and nonce.
+ * It follows the account model with address (20 bytes), balance, and nonce.
  *
  * <h2>Account Model</h2>
  * <pre>
  * Account {
- *   address: Bytes32 (32 bytes, XDAG standard)
+ *   address: Bytes (20 bytes, SHA256+RIPEMD160 hash)
  *   balance: UInt256 (account balance in smallest unit)
  *   nonce: UInt64 (transaction counter for replay protection)
  *   codeHash: Bytes32 (hash of contract code, optional)
@@ -82,9 +82,9 @@ import java.nio.ByteBuffer;
 public class Account {
 
     /**
-     * Account address (32 bytes for XDAG compatibility)
+     * Account address (20 bytes, SHA256+RIPEMD160)
      */
-    Bytes32 address;
+    Bytes address;
 
     /**
      * Account balance (256-bit unsigned integer)
@@ -175,7 +175,7 @@ public class Account {
      * Serialize account to bytes for RocksDB storage
      *
      * <p>Format (variable size):
-     * - address: 32 bytes (Bytes32)
+     * - address: 20 bytes (Bytes - hash160)
      * - balance: 32 bytes (UInt256)
      * - nonce: 8 bytes (UInt64)
      * - has_code: 1 byte (0 = EOA, 1 = contract)
@@ -183,20 +183,23 @@ public class Account {
      * - [optional] storageRoot: 32 bytes (if has_code = 1)
      *
      * <p>Total size:
-     * - EOA: 73 bytes
-     * - Contract: 137 bytes
+     * - EOA: 61 bytes (20 + 32 + 8 + 1)
+     * - Contract: 125 bytes (61 + 64)
      *
      * @return serialized bytes
      */
     public byte[] toBytes() {
-        int size = 32 + 32 + 8 + 1;
+        int size = 20 + 32 + 8 + 1;
         if (isContract()) {
             size += 64;  // codeHash + storageRoot
         }
 
         ByteBuffer buffer = ByteBuffer.allocate(size);
 
-        // Address (32 bytes)
+        // Address (20 bytes)
+        if (address.size() != 20) {
+            throw new IllegalStateException("Address must be exactly 20 bytes, got: " + address.size());
+        }
         buffer.put(address.toArray());
 
         // Balance (32 bytes)
@@ -225,16 +228,16 @@ public class Account {
      * @throws IllegalArgumentException if data is invalid
      */
     public static Account fromBytes(byte[] data) {
-        if (data == null || data.length < 73) {
-            throw new IllegalArgumentException("Invalid account data: too short (minimum 73 bytes for EOA)");
+        if (data == null || data.length < 61) {
+            throw new IllegalArgumentException("Invalid account data: too short (minimum 61 bytes for EOA)");
         }
 
         ByteBuffer buffer = ByteBuffer.wrap(data);
 
-        // Read address (32 bytes)
-        byte[] addressBytes = new byte[32];
+        // Read address (20 bytes)
+        byte[] addressBytes = new byte[20];
         buffer.get(addressBytes);
-        Bytes32 address = Bytes32.wrap(addressBytes);
+        Bytes address = Bytes.wrap(addressBytes);
 
         // Read balance
         byte[] balanceBytes = new byte[32];
@@ -274,10 +277,10 @@ public class Account {
     /**
      * Get size of serialized account
      *
-     * @return size in bytes (73 for EOA, 137 for contract)
+     * @return size in bytes (61 for EOA, 125 for contract)
      */
     public int getSerializedSize() {
-        return isContract() ? 137 : 73;
+        return isContract() ? 125 : 61;
     }
 
     // ==================== Factory Methods ====================
@@ -285,10 +288,14 @@ public class Account {
     /**
      * Create a new empty EOA account
      *
-     * @param address account address (32 bytes)
+     * @param address account address (20 bytes, hash160)
      * @return new Account with zero balance and nonce
+     * @throws IllegalArgumentException if address is not exactly 20 bytes
      */
-    public static Account createEOA(Bytes32 address) {
+    public static Account createEOA(Bytes address) {
+        if (address.size() != 20) {
+            throw new IllegalArgumentException("Address must be exactly 20 bytes, got: " + address.size());
+        }
         return Account.builder()
                 .address(address)
                 .balance(UInt256.ZERO)
@@ -299,12 +306,16 @@ public class Account {
     /**
      * Create a new contract account
      *
-     * @param address account address (32 bytes)
+     * @param address account address (20 bytes, hash160)
      * @param codeHash hash of contract code
      * @param storageRoot root of contract storage
      * @return new contract Account
+     * @throws IllegalArgumentException if address is not exactly 20 bytes
      */
-    public static Account createContract(Bytes32 address, Bytes32 codeHash, Bytes32 storageRoot) {
+    public static Account createContract(Bytes address, Bytes32 codeHash, Bytes32 storageRoot) {
+        if (address.size() != 20) {
+            throw new IllegalArgumentException("Address must be exactly 20 bytes, got: " + address.size());
+        }
         return Account.builder()
                 .address(address)
                 .balance(UInt256.ZERO)

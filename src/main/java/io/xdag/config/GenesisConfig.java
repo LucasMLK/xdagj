@@ -26,7 +26,10 @@ package io.xdag.config;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.xdag.crypto.exception.AddressFormatException;
+import io.xdag.crypto.keys.AddressUtils;
 import lombok.Data;
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
@@ -132,18 +135,23 @@ public class GenesisConfig {
     private String extraData = "XDAG v5.1 Genesis";
 
     /**
-     * Genesis block coinbase address (32 bytes hex string)
+     * Genesis block coinbase address (base58check encoded XDAG address)
      *
      * <p>CRITICAL: This field makes genesis block deterministic (like Bitcoin/Ethereum).
      * All nodes on the same network MUST use the same genesisCoinbase to create
      * identical genesis blocks.
      *
+     * <p>Format: base58check encoded 20-byte XDAG address (hash160)
+     *
      * <p>Examples:
      * <ul>
-     *   <li>Mainnet: 0x0000000000000000000000000000000000000000000000000000000000000000</li>
-     *   <li>Testnet: 0x1111111111111111111111111111111111111111111111111111111111111111</li>
-     *   <li>Devnet:  0xDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF</li>
+     *   <li>Mainnet: "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi" (example)</li>
+     *   <li>Testnet: "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2" (example)</li>
+     *   <li>Devnet:  "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" (example)</li>
      * </ul>
+     *
+     * <p>Note: Also supports legacy 32-byte hex format (0x...) for backward compatibility,
+     * but base58check format is strongly recommended.
      *
      * <p>If not specified, falls back to wallet key (DEPRECATED - for backward compatibility only)
      */
@@ -154,11 +162,20 @@ public class GenesisConfig {
 
     /**
      * Pre-allocated balances (address -> amount in nanoxdag)
-     * Address format: hex string (32 bytes)
-     * Amount format: decimal string in nanoxdag (1 XDAG = 1e9 nanoxdag)
      *
-     * Example:
-     * "0x1234...": "1000000000000000000000"  // 1000 XDAG
+     * <p>Address format: base58check encoded XDAG address (20 bytes)
+     * <p>Amount format: decimal string in nanoxdag (1 XDAG = 1e9 nanoxdag)
+     *
+     * <p>Example:
+     * <pre>
+     * "alloc": {
+     *   "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi": "1000000000000000000000",  // 1000 XDAG
+     *   "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2": "500000000000000000000"     // 500 XDAG
+     * }
+     * </pre>
+     *
+     * <p>Note: Also supports legacy 32-byte hex format (0x...) for backward compatibility,
+     * but base58check format is strongly recommended.
      */
     @JsonProperty("alloc")
     private Map<String, String> alloc = new HashMap<>();
@@ -265,23 +282,71 @@ public class GenesisConfig {
     }
 
     /**
-     * Get genesis coinbase address as Bytes32
+     * Get genesis coinbase address as 20-byte Bytes
      *
-     * <p>Returns configured genesisCoinbase, or null if not set.
-     * Caller should fall back to wallet key if this returns null.
+     * <p>Supports two formats:
+     * <ul>
+     *   <li>base58check encoded XDAG address (recommended): "4dutRdv..."</li>
+     *   <li>Legacy 32-byte hex (backward compatibility): "0x0000...0000"</li>
+     * </ul>
      *
-     * @return Bytes32 coinbase address, or null if not configured
+     * @return 20-byte coinbase address, or null if not configured
+     * @throws IllegalArgumentException if address format is invalid
      */
-    public Bytes32 getGenesisCoinbaseBytes32() {
+    public Bytes getGenesisCoinbaseBytes() {
         if (genesisCoinbase == null || genesisCoinbase.trim().isEmpty()) {
             return null;
         }
 
-        String hex = genesisCoinbase.startsWith("0x")
-                ? genesisCoinbase.substring(2)
-                : genesisCoinbase;
+        try {
+            return parseAddress(genesisCoinbase);
+        } catch (AddressFormatException e) {
+            throw new IllegalArgumentException("Invalid genesisCoinbase: " + genesisCoinbase, e);
+        }
+    }
 
-        return Bytes32.fromHexString(hex);
+    /**
+     * Parse address string to 20-byte Bytes
+     *
+     * <p>Supports multiple formats:
+     * <ul>
+     *   <li>base58check encoded (recommended): "4dutRdv..." → 20 bytes</li>
+     *   <li>Legacy 32-byte hex: "0x0000...0000" → extract bytes 12-31 (20 bytes)</li>
+     *   <li>Legacy 20-byte hex: "0x1234...abcd" (40 hex chars) → 20 bytes</li>
+     * </ul>
+     *
+     * @param address address string
+     * @return 20-byte address
+     * @throws AddressFormatException if format is invalid
+     */
+    public static Bytes parseAddress(String address) throws AddressFormatException {
+        if (address == null || address.trim().isEmpty()) {
+            throw new AddressFormatException("Address is null or empty");
+        }
+
+        address = address.trim();
+
+        // Check if it's hex format (legacy)
+        if (address.startsWith("0x")) {
+            String hex = address.substring(2);
+
+            if (hex.length() == 64) {
+                // Legacy 32-byte hex format - extract bytes 12-31 (20 bytes)
+                Bytes32 bytes32 = Bytes32.fromHexString(hex);
+                return bytes32.slice(12, 20);
+            } else if (hex.length() == 40) {
+                // 20-byte hex format (direct)
+                return Bytes.fromHexString(hex);
+            } else {
+                throw new AddressFormatException(
+                    "Invalid hex address length: " + hex.length() +
+                    " (expected 40 for 20-byte or 64 for 32-byte)"
+                );
+            }
+        }
+
+        // Use AddressUtils for base58check format (standard XDAG address)
+        return AddressUtils.fromBase58Address(address);
     }
 
     /**
@@ -338,37 +403,48 @@ public class GenesisConfig {
 
         // Validate genesisCoinbase if present
         if (hasGenesisCoinbase()) {
-            String address = genesisCoinbase;
-            // Check address format (should be 32 bytes hex with 0x prefix)
-            if (!address.matches("^0x[0-9a-fA-F]{64}$")) {
-                throw new IllegalArgumentException("Invalid genesisCoinbase format: " + address +
-                        " (must be 32 bytes hex with 0x prefix, e.g., 0x0000...0000)");
-            }
-
-            // Try to parse to ensure it's valid
             try {
-                getGenesisCoinbaseBytes32();
+                Bytes address = getGenesisCoinbaseBytes();
+                if (address == null || address.size() != 20) {
+                    throw new IllegalArgumentException(
+                        "genesisCoinbase must decode to exactly 20 bytes, got: " +
+                        (address != null ? address.size() : "null")
+                    );
+                }
             } catch (Exception e) {
-                throw new IllegalArgumentException("Failed to parse genesisCoinbase: " + genesisCoinbase, e);
+                throw new IllegalArgumentException(
+                    "Invalid genesisCoinbase format: " + genesisCoinbase +
+                    " (expected base58check address or 0x-prefixed hex)", e
+                );
             }
         }
 
         // Validate allocations
         if (alloc != null) {
             for (Map.Entry<String, String> entry : alloc.entrySet()) {
-                String address = entry.getKey();
+                String addressStr = entry.getKey();
                 String amount = entry.getValue();
 
-                // Check address format (should be 32 bytes hex)
-                if (!address.matches("^0x[0-9a-fA-F]{64}$")) {
-                    throw new IllegalArgumentException("Invalid address format: " + address);
+                // Validate address format (base58check or hex)
+                try {
+                    Bytes address = parseAddress(addressStr);
+                    if (address.size() != 20) {
+                        throw new AddressFormatException(
+                            "Address must be exactly 20 bytes, got: " + address.size()
+                        );
+                    }
+                } catch (Exception e) {
+                    throw new IllegalArgumentException(
+                        "Invalid address format: " + addressStr +
+                        " (expected base58check address or 0x-prefixed hex)", e
+                    );
                 }
 
                 // Check amount is valid number
                 try {
                     new BigInteger(amount);
                 } catch (NumberFormatException e) {
-                    throw new IllegalArgumentException("Invalid amount for " + address + ": " + amount, e);
+                    throw new IllegalArgumentException("Invalid amount for " + addressStr + ": " + amount, e);
                 }
             }
         }

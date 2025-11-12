@@ -53,7 +53,7 @@ import java.util.Optional;
  * <h2>Storage Layout</h2>
  * <pre>
  * RocksDB Keys:
- *   0x01 + address(20) → Account data (62-126 bytes)
+ *   0x01 + address(20) → Account data (61-125 bytes)
  *   0x02 + codeHash(32) → Contract code bytes
  *   0x03 → Total account count (UInt64)
  *   0x04 → Total balance sum (UInt256)
@@ -98,18 +98,18 @@ public interface AccountStore extends XdagLifecycle {
     /**
      * Get account by address
      *
-     * @param address account address (32 bytes for XDAG)
+     * @param address account address (20 bytes, hash160)
      * @return Optional containing Account if exists, empty otherwise
      */
-    Optional<Account> getAccount(Bytes32 address);
+    Optional<Account> getAccount(Bytes address);
 
     /**
      * Check if account exists
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @return true if account exists
      */
-    boolean hasAccount(Bytes32 address);
+    boolean hasAccount(Bytes address);
 
     /**
      * Delete account
@@ -117,20 +117,20 @@ public interface AccountStore extends XdagLifecycle {
      * <p>This removes the account from storage. Use with caution as this
      * operation cannot be undone.
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @return true if account was deleted, false if it didn't exist
      */
-    boolean deleteAccount(Bytes32 address);
+    boolean deleteAccount(Bytes address);
 
     // ==================== Balance Operations ====================
 
     /**
      * Get account balance
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @return balance (UInt256.ZERO if account doesn't exist)
      */
-    UInt256 getBalance(Bytes32 address);
+    UInt256 getBalance(Bytes address);
 
     /**
      * Update account balance
@@ -138,29 +138,29 @@ public interface AccountStore extends XdagLifecycle {
      * <p>If account doesn't exist, creates a new EOA account with the balance.
      * If account exists, updates its balance.
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @param balance new balance
      */
-    void setBalance(Bytes32 address, UInt256 balance);
+    void setBalance(Bytes address, UInt256 balance);
 
     /**
      * Add to account balance
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @param amount amount to add
      * @return new balance after addition
      */
-    UInt256 addBalance(Bytes32 address, UInt256 amount);
+    UInt256 addBalance(Bytes address, UInt256 amount);
 
     /**
      * Subtract from account balance
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @param amount amount to subtract
      * @return new balance after subtraction
      * @throws IllegalArgumentException if insufficient balance
      */
-    UInt256 subtractBalance(Bytes32 address, UInt256 amount);
+    UInt256 subtractBalance(Bytes address, UInt256 amount);
 
     /**
      * Get total balance of all accounts
@@ -174,20 +174,20 @@ public interface AccountStore extends XdagLifecycle {
     /**
      * Get account nonce
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @return nonce (UInt64.ZERO if account doesn't exist)
      */
-    UInt64 getNonce(Bytes32 address);
+    UInt64 getNonce(Bytes address);
 
     /**
      * Set account nonce
      *
      * <p>If account doesn't exist, creates a new EOA account with the nonce.
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @param nonce new nonce value
      */
-    void setNonce(Bytes32 address, UInt64 nonce);
+    void setNonce(Bytes address, UInt64 nonce);
 
     /**
      * Increment account nonce by 1
@@ -195,10 +195,10 @@ public interface AccountStore extends XdagLifecycle {
      * <p>Used when processing transactions. If account doesn't exist,
      * creates a new EOA with nonce = 1.
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @return new nonce value after increment
      */
-    UInt64 incrementNonce(Bytes32 address);
+    UInt64 incrementNonce(Bytes address);
 
     // ==================== Contract Operations ====================
 
@@ -229,12 +229,12 @@ public interface AccountStore extends XdagLifecycle {
     /**
      * Create a new contract account
      *
-     * @param address contract address
+     * @param address contract address (20 bytes)
      * @param codeHash hash of contract code
      * @param storageRoot root of contract storage
      * @return created contract Account
      */
-    Account createContractAccount(Bytes32 address, Bytes32 codeHash, Bytes32 storageRoot);
+    Account createContractAccount(Bytes address, Bytes32 codeHash, Bytes32 storageRoot);
 
     // ==================== Batch Operations ====================
 
@@ -250,10 +250,10 @@ public interface AccountStore extends XdagLifecycle {
     /**
      * Get multiple accounts by addresses
      *
-     * @param addresses list of account addresses
+     * @param addresses list of account addresses (20 bytes each)
      * @return map of address to Account (excludes non-existent accounts)
      */
-    Map<Bytes32, Account> getAccounts(List<Bytes32> addresses);
+    Map<Bytes, Account> getAccounts(List<Bytes> addresses);
 
     // ==================== Statistics ====================
 
@@ -268,9 +268,9 @@ public interface AccountStore extends XdagLifecycle {
      * Get all account addresses (use with caution on large datasets)
      *
      * @param limit maximum number of addresses to return
-     * @return list of account addresses
+     * @return list of account addresses (20 bytes each)
      */
-    List<Bytes32> getAllAddresses(int limit);
+    List<Bytes> getAllAddresses(int limit);
 
     // ==================== Maintenance ====================
 

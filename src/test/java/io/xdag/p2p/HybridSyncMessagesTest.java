@@ -21,7 +21,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.net.message.consensus;
+package io.xdag.p2p;
 
 import io.xdag.core.Block;
 import io.xdag.core.Link;
@@ -69,7 +69,7 @@ public class HybridSyncMessagesTest {
         long timestamp = 1000000 + index * 64L;
         UInt256 difficulty = UInt256.valueOf(1000);
         Bytes32 nonce = Bytes32.random();
-        Bytes32 coinbase = Bytes32.random();
+        Bytes coinbase = Bytes.random(20);
         List<Link> links = new ArrayList<>();
 
         // Add a test block link
@@ -82,8 +82,8 @@ public class HybridSyncMessagesTest {
      * Create a test transaction with deterministic data
      */
     private Transaction createTestTransaction(int index) {
-        Bytes32 from = Bytes32.random();
-        Bytes32 to = Bytes32.random();
+        Bytes from = Bytes.random(20);
+        Bytes to = Bytes.random(20);
         XAmount amount = XAmount.ofXAmount(1000000L + index);
         long nonce = index;
         XAmount fee = XAmount.ofXAmount(1000L);

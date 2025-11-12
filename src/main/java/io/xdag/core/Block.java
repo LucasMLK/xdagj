@@ -185,7 +185,7 @@ public class Block implements Serializable {
      */
     private Bytes32 calculateHash() {
         // Calculate total size
-        int headerSize = BlockHeader.getSerializedSize();  // 104 bytes
+        int headerSize = BlockHeader.getSerializedSize();  // 92 bytes
         int linksSize = 4 + (links.size() * Link.LINK_SIZE);  // 4 bytes size + N×33 bytes
 
         ByteBuffer buffer = ByteBuffer.allocate(headerSize + linksSize);
@@ -432,14 +432,14 @@ public class Block implements Serializable {
      *
      * @param timestamp block timestamp
      * @param difficulty PoW difficulty target
-     * @param coinbase miner address
+     * @param coinbase miner address (20 bytes)
      * @param links DAG links (transaction and block references)
      * @return candidate block (nonce not set, needs mining)
      */
     public static Block createCandidate(
             long timestamp,
             UInt256 difficulty,
-            Bytes32 coinbase,
+            Bytes coinbase,
             List<Link> links) {
 
         BlockHeader header = BlockHeader.builder()
@@ -462,7 +462,7 @@ public class Block implements Serializable {
      * @param timestamp block timestamp
      * @param difficulty PoW difficulty target
      * @param nonce PoW nonce (found by mining)
-     * @param coinbase miner address
+     * @param coinbase miner address (20 bytes)
      * @param links DAG links
      * @return block with nonce set
      */
@@ -470,7 +470,7 @@ public class Block implements Serializable {
             long timestamp,
             UInt256 difficulty,
             Bytes32 nonce,
-            Bytes32 coinbase,
+            Bytes coinbase,
             List<Link> links) {
 
         BlockHeader header = BlockHeader.builder()
@@ -500,7 +500,7 @@ public class Block implements Serializable {
      * approach. For Block, we use the serialized header + links metadata as input.
      *
      * PreHash calculation:
-     * 1. Serialize header (timestamp, difficulty, nonce, coinbase) = 104 bytes
+     * 1. Serialize header (timestamp, difficulty, nonce, coinbase) = 92 bytes
      * 2. Serialize links metadata (count + first few link hashes) to reach ~480 bytes
      * 3. Calculate SHA256 of the combined data
      *
@@ -512,12 +512,12 @@ public class Block implements Serializable {
      */
     public Bytes32 getRandomXPreHash() {
         // Calculate how much data we need for ~480 bytes equivalent
-        // Header: 104 bytes (timestamp 8 + difficulty 32 + nonce 32 + coinbase 32)
+        // Header: 92 bytes (timestamp 8 + difficulty 32 + nonce 32 + coinbase 20)
         // Links: 4 bytes (count) + N × 33 bytes (each link)
         // Target: ~480 bytes to match legacy behavior
 
-        int headerSize = BlockHeader.getSerializedSize();  // 104 bytes
-        int remainingSize = 480 - headerSize;  // 376 bytes
+        int headerSize = BlockHeader.getSerializedSize();  // 92 bytes
+        int remainingSize = 480 - headerSize;  // 388 bytes
         int maxLinks = Math.min((remainingSize - 4) / Link.LINK_SIZE, links.size());  // ~11 links
 
         ByteBuffer buffer = ByteBuffer.allocate(headerSize + 4 + (maxLinks * Link.LINK_SIZE));
@@ -544,8 +544,8 @@ public class Block implements Serializable {
      * Serialize block to bytes (for network transmission or storage)
      *
      * Format:
-     * [Header - 104 bytes]
-     *   timestamp (8) + difficulty (32) + nonce (32) + coinbase (32)
+     * [Header - 92 bytes]
+     *   timestamp (8) + difficulty (32) + nonce (32) + coinbase (20)
      *
      * [Links - variable]
      *   links_count (4) + link[0] (33) + link[1] (33) + ...
@@ -599,9 +599,9 @@ public class Block implements Serializable {
         buffer.get(nonceBytes);
         Bytes32 nonce = Bytes32.wrap(nonceBytes);
 
-        byte[] coinbaseBytes = new byte[32];
+        byte[] coinbaseBytes = new byte[20];
         buffer.get(coinbaseBytes);
-        Bytes32 coinbase = Bytes32.wrap(coinbaseBytes);
+        Bytes coinbase = Bytes.wrap(coinbaseBytes);
 
         // Deserialize links
         int linksCount = buffer.getInt();

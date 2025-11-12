@@ -165,19 +165,19 @@ public interface TransactionStore extends XdagLifecycle {
      *
      * This method uses the TX_ADDRESS_INDEX to retrieve transaction history.
      *
-     * @param address The address (from or to)
+     * @param address The address (from or to) - 20 bytes
      * @return List of Transactions (empty list if none found)
      */
-    List<Transaction> getTransactionsByAddress(Bytes32 address);
+    List<Transaction> getTransactionsByAddress(org.apache.tuweni.bytes.Bytes address);
 
     /**
      * Index a transaction as involving an address
      * This is called when a transaction is saved
      *
-     * @param address The address (from or to)
+     * @param address The address (from or to) - 20 bytes
      * @param txHash The transaction hash
      */
-    void indexTransactionToAddress(Bytes32 address, Bytes32 txHash);
+    void indexTransactionToAddress(org.apache.tuweni.bytes.Bytes address, Bytes32 txHash);
 
     // ========== Batch Operations ==========
 

@@ -27,7 +27,7 @@ package io.xdag.core;
 import io.xdag.config.Config;
 import io.xdag.db.AccountStore;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
 
@@ -83,30 +83,30 @@ public class DagAccountManager {
     /**
      * Get account balance
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @return balance (zero if account doesn't exist)
      */
-    public UInt256 getBalance(Bytes32 address) {
+    public UInt256 getBalance(Bytes address) {
         return accountStore.getBalance(address);
     }
 
     /**
      * Get account nonce
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @return nonce (zero if account doesn't exist)
      */
-    public UInt64 getNonce(Bytes32 address) {
+    public UInt64 getNonce(Bytes address) {
         return accountStore.getNonce(address);
     }
 
     /**
      * Check if account exists
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @return true if account exists
      */
-    public boolean hasAccount(Bytes32 address) {
+    public boolean hasAccount(Bytes address) {
         return accountStore.hasAccount(address);
     }
 
@@ -133,53 +133,53 @@ public class DagAccountManager {
     /**
      * Add to account balance
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @param amount amount to add
      * @return new balance
      */
-    public UInt256 addBalance(Bytes32 address, UInt256 amount) {
+    public UInt256 addBalance(Bytes address, UInt256 amount) {
         return accountStore.addBalance(address, amount);
     }
 
     /**
      * Subtract from account balance
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @param amount amount to subtract
      * @return new balance
      * @throws IllegalArgumentException if insufficient balance
      */
-    public UInt256 subtractBalance(Bytes32 address, UInt256 amount) {
+    public UInt256 subtractBalance(Bytes address, UInt256 amount) {
         return accountStore.subtractBalance(address, amount);
     }
 
     /**
      * Set account balance
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @param balance new balance
      */
-    public void setBalance(Bytes32 address, UInt256 balance) {
+    public void setBalance(Bytes address, UInt256 balance) {
         accountStore.setBalance(address, balance);
     }
 
     /**
      * Increment account nonce by 1
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @return new nonce value
      */
-    public UInt64 incrementNonce(Bytes32 address) {
+    public UInt64 incrementNonce(Bytes address) {
         return accountStore.incrementNonce(address);
     }
 
     /**
      * Set account nonce
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @param nonce new nonce value
      */
-    public void setNonce(Bytes32 address, UInt64 nonce) {
+    public void setNonce(Bytes address, UInt64 nonce) {
         accountStore.setNonce(address, nonce);
     }
 
@@ -191,9 +191,9 @@ public class DagAccountManager {
      * <p>If the account doesn't exist, creates a new EOA account
      * with zero balance and nonce.
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      */
-    public void ensureAccountExists(Bytes32 address) {
+    public void ensureAccountExists(Bytes address) {
         if (!accountStore.hasAccount(address)) {
             Account account = Account.createEOA(address);
             accountStore.saveAccount(account);
@@ -204,10 +204,10 @@ public class DagAccountManager {
     /**
      * Create a new account with initial balance
      *
-     * @param address account address
+     * @param address account address (20 bytes)
      * @param initialBalance initial balance
      */
-    public void createAccount(Bytes32 address, UInt256 initialBalance) {
+    public void createAccount(Bytes address, UInt256 initialBalance) {
         Account account = Account.builder()
                 .address(address)
                 .balance(initialBalance)

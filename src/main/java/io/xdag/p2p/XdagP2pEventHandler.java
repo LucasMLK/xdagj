@@ -190,7 +190,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
 
     /**
      * Handle NEW_BLOCK message - a new Block propagated through the network (Phase 12.5)
-     *
+     * <p>
      * Simplified implementation using DagChain.tryToConnect() directly
      *
      * @param body message body (without message code prefix)
@@ -210,8 +210,8 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
             io.xdag.core.DagImportResult result = dagChain.tryToConnect(block);
 
             if (result != null && result.isMainBlock()) {
-                log.info("✓ Received block imported as main block at position {}",
-                        result.getPosition());
+                log.info("✓ Received block imported as main block at height {}",
+                        result.getHeight());
             } else if (result != null && result.isOrphan()) {
                 log.info("Received block imported as orphan");
             } else if (result != null) {
@@ -226,7 +226,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
 
     /**
      * Handle SYNC_BLOCK message - a historical Block during sync (Phase 12.5)
-     *
+     * <p>
      * Simplified implementation using DagChain.tryToConnect() directly
      *
      * @param body message body (without message code prefix)
@@ -250,7 +250,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
 
     /**
      * Handle Block_REQUEST - request for a specific Block by hash (Phase 7.3)
-     *
+     * <p>
      * When a peer requests a specific Block (usually a missing parent block),
      * this handler looks up the block and sends it back via SYNC_BLOCK_V5 message.
      *
@@ -281,35 +281,6 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
         }
     }
 
-    // TODO Phase 12.5: Removed updateChainStats() - XdagMessage class deleted
-    // Network statistics are now updated through DagChain directly
-
-    /**
-     * Request a specific Block by hash from a channel (Phase 7.3)
-     *
-     * This method is called by SyncManager when a Block references a missing parent block.
-     * The receiving peer will respond with the requested Block via SYNC_BLOCK_V5 message.
-     *
-     * @param channel P2P channel to send request to
-     * @param hash Hash of the requested Block
-     */
-    // Phase 7.3: Use getChainStats() directly (XdagStats deleted)
-    public void requestBlockByHash(io.xdag.p2p.channel.Channel channel, Bytes32 hash) {
-        try {
-            BlockRequestMessage msg = new BlockRequestMessage(
-                org.apache.tuweni.bytes.MutableBytes.wrap(hash.toArray()),
-                dagChain.getChainStats()
-            );
-            log.debug("Sending Block_REQUEST for {} to {}",
-                    hash.toHexString(), channel.getRemoteAddress());
-            // Send Message object directly - Channel will handle encoding
-            channel.send(msg);
-        } catch (Exception e) {
-            log.error("Error sending Block_REQUEST to {}: {}",
-                    channel.getRemoteAddress(), e.getMessage(), e);
-        }
-    }
-
     // ========== Phase 1.6: Hybrid Sync Protocol Handlers ==========
 
     /**
@@ -329,7 +300,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
             // Get tip hash
             Bytes32 tipHash = Bytes32.ZERO;
             if (mainHeight > 0) {
-                Block tipBlock = dagChain.getMainBlockAtPosition(mainHeight);
+                Block tipBlock = dagChain.getMainBlockByHeight(mainHeight);
                 if (tipBlock != null) {
                     tipHash = tipBlock.getHash();
                 }
@@ -398,7 +369,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
             long actualToHeight = Math.min(toHeight, fromHeight + maxBlocks - 1);
 
             for (long height = fromHeight; height <= actualToHeight; height++) {
-                Block block = dagChain.getMainBlockAtPosition(height);
+                Block block = dagChain.getMainBlockByHeight(height);
                 blocks.add(block); // May be null if block not found
             }
 
@@ -622,23 +593,4 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
         }
     }
 
-    /**
-     * Legacy method - SUMS protocol removed in v5.1
-     * @deprecated Use Hybrid Sync Protocol instead
-     */
-    @Deprecated
-    public long sendGetBlocks(io.xdag.p2p.channel.Channel channel, long startTime, long endTime) {
-        log.warn("sendGetBlocks() called but SUMS protocol removed in v5.1 - use Hybrid Sync Protocol");
-        return 0;
-    }
-
-    /**
-     * Legacy method - SUMS protocol removed in v5.1
-     * @deprecated Use Hybrid Sync Protocol instead
-     */
-    @Deprecated
-    public long sendGetSums(io.xdag.p2p.channel.Channel channel, long startTime, long endTime) {
-        log.warn("sendGetSums() called but SUMS protocol removed in v5.1 - use Hybrid Sync Protocol");
-        return 0;
-    }
 }

@@ -296,7 +296,7 @@ public class AccountStoreImpl implements AccountStore {
     }
 
     @Override
-    public Optional<Account> getAccount(Bytes32 address) {
+    public Optional<Account> getAccount(Bytes address) {
         if (!running) {
             throw new IllegalStateException("AccountStore is not running");
         }
@@ -319,7 +319,7 @@ public class AccountStoreImpl implements AccountStore {
     }
 
     @Override
-    public boolean hasAccount(Bytes32 address) {
+    public boolean hasAccount(Bytes address) {
         if (!running) {
             throw new IllegalStateException("AccountStore is not running");
         }
@@ -336,7 +336,7 @@ public class AccountStoreImpl implements AccountStore {
     }
 
     @Override
-    public boolean deleteAccount(Bytes32 address) {
+    public boolean deleteAccount(Bytes address) {
         if (!running) {
             throw new IllegalStateException("AccountStore is not running");
         }
@@ -368,14 +368,14 @@ public class AccountStoreImpl implements AccountStore {
     // ==================== Balance Operations ====================
 
     @Override
-    public UInt256 getBalance(Bytes32 address) {
+    public UInt256 getBalance(Bytes address) {
         return getAccount(address)
                 .map(Account::getBalance)
                 .orElse(UInt256.ZERO);
     }
 
     @Override
-    public void setBalance(Bytes32 address, UInt256 balance) {
+    public void setBalance(Bytes address, UInt256 balance) {
         Optional<Account> existing = getAccount(address);
 
         Account account;
@@ -389,7 +389,7 @@ public class AccountStoreImpl implements AccountStore {
     }
 
     @Override
-    public UInt256 addBalance(Bytes32 address, UInt256 amount) {
+    public UInt256 addBalance(Bytes address, UInt256 amount) {
         UInt256 currentBalance = getBalance(address);
         UInt256 newBalance = currentBalance.add(amount);
         setBalance(address, newBalance);
@@ -397,7 +397,7 @@ public class AccountStoreImpl implements AccountStore {
     }
 
     @Override
-    public UInt256 subtractBalance(Bytes32 address, UInt256 amount) {
+    public UInt256 subtractBalance(Bytes address, UInt256 amount) {
         UInt256 currentBalance = getBalance(address);
 
         if (currentBalance.compareTo(amount) < 0) {
@@ -436,14 +436,14 @@ public class AccountStoreImpl implements AccountStore {
     // ==================== Nonce Operations ====================
 
     @Override
-    public UInt64 getNonce(Bytes32 address) {
+    public UInt64 getNonce(Bytes address) {
         return getAccount(address)
                 .map(Account::getNonce)
                 .orElse(UInt64.ZERO);
     }
 
     @Override
-    public void setNonce(Bytes32 address, UInt64 nonce) {
+    public void setNonce(Bytes address, UInt64 nonce) {
         Optional<Account> existing = getAccount(address);
 
         Account account;
@@ -457,7 +457,7 @@ public class AccountStoreImpl implements AccountStore {
     }
 
     @Override
-    public UInt64 incrementNonce(Bytes32 address) {
+    public UInt64 incrementNonce(Bytes address) {
         Optional<Account> existing = getAccount(address);
 
         Account account;
@@ -527,7 +527,7 @@ public class AccountStoreImpl implements AccountStore {
     }
 
     @Override
-    public Account createContractAccount(Bytes32 address, Bytes32 codeHash, Bytes32 storageRoot) {
+    public Account createContractAccount(Bytes address, Bytes32 codeHash, Bytes32 storageRoot) {
         Account contract = Account.createContract(address, codeHash, storageRoot);
         saveAccount(contract);
         return contract;
@@ -563,14 +563,14 @@ public class AccountStoreImpl implements AccountStore {
     }
 
     @Override
-    public Map<Bytes32, Account> getAccounts(List<Bytes32> addresses) {
+    public Map<Bytes, Account> getAccounts(List<Bytes> addresses) {
         if (!running) {
             throw new IllegalStateException("AccountStore is not running");
         }
 
-        Map<Bytes32, Account> result = new HashMap<>();
+        Map<Bytes, Account> result = new HashMap<>();
 
-        for (Bytes32 address : addresses) {
+        for (Bytes address : addresses) {
             getAccount(address).ifPresent(account -> result.put(address, account));
         }
 
@@ -602,12 +602,12 @@ public class AccountStoreImpl implements AccountStore {
     }
 
     @Override
-    public List<Bytes32> getAllAddresses(int limit) {
+    public List<Bytes> getAllAddresses(int limit) {
         if (!running) {
             throw new IllegalStateException("AccountStore is not running");
         }
 
-        List<Bytes32> addresses = new ArrayList<>();
+        List<Bytes> addresses = new ArrayList<>();
 
         try (RocksIterator iterator = db.newIterator(defaultHandle, readOptions)) {
             // Seek to first account key
@@ -623,9 +623,10 @@ public class AccountStoreImpl implements AccountStore {
                     break;
                 }
 
-                // Extract address from key (skip prefix byte)
-                byte[] addressBytes = Arrays.copyOfRange(key, 1, key.length);
-                addresses.add(Bytes32.wrap(addressBytes));
+                // Extract address from key (skip prefix byte, get 20 bytes)
+                // Key format: [PREFIX:1 byte] + [ADDRESS:20 bytes]
+                byte[] addressBytes = Arrays.copyOfRange(key, 1, 21);
+                addresses.add(Bytes.wrap(addressBytes));
 
                 iterator.next();
                 count++;
@@ -684,11 +685,18 @@ public class AccountStoreImpl implements AccountStore {
 
     /**
      * Make account key: PREFIX_ACCOUNT + address
+     *
+     * @param address account address (20 bytes)
+     * @return RocksDB key (21 bytes total: 1 prefix + 20 address)
+     * @throws IllegalArgumentException if address is not exactly 20 bytes
      */
-    private byte[] makeAccountKey(Bytes32 address) {
-        byte[] key = new byte[1 + address.size()];
+    private byte[] makeAccountKey(Bytes address) {
+        if (address.size() != 20) {
+            throw new IllegalArgumentException("Address must be exactly 20 bytes, got: " + address.size());
+        }
+        byte[] key = new byte[21];  // 1 + 20
         key[0] = PREFIX_ACCOUNT;
-        System.arraycopy(address.toArray(), 0, key, 1, address.size());
+        System.arraycopy(address.toArray(), 0, key, 1, 20);
         return key;
     }
 

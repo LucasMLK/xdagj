@@ -91,8 +91,8 @@ public class TransactionStoreTest {
     @Test
     public void testSaveAndRetrieveTransaction() {
         Transaction tx = Transaction.builder()
-                .from(Bytes32.random())
-                .to(Bytes32.random())
+                .from(Bytes.random(20))
+                .to(Bytes.random(20))
                 .amount(XAmount.of(100, XUnit.XDAG))
                 .nonce(1)
                 .fee(XAmount.of(1, XUnit.MILLI_XDAG))
@@ -118,8 +118,8 @@ public class TransactionStoreTest {
     public void testSaveTransactionWithData() {
         Bytes data = Bytes.wrap("Hello XDAG v5.1".getBytes());
         Transaction tx = Transaction.builder()
-                .from(Bytes32.random())
-                .to(Bytes32.random())
+                .from(Bytes.random(20))
+                .to(Bytes.random(20))
                 .amount(XAmount.of(50, XUnit.XDAG))
                 .nonce(5)
                 .fee(XAmount.of(2, XUnit.MILLI_XDAG))
@@ -140,8 +140,8 @@ public class TransactionStoreTest {
     @Test
     public void testHasTransaction() {
         Transaction tx = Transaction.builder()
-                .from(Bytes32.random())
-                .to(Bytes32.random())
+                .from(Bytes.random(20))
+                .to(Bytes.random(20))
                 .amount(XAmount.of(10, XUnit.XDAG))
                 .nonce(1)
                 .fee(XAmount.of(1, XUnit.MILLI_XDAG))
@@ -157,8 +157,8 @@ public class TransactionStoreTest {
     @Test
     public void testDeleteTransaction() {
         Transaction tx = Transaction.builder()
-                .from(Bytes32.random())
-                .to(Bytes32.random())
+                .from(Bytes.random(20))
+                .to(Bytes.random(20))
                 .amount(XAmount.of(100, XUnit.XDAG))
                 .nonce(1)
                 .fee(XAmount.of(1, XUnit.MILLI_XDAG))
@@ -218,12 +218,12 @@ public class TransactionStoreTest {
 
     @Test
     public void testGetTransactionsByAddress() {
-        Bytes32 address = Bytes32.random();
+        Bytes address = Bytes.random(20);
 
         // Transaction from address
         Transaction tx1 = Transaction.builder()
                 .from(address)
-                .to(Bytes32.random())
+                .to(Bytes.random(20))
                 .amount(XAmount.of(100, XUnit.XDAG))
                 .nonce(1)
                 .fee(XAmount.of(1, XUnit.MILLI_XDAG))
@@ -231,7 +231,7 @@ public class TransactionStoreTest {
 
         // Transaction to address
         Transaction tx2 = Transaction.builder()
-                .from(Bytes32.random())
+                .from(Bytes.random(20))
                 .to(address)
                 .amount(XAmount.of(50, XUnit.XDAG))
                 .nonce(2)
@@ -336,8 +336,8 @@ public class TransactionStoreTest {
     @Test
     public void testSerializationRoundTrip() {
         Transaction original = Transaction.builder()
-                .from(Bytes32.random())
-                .to(Bytes32.random())
+                .from(Bytes.random(20))
+                .to(Bytes.random(20))
                 .amount(XAmount.of(123, XUnit.XDAG))
                 .nonce(456)
                 .fee(XAmount.of(78, XUnit.MILLI_XDAG))
@@ -366,8 +366,8 @@ public class TransactionStoreTest {
 
     private Transaction createTestTransaction(long nonce) {
         return Transaction.builder()
-                .from(Bytes32.random())
-                .to(Bytes32.random())
+                .from(Bytes.random(20))
+                .to(Bytes.random(20))
                 .amount(XAmount.of(nonce * 10, XUnit.XDAG))
                 .nonce(nonce)
                 .fee(XAmount.of(1, XUnit.MILLI_XDAG))

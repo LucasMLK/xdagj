@@ -21,27 +21,21 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
+
 package io.xdag.p2p.message;
 
-import java.io.IOException;
-
-public class MessageException extends IOException  {
+/**
+ * Exception thrown when message encoding/decoding fails
+ */
+public class MessageException extends Exception {
 
     private static final long serialVersionUID = 1L;
 
-    public MessageException() {
+    public MessageException(String message) {
+        super(message);
     }
 
-    public MessageException(String s) {
-        super(s);
+    public MessageException(String message, Throwable cause) {
+        super(message, cause);
     }
-
-    public MessageException(String s, Throwable throwable) {
-        super(s, throwable);
-    }
-
-    public MessageException(Throwable throwable) {
-        super(throwable);
-    }
-
 }

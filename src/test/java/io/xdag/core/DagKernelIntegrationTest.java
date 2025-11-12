@@ -102,6 +102,7 @@ public class DagKernelIntegrationTest {
                 "  \"initialDifficulty\": \"0x1000\",\n" +
                 "  \"epochLength\": 64,\n" +
                 "  \"extraData\": \"XDAG v5.1 Test Genesis\",\n" +
+                "  \"genesisCoinbase\": \"0x0000000000000000000000001111111111111111111111111111111111111111\",\n" +
                 "  \"alloc\": {},\n" +
                 "  \"snapshot\": {\n" +
                 "    \"enabled\": false,\n" +
@@ -283,7 +284,7 @@ public class DagKernelIntegrationTest {
         assertNotNull("DagAccountManager should be available", accountManager);
 
         // Create a test address (32 bytes for XDAG)
-        org.apache.tuweni.bytes.Bytes32 testAddress = org.apache.tuweni.bytes.Bytes32.random();
+        Bytes testAddress = Bytes.random(20);
 
         // Verify account doesn't exist initially
         assertFalse("New address should not exist initially",
@@ -318,7 +319,7 @@ public class DagKernelIntegrationTest {
         dagKernel.start();
 
         DagAccountManager accountManager = dagKernel.getDagAccountManager();
-        org.apache.tuweni.bytes.Bytes32 testAddress = org.apache.tuweni.bytes.Bytes32.random();
+        Bytes testAddress = Bytes.random(20);
 
         // Create account
         accountManager.ensureAccountExists(testAddress);
@@ -353,7 +354,7 @@ public class DagKernelIntegrationTest {
         dagKernel.start();
 
         DagAccountManager accountManager = dagKernel.getDagAccountManager();
-        org.apache.tuweni.bytes.Bytes32 testAddress = org.apache.tuweni.bytes.Bytes32.random();
+        Bytes testAddress = Bytes.random(20);
 
         // Create account
         accountManager.ensureAccountExists(testAddress);
@@ -499,8 +500,8 @@ public class DagKernelIntegrationTest {
         DagTransactionProcessor txProcessor = dagKernel.getDagTransactionProcessor();
 
         // Create simple test
-        Bytes32 senderAddress = Bytes32.random();
-        Bytes32 receiverAddress = Bytes32.random();
+        Bytes senderAddress = Bytes.random(20);
+        Bytes receiverAddress = Bytes.random(20);
 
         // Create sender with balance
         accountManager.ensureAccountExists(senderAddress);
@@ -557,8 +558,8 @@ public class DagKernelIntegrationTest {
         DagTransactionProcessor txProcessor = dagKernel.getDagTransactionProcessor();
 
         // Step 1: Create test accounts (32 bytes for XDAG)
-        Bytes32 senderAddress = Bytes32.random();
-        Bytes32 receiverAddress = Bytes32.random();
+        Bytes senderAddress = Bytes.random(20);
+        Bytes receiverAddress = Bytes.random(20);
 
         // Step 2: Create sender account with initial balance
         accountManager.ensureAccountExists(senderAddress);
@@ -634,8 +635,8 @@ public class DagKernelIntegrationTest {
         DagTransactionProcessor txProcessor = dagKernel.getDagTransactionProcessor();
 
         // Create sender with small balance
-        Bytes32 senderAddress = Bytes32.random();
-        Bytes32 receiverAddress = Bytes32.random();
+        Bytes senderAddress = Bytes.random(20);
+        Bytes receiverAddress = Bytes.random(20);
 
         accountManager.ensureAccountExists(senderAddress);
 
@@ -690,8 +691,8 @@ public class DagKernelIntegrationTest {
         DagTransactionProcessor txProcessor = dagKernel.getDagTransactionProcessor();
 
         // Create accounts with sufficient balance
-        Bytes32 senderAddress = Bytes32.random();
-        Bytes32 receiverAddress = Bytes32.random();
+        Bytes senderAddress = Bytes.random(20);
+        Bytes receiverAddress = Bytes.random(20);
 
         accountManager.ensureAccountExists(senderAddress);
         accountManager.addBalance(senderAddress,
@@ -733,8 +734,8 @@ public class DagKernelIntegrationTest {
         DagTransactionProcessor txProcessor = dagKernel.getDagTransactionProcessor();
 
         // Create transaction from non-existent account
-        Bytes32 senderAddress = Bytes32.random();
-        Bytes32 receiverAddress = Bytes32.random();
+        Bytes senderAddress = Bytes.random(20);
+        Bytes receiverAddress = Bytes.random(20);
 
         Transaction tx = Transaction.builder()
                 .from(senderAddress)
@@ -772,10 +773,10 @@ public class DagKernelIntegrationTest {
         DagTransactionProcessor txProcessor = dagKernel.getDagTransactionProcessor();
 
         // Create sender with sufficient balance
-        Bytes32 senderAddress = Bytes32.random();
-        Bytes32 receiver1 = Bytes32.random();
-        Bytes32 receiver2 = Bytes32.random();
-        Bytes32 receiver3 = Bytes32.random();
+        Bytes senderAddress = Bytes.random(20);
+        Bytes receiver1 = Bytes.random(20);
+        Bytes receiver2 = Bytes.random(20);
+        Bytes receiver3 = Bytes.random(20);
 
         accountManager.ensureAccountExists(senderAddress);
         accountManager.addBalance(senderAddress,
@@ -788,7 +789,7 @@ public class DagKernelIntegrationTest {
 
         // Process 3 transactions with nonces 0, 1, 2
         for (int i = 0; i < 3; i++) {
-            Bytes32 receiver = (i == 0) ? receiver1 : (i == 1) ? receiver2 : receiver3;
+            Bytes receiver = (i == 0) ? receiver1 : (i == 1) ? receiver2 : receiver3;
 
             Transaction tx = Transaction.builder()
                     .from(senderAddress)

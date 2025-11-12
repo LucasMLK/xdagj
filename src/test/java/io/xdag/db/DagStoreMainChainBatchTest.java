@@ -30,6 +30,7 @@ import io.xdag.core.BlockHeader;
 import io.xdag.core.BlockInfo;
 import io.xdag.core.Link;
 import io.xdag.db.rocksdb.DagStoreImpl;
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.After;
@@ -94,7 +95,7 @@ public class DagStoreMainChainBatchTest {
                     .timestamp(1000000L + i * 64)
                     .difficulty(UInt256.valueOf(1000))
                     .nonce(Bytes32.random())
-                    .coinbase(Bytes32.ZERO)
+                    .coinbase(Bytes.wrap(new byte[20]))
                     .build();
 
             // Create block with proper info

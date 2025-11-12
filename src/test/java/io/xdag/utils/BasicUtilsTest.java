@@ -28,7 +28,6 @@ import static io.xdag.utils.BasicUtils.address2Hash;
 import static io.xdag.utils.BasicUtils.crc32Verify;
 import static io.xdag.utils.BasicUtils.extractIpAddress;
 import static io.xdag.utils.BasicUtils.hash2Address;
-import static io.xdag.utils.BasicUtils.hash2byte;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -110,7 +109,8 @@ public class BasicUtilsTest {
     @Test
     public void hash2PubAddress() {
         Bytes32 hash = Bytes32.fromHexString("0x00000000000000001eadb24287735969f08c33d5a410ca4aa2440fbc00000000");
-        assertEquals("3oDMPTzmLvvy7mgkpvn1nhPDfW9tghrwB", Base58.encodeCheck(hash2byte(hash.mutableCopy())));
+        // Extract 20-byte address from legacy 32-byte hash (bytes 8-27)
+        assertEquals("3oDMPTzmLvvy7mgkpvn1nhPDfW9tghrwB", Base58.encodeCheck(hash.slice(8, 20).toArrayUnsafe()));
     }
 
     // Base58 => legacy hash
@@ -130,8 +130,9 @@ public class BasicUtilsTest {
         Bytes hash = Bytes.fromHexString(hexPubAddress);
         MutableBytes32 legacyHash = MutableBytes32.create();
         legacyHash.set(8, hash);
+        // Extract 20-byte address from legacy 32-byte hash (bytes 8-27)
         assertEquals("KD77RGFihFaqrJQrKK8MJ21hocJeq32Pf",
-            Base58.encodeCheck(hash2byte(legacyHash.mutableCopy())));
+            Base58.encodeCheck(legacyHash.slice(8, 20).toArrayUnsafe()));
         assertEquals(legacyHash, BasicUtils.hexPubAddress2Hash("0xc7bc5b48517bf2da9e845eacebacf65008e9e763"));
     }
 
