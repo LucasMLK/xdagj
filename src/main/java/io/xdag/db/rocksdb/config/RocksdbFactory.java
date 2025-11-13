@@ -22,9 +22,11 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.db.rocksdb;
+package io.xdag.db.rocksdb.config;
 
 import io.xdag.config.Config;
+import io.xdag.db.rocksdb.base.KVSource;
+import io.xdag.db.rocksdb.base.RocksdbKVSource;
 import java.util.EnumMap;
 import org.apache.commons.lang3.Strings;
 

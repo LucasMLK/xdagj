@@ -22,10 +22,10 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.db.rocksdb;
+package io.xdag.db.rocksdb.impl;
 
 import io.xdag.core.BlockInfo;
-import io.xdag.db.store.FinalizedBlockStore;
+import io.xdag.db.FinalizedBlockStore;
 import io.xdag.utils.CompactSerializer;
 import java.io.IOException;
 import java.nio.ByteBuffer;

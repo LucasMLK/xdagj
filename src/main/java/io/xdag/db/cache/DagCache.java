@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.db.store;
+package io.xdag.db.cache;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;

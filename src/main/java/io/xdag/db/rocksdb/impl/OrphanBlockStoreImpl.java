@@ -22,10 +22,11 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.db.rocksdb;
+package io.xdag.db.rocksdb.impl;
 
 import com.google.common.collect.Lists;
 import io.xdag.db.OrphanBlockStore;
+import io.xdag.db.rocksdb.base.KVSource;
 import io.xdag.utils.BytesUtils;
 import java.util.Comparator;
 import java.util.List;

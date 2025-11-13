@@ -22,11 +22,12 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.db.rocksdb;
+package io.xdag.db.rocksdb.impl;
 
 import com.google.common.collect.Lists;
 import io.xdag.core.Transaction;
 import io.xdag.db.TransactionStore;
+import io.xdag.db.rocksdb.base.KVSource;
 import io.xdag.utils.BytesUtils;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;

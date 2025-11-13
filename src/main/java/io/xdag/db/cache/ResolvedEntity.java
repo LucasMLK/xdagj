@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.db.store;
+package io.xdag.db.cache;
 
 import io.xdag.core.Block;
 import io.xdag.core.Link;

@@ -22,7 +22,9 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.db.rocksdb;
+package io.xdag.db.rocksdb.config;
+
+import io.xdag.db.rocksdb.base.KVSource;
 
 public interface DatabaseFactory {
 

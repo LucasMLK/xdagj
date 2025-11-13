@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.db.rocksdb;
+package io.xdag.db.rocksdb.base;
 
 import com.google.common.collect.Lists;
 import io.xdag.config.Config;

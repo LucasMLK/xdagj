@@ -26,7 +26,7 @@ package io.xdag.core;
 
 import io.xdag.DagKernel;
 import io.xdag.db.DagStore;
-import io.xdag.db.store.FinalizedBlockStore;
+import io.xdag.db.FinalizedBlockStore;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;

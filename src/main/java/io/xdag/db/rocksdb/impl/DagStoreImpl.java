@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.db.rocksdb;
+package io.xdag.db.rocksdb.impl;
 
 import io.xdag.config.Config;
 import io.xdag.core.Block;
@@ -30,7 +30,8 @@ import io.xdag.core.BlockHeader;
 import io.xdag.core.BlockInfo;
 import io.xdag.core.ChainStats;
 import io.xdag.db.DagStore;
-import io.xdag.db.store.DagCache;
+import io.xdag.db.cache.DagCache;
+import io.xdag.db.rocksdb.config.DagStoreRocksDBConfig;
 import io.xdag.utils.CompactSerializer;
 import java.io.File;
 import java.nio.ByteBuffer;

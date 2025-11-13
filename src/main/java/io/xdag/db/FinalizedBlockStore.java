@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.db.store;
+package io.xdag.db;
 
 import io.xdag.core.BlockInfo;
 import java.util.List;

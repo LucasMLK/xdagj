@@ -29,7 +29,7 @@ import io.xdag.core.Block;
 import io.xdag.core.BlockHeader;
 import io.xdag.core.BlockInfo;
 import io.xdag.core.Link;
-import io.xdag.db.rocksdb.DagStoreImpl;
+import io.xdag.db.rocksdb.impl.DagStoreImpl;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
