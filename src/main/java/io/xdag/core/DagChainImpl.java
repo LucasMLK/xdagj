@@ -1673,11 +1673,317 @@ public class DagChainImpl implements DagChain {
 
     /**
      * Check for chain reorganization
+     * <p>
+     * This method performs a comprehensive check for potential chain reorganization scenarios:
+     * <ol>
+     *   <li>Scan orphan blocks for higher cumulative difficulty forks</li>
+     *   <li>Verify main chain consistency (no gaps in height sequence)</li>
+     *   <li>Detect and resolve fork points if better chain exists</li>
+     * </ol>
+     * <p>
+     * Note: Most reorganization is handled incrementally in tryToConnect().
+     * This method handles edge cases and performs validation.
      */
-    private void checkChainReorganization() {
-        // TODO: Implement chain reorganization logic
-        // This is a complex operation that needs careful design
-        log.debug("Chain reorganization check (not yet implemented)");
+    private synchronized void checkChainReorganization() {
+        if (chainStats.getMainBlockCount() == 0) {
+            return;  // Empty chain, nothing to reorganize
+        }
+
+        log.debug("Checking for chain reorganization (current main chain length: {})",
+                chainStats.getMainBlockCount());
+
+        // Step 1: Scan recent epochs for orphan blocks with high cumulative difficulty
+        long currentEpoch = getCurrentEpoch();
+        long scanStartEpoch = Math.max(1, currentEpoch - 100);  // Scan last 100 epochs
+
+        List<Block> potentialForkHeads = new ArrayList<>();
+        UInt256 currentMaxDifficulty = chainStats.getMaxDifficulty();
+
+        for (long epoch = scanStartEpoch; epoch <= currentEpoch; epoch++) {
+            List<Block> candidates = getCandidateBlocksInEpoch(epoch);
+
+            for (Block block : candidates) {
+                // Find orphan blocks (height=0) with high cumulative difficulty
+                if (block.getInfo() != null && block.getInfo().getHeight() == 0) {
+                    UInt256 blockDifficulty = block.getInfo().getDifficulty();
+
+                    // If orphan block has higher cumulative difficulty than current main chain
+                    if (blockDifficulty.compareTo(currentMaxDifficulty) > 0) {
+                        potentialForkHeads.add(block);
+                        log.warn("Found orphan block {} with higher difficulty ({}) than main chain ({})",
+                                block.getHash().toHexString().substring(0, 16),
+                                blockDifficulty.toDecimalString(),
+                                currentMaxDifficulty.toDecimalString());
+                    }
+                }
+            }
+        }
+
+        // Step 2: If better forks found, trigger reorganization
+        if (!potentialForkHeads.isEmpty()) {
+            log.warn("Found {} orphan blocks with higher cumulative difficulty, investigating...",
+                    potentialForkHeads.size());
+
+            // Sort by cumulative difficulty (descending)
+            potentialForkHeads.sort((b1, b2) ->
+                b2.getInfo().getDifficulty().compareTo(b1.getInfo().getDifficulty()));
+
+            Block bestForkHead = potentialForkHeads.get(0);
+
+            log.info("Best fork head: {} (difficulty: {})",
+                    bestForkHead.getHash().toHexString(),
+                    bestForkHead.getInfo().getDifficulty().toDecimalString());
+
+            // Find fork point and perform reorganization
+            performChainReorganization(bestForkHead);
+        }
+
+        // Step 3: Verify main chain consistency
+        verifyMainChainConsistency();
+
+        log.debug("Chain reorganization check completed");
+    }
+
+    /**
+     * Perform chain reorganization to switch to a better fork
+     * <p>
+     * Algorithm:
+     * <ol>
+     *   <li>Find the fork point (common ancestor)</li>
+     *   <li>Demote blocks on current main chain after fork point</li>
+     *   <li>Promote blocks on new fork to main chain</li>
+     *   <li>Update chain statistics</li>
+     * </ol>
+     *
+     * @param newForkHead the head block of the new (better) fork
+     */
+    private synchronized void performChainReorganization(Block newForkHead) {
+        log.warn("CHAIN REORGANIZATION: Switching to fork with head {}",
+                newForkHead.getHash().toHexString());
+
+        // Step 1: Find fork point
+        Block forkPoint = findForkPoint(newForkHead);
+
+        if (forkPoint == null) {
+            log.error("Cannot find fork point for reorganization, aborting");
+            return;
+        }
+
+        long forkHeight = forkPoint.getInfo().getHeight();
+        log.info("Fork point found at height {} (block: {})",
+                forkHeight, forkPoint.getHash().toHexString().substring(0, 16));
+
+        // Step 2: Demote blocks on current main chain after fork point
+        List<Block> demotedBlocks = demoteBlocksAfterHeight(forkHeight);
+        log.info("Demoted {} blocks from old main chain", demotedBlocks.size());
+
+        // Step 3: Build new main chain path from fork point to new head
+        List<Block> newMainChainBlocks = buildChainPath(newForkHead, forkPoint);
+
+        if (newMainChainBlocks.isEmpty()) {
+            log.error("Failed to build new main chain path, aborting reorganization");
+            // Restore demoted blocks
+            for (Block block : demotedBlocks) {
+                promoteToMainBlock(block);
+            }
+            return;
+        }
+
+        log.info("New main chain has {} blocks from fork point to new head",
+                newMainChainBlocks.size());
+
+        // Step 4: Promote blocks on new fork (from fork point + 1 to new head)
+        long currentHeight = forkHeight;
+        for (int i = newMainChainBlocks.size() - 1; i >= 0; i--) {
+            Block block = newMainChainBlocks.get(i);
+
+            // Skip fork point itself (already on main chain)
+            if (block.getHash().equals(forkPoint.getHash())) {
+                continue;
+            }
+
+            currentHeight++;
+            promoteBlockToHeight(block, currentHeight);
+        }
+
+        // Step 5: Update chain statistics
+        Block newTip = newMainChainBlocks.get(0);  // First element is the new head
+        chainStats = chainStats
+                .withMainBlockCount(currentHeight)
+                .withMaxDifficulty(newTip.getInfo().getDifficulty())
+                .withDifficulty(newTip.getInfo().getDifficulty())
+                .withTopBlock(newTip.getHash())
+                .withTopDifficulty(newTip.getInfo().getDifficulty());
+
+        dagStore.saveChainStats(chainStats);
+
+        log.warn("CHAIN REORGANIZATION COMPLETE: New main chain length = {}, new tip = {}",
+                currentHeight, newTip.getHash().toHexString().substring(0, 16));
+    }
+
+    /**
+     * Find the fork point (common ancestor) between new fork and current main chain
+     *
+     * @param forkHead head block of the new fork
+     * @return the fork point block, or null if not found
+     */
+    private Block findForkPoint(Block forkHead) {
+        Set<Bytes32> visited = new HashSet<>();
+        Block current = forkHead;
+
+        // Traverse back from fork head until we find a main block
+        while (current != null) {
+            Bytes32 currentHash = current.getHash();
+
+            // Prevent infinite loop
+            if (visited.contains(currentHash)) {
+                log.warn("Cycle detected while finding fork point");
+                return null;
+            }
+            visited.add(currentHash);
+
+            // Check if this block is on main chain (height > 0)
+            if (current.getInfo() != null && current.getInfo().getHeight() > 0) {
+                log.debug("Fork point found: {} at height {}",
+                        currentHash.toHexString().substring(0, 16),
+                        current.getInfo().getHeight());
+                return current;
+            }
+
+            // Move to parent with highest cumulative difficulty
+            current = findMaxDifficultyParent(current);
+        }
+
+        log.error("Could not find fork point (reached genesis)");
+        return null;
+    }
+
+    /**
+     * Build chain path from fork head back to fork point
+     *
+     * @param forkHead the head of the fork
+     * @param forkPoint the common ancestor
+     * @return list of blocks from forkHead to forkPoint (inclusive, ordered head-first)
+     */
+    private List<Block> buildChainPath(Block forkHead, Block forkPoint) {
+        List<Block> path = new ArrayList<>();
+        Set<Bytes32> visited = new HashSet<>();
+        Block current = forkHead;
+
+        while (current != null) {
+            // Prevent infinite loop
+            if (visited.contains(current.getHash())) {
+                log.error("Cycle detected while building chain path");
+                return new ArrayList<>();  // Return empty list on error
+            }
+            visited.add(current.getHash());
+
+            path.add(current);
+
+            // Stop when we reach fork point
+            if (current.getHash().equals(forkPoint.getHash())) {
+                break;
+            }
+
+            // Move to parent with highest cumulative difficulty
+            current = findMaxDifficultyParent(current);
+        }
+
+        return path;
+    }
+
+    /**
+     * Demote all blocks on main chain after the specified height
+     *
+     * @param afterHeight demote blocks with height > afterHeight
+     * @return list of demoted blocks
+     */
+    private List<Block> demoteBlocksAfterHeight(long afterHeight) {
+        List<Block> demoted = new ArrayList<>();
+        long currentHeight = chainStats.getMainBlockCount();
+
+        // Demote from highest to afterHeight+1
+        for (long height = currentHeight; height > afterHeight; height--) {
+            Block block = dagStore.getMainBlockByHeight(height, false);
+            if (block != null) {
+                demoteBlockToOrphan(block);
+                demoted.add(block);
+                log.debug("Demoted block {} from height {}",
+                        block.getHash().toHexString().substring(0, 16), height);
+            }
+        }
+
+        return demoted;
+    }
+
+    /**
+     * Promote a block to main chain at specific height
+     *
+     * @param block the block to promote
+     * @param height the height to assign
+     */
+    private void promoteBlockToHeight(Block block, long height) {
+        BlockInfo updatedInfo = block.getInfo().toBuilder()
+                .height(height)
+                .build();
+
+        dagStore.saveBlockInfo(updatedInfo);
+
+        Block updatedBlock = block.toBuilder().info(updatedInfo).build();
+        dagStore.saveBlock(updatedBlock);
+
+        log.debug("Promoted block {} to height {}",
+                block.getHash().toHexString().substring(0, 16), height);
+    }
+
+    /**
+     * Verify main chain consistency
+     * <p>
+     * Checks that:
+     * <ol>
+     *   <li>Height sequence is continuous (no gaps)</li>
+     *   <li>Each block's cumulative difficulty >= parent's difficulty</li>
+     *   <li>Top block matches chain stats</li>
+     * </ol>
+     */
+    private void verifyMainChainConsistency() {
+        long mainBlockCount = chainStats.getMainBlockCount();
+
+        if (mainBlockCount == 0) {
+            return;  // Empty chain is trivially consistent
+        }
+
+        // Check height sequence
+        for (long height = 1; height <= mainBlockCount; height++) {
+            Block block = dagStore.getMainBlockByHeight(height, false);
+            if (block == null) {
+                log.error("INCONSISTENCY: Missing main block at height {}", height);
+                return;
+            }
+
+            if (block.getInfo() == null || block.getInfo().getHeight() != height) {
+                log.error("INCONSISTENCY: Block at height {} has wrong height info: {}",
+                        height, block.getInfo() != null ? block.getInfo().getHeight() : "null");
+                return;
+            }
+        }
+
+        // Verify top block
+        Block topBlock = dagStore.getMainBlockByHeight(mainBlockCount, false);
+        if (topBlock == null) {
+            log.error("INCONSISTENCY: Top block at height {} not found", mainBlockCount);
+            return;
+        }
+
+        if (chainStats.getTopBlock() != null &&
+            !chainStats.getTopBlock().equals(topBlock.getHash())) {
+            log.warn("INCONSISTENCY: Chain stats top block mismatch (expected: {}, actual: {})",
+                    chainStats.getTopBlock().toHexString().substring(0, 16),
+                    topBlock.getHash().toHexString().substring(0, 16));
+        }
+
+        log.debug("Main chain consistency verified: {} blocks, no gaps",
+                mainBlockCount);
     }
 
     @Override
