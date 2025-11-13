@@ -24,30 +24,32 @@
 
 package io.xdag.consensus.pow;
 
+import io.xdag.crypto.randomx.RandomXTemplate;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.encoders.Hex;
 
 /**
  * RandomX Hash Service
  *
- * <p>Provides hash calculation services for RandomX mining and block validation.
- * This service acts as a facade over the seed manager, selecting the appropriate
- * memory slot and delegating hash calculations to RandomX templates.
+ * <p>Professional hash calculation service for RandomX mining and validation.
  *
- * <h2>Hash Modes</h2>
+ * <h2>Responsibilities</h2>
  * <ul>
- *   <li><strong>Pool Hash</strong> - Used by mining pools for share validation</li>
- *   <li><strong>Block Hash</strong> - Used for block PoW validation</li>
+ *   <li>Calculate hashes for mining pool operations</li>
+ *   <li>Calculate hashes for block validation</li>
+ *   <li>Manage RandomX template selection based on time</li>
+ *   <li>Handle null checks and error cases gracefully</li>
  * </ul>
  *
- * <h2>Thread Safety</h2>
- * <p>This class is thread-safe. Hash calculations can be performed concurrently
- * from multiple threads.
+ * <h2>Hash Types</h2>
+ * <ul>
+ *   <li><strong>Pool Hash</strong>: For mining pool share validation (uses pool template)</li>
+ *   <li><strong>Block Hash</strong>: For blockchain block validation (uses block template)</li>
+ * </ul>
  *
- * @since XDAGJ 0.8.1
+ * @since XDAGJ v0.8.1
  */
 @Slf4j
 public class RandomXHashService {
@@ -55,63 +57,68 @@ public class RandomXHashService {
     private final RandomXSeedManager seedManager;
 
     /**
-     * Creates a new hash service
+     * Creates a new RandomX hash service.
      *
-     * @param seedManager Seed manager for memory slot access
+     * @param seedManager Seed manager for memory slot selection
      */
     public RandomXHashService(RandomXSeedManager seedManager) {
         this.seedManager = seedManager;
     }
 
-    // ========== Pool Mining ==========
+    // ========== Pool Mining Hash ==========
 
     /**
-     * Calculates a hash for mining pool share validation
+     * Calculate hash for mining pool operations.
      *
-     * <p>This method is optimized for high-frequency hash calculations in mining pools.
-     * It uses the pool-specific memory slot and template.
+     * <p>Used by mining pools to validate shares submitted by miners.
+     * Selects the appropriate memory slot based on task time.
      *
      * @param data Input data to hash
-     * @param taskTime Timestamp of the mining task
-     * @return 32-byte hash result
+     * @param taskTime Task timestamp (for memory slot selection)
+     * @return Calculated hash, or null if not available
      * @throws IllegalArgumentException if data is null
-     * @throws IllegalStateException if no active memory slot is available
      */
     public Bytes32 calculatePoolHash(Bytes data, long taskTime) {
         if (data == null) {
             throw new IllegalArgumentException("Input data cannot be null");
         }
 
-        // Get active memory slot for pool mode
-        RandomXMemory memory = seedManager.getActiveMemory(taskTime, true);
-
-        if (memory == null || memory.getPoolTemplate() == null) {
-            throw new IllegalStateException(
-                    String.format("No active pool template available for taskTime=%d", taskTime));
+        // Get active memory slot for pool mining
+        RandomXMemory memory = seedManager.getPoolMemory(taskTime);
+        if (memory == null) {
+            log.debug("Pool memory not initialized for taskTime: {}", taskTime);
+            return null;
         }
 
-        // Calculate hash using pool template
-        byte[] hash = memory.getPoolTemplate().calculateHash(data.toArray());
-
-        if (log.isTraceEnabled()) {
-            log.trace("Pool hash calculated: taskTime={}, hash={}",
-                    taskTime, Hex.toHexString(hash).substring(0, 16));
+        // Get pool template
+        RandomXTemplate poolTemplate = memory.getPoolTemplate();
+        if (poolTemplate == null) {
+            log.warn("Pool template not available in memory slot");
+            return null;
         }
 
-        return Bytes32.wrap(hash);
+        // Calculate hash
+        try {
+            byte[] hash = poolTemplate.calculateHash(data.toArray());
+            return Bytes32.wrap(hash);
+
+        } catch (Exception e) {
+            log.error("Failed to calculate pool hash for taskTime: " + taskTime, e);
+            return null;
+        }
     }
 
-    // ========== Block Validation ==========
+    // ========== Block Validation Hash ==========
 
     /**
-     * Calculates a hash for block PoW validation
+     * Calculate hash for block validation.
      *
-     * <p>This method is used during block validation to verify the proof-of-work.
-     * It uses the block-specific memory slot and template.
+     * <p>Used by the blockchain to validate blocks and verify PoW.
+     * Selects the appropriate memory slot based on block time.
      *
-     * @param data Raw block data to hash
-     * @param blockTime Block timestamp
-     * @return 32-byte hash result, or null if no seed is available
+     * @param data Block data to hash
+     * @param blockTime Block timestamp (for memory slot selection)
+     * @return Calculated hash, or null if not available
      * @throws IllegalArgumentException if data is null
      */
     public byte[] calculateBlockHash(byte[] data, long blockTime) {
@@ -119,67 +126,58 @@ public class RandomXHashService {
             throw new IllegalArgumentException("Input data cannot be null");
         }
 
-        // Check if any seed is available
-        if (seedManager.getCurrentEpochIndex() == 0) {
-            log.debug("Cannot calculate block hash: no seed available yet");
-            return null;
-        }
-
-        // Get active memory slot for block mode
-        RandomXMemory memory = seedManager.getActiveMemory(blockTime, false);
-
+        // Get active memory slot for block validation
+        RandomXMemory memory = seedManager.getActiveMemory(blockTime);
         if (memory == null) {
-            log.warn("No active memory slot for blockTime={}", blockTime);
+            log.debug("No seed available for blockTime: {} (epoch index: {})",
+                    Long.toHexString(blockTime), seedManager.getCurrentEpochIndex());
             return null;
         }
 
-        // Special handling for first seed
-        if (seedManager.getCurrentEpochIndex() == 1) {
-            if (blockTime < memory.getSwitchTime()) {
-                log.debug("Block time {} less than switch time {}, seed not active yet",
-                        Long.toHexString(blockTime), Long.toHexString(memory.getSwitchTime()));
-                return null;
+        // Get block template
+        RandomXTemplate blockTemplate = memory.getBlockTemplate();
+        if (blockTemplate == null) {
+            log.warn("Block template not available in memory slot");
+            return null;
+        }
+
+        // Calculate hash
+        try {
+            if (log.isDebugEnabled()) {
+                log.debug("Using seed {} for block hash calculation",
+                        Hex.toHexString(org.bouncycastle.util.Arrays.reverse(memory.getSeed())));
             }
-        }
 
-        // Calculate hash using block template
-        if (memory.getBlockTemplate() == null) {
-            log.error("Block template is null for memory at blockTime={}", blockTime);
+            return blockTemplate.calculateHash(data);
+
+        } catch (Exception e) {
+            log.error("Failed to calculate block hash for blockTime: " + blockTime, e);
             return null;
         }
-
-        byte[] hash = memory.getBlockTemplate().calculateHash(data);
-
-        if (log.isDebugEnabled()) {
-            log.debug("Block hash calculated: blockTime={}, seed={}, hash={}",
-                    blockTime,
-                    Hex.toHexString(Arrays.reverse(memory.seed)).substring(0, 16),
-                    Hex.toHexString(hash).substring(0, 16));
-        }
-
-        return hash;
     }
 
-    // ========== Status ==========
+    // ========== Helper Methods ==========
 
     /**
-     * Checks if the hash service is ready for calculations
+     * Check if RandomX is ready for hash calculations.
      *
-     * @return true if at least one seed is initialized, false otherwise
+     * @return true if at least one seed epoch is initialized
      */
     public boolean isReady() {
         return seedManager.getCurrentEpochIndex() > 0;
     }
 
     /**
-     * Gets current status information for debugging
+     * Get diagnostic information about current state.
      *
-     * @return Status string
+     * @return Diagnostic string
      */
-    public String getStatus() {
-        return String.format("RandomXHashService[epochIndex=%d, poolIndex=%d, forkTime=%d]",
+    public String getDiagnostics() {
+        return String.format(
+                "RandomXHashService[epochIndex=%d, poolIndex=%d, ready=%s]",
                 seedManager.getCurrentEpochIndex(),
                 seedManager.getPoolMemoryIndex(),
-                seedManager.getForkTime());
+                isReady()
+        );
     }
 }

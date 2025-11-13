@@ -25,7 +25,7 @@
 package io.xdag.consensus.miner;
 
 import io.xdag.Wallet;
-import io.xdag.consensus.pow.RandomX;
+import io.xdag.consensus.pow.PowAlgorithm;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
 import io.xdag.crypto.core.CryptoProvider;
@@ -64,16 +64,16 @@ public class BlockGenerator {
 
     private final DagChain dagChain;
     private final Wallet wallet;
-    private final RandomX randomX;
+    private final PowAlgorithm powAlgorithm;
 
     /**
      * Create a new BlockGenerator
      *
      * @param dagChain DagChain for block creation
      * @param wallet Wallet for coinbase key
-     * @param randomX RandomX instance (can be null if not using RandomX)
+     * @param powAlgorithm PoW algorithm instance (can be null if not using RandomX)
      */
-    public BlockGenerator(DagChain dagChain, Wallet wallet, RandomX randomX) {
+    public BlockGenerator(DagChain dagChain, Wallet wallet, PowAlgorithm powAlgorithm) {
         if (dagChain == null) {
             throw new IllegalArgumentException("DagChain cannot be null");
         }
@@ -82,7 +82,7 @@ public class BlockGenerator {
         }
         this.dagChain = dagChain;
         this.wallet = wallet;
-        this.randomX = randomX;
+        this.powAlgorithm = powAlgorithm;
     }
 
     /**
@@ -172,11 +172,11 @@ public class BlockGenerator {
      * @return true if RandomX fork is active
      */
     public boolean isRandomXFork(long timestamp) {
-        if (randomX == null) {
+        if (powAlgorithm == null) {
             return false;
         }
         long epoch = XdagTime.getEpoch(timestamp);
-        return randomX.isRandomxFork(epoch);
+        return powAlgorithm.isActive(epoch);
     }
 
     /**
@@ -198,11 +198,11 @@ public class BlockGenerator {
     }
 
     /**
-     * Get the RandomX instance
+     * Get the PoW algorithm instance
      *
-     * @return RandomX instance (can be null)
+     * @return PoW algorithm instance (can be null)
      */
-    public RandomX getRandomX() {
-        return randomX;
+    public PowAlgorithm getPowAlgorithm() {
+        return powAlgorithm;
     }
 }

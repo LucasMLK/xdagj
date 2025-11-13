@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed - RandomX Event-Driven Architecture Refactoring (2025-11-13)
+
+#### Architecture Transformation
+- **完整重构 RandomX 为事件驱动架构** - 不保持向后兼容的全面重构
+  - **删除旧类**:
+    - ❌ `RandomX.java` (328 行) - 旧的单体实现（7 个未使用方法）
+    - ❌ `PoW.java` (40 行) - 设计不合理的旧接口
+  - **新接口层**:
+    - ✅ `PowAlgorithm` (115 行) - 统一的 PoW 算法接口，支持可插拔算法
+    - ✅ `DagchainListener` (94 行) - 区块链事件监听器接口
+    - ✅ `HashContext` (173 行) - 类型安全的哈希计算上下文
+    - ✅ `SnapshotStrategy` (210 行) - 统一快照加载策略枚举
+  - **新实现**:
+    - ✅ `RandomXPow` (307 行) - 事件驱动的 RandomX 实现
+      - 实现 `PowAlgorithm` 和 `DagchainListener`
+      - 自动响应区块链事件更新种子
+      - Facade 模式协调内部服务
+
+#### 核心改进
+- **事件驱动设计**: 种子更新从手动调用（从不调用）改为自动事件触发
+  - `DagChainImpl.tryToConnect()` → 自动通知监听器
+  - `RandomXPow.onBlockConnected()` → 自动更新种子
+  - 消除了旧架构中的死代码问题
+- **接口抽象**: 可插拔的 PoW 算法支持（SHA256, RandomX, 未来可扩展）
+- **策略模式**: 统一快照加载（4 个重复方法 → 1 个统一方法）
+  - `WITH_PRESEED` - 使用预计算种子（快速）
+  - `FROM_CURRENT_STATE` - 从当前状态重建（准确）
+  - `FROM_FORK_HEIGHT` - 从分叉高度初始化（完整）
+  - `AUTO` - 自动选择策略（推荐）
+- **依赖注入**: 完整的生命周期管理（DagKernel 中 null → 完整初始化）
+- **命名规范**: 符合 Java 规范（`randomXSetForkTime` → `onBlockConnected`）
+
+#### 受影响组件
+- **更新的文件**:
+  - `DagKernel.java` - RandomXPow 创建和生命周期管理
+  - `DagChain.java` / `DagChainImpl.java` - 监听器机制实现
+  - `RandomXSnapshotLoader.java` - 统一快照加载 API
+  - `MiningManager.java` - 使用 PowAlgorithm 接口
+  - `BlockGenerator.java` - 使用 PowAlgorithm 接口
+  - `ShareValidator.java` - 使用 PowAlgorithm 接口
+
+#### 代码质量提升
+| 指标 | 重构前 | 重构后 | 改进 |
+|------|--------|--------|------|
+| 死代码 | 7 个未使用方法 | 0 | -100% |
+| 快照加载方法 | 4 个重复方法 | 1 个统一方法 | 简化 75% |
+| 事件驱动 | 无 | 完整 | +100% |
+| 依赖注入 | 不完整 (null) | 完整 | +100% |
+| 命名规范 | 不符合 | 符合 Java 规范 | ✅ |
+
+#### 文档更新
+- ✅ [RANDOMX_EVENT_DRIVEN_REFACTORING_COMPLETE.md](./RANDOMX_EVENT_DRIVEN_REFACTORING_COMPLETE.md) - 完整的重构报告
+- ✅ [RANDOMX_REDESIGN_PROPOSAL.md](./RANDOMX_REDESIGN_PROPOSAL.md) - 设计方案（已标记为已实施）
+
+#### 测试验证
+- ✅ 编译成功：162 源文件全部编译通过
+- ✅ 无旧代码引用：所有旧 API 调用已清理
+- ✅ 架构验证：事件驱动机制正常工作
+
+#### 向后兼容性
+- ⚠️ **不保持向后兼容** - 采用全新事件驱动架构
+- 适用场景：全面停机升级（快照导入）
+- 所有旧 API 已删除或重构
+
 ### Added - Phase 12: Mining & P2P Integration (2025-11-10)
 
 #### Mining Architecture (Phase 12.4)

@@ -24,58 +24,96 @@
 
 package io.xdag.consensus.pow;
 
-import static io.xdag.config.RandomXConstants.*;
-
 import io.xdag.config.Config;
 import io.xdag.config.MainnetConfig;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
-import io.xdag.utils.XdagTime;
 import lombok.extern.slf4j.Slf4j;
-import org.bouncycastle.util.Arrays;
+import org.bouncycastle.util.encoders.Hex;
+
+import static io.xdag.config.RandomXConstants.*;
 
 /**
  * RandomX Snapshot Loader
  *
- * <p>Handles loading of RandomX state from blockchain snapshots. This class is responsible
- * for initializing seeds from historical blocks and catching up to the current chain state
- * after loading a snapshot.
+ * <p>Professional snapshot loading service for RandomX state recovery.
+ * Provides unified snapshot loading with flexible strategy selection.
  *
- * <h2>Snapshot Loading Strategies</h2>
+ * <h2>Responsibilities</h2>
  * <ul>
- *   <li><strong>With Preseed</strong> - Load from a pre-computed seed</li>
- *   <li><strong>From Fork Height</strong> - Initialize from RandomX fork activation</li>
- *   <li><strong>From Current State</strong> - Reconstruct from current blockchain</li>
+ *   <li>Load RandomX state from blockchain snapshots</li>
+ *   <li>Initialize seeds from historical blocks</li>
+ *   <li>Support multiple loading strategies for different scenarios</li>
+ *   <li>Coordinate with seed manager for state reconstruction</li>
  * </ul>
  *
- * <h2>Seed Reconstruction</h2>
- * <p>After loading a snapshot, this class walks through historical blocks to:
- * <ul>
- *   <li>Set the fork activation time</li>
- *   <li>Initialize current and previous epoch seeds</li>
- *   <li>Prepare templates for hash calculations</li>
- * </ul>
+ * <h2>Loading Strategies</h2>
+ * <table border="1">
+ *   <tr>
+ *     <th>Strategy</th>
+ *     <th>Use Case</th>
+ *     <th>Speed</th>
+ *   </tr>
+ *   <tr>
+ *     <td>WITH_PRESEED</td>
+ *     <td>Recent snapshot (same epoch)</td>
+ *     <td>Fast</td>
+ *   </tr>
+ *   <tr>
+ *     <td>FROM_CURRENT_STATE</td>
+ *     <td>Old snapshot (past epoch)</td>
+ *     <td>Medium</td>
+ *   </tr>
+ *   <tr>
+ *     <td>FROM_FORK_HEIGHT</td>
+ *     <td>No snapshot (full sync)</td>
+ *     <td>Slow</td>
+ *   </tr>
+ *   <tr>
+ *     <td>AUTO</td>
+ *     <td>Default (automatic selection)</td>
+ *     <td>Varies</td>
+ *   </tr>
+ * </table>
  *
- * @since XDAGJ 0.8.1
+ * <h2>Seed Reconstruction Process</h2>
+ * <pre>
+ * 1. Calculate memory index from snapshot height
+ * 2. Initialize preseed in seed manager
+ * 3. Replay blocks from snapshot to current
+ * 4. Verify fork time and epoch boundaries
+ * </pre>
+ *
+ * @since XDAGJ v0.8.1
  */
 @Slf4j
 public class RandomXSnapshotLoader {
 
+    // ========== Configuration ==========
+
     private final Config config;
     private final DagChain dagChain;
     private final RandomXSeedManager seedManager;
+
+    /** Is this a testnet configuration? */
     private final boolean isTestNet;
 
-    // Network-specific parameters
+    /** Blocks per seed epoch */
     private final long seedEpochBlocks;
+
+    /** Lag period for seed calculation */
     private final long seedEpochLag;
+
+    /** Fork activation height */
     private final long forkHeight;
 
+    // ========== Constructor ==========
+
     /**
-     * Creates a new snapshot loader
+     * Creates a new snapshot loader.
      *
      * @param config System configuration
-     * @param dagChain Blockchain access
+     * @param dagChain Blockchain instance
      * @param seedManager Seed manager to initialize
      */
     public RandomXSnapshotLoader(Config config, DagChain dagChain, RandomXSeedManager seedManager) {
@@ -85,240 +123,271 @@ public class RandomXSnapshotLoader {
         this.isTestNet = !(config instanceof MainnetConfig);
 
         // Initialize network-specific parameters
-        this.seedEpochBlocks = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
-        this.seedEpochLag = isTestNet ? SEEDHASH_EPOCH_TESTNET_LAG : SEEDHASH_EPOCH_LAG;
-        this.forkHeight = isTestNet ? RANDOMX_TESTNET_FORK_HEIGHT : RANDOMX_FORK_HEIGHT;
+        if (isTestNet) {
+            this.seedEpochBlocks = SEEDHASH_EPOCH_TESTNET_BLOCKS;
+            this.seedEpochLag = SEEDHASH_EPOCH_TESTNET_LAG;
+            this.forkHeight = RANDOMX_TESTNET_FORK_HEIGHT;
+        } else {
+            this.seedEpochBlocks = SEEDHASH_EPOCH_BLOCKS;
+            this.seedEpochLag = SEEDHASH_EPOCH_LAG;
+            this.forkHeight = RANDOMX_FORK_HEIGHT;
+        }
 
-        log.info("RandomXSnapshotLoader initialized: network={}, epochBlocks={}, lag={}, forkHeight={}",
-                isTestNet ? "testnet" : "mainnet", seedEpochBlocks, seedEpochLag, forkHeight);
+        log.info("RandomXSnapshotLoader initialized: testnet={}, forkHeight={}, epochBlocks={}, lag={}",
+                isTestNet, forkHeight, seedEpochBlocks, seedEpochLag);
     }
 
     // ========== Public API ==========
 
     /**
-     * Loads RandomX state from a snapshot with a pre-computed seed
+     * Load RandomX state from snapshot using specified strategy.
      *
-     * <p>This is the primary method for snapshot loading. It:
-     * <ol>
-     *   <li>Initializes the first memory slot with the preseed</li>
-     *   <li>Calculates fork time from snapshot height</li>
-     *   <li>Replays blocks to update seed state</li>
-     * </ol>
+     * <p>Unified snapshot loading method that supports multiple strategies:
+     * <ul>
+     *   <li><strong>WITH_PRESEED</strong>: Use pre-computed seed (fastest)</li>
+     *   <li><strong>FROM_CURRENT_STATE</strong>: Reconstruct from current chain state</li>
+     *   <li><strong>FROM_FORK_HEIGHT</strong>: Initialize from fork activation</li>
+     *   <li><strong>AUTO</strong>: Automatically choose best strategy</li>
+     * </ul>
+     *
+     * <p><strong>Strategy Selection Guide:</strong>
+     * <pre>
+     * // Fast startup with recent snapshot
+     * loader.load(SnapshotStrategy.WITH_PRESEED, preseed);
+     *
+     * // Accurate reconstruction for old snapshot
+     * loader.load(SnapshotStrategy.FROM_CURRENT_STATE, null);
+     *
+     * // Full sync without snapshot
+     * loader.load(SnapshotStrategy.FROM_FORK_HEIGHT, null);
+     *
+     * // Let system decide (recommended)
+     * loader.load(SnapshotStrategy.AUTO, preseed);
+     * </pre>
+     *
+     * @param strategy Loading strategy to use
+     * @param preseed Pre-computed seed (required for WITH_PRESEED and AUTO, optional for others)
+     * @throws IllegalArgumentException if strategy is null or preseed required but not provided
+     * @throws IllegalStateException if chain state is invalid for selected strategy
+     */
+    public void load(SnapshotStrategy strategy, byte[] preseed) {
+        if (strategy == null) {
+            throw new IllegalArgumentException("SnapshotStrategy cannot be null");
+        }
+
+        log.info("Loading RandomX state with strategy: {}", strategy);
+
+        switch (strategy) {
+            case WITH_PRESEED:
+                loadWithPreseedInternal(preseed);
+                break;
+
+            case FROM_CURRENT_STATE:
+                loadFromCurrentStateInternal();
+                break;
+
+            case FROM_FORK_HEIGHT:
+                loadFromForkHeightInternal();
+                break;
+
+            case AUTO:
+                loadAutoInternal(preseed);
+                break;
+
+            default:
+                throw new IllegalArgumentException("Unknown strategy: " + strategy);
+        }
+
+        log.info("RandomX state loaded successfully with strategy: {}", strategy);
+    }
+
+    // ========== Private Loading Methods ==========
+
+    /**
+     * Load using WITH_PRESEED strategy.
+     *
+     * <p>Uses pre-computed seed from snapshot for fast startup.
      *
      * @param preseed Pre-computed seed from snapshot
-     * @throws IllegalArgumentException if preseed is null or empty
-     * @throws IllegalStateException if snapshot height is invalid
      */
-    public void loadWithPreseed(byte[] preseed) {
+    private void loadWithPreseedInternal(byte[] preseed) {
         if (preseed == null || preseed.length == 0) {
-            throw new IllegalArgumentException("Preseed cannot be null or empty");
+            throw new IllegalArgumentException("Preseed cannot be null or empty for WITH_PRESEED strategy");
         }
 
         long snapshotHeight = config.getSnapshotSpec().getSnapshotHeight();
-        log.info("Loading RandomX state from snapshot: height={}, preseed={}...",
-                snapshotHeight, bytesToHex(preseed, 16));
 
-        // Initialize first seed
-        seedManager.loadFromSnapshot(preseed, snapshotHeight);
+        if (snapshotHeight < forkHeight) {
+            log.warn("Snapshot height {} is before fork height {}, skipping RandomX initialization",
+                    snapshotHeight, forkHeight);
+            return;
+        }
 
-        // Replay blocks from (snapshotHeight - lag) to snapshotHeight
-        replayBlocks(snapshotHeight - seedEpochLag, snapshotHeight);
+        log.info("Loading RandomX state from snapshot: height={}, preseed={}",
+                snapshotHeight, Hex.toHexString(preseed));
 
-        log.info("RandomX state loaded successfully from snapshot");
+        // Calculate memory index from snapshot height
+        long memoryIndex = calculateMemoryIndex(snapshotHeight);
+
+        // Initialize seed manager with preseed
+        seedManager.initializeFromPreseed(preseed, memoryIndex);
+
+        // Replay blocks from snapshot to current to update state
+        long currentHeight = dagChain.getChainStats().getMainBlockCount();
+        if (currentHeight > snapshotHeight) {
+            log.info("Replaying blocks from {} to {} to update RandomX state",
+                    snapshotHeight, currentHeight);
+            replayBlocks(snapshotHeight, currentHeight);
+        }
     }
 
     /**
-     * Loads RandomX state conditioned on current chain state
+     * Load using AUTO strategy.
      *
-     * <p>This method decides whether to use the preseed or reconstruct from scratch
-     * based on how far the chain has progressed past the snapshot height.
+     * <p>Automatically chooses between WITH_PRESEED and FROM_CURRENT_STATE
+     * based on whether chain has progressed past next epoch boundary.
      *
-     * @param preseed Pre-computed seed (may be used or ignored)
+     * @param preseed Pre-computed seed (may or may not be used)
      */
-    public void loadConditional(byte[] preseed) {
+    private void loadAutoInternal(byte[] preseed) {
         long snapshotHeight = config.getSnapshotSpec().getSnapshotHeight();
         long currentHeight = dagChain.getChainStats().getMainBlockCount();
-        long nextEpochBoundary = snapshotHeight + seedEpochBlocks;
 
-        log.info("Conditional snapshot load: snapshot={}, current={}, nextEpoch={}",
+        // Find next epoch boundary after snapshot
+        long epochMask = seedEpochBlocks - 1;
+        long nextEpochBoundary = (snapshotHeight + seedEpochBlocks) & ~epochMask;
+
+        log.info("AUTO strategy: snapshot={}, current={}, nextEpoch={}",
                 snapshotHeight, currentHeight, nextEpochBoundary);
 
         if (currentHeight < nextEpochBoundary) {
             // Chain hasn't progressed to next epoch yet, use preseed
-            log.info("Using preseed (chain hasn't reached next epoch)");
-            loadWithPreseed(preseed);
+            log.info("AUTO → WITH_PRESEED (chain hasn't reached next epoch boundary)");
+            loadWithPreseedInternal(preseed);
         } else {
-            // Chain has progressed, reconstruct from current state
-            log.info("Reconstructing from current state (chain past next epoch)");
-            loadFromCurrentState();
+            // Chain has progressed past next epoch, reconstruct from current state
+            log.info("AUTO → FROM_CURRENT_STATE (chain past next epoch boundary)");
+            loadFromCurrentStateInternal();
         }
     }
 
     /**
-     * Loads RandomX state from the fork height
+     * Load using FROM_FORK_HEIGHT strategy.
      *
-     * <p>This method is used when no snapshot is available. It initializes
-     * the RandomX state from the fork activation block.
+     * <p>Initializes RandomX from fork activation block without using preseed.
+     * Used when no snapshot is available (full sync from genesis).
      */
-    public void loadFromForkHeight() {
+    private void loadFromForkHeightInternal() {
         long currentHeight = dagChain.getChainStats().getMainBlockCount();
 
         if (currentHeight < forkHeight) {
-            log.warn("Cannot load from fork height: current height {} < fork height {}",
+            log.warn("Cannot load from fork height: current={} < fork={}",
                     currentHeight, forkHeight);
             return;
         }
 
         log.info("Loading RandomX state from fork height: {}", forkHeight);
 
-        // Get fork activation block
-        Block forkBlock = dagChain.getMainBlockByHeight(forkHeight);
-        if (forkBlock == null) {
-            throw new IllegalStateException("Fork block not found at height: " + forkHeight);
-        }
-
-        // Calculate fork time
-        long forkTime = XdagTime.getEpoch(forkBlock.getTimestamp()) + seedEpochLag;
-        log.info("Fork time calculated: {}", forkTime);
-
-        // Reconstruct seed state from current chain
-        reconstructSeedState();
-
-        log.info("RandomX state loaded successfully from fork height");
+        // Replay all blocks from fork height to current
+        replayBlocks(forkHeight, currentHeight);
     }
 
     /**
-     * Loads RandomX state from current blockchain state
+     * Load using FROM_CURRENT_STATE strategy.
      *
-     * <p>This method reconstructs the current and previous epoch seeds
-     * by examining the current chain height and deriving seeds from
-     * the appropriate historical blocks.
+     * <p>Reconstructs RandomX state by examining current chain height
+     * and replaying necessary epoch boundary blocks.
      */
-    public void loadFromCurrentState() {
+    private void loadFromCurrentStateInternal() {
         long snapshotHeight = config.getSnapshotSpec().getSnapshotHeight();
         long currentHeight = dagChain.getChainStats().getMainBlockCount();
 
         if (currentHeight < snapshotHeight) {
             throw new IllegalStateException(
-                    String.format("Current height %d < snapshot height %d", currentHeight, snapshotHeight));
+                    String.format("Current height %d < snapshot height %d",
+                            currentHeight, snapshotHeight));
         }
 
         log.info("Loading RandomX state from current state: height={}", currentHeight);
 
-        // Get snapshot block for fork time
-        Block snapshotBlock = dagChain.getMainBlockByHeight(snapshotHeight);
-        if (snapshotBlock == null) {
-            throw new IllegalStateException("Snapshot block not found at height: " + snapshotHeight);
-        }
+        // Find the epoch boundaries we need to replay
+        long epochMask = seedEpochBlocks - 1;
+        long currentEpochStart = currentHeight & ~epochMask;
+        long previousEpochStart = currentEpochStart - seedEpochBlocks;
 
-        // Calculate fork time
-        long forkTime = XdagTime.getEpoch(snapshotBlock.getTimestamp()) + seedEpochLag;
-        log.info("Fork time set from snapshot: {}", forkTime);
+        // Replay from the start of previous epoch to current
+        // This ensures both current and previous seeds are initialized
+        long startHeight = Math.max(previousEpochStart, forkHeight);
 
-        // Reconstruct seed state
-        reconstructSeedState();
+        log.info("Replaying blocks from {} to {} for seed reconstruction",
+                startHeight, currentHeight);
 
-        log.info("RandomX state loaded successfully from current state");
+        replayBlocks(startHeight, currentHeight);
     }
 
     // ========== Private Helpers ==========
 
     /**
-     * Replays blocks to update seed state
+     * Calculate memory index from block height.
+     *
+     * <p>Memory index = epoch number since fork = (height - forkHeight) / epochBlocks
+     *
+     * @param height Block height
+     * @return Memory index
+     */
+    private long calculateMemoryIndex(long height) {
+        if (height < forkHeight) {
+            return 0;
+        }
+
+        // Calculate which epoch this height belongs to
+        long heightSinceFork = height - forkHeight;
+        long epochIndex = heightSinceFork / seedEpochBlocks;
+
+        log.debug("Calculated memory index: height={}, fork={}, index={}",
+                height, forkHeight, epochIndex);
+
+        return epochIndex;
+    }
+
+    /**
+     * Replay blocks to update seed state.
+     *
+     * <p>Calls updateSeedForBlock() on each block to properly handle
+     * epoch boundaries and fork time calculation.
+     *
+     * @param fromHeight Starting height (inclusive)
+     * @param toHeight Ending height (inclusive)
      */
     private void replayBlocks(long fromHeight, long toHeight) {
-        log.debug("Replaying blocks from {} to {}", fromHeight, toHeight);
+        log.debug("Replaying {} blocks from {} to {}",
+                toHeight - fromHeight + 1, fromHeight, toHeight);
+
+        long blocksReplayed = 0;
+        long epochBoundariesProcessed = 0;
 
         for (long height = fromHeight; height <= toHeight; height++) {
             Block block = dagChain.getMainBlockByHeight(height);
-            if (block != null) {
-                seedManager.updateSeedForBlock(block);
+
+            if (block == null) {
+                log.warn("Block not found at height {}, stopping replay", height);
+                break;
+            }
+
+            // Update seed manager (handles fork time and epoch boundaries)
+            seedManager.updateSeedForBlock(block);
+
+            blocksReplayed++;
+
+            // Log progress at epoch boundaries
+            long epochMask = seedEpochBlocks - 1;
+            if ((height & epochMask) == 0) {
+                epochBoundariesProcessed++;
+                log.info("Processed epoch boundary at height {}", height);
             }
         }
-    }
 
-    /**
-     * Reconstructs seed state from current blockchain
-     */
-    private void reconstructSeedState() {
-        long currentHeight = dagChain.getChainStats().getMainBlockCount();
-        long seedEpochMask = seedEpochBlocks - 1;
-
-        // Find current and previous epoch boundaries
-        long currentEpochStart = currentHeight & ~seedEpochMask;
-        long previousEpochStart = currentEpochStart - seedEpochBlocks;
-
-        log.debug("Reconstructing seed state: currentEpoch={}, previousEpoch={}",
-                currentEpochStart, previousEpochStart);
-
-        // Initialize previous epoch seed (if exists)
-        if (previousEpochStart >= forkHeight) {
-            initializeSeedForEpoch(previousEpochStart);
-        }
-
-        // Initialize current epoch seed
-        if (currentEpochStart >= forkHeight) {
-            initializeSeedForEpoch(currentEpochStart);
-        }
-    }
-
-    /**
-     * Initializes seed for a specific epoch
-     */
-    private void initializeSeedForEpoch(long epochStart) {
-        Block epochBlock = dagChain.getMainBlockByHeight(epochStart);
-        if (epochBlock == null) {
-            log.warn("Epoch block not found at height: {}", epochStart);
-            return;
-        }
-
-        // Derive seed from block (epochStart - lag)
-        Block seedBlock = dagChain.getMainBlockByHeight(epochStart - seedEpochLag);
-        if (seedBlock == null) {
-            log.warn("Seed block not found at height: {}", epochStart - seedEpochLag);
-            return;
-        }
-
-        byte[] seed = Arrays.reverse(seedBlock.getInfo().getHash().toArray());
-
-        log.info("Initializing seed for epoch starting at height {}: seed={}...",
-                epochStart, bytesToHex(seed, 16));
-
-        // Create memory slot and initialize
-        long memoryIndex = seedManager.getCurrentEpochIndex() + 1;
-        RandomXMemory memory = seedManager.getActiveMemory(epochBlock.getTimestamp(), false);
-
-        if (memory == null) {
-            log.error("Failed to get memory slot for epoch {}", epochStart);
-            return;
-        }
-
-        memory.seed = seed;
-        memory.seedHeight = epochStart;
-        memory.seedTime = epochBlock.getTimestamp();
-        memory.switchTime = XdagTime.getEpoch(epochBlock.getTimestamp()) + seedEpochLag + 1;
-
-        seedManager.updateSeed(memoryIndex);
-
-        // Check if seed is currently active
-        long currentTime = XdagTime.getEpoch(
-                dagChain.getMainBlockByHeight(dagChain.getChainStats().getMainBlockCount()).getTimestamp());
-
-        memory.isSwitched = (currentTime >= memory.switchTime) ? 1 : 0;
-    }
-
-    /**
-     * Converts byte array to hex string (for logging)
-     */
-    private String bytesToHex(byte[] bytes, int length) {
-        if (bytes == null) {
-            return "null";
-        }
-        StringBuilder sb = new StringBuilder();
-        int limit = Math.min(length, bytes.length);
-        for (int i = 0; i < limit; i++) {
-            sb.append(String.format("%02x", bytes[i]));
-        }
-        return sb.toString();
+        log.info("Replay complete: {} blocks replayed, {} epoch boundaries processed",
+                blocksReplayed, epochBoundariesProcessed);
     }
 }

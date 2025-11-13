@@ -28,7 +28,8 @@ import io.xdag.config.Config;
 import io.xdag.config.GenesisConfig;
 import io.xdag.consensus.sync.HybridSyncManager;
 import io.xdag.consensus.sync.HybridSyncP2pAdapter;
-import io.xdag.consensus.pow.RandomX;
+import io.xdag.consensus.pow.PowAlgorithm;
+import io.xdag.consensus.pow.RandomXPow;
 import io.xdag.consensus.miner.MiningManager;
 import io.xdag.core.*;
 import io.xdag.crypto.keys.ECKeyPair;
@@ -128,7 +129,7 @@ public class DagKernel {
 
   // Mining component (4)
   private MiningManager miningManager;
-  private RandomX randomX;
+  private PowAlgorithm powAlgorithm;  // RandomXPow instance
 
   // P2P service (5)
   private P2pService p2pService;
@@ -256,13 +257,16 @@ public class DagKernel {
       this.hybridSyncManager = new HybridSyncManager(this, dagChain, hybridSyncP2pAdapter);
       log.info("   ✓ HybridSyncManager initialized");
 
-      // 7. Create MiningManager (4)
-      // Note: RandomX might be null if not configured/needed
+      // 7. Create RandomXPow (PoW algorithm for mining)
+      this.powAlgorithm = new RandomXPow(config, dagChain);
+      log.info("   ✓ RandomXPow initialized");
+
+      // 8. Create MiningManager (4)
       // TTL is taken from config (default is 8)
       if (wallet != null) {
           int ttl = config.getNodeSpec() != null ? config.getNodeSpec().getTTL() : 8;
           this.miningManager = new MiningManager(
-                  this, wallet, randomX, ttl);
+                  this, wallet, powAlgorithm, ttl);
           log.info("   ✓ MiningManager initialized (TTL={})", ttl);
       } else {
           log.warn("   ⚠ MiningManager not initialized (wallet required)");
@@ -332,6 +336,12 @@ public class DagKernel {
               log.info("✓ HybridSyncManager started (auto-sync enabled)");
           }
 
+          // Start RandomXPow (must start before mining)
+          if (powAlgorithm != null) {
+              powAlgorithm.start();
+              log.info("✓ RandomXPow started");
+          }
+
           // Start MiningManager (4)
           if (miningManager != null) {
               miningManager.start();
@@ -384,6 +394,12 @@ public class DagKernel {
           if (miningManager != null) {
               miningManager.stop();
               log.info("✓ MiningManager stopped");
+          }
+
+          // Stop RandomXPow (must stop after mining)
+          if (powAlgorithm != null) {
+              powAlgorithm.stop();
+              log.info("✓ RandomXPow stopped");
           }
 
           // Stop P2P service (5)

@@ -877,4 +877,44 @@ public interface DagChain {
      * @return pre-seed bytes, or null if not available
      */
     byte[] getPreSeed();
+
+    // ==================== DAG Chain Event Listeners ====================
+
+    /**
+     * Add DAG chain event listener
+     *
+     * <p>Registers a listener to receive notifications when blocks are
+     * connected to or disconnected from the main chain.
+     *
+     * <p><strong>Thread Safety:</strong> This method is thread-safe.
+     * Listeners may be called from different threads.
+     *
+     * <p><strong>Use Cases:</strong>
+     * <ul>
+     *   <li>RandomX seed updates on epoch boundaries</li>
+     *   <li>Transaction indexing</li>
+     *   <li>Statistics collection</li>
+     * </ul>
+     *
+     * @param listener DAG chain listener to register
+     * @throws IllegalArgumentException if listener is null
+     * @see DagchainListener
+     * @see #removeListener(DagchainListener)
+     * @since XDAGJ v0.8.1
+     */
+    void addListener(DagchainListener listener);
+
+    /**
+     * Remove DAG chain event listener
+     *
+     * <p>Unregisters a previously registered DAG chain listener.
+     *
+     * <p><strong>Thread Safety:</strong> This method is thread-safe.
+     *
+     * @param listener DAG chain listener to unregister
+     * @see DagchainListener
+     * @see #addListener(DagchainListener)
+     * @since XDAGJ v0.8.1
+     */
+    void removeListener(DagchainListener listener);
 }

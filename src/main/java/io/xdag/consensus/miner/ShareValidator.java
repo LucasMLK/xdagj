@@ -24,7 +24,8 @@
 
 package io.xdag.consensus.miner;
 
-import io.xdag.consensus.pow.RandomX;
+import io.xdag.consensus.pow.HashContext;
+import io.xdag.consensus.pow.PowAlgorithm;
 import io.xdag.core.Block;
 import io.xdag.crypto.hash.XdagSha256Digest;
 import io.xdag.utils.XdagTime;
@@ -84,7 +85,7 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 public class ShareValidator {
 
-    private final RandomX randomX;
+    private final PowAlgorithm powAlgorithm;
 
     /**
      * Best share (nonce) found so far
@@ -115,10 +116,10 @@ public class ShareValidator {
     /**
      * Create a new ShareValidator
      *
-     * @param randomX RandomX instance (can be null if not using RandomX)
+     * @param powAlgorithm PoW algorithm instance (can be null if not using RandomX)
      */
-    public ShareValidator(RandomX randomX) {
-        this.randomX = randomX;
+    public ShareValidator(PowAlgorithm powAlgorithm) {
+        this.powAlgorithm = powAlgorithm;
     }
 
     /**
@@ -215,8 +216,8 @@ public class ShareValidator {
      * @return Bytes32 RandomX hash
      */
     private Bytes32 calculateRandomXHash(Bytes32 nonce, MiningTask task) {
-        if (randomX == null) {
-            throw new IllegalStateException("RandomX not available for RandomX task");
+        if (powAlgorithm == null) {
+            throw new IllegalStateException("PoW algorithm not available for RandomX task");
         }
 
         try {
@@ -225,12 +226,14 @@ public class ShareValidator {
             Block blockWithNonce = candidate.withNonce(nonce);
             byte[] blockData = blockWithNonce.toBytes();
 
-            // Calculate RandomX hash using block timestamp
-            long blockTime = task.getTimestamp();
-            byte[] hashBytes = randomX.randomXBlockHash(blockData, blockTime);
+            // Create hash context with block timestamp
+            HashContext context = HashContext.forMining(task.getTimestamp());
+
+            // Calculate hash using PoW algorithm
+            byte[] hashBytes = powAlgorithm.calculateBlockHash(blockData, context);
 
             if (hashBytes == null) {
-                log.warn("RandomX hash calculation returned null for timestamp {}", blockTime);
+                log.warn("PoW hash calculation returned null for timestamp {}", task.getTimestamp());
                 // Return max value (worst possible hash)
                 return Bytes32.fromHexString("0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
             }

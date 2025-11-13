@@ -68,6 +68,7 @@ public class DagChainImpl implements DagChain {
 
     private volatile ChainStats chainStats;
     private final List<Listener> listeners = new ArrayList<>();
+    private final List<DagchainListener> dagchainListeners = new ArrayList<>();
     private final ThreadLocal<Boolean> isRetryingOrphans = ThreadLocal.withInitial(() -> false);
     private volatile Bytes miningCoinbase = Bytes.wrap(new byte[20]);
 
@@ -253,6 +254,11 @@ public class DagChainImpl implements DagChain {
 
             // Notify listeners
             notifyListeners(blockWithInfo);
+
+            // Notify DAG chain listeners (only for main blocks)
+            if (isBestChain) {
+                notifyDagchainListeners(blockWithInfo);
+            }
 
             // Retry orphan blocks (dependency resolution)
             retryOrphanBlocks();
@@ -1426,5 +1432,70 @@ public class DagChainImpl implements DagChain {
 
         log.info("Demoted block {} from height {} to orphan (epoch competition loser)",
                 block.getHash().toHexString(), previousHeight);
+    }
+
+    // ==================== DAG Chain Event Listeners ====================
+
+    @Override
+    public void addListener(DagchainListener listener) {
+        if (listener == null) {
+            throw new IllegalArgumentException("DagchainListener cannot be null");
+        }
+
+        synchronized (dagchainListeners) {
+            if (!dagchainListeners.contains(listener)) {
+                dagchainListeners.add(listener);
+                log.debug("Added DAG chain listener: {}", listener.getClass().getSimpleName());
+            } else {
+                log.warn("Attempted to add duplicate listener: {}", listener.getClass().getSimpleName());
+            }
+        }
+    }
+
+    @Override
+    public void removeListener(DagchainListener listener) {
+        if (listener == null) {
+            return;
+        }
+
+        synchronized (dagchainListeners) {
+            boolean removed = dagchainListeners.remove(listener);
+            if (removed) {
+                log.debug("Removed DAG chain listener: {}", listener.getClass().getSimpleName());
+            }
+        }
+    }
+
+    /**
+     * Notify all DAG chain listeners of block connection
+     *
+     * <p>This method is called after a block is successfully imported
+     * and added to the main chain. It notifies all registered listeners
+     * so they can react to the chain state change.
+     *
+     * <p>Listener exceptions are caught and logged to prevent one failing
+     * listener from affecting others.
+     *
+     * @param block The block that was connected to the main chain
+     */
+    private void notifyDagchainListeners(Block block) {
+        synchronized (dagchainListeners) {
+            if (dagchainListeners.isEmpty()) {
+                return;
+            }
+
+            log.debug("Notifying {} DAG chain listeners of block connection: {}",
+                    dagchainListeners.size(),
+                    block.getHash().toHexString().substring(0, 16));
+
+            for (DagchainListener listener : dagchainListeners) {
+                try {
+                    listener.onBlockConnected(block);
+                } catch (Exception e) {
+                    log.error("Error notifying DAG chain listener {}: {}",
+                            listener.getClass().getSimpleName(), e.getMessage(), e);
+                }
+            }
+        }
     }
 }

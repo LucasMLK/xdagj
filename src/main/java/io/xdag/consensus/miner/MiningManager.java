@@ -26,7 +26,7 @@ package io.xdag.consensus.miner;
 
 import io.xdag.DagKernel;
 import io.xdag.Wallet;
-import io.xdag.consensus.pow.RandomX;
+import io.xdag.consensus.pow.PowAlgorithm;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
 import io.xdag.utils.XdagTime;
@@ -74,7 +74,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <h2>Usage Example</h2>
  * <pre>
- * MiningManager manager = new MiningManager(dagKernel, wallet, randomX, 8);
+ * MiningManager manager = new MiningManager(dagKernel, wallet, powAlgorithm, 8);
  * manager.start();
  *
  * // Manager runs automatically every 64 seconds
@@ -105,7 +105,7 @@ public class MiningManager {
     private final DagKernel dagKernel;
     private final DagChain dagChain;
     private final Wallet wallet;
-    private final RandomX randomX;
+    private final PowAlgorithm powAlgorithm;
     private final int ttl;  // Network broadcast TTL
 
     // ========== Components ==========
@@ -153,10 +153,10 @@ public class MiningManager {
      *
      * @param dagKernel DagKernel for mining operations
      * @param wallet Wallet for coinbase rewards
-     * @param randomX RandomX instance (can be null if not using RandomX)
+     * @param powAlgorithm PoW algorithm instance (can be null if not using RandomX)
      * @param ttl Network broadcast time-to-live
      */
-    public MiningManager(DagKernel dagKernel, Wallet wallet, RandomX randomX, int ttl) {
+    public MiningManager(DagKernel dagKernel, Wallet wallet, PowAlgorithm powAlgorithm, int ttl) {
         if (dagKernel == null) {
             throw new IllegalArgumentException("DagKernel cannot be null");
         }
@@ -170,12 +170,12 @@ public class MiningManager {
         this.dagKernel = dagKernel;
         this.dagChain = dagKernel.getDagChain();
         this.wallet = wallet;
-        this.randomX = randomX;
+        this.powAlgorithm = powAlgorithm;
         this.ttl = ttl;
 
         // Create components
-        this.blockGenerator = new BlockGenerator(dagChain, wallet, randomX);
-        this.shareValidator = new ShareValidator(randomX);
+        this.blockGenerator = new BlockGenerator(dagChain, wallet, powAlgorithm);
+        this.shareValidator = new ShareValidator(powAlgorithm);
         this.blockBroadcaster = new BlockBroadcaster(dagKernel, ttl);
 
         log.info("MiningManager initialized with TTL={}", ttl);
@@ -411,11 +411,11 @@ public class MiningManager {
      * @return RandomX seed bytes
      */
     private byte[] getRandomXSeed() {
-        if (randomX == null) {
-            return new byte[32];  // Empty seed if RandomX not available
+        if (powAlgorithm == null) {
+            return new byte[32];  // Empty seed if PoW algorithm not available
         }
 
-        // TODO  Get seed from RandomX memory
+        // TODO: Get seed from RandomX memory
         // For now, return empty seed
         return new byte[32];
     }
