@@ -39,16 +39,31 @@ public class XdagTime {
 
     /**
      * Convert milliseconds to XDAG timestamp
+     *
+     * <p>XDAG uses 1/1024 second precision (not 1/1000).
+     * Formula: XDAG_timestamp = (milliseconds * 1024) / 1000
+     *
+     * @param ms Milliseconds since Unix epoch
+     * @return XDAG timestamp (1/1024 second units)
      */
     public static long msToXdagtimestamp(long ms) {
-        double ms_tmp = (double) (ms << 10);
-        return (long) Math.ceil(ms_tmp / 1000 + 0.5);
+        // XDAG timestamp = (ms * 1024) / 1000
+        // Using bit shift for efficiency: ms << 10 = ms * 1024
+        return (ms << 10) / 1000;
     }
 
     /**
      * Convert XDAG timestamp to milliseconds
+     *
+     * <p>XDAG uses 1/1024 second precision.
+     * Formula: milliseconds = (XDAG_timestamp * 1000) / 1024
+     *
+     * @param timestamp XDAG timestamp (1/1024 second units)
+     * @return Milliseconds since Unix epoch
      */
     public static long xdagTimestampToMs(long timestamp) {
+        // Milliseconds = (timestamp * 1000) / 1024
+        // Using bit shift for efficiency: >> 10 = / 1024
         return (timestamp * 1000) >> 10;
     }
 
