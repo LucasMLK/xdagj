@@ -45,7 +45,7 @@ import org.apache.tuweni.bytes.Bytes32;
  * <h2>Design Principles</h2>
  * <ul>
  *   <li>Single Responsibility: Only generates blocks, doesn't validate or broadcast</li>
- *   <li>v5.1 Alignment: Uses DagChain API instead of legacy Blockchain</li>
+ *   <li>Alignment: Uses DagChain API instead of legacy Blockchain</li>
  *   <li>Immutability: Works with immutable Block objects</li>
  *   <li>Testability: Easy to mock dependencies</li>
  * </ul>
@@ -57,7 +57,7 @@ import org.apache.tuweni.bytes.Bytes32;
  * // Pass candidate to miner...
  * </pre>
  *
- * @since v5.1 Phase 12.4
+ * @since XDAGJ
  */
 @Slf4j
 public class BlockGenerator {
@@ -114,20 +114,25 @@ public class BlockGenerator {
         // Get current time
         long timestamp = XdagTime.getMainTime();
 
-        // Generate coinbase address (32 bytes)
-        // AddressUtils.toBytesAddress() returns 20 bytes, pad to 32 bytes
-        org.apache.tuweni.bytes.Bytes addressBytes =
+        // BUGFIX: Generate coinbase address (20 bytes, NOT 32 bytes)
+        // AddressUtils.toBytesAddress() returns exactly 20 bytes (Ethereum-style address)
+        // BlockHeader expects coinbase to be exactly 20 bytes (see BlockHeader.getSerializedSize())
+        org.apache.tuweni.bytes.Bytes coinbase =
                 io.xdag.crypto.keys.AddressUtils.toBytesAddress(coinbaseKey.getPublicKey());
-        byte[] coinbaseBytes = new byte[32];
-        System.arraycopy(addressBytes.toArray(), 0, coinbaseBytes, 12, 20);
-        Bytes32 coinbase = Bytes32.wrap(coinbaseBytes);
+
+        // Validation: Ensure coinbase is exactly 20 bytes
+        if (coinbase.size() != 20) {
+            throw new IllegalStateException(String.format(
+                    "Wallet address must be 20 bytes, got %d bytes: %s",
+                    coinbase.size(), coinbase.toHexString()));
+        }
 
         // Set mining coinbase address for DagChain
         if (dagChain instanceof io.xdag.core.DagChainImpl) {
             ((io.xdag.core.DagChainImpl) dagChain).setMiningCoinbase(coinbase);
         }
 
-        // Create candidate block via DagChain (v5.1 API)
+        // Create candidate block via DagChain (API)
         Block candidate = dagChain.createCandidateBlock();
 
         // Generate initial nonce

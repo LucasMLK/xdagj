@@ -42,7 +42,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  *   <li><strong>Error details</strong>: Detailed error information if import failed</li>
  * </ul>
  *
- * @since v5.1
+ * @since XDAGJ
  * @see DagChain#tryToConnect(Block)
  */
 @Data

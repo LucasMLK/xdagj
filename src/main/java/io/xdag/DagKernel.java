@@ -57,9 +57,9 @@ import java.io.File;
 import java.util.Map;
 
 /**
- * DagKernel - Standalone kernel for XDAG v5.1 DagStore architecture
+ * DagKernel - Standalone kernel for XDAG DagStore architecture
  *
- * <p>This is a completely new kernel designed specifically for the v5.1 data structures.
+ * <p>This is a completely new kernel designed specifically for the data structures.
  * It does NOT depend on the legacy io.xdag.Kernel and manages all components independently.
  *
  * <h2>Architecture</h2>
@@ -82,7 +82,7 @@ import java.util.Map;
  * <h2>Design Goals</h2>
  * <ul>
  *   <li>Complete independence from legacy io.xdag.Kernel</li>
- *   <li>Designed specifically for v5.1 data structures</li>
+ *   <li>Designed specifically for data structures</li>
  *   <li>Integrated consensus layer (DagChain) with storage</li>
  *   <li>Clean initialization and lifecycle management</li>
  *   <li>Type-safe component access</li>
@@ -104,7 +104,7 @@ import java.util.Map;
  * dagKernel.stop();
  * </pre>
  *
- * @since v5.1 Phase 9 Final
+ * @since XDAGJ Final
  */
 @Slf4j
 @Getter
@@ -127,11 +127,11 @@ public class DagKernel {
   private HybridSyncManager hybridSyncManager;
   private HybridSyncP2pAdapter hybridSyncP2pAdapter;
 
-  // Mining component (Phase 12.4)
+  // Mining component (4)
   private MiningManager miningManager;
   private RandomX randomX;
 
-  // P2P service (Phase 12.5)
+  // P2P service (5)
   private P2pService p2pService;
 
   // Genesis configuration
@@ -257,7 +257,7 @@ public class DagKernel {
       this.hybridSyncManager = new HybridSyncManager(this, dagChain, hybridSyncP2pAdapter);
       log.info("   ✓ HybridSyncManager initialized");
 
-      // 7. Create MiningManager (Phase 12.4)
+      // 7. Create MiningManager (4)
       // Note: RandomX might be null if not configured/needed
       // TTL is taken from config (default is 8)
       if (wallet != null) {
@@ -324,7 +324,7 @@ public class DagKernel {
           // Bootstrap genesis block if needed
           bootstrapGenesis();
 
-          // Start P2P service (Phase 12.5)
+          // Start P2P service (5)
           startP2pService();
 
           // Start HybridSyncManager (auto-sync)
@@ -333,7 +333,7 @@ public class DagKernel {
               log.info("✓ HybridSyncManager started (auto-sync enabled)");
           }
 
-          // Start MiningManager (Phase 12.4)
+          // Start MiningManager (4)
           if (miningManager != null) {
               miningManager.start();
               log.info("✓ MiningManager started (mining enabled)");
@@ -381,13 +381,13 @@ public class DagKernel {
       log.info("========================================");
 
       try {
-          // Stop MiningManager first (Phase 12.4)
+          // Stop MiningManager first (4)
           if (miningManager != null) {
               miningManager.stop();
               log.info("✓ MiningManager stopped");
           }
 
-          // Stop P2P service (Phase 12.5)
+          // Stop P2P service (5)
           stopP2pService();
 
           // Stop HybridSyncManager first (if present)
@@ -497,12 +497,12 @@ public class DagKernel {
       log.info("✓ DagKernel reset completed - all data erased");
   }
 
-  // ========== P2P Service Management (Phase 12.5) ==========
+  // ========== P2P Service Management (5) ==========
 
   /**
    * Start P2P service for block broadcasting
    *
-   * <p>Phase 12.5+: P2P integration with application layer event handler.
+   * <p>5+: P2P integration with application layer event handler.
    * Registers XdagP2pEventHandler to enable HybridSync protocol.
    */
   private void startP2pService() {
@@ -597,7 +597,7 @@ public class DagKernel {
               "genesis.json not found! Searched:\n" +
               "  1. %s/genesis.json\n" +
               "  2. %s/config/genesis.json\n\n" +
-              "XDAG v5.1 requires explicit genesis configuration (like Ethereum).\n" +
+              "XDAG requires explicit genesis configuration (like Ethereum).\n" +
               "Please create genesis.json for your network:\n" +
               "  - Mainnet: cp config/genesis-mainnet.json ./genesis.json\n" +
               "  - Testnet: cp config/genesis-testnet.json ./genesis.json\n" +
@@ -781,7 +781,7 @@ public class DagKernel {
   /**
    * Create genesis block from configuration
    *
-   * <p>Phase 12.5+: REQUIRES deterministic genesisCoinbase from genesis.json (Bitcoin/Ethereum approach).
+   * <p>5+: REQUIRES deterministic genesisCoinbase from genesis.json (Bitcoin/Ethereum approach).
    * All nodes must create identical genesis blocks using the network-defined coinbase address.
    *
    * @throws RuntimeException if creation fails or if genesisCoinbase is not configured
@@ -793,11 +793,11 @@ public class DagKernel {
       long timestamp = genesisConfig.getTimestamp();
       log.info("  - Genesis timestamp: {}", timestamp);
 
-      // Phase 12.5+: genesisCoinbase is REQUIRED for deterministic genesis (Bitcoin/Ethereum approach)
+      // 5+: genesisCoinbase is REQUIRED for deterministic genesis (Bitcoin/Ethereum approach)
       if (!genesisConfig.hasGenesisCoinbase()) {
           throw new RuntimeException(
               "genesisCoinbase is required in genesis.json!\n\n" +
-              "XDAG v5.1 requires deterministic genesis block creation.\n" +
+              "XDAG requires deterministic genesis block creation.\n" +
               "All nodes must create IDENTICAL genesis blocks (Bitcoin/Ethereum approach).\n\n" +
               "Please add to your genesis.json:\n" +
               "  \"genesisCoinbase\": \"4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi\"\n\n" +
@@ -843,13 +843,13 @@ public class DagKernel {
       log.info("Importing snapshot...");
       log.info("  - {}", genesisConfig.getSnapshot().getDescription());
 
-      // TODO Phase 12.5: Implement snapshot import
+      // TODO  Implement snapshot import
       //  1. Read snapshot data file
       //  2. Parse blocks and accounts
       //  3. Import to DagStore and AccountStore
       //  4. Create genesis block referencing snapshot state
 
-      throw new UnsupportedOperationException("Snapshot import not yet implemented (Phase 12.5)");
+      throw new UnsupportedOperationException("Snapshot import not yet implemented (5)");
   }
 
   /**

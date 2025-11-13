@@ -56,7 +56,7 @@ import org.rocksdb.*;
  * Total Memory:            ~5-9 GB
  * </pre>
  *
- * @since v5.1 Phase 8
+ * @since XDAGJ
  */
 @Slf4j
 public class DagStoreRocksDBConfig {

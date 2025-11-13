@@ -28,7 +28,6 @@ import static io.xdag.utils.BasicUtils.address2Hash;
 
 import io.xdag.DagKernel;
 import io.xdag.Wallet;
-import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.utils.BasicUtils;
 import io.xdag.utils.WalletUtils;
 import java.io.PrintWriter;
@@ -57,12 +56,29 @@ import org.jline.reader.Parser;
 import org.jline.reader.impl.DefaultParser;
 import org.jline.terminal.Terminal;
 
+/**
+ * XDAG CLI Shell - Simplified Command Interface
+ *
+ * Supported commands:
+ * - account       List accounts with balance and nonce
+ * - transaction   Query transaction details by hash
+ * - block         Query block details by hash
+ * - chain         List main chain blocks
+ * - epoch         Query epoch information
+ * - mined         List blocks mined by this node
+ * - transfer      Transfer XDAG to another address
+ * - network       Network management (list/connect)
+ * - stats         Node statistics
+ * - monitor       System monitor
+ * - stop          Stop node
+ */
 @Slf4j
 public class Shell extends JlineCommandRegistry implements CommandRegistry, Telnet.ShellProvider {
 
     public static final int DEFAULT_LIST_NUM = 20;
     public static final String prompt = "xdag> ";
     public Map<String, CommandMethods> commandExecute = new HashMap<>();
+
     @Setter
     private DagKernel dagKernel;
     private Commands commands;
@@ -71,129 +87,27 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
 
     public Shell() {
         super();
-        // Account & Wallet Commands
+
+        // Core data query commands
         commandExecute.put("account", new CommandMethods(this::processAccount, this::defaultCompleter));
-        commandExecute.put("balance", new CommandMethods(this::processBalance, this::defaultCompleter));
-        commandExecute.put("address", new CommandMethods(this::processAddress, this::defaultCompleter));
-        commandExecute.put("nonce", new CommandMethods(this::processNonce, this::defaultCompleter));
-        commandExecute.put("maxbalance", new CommandMethods(this::processMaxBalance, this::defaultCompleter));
-        commandExecute.put("keygen", new CommandMethods(this::processKeygen, this::defaultCompleter));
-
-        // Transaction Commands
-        commandExecute.put("transfer", new CommandMethods(this::processTransfer, this::defaultCompleter));
-        commandExecute.put("consolidate", new CommandMethods(this::processConsolidate, this::defaultCompleter));
-
-        // Block & Chain Commands
+        commandExecute.put("transaction", new CommandMethods(this::processTransaction, this::defaultCompleter));
         commandExecute.put("block", new CommandMethods(this::processBlock, this::defaultCompleter));
         commandExecute.put("chain", new CommandMethods(this::processChain, this::defaultCompleter));
-        commandExecute.put("mined", new CommandMethods(this::processMined, this::defaultCompleter));
         commandExecute.put("epoch", new CommandMethods(this::processEpoch, this::defaultCompleter));
+        commandExecute.put("mined", new CommandMethods(this::processMined, this::defaultCompleter));
 
-        // Network & Mining Commands
+        // Transaction operations
+        commandExecute.put("transfer", new CommandMethods(this::processTransfer, this::defaultCompleter));
+
+        // Network & node management
         commandExecute.put("network", new CommandMethods(this::processNetwork, this::defaultCompleter));
-        commandExecute.put("pool", new CommandMethods(this::processPool, this::defaultCompleter));
         commandExecute.put("stats", new CommandMethods(this::processStats, this::defaultCompleter));
-        commandExecute.put("state", new CommandMethods(this::processState, this::defaultCompleter));
 
-        // System Commands
+        // System commands
         commandExecute.put("monitor", new CommandMethods(this::processMonitor, this::defaultCompleter));
         commandExecute.put("stop", new CommandMethods(this::processStop, this::defaultCompleter));
 
         registerCommands(commandExecute);
-    }
-
-    /**
-     * Process consolidate command - Consolidate account balances to default address
-     */
-    private void processConsolidate(CommandInput input) {
-        final String[] usage = {
-                "consolidate - consolidate all account balances to default address",
-                "Usage: consolidate",
-                "  -? --help         Show help",
-                "",
-                "Description:",
-                "  This command transfers all confirmed account balances to the default address.",
-                "  Each account's balance (minus fee) will be transferred in a separate transaction.",
-                "",
-                "  Note: Requires wallet password for authorization.",
-        };
-        try {
-            Options opt = parseOptions(usage, input.args());
-            if (opt.isSet("help")) {
-                throw new Options.HelpException(opt.usage());
-            }
-
-            // Verify wallet password
-            Wallet wallet = new Wallet(dagKernel.getConfig());
-            if (!wallet.unlock(readPassword())) {
-                println("The password is incorrect");
-                return;
-            }
-
-            // Execute consolidation
-            println(commands.consolidate());
-
-        } catch (Exception e) {
-            saveException(e);
-        }
-    }
-
-    private void processAddress(CommandInput input) {
-        final String[] usage = {
-                "address-  print extended info for the account corresponding to the address, page size 100",
-                "Usage: address [PUBLIC ADDRESS] [PAGE]",
-                "  -? --help                    Show help",
-        };
-        try {
-            Options opt = parseOptions(usage, input.args());
-            List<String> argv = opt.args();
-            if (opt.isSet("help")) {
-                throw new Options.HelpException(opt.usage());
-            }
-
-            if (argv.isEmpty()) {
-                println("Need hash or address");
-                return;
-            }
-
-            String address = argv.get(0);
-            int page = StringUtils.isNumeric(argv.get(1))?Integer.parseInt(argv.get(1)):1;
-            try {
-                org.apache.tuweni.bytes.Bytes addressBytes;
-                if (WalletUtils.checkAddress(address)) {
-                    addressBytes = AddressUtils.fromBase58Address(address);
-                } else {
-                    println("Incorrect address");
-                    return;
-                }
-                println(commands.address(addressBytes, page));
-            } catch (Exception e) {
-                println("Argument is incorrect.");
-            }
-        } catch (Exception e) {
-            saveException(e);
-        }
-    }
-
-    /**
-     * Process maxbalance command - Show maximum transferable balance
-     */
-    private void processMaxBalance(CommandInput input) {
-        final String[] usage = {
-                "maxbalance - print maximum transferable balance",
-                "Usage: maxbalance",
-                "  -? --help                    Show help",
-        };
-        try {
-            Options opt = parseOptions(usage, input.args());
-            if (opt.isSet("help")) {
-                throw new Options.HelpException(opt.usage());
-            }
-            println(commands.balanceMaxXfer());
-
-        } catch (Exception e) {
-            saveException(e);
-        }
     }
 
     private void println(final String msg) {
@@ -202,11 +116,21 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         writer.flush();
     }
 
+    // ========== Account Management ==========
+
+    /**
+     * Process account command - List accounts with balance and nonce
+     */
     private void processAccount(CommandInput input) {
         final String[] usage = {
-                "account -  print first [SIZE] (20 by default) our addresses with their amounts",
-                "Usage: account [SIZE]",
-                "  -? --help                    Show help",
+                "account - list wallet accounts with balance and nonce",
+                "Usage: account [COUNT]",
+                "  COUNT         Number of accounts to display (default: 20)",
+                "  -? --help     Show help",
+                "",
+                "Examples:",
+                "  account       # List all accounts",
+                "  account 10    # List top 10 accounts by balance",
         };
         try {
             Options opt = parseOptions(usage, input.args());
@@ -214,60 +138,32 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
             if (opt.isSet("help")) {
                 throw new Options.HelpException(opt.usage());
             }
+
             int num = DEFAULT_LIST_NUM;
             if (!argv.isEmpty() && NumberUtils.isDigits(argv.getFirst())) {
                 num = NumberUtils.toInt(argv.getFirst());
             }
+
             println(commands.account(num));
         } catch (Exception e) {
             saveException(e);
         }
     }
 
-    private void processBalance(CommandInput input) {
-        final String[] usage = {
-                "balance -  print balance of the address [ADDRESS] or total balance for all our addresses\n",
-                "Usage: balance [ADDRESS]",
-                "  -? --help                    Show help",
-        };
-        try {
-            Options opt = parseOptions(usage, input.args());
-            if (opt.isSet("help")) {
-                throw new Options.HelpException(opt.usage());
-            }
-            List<String> argv = opt.args();
-            println(commands.balance(!argv.isEmpty() ? argv.getFirst() : null));
-        } catch (Exception e) {
-            saveException(e);
-        }
-    }
+    // ========== Transaction & Block Queries ==========
 
     /**
-     * Process nonce command - Show transaction nonce
+     * Process transaction command - Query transaction details by hash
      */
-    private void processNonce(CommandInput input) {
+    private void processTransaction(CommandInput input) {
         final String[] usage = {
-                "nonce - print transaction nonce of the address [ADDRESS] or total nonce of all addresses",
-                "Usage: nonce [ADDRESS](optional)",
-                "  -? --help                    Show help",
-        };
-        try {
-            Options opt = parseOptions(usage, input.args());
-            if (opt.isSet("help")) {
-                throw new Options.HelpException(opt.usage());
-            }
-            List<String> argv = opt.args();
-            println(commands.txQuantity(!argv.isEmpty() ? argv.getFirst() : null));
-        } catch (Exception error) {
-            saveException(error);
-        }
-    }
-
-    private void processBlock(CommandInput input) {
-        final String[] usage = {
-                "block -  print extended info for the block corresponding to the address or hash [A]",
-                "Usage: block [ADDRESS|HASH]",
-                "  -? --help                    Show help",
+                "transaction - query transaction details by hash",
+                "Usage: transaction <HASH>",
+                "  HASH          Transaction hash (64 hex characters)",
+                "  -? --help     Show help",
+                "",
+                "Examples:",
+                "  transaction 0x1234567890abcdef...",
         };
         try {
             Options opt = parseOptions(usage, input.args());
@@ -277,7 +173,50 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
             }
 
             if (argv.isEmpty()) {
-                println("Need hash or address");
+                println("Error: Transaction hash is required");
+                println("Usage: transaction <HASH>");
+                return;
+            }
+
+            String hashStr = argv.getFirst();
+            try {
+                Bytes32 hash = BasicUtils.getHash(hashStr);
+                if (hash == null) {
+                    println("Error: Invalid transaction hash format");
+                    return;
+                }
+                println(commands.transaction(hash));
+            } catch (Exception e) {
+                println("Error: " + e.getMessage());
+            }
+        } catch (Exception e) {
+            saveException(e);
+        }
+    }
+
+    /**
+     * Process block command - Query block details by hash
+     */
+    private void processBlock(CommandInput input) {
+        final String[] usage = {
+                "block - query block details by hash",
+                "Usage: block <HASH>",
+                "  HASH          Block hash (64 hex characters)",
+                "  -? --help     Show help",
+                "",
+                "Examples:",
+                "  block 0x1234567890abcdef...",
+        };
+        try {
+            Options opt = parseOptions(usage, input.args());
+            List<String> argv = opt.args();
+            if (opt.isSet("help")) {
+                throw new Options.HelpException(opt.usage());
+            }
+
+            if (argv.isEmpty()) {
+                println("Error: Block hash is required");
+                println("Usage: block <HASH>");
                 return;
             }
 
@@ -285,19 +224,17 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
             try {
                 Bytes32 hash;
                 if (address.length() == 32) {
-                    // as address
                     hash = address2Hash(address);
                 } else {
-                    // as hash
                     hash = BasicUtils.getHash(address);
                 }
                 if (hash == null) {
-                    println("No param");
+                    println("Error: Invalid block hash format");
                     return;
                 }
                 println(commands.block(Bytes32.wrap(hash)));
             } catch (Exception e) {
-                println("Argument is incorrect.");
+                println("Error: " + e.getMessage());
             }
         } catch (Exception e) {
             saveException(e);
@@ -309,9 +246,14 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
      */
     private void processChain(CommandInput input) {
         final String[] usage = {
-                "chain - print latest [SIZE] (20 by default, max limit 100) main chain blocks",
-                "Usage: chain [SIZE]",
-                "  -? --help                    Show help",
+                "chain - list main chain blocks",
+                "Usage: chain [COUNT]",
+                "  COUNT         Number of blocks to display (default: 20, max: 100)",
+                "  -? --help     Show help",
+                "",
+                "Examples:",
+                "  chain         # List latest 20 blocks",
+                "  chain 50      # List latest 50 blocks",
         };
         try {
             Options opt = parseOptions(usage, input.args());
@@ -319,24 +261,31 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
             if (opt.isSet("help")) {
                 throw new Options.HelpException(opt.usage());
             }
+
             int num = DEFAULT_LIST_NUM;
             if (!argv.isEmpty() && NumberUtils.isDigits(argv.getFirst())) {
                 num = NumberUtils.toInt(argv.getFirst());
             }
-            println(commands.mainblocks(num));
+
+            println(commands.chain(num));
         } catch (Exception e) {
             saveException(e);
         }
     }
 
     /**
-     * Process mined command - List mined blocks
+     * Process mined command - List blocks mined by this node
      */
     private void processMined(CommandInput input) {
         final String[] usage = {
-                "mined - print list of [SIZE] (20 by default) main blocks mined by this node",
-                "Usage: mined [SIZE]",
-                "  -? --help                    Show help",
+                "mined - list blocks mined by this node",
+                "Usage: mined [COUNT]",
+                "  COUNT         Number of blocks to display (default: 20)",
+                "  -? --help     Show help",
+                "",
+                "Examples:",
+                "  mined         # List latest 20 mined blocks",
+                "  mined 50      # List latest 50 mined blocks",
         };
         try {
             Options opt = parseOptions(usage, input.args());
@@ -344,63 +293,31 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
             if (opt.isSet("help")) {
                 throw new Options.HelpException(opt.usage());
             }
+
             int num = DEFAULT_LIST_NUM;
             if (!argv.isEmpty() && NumberUtils.isDigits(argv.getFirst())) {
                 num = NumberUtils.toInt(argv.getFirst());
             }
+
             println(commands.minedBlocks(num));
         } catch (Exception e) {
             saveException(e);
         }
     }
 
-    private void processState(CommandInput input) {
-        final String[] usage = {
-                "state -  print the program state",
-                "Usage: state",
-                "  -? --help                    Show help",
-        };
-        try {
-            Options opt = parseOptions(usage, input.args());
-            if (opt.isSet("help")) {
-                throw new Options.HelpException(opt.usage());
-            }
-            println(commands.state());
-
-        } catch (Exception e) {
-            saveException(e);
-        }
-    }
-
-    private void processStats(CommandInput input) {
-        final String[] usage = {
-                "stats -  print statistics for loaded and all known blocks",
-                "Usage: stats",
-                "  -? --help                    Show help",
-        };
-        try {
-            Options opt = parseOptions(usage, input.args());
-            if (opt.isSet("help")) {
-                throw new Options.HelpException(opt.usage());
-            }
-            println(commands.stats());
-        } catch (Exception e) {
-            saveException(e);
-        }
-    }
-
     /**
-     * Process epoch command - Query epoch information (CLI Redesign v5.1)
+     * Process epoch command - Query epoch information
      */
     private void processEpoch(CommandInput input) {
         final String[] usage = {
                 "epoch - query epoch information",
                 "Usage: epoch [EPOCH_NUMBER]",
-                "  -? --help                    Show help",
+                "  EPOCH_NUMBER  Specific epoch to query (default: current epoch)",
+                "  -? --help     Show help",
                 "",
                 "Examples:",
-                "  epoch                        # Show current epoch information",
-                "  epoch 23693854               # Show specific epoch information",
+                "  epoch         # Show current epoch",
+                "  epoch 23693854 # Show specific epoch",
         };
         try {
             Options opt = parseOptions(usage, input.args());
@@ -420,18 +337,20 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         }
     }
 
+    // ========== Transaction Operations ==========
+
     /**
      * Process transfer command - Transfer XDAG to another address
      */
     private void processTransfer(CommandInput input) {
         final String[] usage = {
                 "transfer - transfer XDAG to another address",
-                "Usage: transfer <AMOUNT> <ADDRESS> [REMARK] [FEE_MILLI_XDAG]",
-                "  AMOUNT            Amount to send in XDAG",
-                "  ADDRESS           Recipient address (Base58 format)",
-                "  REMARK            (Optional) Transaction remark",
-                "  FEE_MILLI_XDAG    (Optional) Transaction fee in milli-XDAG (default: 100 = 0.1 XDAG)",
-                "  -? --help         Show help",
+                "Usage: transfer <AMOUNT> <ADDRESS> [REMARK] [FEE]",
+                "  AMOUNT        Amount to send in XDAG",
+                "  ADDRESS       Recipient address (Base58 format)",
+                "  REMARK        (Optional) Transaction remark",
+                "  FEE           (Optional) Fee in milli-XDAG (default: 100 = 0.1 XDAG)",
+                "  -? --help     Show help",
                 "",
                 "Examples:",
                 "  transfer 10.5 2gHjwW7kNTj8VTg7yoS5fMT1APU7gGFSXm8jFL9qLMNYSZPM",
@@ -446,39 +365,39 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
             }
 
             if (argv.size() < 2) {
-                println("Missing required parameters: AMOUNT and ADDRESS");
-                println("Usage: transfer <AMOUNT> <ADDRESS> [REMARK] [FEE_MILLI_XDAG]");
+                println("Error: Missing required parameters");
+                println("Usage: transfer <AMOUNT> <ADDRESS> [REMARK] [FEE]");
                 return;
             }
 
             // Parse amount
             double amount = BasicUtils.getDouble(argv.get(0));
-            if (amount < 0) {
-                println("The transfer amount must be greater than 0");
+            if (amount <= 0) {
+                println("Error: Amount must be greater than 0");
                 return;
             }
 
             // Parse address
             String addressStr = argv.get(1);
             if (!WalletUtils.checkAddress(addressStr)) {
-                println("Incorrect address format. Please use Base58 address.");
+                println("Error: Invalid address format. Please use Base58 address.");
                 return;
             }
 
             // Parse optional remark
             String remark = argv.size() >= 3 ? argv.get(2) : null;
 
-            // Parse optional fee (in milli-XDAG)
-            double feeMilliXdag = 100.0; // Default: 0.1 XDAG
+            // Parse optional fee
+            double feeMilliXdag = 100.0;
             if (argv.size() >= 4) {
                 try {
                     feeMilliXdag = Double.parseDouble(argv.get(3));
                     if (feeMilliXdag < 0) {
-                        println("Fee must be non-negative");
+                        println("Error: Fee must be non-negative");
                         return;
                     }
                 } catch (NumberFormatException e) {
-                    println("Invalid fee format: " + argv.get(3));
+                    println("Error: Invalid fee format");
                     return;
                 }
             }
@@ -486,11 +405,10 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
             // Verify wallet password
             Wallet wallet = new Wallet(dagKernel.getConfig());
             if (!wallet.unlock(readPassword())) {
-                println("The password is incorrect");
+                println("Error: Incorrect password");
                 return;
             }
 
-            // Execute transfer
             println(commands.transfer(amount, addressStr, remark, feeMilliXdag));
 
         } catch (Exception e) {
@@ -498,39 +416,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         }
     }
 
-    private void processPool(CommandInput input){
-        final String[] usage = {
-                "pool - for pool, print list of recent connected pool",
-                "Usage: pool ",
-                "  -? --help                    Show help",
-        };
-        try {
-            Options opt = parseOptions(usage, input.args());
-            if (opt.isSet("help")) {
-                throw new Options.HelpException(opt.usage());
-            }
-            println(commands.pool());
-        } catch (Exception e) {
-            saveException(e);
-        }
-    }
-
-    private void processKeygen(CommandInput input) {
-        final String[] usage = {
-                "keygen - generate new private/public key pair and set it by default",
-                "Usage: keygen",
-                "  -? --help                    Show help",
-        };
-        try {
-            Options opt = parseOptions(usage, input.args());
-            if (opt.isSet("help")) {
-                throw new Options.HelpException(opt.usage());
-            }
-            println(commands.keygen());
-        } catch (Exception e) {
-            saveException(e);
-        }
-    }
+    // ========== Network & Node Management ==========
 
     /**
      * Process network command - Network operations
@@ -538,11 +424,15 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
     private void processNetwork(CommandInput input) {
         Pattern p = Pattern.compile("^\\s*(.*?):(\\d+)\\s*(.*?)$");
         final String[] usage = {
-                "network - network operations, try 'network --help'",
+                "network - network management operations",
                 "Usage: network [OPTIONS]",
-                "  -? --help                        Show help",
-                "  -l --list                        List connections",
-                "  -c --connect=IP:PORT             Connect to this host",
+                "  -l --list             List active connections",
+                "  -c --connect=IP:PORT  Connect to a peer",
+                "  -? --help             Show help",
+                "",
+                "Examples:",
+                "  network --list",
+                "  network --connect=127.0.0.1:8001",
         };
         try {
             Options opt = parseOptions(usage, input.args());
@@ -554,20 +444,43 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
                 return;
             }
             if (opt.isSet("connect")) {
-                println("connect to :" + opt.get("connect"));
-                Matcher m = p.matcher(opt.get("connect"));
+                String connectStr = opt.get("connect");
+                println("Connecting to: " + connectStr);
+                Matcher m = p.matcher(connectStr);
                 if (m.matches()) {
                     String host = m.group(1);
                     int port = Integer.parseInt(m.group(2));
                     commands.connect(host, port);
                 } else {
-                    println("Node ip:port Error");
+                    println("Error: Invalid format. Use IP:PORT (e.g., 127.0.0.1:8001)");
                 }
             }
         } catch (Exception e) {
             saveException(e);
         }
     }
+
+    /**
+     * Process stats command - Node statistics
+     */
+    private void processStats(CommandInput input) {
+        final String[] usage = {
+                "stats - display node statistics",
+                "Usage: stats",
+                "  -? --help     Show help",
+        };
+        try {
+            Options opt = parseOptions(usage, input.args());
+            if (opt.isSet("help")) {
+                throw new Options.HelpException(opt.usage());
+            }
+            println(commands.stats());
+        } catch (Exception e) {
+            saveException(e);
+        }
+    }
+
+    // ========== System Commands ==========
 
     /**
      * Process monitor command - System monitor
@@ -587,23 +500,26 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         final String[] usage = {
                 "stop - stop the XDAG node",
                 "Usage: stop",
-                "  -? --help                       Displays command help"
+                "  -? --help     Show help"
         };
         try {
             Options opt = parseOptions(usage, input.args());
             if (opt.isSet("help")) {
                 throw new Options.HelpException(opt.usage());
             }
-            // before stop must verify admin password(config at AdminSpec)
+
             if (!readPassword("Enter Admin password> ", true)) {
                 return;
             }
+
             commands.stop();
-            println("Stop.");
+            println("Node stopped.");
         } catch (Exception e) {
             saveException(e);
         }
     }
+
+    // ========== Helper Methods ==========
 
     private boolean readPassword(String prompt, boolean isTelnet) {
         Character mask = '*';
@@ -615,7 +531,6 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         if (isTelnet) {
             return line.equals(dagKernel.getConfig().getAdminSpec().getAdminTelnetPassword());
         }
-
         return true;
     }
 
@@ -633,6 +548,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         if (commands == null) {
             commands = new Commands(dagKernel);
         }
+
         Parser parser = new DefaultParser();
         SystemRegistryImpl systemRegistry = new SystemRegistryImpl(parser, terminal, null, null);
         systemRegistry.setCommandRegistries(this);
@@ -642,7 +558,7 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
                 .terminal(terminal)
                 .completer(systemRegistry.completer())
                 .parser(parser)
-                .variable(LineReader.LIST_MAX, 50)   // max tab completion candidates
+                .variable(LineReader.LIST_MAX, 50)
                 .build();
 
         this.setReader(reader);

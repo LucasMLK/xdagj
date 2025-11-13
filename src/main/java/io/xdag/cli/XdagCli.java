@@ -188,7 +188,7 @@ public class XdagCli extends Launcher {
         } else if (cmd.hasOption(XdagOption.IMPORT_MNEMONIC.toString())) {
             importMnemonic(cmd.getOptionValue(XdagOption.IMPORT_MNEMONIC.toString()).trim());
         } else if (cmd.hasOption(XdagOption.MAKE_SNAPSHOT.toString())) {
-            // Phase 7.1.2: Removed convertXAmount parameter - always use LegacyBlockInfo
+            //  Removed convertXAmount parameter - always use LegacyBlockInfo
             makeSnapshot();
         } else {
             if (cmd.hasOption(XdagOption.ENABLE_SNAPSHOT.toString())) {
@@ -245,6 +245,11 @@ public class XdagCli extends Launcher {
             DagKernel dagKernel = startDagKernel(getConfig(), wallet);
             Launcher.registerShutdownHook("dagkernel", dagKernel::stop);
 
+            // Start RPC server if enabled
+            if (getConfig().getHttpSpec().isRpcHttpEnabled()) {
+                startRpcServer(dagKernel);
+            }
+
             // Start telnet server for remote administration
             TelnetServer telnetServer = new TelnetServer(dagKernel);
             telnetServer.start();
@@ -263,6 +268,29 @@ public class XdagCli extends Launcher {
             System.err.println("Uncaught exception during kernel startup:" + e.getMessage());
             e.printStackTrace();
             exit(-1);
+        }
+    }
+
+    protected void startRpcServer(DagKernel dagKernel) {
+        try {
+            System.out.println("Starting HTTP API server...");
+
+            io.xdag.http.HttpApiServer apiServer =
+                new io.xdag.http.HttpApiServer(getConfig().getHttpSpec(), dagKernel);
+            apiServer.start();
+
+            Launcher.registerShutdownHook("api", apiServer::stop);
+
+            System.out.println("HTTP API server started on " +
+                             getConfig().getHttpSpec().getRpcHttpHost() +
+                             ":" + getConfig().getHttpSpec().getRpcHttpPort());
+            System.out.println("  - RESTful API:  http://localhost:10001/api/v1/");
+            System.out.println("  - OpenAPI Spec: http://localhost:10001/openapi.json");
+            System.out.println("  - API Docs:     http://localhost:10001/docs");
+
+        } catch (Exception e) {
+            System.err.println("Failed to start API server: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -522,11 +550,11 @@ public class XdagCli extends Launcher {
         return new String(console.readPassword(prompt));
     }
 
-    // Phase 7.1.2: Removed boolean parameter - always deserialize to LegacyBlockInfo directly
-    // TODO v5.1: Snapshot functionality temporarily disabled, will be re-implemented later
-    // SnapshotStore was removed in v5.1 refactoring
+    //  Removed boolean parameter - always deserialize to LegacyBlockInfo directly
+    // TODO  Snapshot functionality temporarily disabled, will be re-implemented later
+    // SnapshotStore was removed in refactoring
     public void makeSnapshot() {
-        System.out.println("Snapshot functionality temporarily disabled in v5.1");
+        System.out.println("Snapshot functionality temporarily disabled");
         System.out.println("Will be re-implemented in future version");
         System.out.println("Please use --enable-snapshot option to load existing snapshots");
 //        System.out.println("make snapshot start");

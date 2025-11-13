@@ -41,7 +41,7 @@ import org.apache.tuweni.bytes.Bytes32;
  * <p>Used by {@link DagEntityResolver} to provide complete link information
  * for Block validation and processing.
  *
- * @since v5.1 Phase 8
+ * @since XDAGJ
  * @see DagEntityResolver
  */
 @Data

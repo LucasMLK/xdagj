@@ -34,7 +34,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
 
 /**
- * RocksDB implementation of TransactionStore for XDAG v5.1
+ * RocksDB implementation of TransactionStore for XDAG
  *
  * Storage architecture:
  * 1. Primary storage: TX_DATA prefix (0xe0) + txHash -> Transaction bytes
@@ -46,7 +46,7 @@ import org.apache.tuweni.bytes.Bytes32;
  * - O(n) retrieval by block/address (where n = number of transactions)
  * - Batch operations supported for efficiency
  *
- * @since Phase 4 - v5.1 Architecture
+ * @since Phase 4 - Architecture
  */
 @Slf4j
 public class TransactionStoreImpl implements TransactionStore {
@@ -200,7 +200,7 @@ public class TransactionStoreImpl implements TransactionStore {
 
             indexSource.put(key, newValue);
 
-            // Phase 9.1: Reverse index: txHash -> blockHash (for timestamp lookup)
+            //  Reverse index: txHash -> blockHash (for timestamp lookup)
             byte[] reverseKey = BytesUtils.merge(TRANSACTION_TO_BLOCK_INDEX, txHash.toArray());
             indexSource.put(reverseKey, blockHash.toArray());
 

@@ -32,7 +32,7 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * BlockHeader for XDAG v5.1
+ * BlockHeader for XDAG
  * <p>
  * Design principles (from CORE_DATA_STRUCTURES.md):
  * 1. Participates in hash calculation: timestamp, difficulty, nonce, coinbase
@@ -47,7 +47,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  * - coinbase: 32 bytes
  * - hash: 32 bytes (cached, not serialized)
  *
- * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">v5.1 Design</a>
+ * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">Design</a>
  */
 @Value
 @Builder(toBuilder = true)

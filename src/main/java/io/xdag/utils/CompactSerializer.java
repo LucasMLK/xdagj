@@ -66,7 +66,7 @@ public class CompactSerializer {
         // height: variable length (typically 3-5 bytes)
         writeVarLong(out, blockInfo.getHeight());
 
-        // Phase 9.3: BlockInfo type/flags deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo type/flags deleted in minimal design (backward compatibility maintained)
         // Serializing zeros for backward compatibility with v1 format
         writeFixed64(out, 0L); // type placeholder
         writeFixed32(out, 0);  // flags placeholder
@@ -74,31 +74,31 @@ public class CompactSerializer {
         // difficulty: 32 bytes (UInt256)
         out.write(blockInfo.getDifficulty().toBytes().toArray());
 
-        // Phase 9.3: BlockInfo.ref field deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo.ref field deleted in minimal design (backward compatibility maintained)
         // Serializing absent flag for backward compatibility with v1 format
         out.write(0); // ref absent placeholder
 
-        // Phase 9.3: BlockInfo.maxDiffLink field deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo.maxDiffLink field deleted in minimal design (backward compatibility maintained)
         // Serializing absent flag for backward compatibility with v1 format
         out.write(0); // maxDiffLink absent placeholder
 
-        // Phase 9.3: BlockInfo.amount field deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo.amount field deleted in minimal design (backward compatibility maintained)
         // Serializing null for backward compatibility with v1 format
         serializeXAmount(out, null); // amount placeholder
 
-        // Phase 9.3: BlockInfo.fee field deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo.fee field deleted in minimal design (backward compatibility maintained)
         // Serializing null for backward compatibility with v1 format
         serializeXAmount(out, null); // fee placeholder
 
-        // Phase 9.3: BlockInfo.remark field deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo.remark field deleted in minimal design (backward compatibility maintained)
         // Serializing zero length for backward compatibility with v1 format
         writeVarInt(out, 0); // remark length placeholder
 
-        // Phase 9.3: BlockInfo.isSnapshot field deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo.isSnapshot field deleted in minimal design (backward compatibility maintained)
         // Serializing false for backward compatibility with v1 format
         out.write(0); // isSnapshot placeholder
 
-        // Phase 9.3: BlockInfo.snapshotInfo field deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo.snapshotInfo field deleted in minimal design (backward compatibility maintained)
         // Serializing absent flag for backward compatibility with v1 format
         out.write(0); // snapshotInfo absent placeholder
 
@@ -120,7 +120,7 @@ public class CompactSerializer {
         // height: variable
         long height = reader.readVarLong();
 
-        // Phase 9.3: BlockInfo type/flags deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo type/flags deleted in minimal design (backward compatibility maintained)
         // Reading placeholders for backward compatibility with v1 format
         long type = reader.readFixed64(); // placeholder
         int flags = reader.readFixed32(); // placeholder
@@ -128,31 +128,31 @@ public class CompactSerializer {
         // difficulty: 32 bytes
         UInt256 difficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
 
-        // Phase 9.3: BlockInfo.ref field deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo.ref field deleted in minimal design (backward compatibility maintained)
         // Reading placeholder for backward compatibility with v1 format
         byte refFlag = reader.readByte(); // placeholder
 
-        // Phase 9.3: BlockInfo.maxDiffLink field deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo.maxDiffLink field deleted in minimal design (backward compatibility maintained)
         // Reading placeholder for backward compatibility with v1 format
         byte maxDiffLinkFlag = reader.readByte(); // placeholder
 
-        // Phase 9.3: BlockInfo.amount field deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo.amount field deleted in minimal design (backward compatibility maintained)
         // Reading placeholder for backward compatibility with v1 format
         XAmount amount = deserializeXAmount(reader); // placeholder
 
-        // Phase 9.3: BlockInfo.fee field deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo.fee field deleted in minimal design (backward compatibility maintained)
         // Reading placeholder for backward compatibility with v1 format
         XAmount fee = deserializeXAmount(reader); // placeholder
 
-        // Phase 9.3: BlockInfo.remark field deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo.remark field deleted in minimal design (backward compatibility maintained)
         // Reading placeholder for backward compatibility with v1 format
         int remarkLen = reader.readVarInt(); // placeholder
 
-        // Phase 9.3: BlockInfo.isSnapshot field deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo.isSnapshot field deleted in minimal design (backward compatibility maintained)
         // Reading placeholder for backward compatibility with v1 format
         byte isSnapshotFlag = reader.readByte(); // placeholder
 
-        // Phase 9.3: BlockInfo.snapshotInfo field deleted in v5.1 minimal design (backward compatibility maintained)
+        //  BlockInfo.snapshotInfo field deleted in minimal design (backward compatibility maintained)
         // Reading placeholder for backward compatibility with v1 format
         byte snapshotInfoFlag = reader.readByte(); // placeholder
 
@@ -167,9 +167,9 @@ public class CompactSerializer {
     // ========== ChainStats Serialization ==========
 
     /**
-     * Serialize ChainStats to bytes (v5.1 optimized - removed 5 deprecated fields)
+     * Serialize ChainStats to bytes (optimized - removed 5 deprecated fields)
      *
-     * Phase 7.3 Optimization: Removed blockCount, hostCount, mainBlockTime,
+     * 3 Optimization: Removed blockCount, hostCount, mainBlockTime,
      * globalMinerHash, ourLastBlockHash serialization for 33% size reduction.
      */
     public static byte[] serialize(ChainStats stats) throws IOException {
@@ -199,9 +199,9 @@ public class CompactSerializer {
     }
 
     /**
-     * Deserialize ChainStats from bytes (v5.1 optimized)
+     * Deserialize ChainStats from bytes (optimized)
      *
-     * Phase 7.3 Optimization: Reads only the 10 core fields.
+     * 3 Optimization: Reads only the 10 core fields.
      * Deprecated fields are set to defaults in fromLegacy() if needed.
      */
     public static ChainStats deserializeChainStats(byte[] data) throws IOException {

@@ -245,7 +245,7 @@ public class ShellTest {
         when(transactionStore.getTransactionsByBlock(any(Bytes32.class))).thenReturn(new ArrayList<>());
 
         // Execute
-        String result = commands.mainblocks(20);
+        String result = commands.chain(20);
 
         // Verify
         assertNotNull(result);

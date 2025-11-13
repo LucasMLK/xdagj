@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * <h2>Design Principles</h2>
  * <ul>
  *   <li>Single Responsibility: Only handles block importing and broadcasting</li>
- *   <li>v5.1 Alignment: Uses DagChain API instead of legacy Blockchain</li>
+ *   <li>Alignment: Uses DagChain API instead of legacy Blockchain</li>
  *   <li>Separation: Broadcasting is separate from mining and validation</li>
  *   <li>Future-ready: P2P integration points clearly marked</li>
  * </ul>
@@ -67,7 +67,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * }
  * </pre>
  *
- * @since v5.1 Phase 12.4
+ * @since XDAGJ
  */
 @Slf4j
 public class BlockBroadcaster {
@@ -206,7 +206,7 @@ public class BlockBroadcaster {
     /**
      * Broadcast block to P2P network
      *
-     * <p>Phase 12.5: Integrated with P2P layer for actual broadcasting.
+     * <p> Integrated with P2P layer for actual broadcasting.
      * Sends NEW_BLOCK message to all connected peers with TTL.
      *
      * @param block Block to broadcast
@@ -226,7 +226,7 @@ public class BlockBroadcaster {
                     new NewBlockMessage(block, ttl);
 
             // Broadcast to all connected peers
-            // Phase 12.5 FIX: Send Message object directly, not raw bytes
+            // 5 FIX: Send Message object directly, not raw bytes
             // Channel.send(Message) will handle proper encoding with message code prefix
             int sentCount = 0;
             for (io.xdag.p2p.channel.Channel channel : p2pService.getChannelManager().getChannels().values()) {

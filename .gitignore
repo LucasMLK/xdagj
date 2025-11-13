@@ -1,36 +1,36 @@
-#for eclipse
-/target/
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# IDE
+.idea/
+*.iml
 .classpath
 .project
-/.settings/
-/bin/
+.settings/
+.vscode/
 
-#for idea
-xdagj.iml
-.idea
-logs
+# Backup files
+*.bak
+*.backup
+*~
 
-de
-#for project
-devnet
-xdagj.jar
-testnet
-mainnet
-target
-logs
-dist
+# Generated SDK directories
+sdk/
+*.pid
 
-#for macos
+# Test nodes runtime files
+test-nodes/node*/devnet/
+test-nodes/node*/testnet/
+test-nodes/node*/mainnet/
+test-nodes/node*/*.log
+test-nodes/node*/*.pid
+test-nodes/node*/rocksdb/
+
+# OS
 .DS_Store
-src/c/
-src/main/resources/native
-src/main/resources/xdag-mainnet.conf
-dependency-reduced-pom.xml
-pool
-
-# AI-generated docs (should not be in git)
-.claude/
-.cursor/
-CLAUDE.md
-REFACTORING*.md
-RANDOMX_TEST*.md
+Thumbs.db

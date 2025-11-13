@@ -27,7 +27,7 @@ package io.xdag.config;
 import io.xdag.config.spec.AdminSpec;
 import io.xdag.config.spec.FundSpec;
 import io.xdag.config.spec.NodeSpec;
-import io.xdag.config.spec.RPCSpec;
+import io.xdag.config.spec.HttpSpec;
 import io.xdag.config.spec.RandomxSpec;
 import io.xdag.config.spec.SnapshotSpec;
 import io.xdag.config.spec.WalletSpec;
@@ -106,9 +106,9 @@ public interface Config {
     void setDir();
 
     /**
-     * Get the RPC specification configuration
+     * Get the HTTP API specification configuration
      */
-    RPCSpec getRPCSpec();
+    HttpSpec getHttpSpec();
 
     /**
      * Get the snapshot specification configuration

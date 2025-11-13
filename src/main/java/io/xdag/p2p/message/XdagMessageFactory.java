@@ -57,10 +57,10 @@ public class XdagMessageFactory {
             return switch (c) {
                 case BLOCK_REQUEST -> new BlockRequestMessage(body);
                 case SYNCBLOCK_REQUEST -> new SyncBlockRequestMessage(body);
-                // Phase 3: Block messages
+                //  Block messages
                 case NEW_BLOCK -> new NewBlockMessage(body);
                 case SYNC_BLOCK -> new SyncBlockMessage(body);
-                // Phase 1.5: Hybrid sync protocol messages
+                //  Hybrid sync protocol messages
                 case SYNC_HEIGHT_REQUEST -> new SyncHeightRequestMessage(body);
                 case SYNC_HEIGHT_REPLY -> new SyncHeightReplyMessage(body);
                 case SYNC_MAIN_BLOCKS_REQUEST -> new SyncMainBlocksRequestMessage(body);

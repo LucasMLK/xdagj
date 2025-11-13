@@ -53,7 +53,7 @@ public enum DatabaseName {
     TXHISTORY,
 
     /**
-     * Transaction store (Phase 4 - v5.1)
+     * Transaction store (Transaction data)
      * Primary storage for Transaction objects
      */
     TRANSACTION,

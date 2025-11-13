@@ -32,7 +32,7 @@ import java.util.List;
 import org.apache.tuweni.bytes.Bytes32;
 
 /**
- * DagStore for XDAG v5.1 - Block-focused DAG Storage
+ * DagStore for XDAG - Block-focused DAG Storage
  *
  * <p>This store manages Block entities and DAG structure.
  * For Transaction storage, use TransactionStore.
@@ -66,7 +66,7 @@ import org.apache.tuweni.bytes.Bytes32;
  *   <li>Cache Hit Rate: 90%+</li>
  * </ul>
  *
- * @since v5.1 Phase 8
+ * @since XDAGJ
  * @see TransactionStore
  * @see io.xdag.db.store.DagCache
  * @see io.xdag.db.store.DagEntityResolver

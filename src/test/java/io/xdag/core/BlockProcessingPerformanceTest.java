@@ -59,7 +59,7 @@ import static org.junit.Assert.*;
  * - Transaction validation: < 10ms (P99)
  * - Account balance read: < 5ms (P99)
  *
- * @since v5.1 Phase 10
+ * @since @since XDAGJ
  */
 public class BlockProcessingPerformanceTest {
 

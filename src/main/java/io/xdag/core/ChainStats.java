@@ -34,12 +34,12 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * Immutable chain statistics for XDAG network (v5.1 optimized)
+ * Immutable chain statistics for XDAG network (optimized)
  *
  * This class replaces the mutable XdagStats with a type-safe, immutable implementation.
  * Uses UInt256 for difficulty values.
  *
- * Phase 7.3 Optimization: Removed 5 unused fields (blockCount, hostCount, mainBlockTime,
+ * 3 Optimization: Removed 5 unused fields (blockCount, hostCount, mainBlockTime,
  * globalMinerHash, ourLastBlockHash) that were only used for legacy compatibility.
  *
  * Optimized size: ~120 bytes (down from ~180 bytes, 33% reduction)
@@ -105,7 +105,7 @@ public class ChainStats implements Serializable {
      */
     XAmount balance;
 
-    // ========== Top Block State (Phase 7.3.1: Merged from XdagTopStatus) ==========
+    // ========== Top Block State ( Merged from XdagTopStatus) ==========
 
     /**
      * Current top block hash (highest difficulty)

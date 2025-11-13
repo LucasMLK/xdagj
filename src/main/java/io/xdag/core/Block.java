@@ -37,9 +37,9 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * Block for XDAG v5.1 - Candidate Block
+ * Block for XDAG - Candidate Block
  *
- * NOTE: This is the v5.1 Block implementation. During Phase 3 migration, it coexists
+ * NOTE: This is the Block implementation. During Phase 3 migration, it coexists
  * with the legacy Block.java. Once migration is complete, this class will be renamed
  * back to Block.java and the legacy Block will be removed.
  *
@@ -63,7 +63,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  * - 48MB / 33 bytes per link ≈ 1,485,000 links
  * - TPS: 1,485,000 txs / 64秒 ≈ 23,200 TPS (96.7% Visa level)
  *
- * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">v5.1 Design</a>
+ * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">Design</a>
  */
 @Value
 @Builder(toBuilder = true)
@@ -221,7 +221,7 @@ public class Block implements Serializable {
     /**
      * Create a new Block with updated nonce (for mining)
      *
-     * Phase 5.5: This method enables updating nonce during POW mining.
+     *  This method enables updating nonce during POW mining.
      * Since Block is immutable, this creates a new instance with the new nonce.
      *
      * Usage during mining:
@@ -392,7 +392,7 @@ public class Block implements Serializable {
         // Check Block reference limits (from DESIGN_DECISIONS.md D6)
         int blockRefCount = getBlockRefCount();
 
-        // Phase 7.5: Allow genesis block with empty links
+        //  Allow genesis block with empty links
         // Genesis block is identified by: empty links list and difficulty == 1
         boolean isGenesis = (links.isEmpty() &&
                            header.getDifficulty() != null &&
@@ -491,12 +491,12 @@ public class Block implements Serializable {
         return block.withHash(hash);
     }
 
-    // ========== Mining & RandomX Support (Phase 5.5) ==========
+    // ========== Mining & RandomX Support (5) ==========
 
     /**
      * Calculate preHash for RandomX mining
      *
-     * Phase 5.5: This method replaces the legacy block.getXdagBlock().getData().slice(0, 480)
+     *  This method replaces the legacy block.getXdagBlock().getData().slice(0, 480)
      * approach. For Block, we use the serialized header + links metadata as input.
      *
      * PreHash calculation:

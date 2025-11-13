@@ -65,7 +65,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     private final HybridSyncManager hybridSyncManager;
 
     /**
-     * Hybrid sync P2P adapter for handling new sync protocol messages (Phase 1.6)
+     * Hybrid sync P2P adapter for handling new sync protocol messages (6)
      */
     @Setter
     private HybridSyncP2pAdapter hybridSyncAdapter;
@@ -76,14 +76,14 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
         this.hybridSyncManager = dagKernel.getHybridSyncManager();
 
         // Register XDAG-specific message types
-        // Phase 7.3: Register Block message types
+        //  Register Block message types
         this.messageTypes = new HashSet<>();
 
         this.messageTypes.add(XdagMessageCode.NEW_BLOCK.toByte());
         this.messageTypes.add(XdagMessageCode.SYNC_BLOCK.toByte());
         this.messageTypes.add(XdagMessageCode.BLOCK_REQUEST.toByte());
 
-        // Phase 1.6: Register hybrid sync protocol messages (10 new message types)
+        //  Register hybrid sync protocol messages (10 new message types)
         this.messageTypes.add(XdagMessageCode.SYNC_HEIGHT_REQUEST.toByte());
         this.messageTypes.add(XdagMessageCode.SYNC_HEIGHT_REPLY.toByte());
         this.messageTypes.add(XdagMessageCode.SYNC_MAIN_BLOCKS_REQUEST.toByte());
@@ -110,7 +110,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
 
     @Override
     public void onMessage(Channel channel, Bytes data) {
-        // Phase 12.5 DEBUG: Log all message receptions at INFO level
+        // 5 DEBUG: Log all message receptions at INFO level
         log.info("⚡ onMessage() called from {} (data size: {} bytes)",
                 channel.getRemoteAddress(), data.size());
 
@@ -147,7 +147,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
                 case BLOCK_REQUEST:
                     handleBlockRequest(channel, body);
                     break;
-                // Phase 1.6: Handle hybrid sync protocol messages
+                //  Handle hybrid sync protocol messages
                 case SYNC_HEIGHT_REQUEST:
                     handleSyncHeightRequest(channel, body);
                     break;
@@ -189,7 +189,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle NEW_BLOCK message - a new Block propagated through the network (Phase 12.5)
+     * Handle NEW_BLOCK message - a new Block propagated through the network (5)
      * <p>
      * Simplified implementation using DagChain.tryToConnect() directly
      *
@@ -206,7 +206,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
                     block.getInfo() != null ? block.getInfo().getHeight() : "unknown",
                     block.getEpoch());
 
-            // Phase 12.5: Import block directly via DagChain
+            //  Import block directly via DagChain
             io.xdag.core.DagImportResult result = dagChain.tryToConnect(block);
 
             if (result != null && result.isMainBlock()) {
@@ -225,7 +225,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle SYNC_BLOCK message - a historical Block during sync (Phase 12.5)
+     * Handle SYNC_BLOCK message - a historical Block during sync (5)
      * <p>
      * Simplified implementation using DagChain.tryToConnect() directly
      *
@@ -239,7 +239,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
             log.debug("Received SYNC_BLOCK: {} from {}",
                     block.getHash().toHexString(), channel.getRemoteAddress());
 
-            // Phase 12.5: Import block directly via DagChain
+            //  Import block directly via DagChain
             dagChain.tryToConnect(block);
 
         } catch (Exception e) {
@@ -249,7 +249,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle Block_REQUEST - request for a specific Block by hash (Phase 7.3)
+     * Handle Block_REQUEST - request for a specific Block by hash (3)
      * <p>
      * When a peer requests a specific Block (usually a missing parent block),
      * this handler looks up the block and sends it back via SYNC_BLOCK_V5 message.
@@ -261,7 +261,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
             BlockRequestMessage msg = new BlockRequestMessage(body.toArray());
             Bytes hash = msg.getHash();
 
-            // Phase 8.3.2: Use unified getBlockByHash() method
+            //  Use unified getBlockByHash() method
             Block block = dagChain.getBlockByHash(Bytes32.wrap(hash), true);
             if (block != null) {
                 log.debug("Responding to Block_REQUEST for {} from {}",
@@ -281,10 +281,10 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
         }
     }
 
-    // ========== Phase 1.6: Hybrid Sync Protocol Handlers ==========
+    // ==========  Hybrid Sync Protocol Handlers ==========
 
     /**
-     * Handle SYNC_HEIGHT_REQUEST - peer asking for our chain height (Phase 1.6)
+     * Handle SYNC_HEIGHT_REQUEST - peer asking for our chain height (6)
      *
      * @param body message body (without message code prefix)
      */
@@ -323,7 +323,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle SYNC_HEIGHT_REPLY - received remote chain height (Phase 1.6)
+     * Handle SYNC_HEIGHT_REPLY - received remote chain height (6)
      *
      * @param body message body (without message code prefix)
      */
@@ -348,7 +348,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle SYNC_MAIN_BLOCKS_REQUEST - peer requesting main chain blocks by height range (Phase 1.6)
+     * Handle SYNC_MAIN_BLOCKS_REQUEST - peer requesting main chain blocks by height range (6)
      *
      * @param body message body (without message code prefix)
      */
@@ -389,7 +389,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle SYNC_MAIN_BLOCKS_REPLY - received main chain blocks (Phase 1.6)
+     * Handle SYNC_MAIN_BLOCKS_REPLY - received main chain blocks (6)
      *
      * @param body message body (without message code prefix)
      */
@@ -414,7 +414,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle SYNC_EPOCH_BLOCKS_REQUEST - peer requesting all block hashes in an epoch (Phase 1.6)
+     * Handle SYNC_EPOCH_BLOCKS_REQUEST - peer requesting all block hashes in an epoch (6)
      *
      * @param body message body (without message code prefix)
      */
@@ -448,7 +448,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle SYNC_EPOCH_BLOCKS_REPLY - received epoch block hashes (Phase 1.6)
+     * Handle SYNC_EPOCH_BLOCKS_REPLY - received epoch block hashes (6)
      *
      * @param body message body (without message code prefix)
      */
@@ -473,7 +473,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle SYNC_BLOCKS_REQUEST - peer requesting blocks by hash list (Phase 1.6)
+     * Handle SYNC_BLOCKS_REQUEST - peer requesting blocks by hash list (6)
      *
      * @param body message body (without message code prefix)
      */
@@ -510,7 +510,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle SYNC_BLOCKS_REPLY - received blocks by hash (Phase 1.6)
+     * Handle SYNC_BLOCKS_REPLY - received blocks by hash (6)
      *
      * @param body message body (without message code prefix)
      */
@@ -535,7 +535,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle SYNC_TRANSACTIONS_REQUEST - peer requesting transactions by hash list (Phase 1.6)
+     * Handle SYNC_TRANSACTIONS_REQUEST - peer requesting transactions by hash list (6)
      *
      * @param body message body (without message code prefix)
      */
@@ -569,7 +569,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle SYNC_TRANSACTIONS_REPLY - received transactions (Phase 1.6)
+     * Handle SYNC_TRANSACTIONS_REPLY - received transactions (6)
      *
      * @param body message body (without message code prefix)
      */

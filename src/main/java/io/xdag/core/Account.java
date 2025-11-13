@@ -34,7 +34,7 @@ import org.apache.tuweni.units.bigints.UInt64;
 import java.nio.ByteBuffer;
 
 /**
- * Account - Account model for XDAG v5.1
+ * Account - Account model for XDAG
  *
  * <p>This is the core data structure for storing account state in the AccountStore.
  * It follows the account model with address (20 bytes), balance, and nonce.
@@ -75,7 +75,7 @@ import java.nio.ByteBuffer;
  *     .build();
  * </pre>
  *
- * @since v5.1 AccountStore
+ * @since AccountStore
  */
 @Value
 @Builder(toBuilder = true)

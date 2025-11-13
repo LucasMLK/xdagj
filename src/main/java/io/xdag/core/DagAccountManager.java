@@ -59,7 +59,7 @@ import org.apache.tuweni.units.bigints.UInt64;
  * manager.incrementNonce(address);
  * </pre>
  *
- * @since v5.1 Phase 10
+ * @since XDAGJ
  */
 @Slf4j
 public class DagAccountManager {

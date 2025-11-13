@@ -90,28 +90,6 @@ public class BasicUtils {
     }
 
     /**
-     * Convert hash to base64 address
-     * @param hash Input hash
-     * @return Base64 encoded address
-     */
-    public static String hash2Address(Bytes32 hash) {
-        return hash.reverse().slice(0, 24).toBase64String();
-    }
-
-    /**
-     * Convert hash to public address (LEGACY - for 32-byte padded hashes)
-     * @param hash Input hash (32 bytes with padding)
-     * @return Base58 encoded public address
-     * @deprecated Use address2PubAddress(Bytes) for 20-byte addresses
-     */
-    @Deprecated
-    public static String hash2PubAddress(Bytes32 hash) {
-        // Extract the 20-byte address from padded 32-byte hash (bytes 8-27)
-        Bytes addressBytes = hash.slice(8, 20);
-        return Base58.encodeCheck(addressBytes.toArray());
-    }
-
-    /**
      * Convert 20-byte address to public address string
      * @param address 20-byte address (hash160)
      * @return Base58 encoded public address

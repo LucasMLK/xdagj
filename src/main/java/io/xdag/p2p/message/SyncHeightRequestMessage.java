@@ -52,7 +52,7 @@ import io.xdag.p2p.utils.SimpleEncoder;
  *
  * @see SyncHeightReplyMessage for the response message
  * @see <a href="../../../../../HYBRID_SYNC_MESSAGES.md">Hybrid Sync Protocol</a>
- * @since v5.1 Phase 1.5
+ * @since XDAGJ
  */
 public class SyncHeightRequestMessage extends Message {
 

@@ -27,7 +27,6 @@ package io.xdag.utils;
 import static io.xdag.utils.BasicUtils.address2Hash;
 import static io.xdag.utils.BasicUtils.crc32Verify;
 import static io.xdag.utils.BasicUtils.extractIpAddress;
-import static io.xdag.utils.BasicUtils.hash2Address;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -87,14 +86,6 @@ public class BasicUtilsTest {
 
         // Xfer:transferred 4398046511104 1024.000000000 XDAG to the address 0000002f28322e9d817fd94a1357e51a. 1024
         assertEquals(1024.0, BasicUtils.amount2xdag(4398046511104L), 0.0);
-    }
-
-    @Test
-    public void testHash2Address() {
-        String news = "42cLWCMWZDKPZM8WJfpmI7Lbe3p83U2l";
-        String originhash = "4aa1ab5742feb010a54ddd7c7a7bdbb22366fa2516cf648f32641623580b67e3";
-        Bytes32 hash1 = Bytes32.fromHexString(originhash);
-        assertEquals(news, hash2Address(hash1));
     }
 
     @Test

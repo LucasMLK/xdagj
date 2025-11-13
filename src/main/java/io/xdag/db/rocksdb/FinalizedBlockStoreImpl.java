@@ -272,7 +272,7 @@ public class FinalizedBlockStoreImpl implements FinalizedBlockStore {
 
                 BlockInfo info = infoOpt.get();
 
-                // Temporarily disabled - waiting for migration to v5.1
+                // Temporarily disabled - waiting for migration
                 /*
                 // Check if this block points to previous block
                 if (prevHash != null && info.getMaxDiffLink() != null) {

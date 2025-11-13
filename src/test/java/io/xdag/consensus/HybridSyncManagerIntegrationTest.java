@@ -56,7 +56,7 @@ import static org.mockito.Mockito.*;
  *   <li>Block and transaction solidification</li>
  * </ul>
  *
- * @since v5.1 Phase 1.6
+ * @since @since XDAGJ
  */
 public class HybridSyncManagerIntegrationTest {
 

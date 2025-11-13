@@ -80,7 +80,7 @@ import java.util.concurrent.*;
  * 7. HybridSyncManager receives result
  * </pre>
  *
- * @since v5.1 Phase 1.6
+ * @since XDAGJ
  */
 @Slf4j
 public class HybridSyncP2pAdapter {
@@ -100,7 +100,7 @@ public class HybridSyncP2pAdapter {
     // ========== Dependencies ==========
 
     /**
-     * P2P service for channel management (Phase 12.5)
+     * P2P service for channel management (5)
      */
     private P2pService p2pService;
 
@@ -504,7 +504,7 @@ public class HybridSyncP2pAdapter {
         }, timeoutMs, TimeUnit.MILLISECONDS);
     }
 
-    // ========== P2P Service Management (Phase 12.5) ==========
+    // ========== P2P Service Management (5) ==========
 
     /**
      * Set P2P service for channel management

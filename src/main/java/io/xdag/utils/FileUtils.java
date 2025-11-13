@@ -29,7 +29,7 @@ package io.xdag.utils;
  */
 public class FileUtils {
 
-    // Temporarily disabled - waiting for migration to v5.1
+    // Temporarily disabled - waiting for migration
     /*
     /**
      * Generates a list of hierarchical file paths based on a timestamp

@@ -1,0 +1,547 @@
+/*
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2020-2030 The XdagJ Developers
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
+package io.xdag.http.v1;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.netty.buffer.ByteBuf;
+import io.netty.channel.ChannelFutureListener;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.codec.http.*;
+import io.netty.util.CharsetUtil;
+import io.xdag.DagKernel;
+import io.xdag.Network;
+import io.xdag.api.dto.AccountInfo;
+import io.xdag.api.dto.BlockDetail;
+import io.xdag.api.dto.ChainStatsInfo;
+import io.xdag.api.dto.TransactionInfo;
+import io.xdag.api.service.AccountApiService;
+import io.xdag.api.service.BlockApiService;
+import io.xdag.api.service.ChainApiService;
+import io.xdag.api.service.NetworkApiService;
+import io.xdag.api.service.TransactionApiService;
+import io.xdag.core.XUnit;
+import io.xdag.crypto.keys.AddressUtils;
+import io.xdag.http.auth.ApiKeyStore;
+import io.xdag.http.auth.Permission;
+import io.xdag.http.pagination.PageRequest;
+import io.xdag.http.pagination.PaginationInfo;
+import io.xdag.http.response.*;
+import io.xdag.utils.BasicUtils;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes32;
+
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import static io.netty.handler.codec.http.HttpResponseStatus.*;
+import static io.netty.handler.codec.http.HttpVersion.HTTP_1_1;
+
+@Slf4j
+public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpRequest> {
+
+    private final DagKernel dagKernel;
+    private final ObjectMapper objectMapper;
+    private final ApiKeyStore apiKeyStore;
+    private final AccountApiService accountApiService;
+    private final TransactionApiService transactionApiService;
+    private final BlockApiService blockApiService;
+    private final ChainApiService chainApiService;
+    private final NetworkApiService networkApiService;
+
+    public HttpApiHandlerV1(DagKernel dagKernel, ApiKeyStore apiKeyStore) {
+        this.dagKernel = dagKernel;
+        this.apiKeyStore = apiKeyStore;
+        this.objectMapper = new ObjectMapper();
+        this.accountApiService = new AccountApiService(dagKernel);
+        this.transactionApiService = new TransactionApiService(dagKernel);
+        this.blockApiService = new BlockApiService(dagKernel, transactionApiService);
+        this.chainApiService = new ChainApiService(dagKernel, accountApiService);
+        this.networkApiService = new NetworkApiService(dagKernel);
+    }
+
+    @Override
+    public void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) throws Exception {
+        String uri = request.uri();
+        HttpMethod method = request.method();
+
+        log.debug("HTTP request: {} {}", method, uri);
+
+        if (uri.startsWith("/api/v1/")) {
+            handleApiRequest(ctx, request, uri, method);
+        } else if (uri.equals("/openapi.json") || uri.equals("/api-docs") || uri.startsWith("/openapi")) {
+            serveOpenApiSpec(ctx);
+        } else if (uri.startsWith("/swagger-ui") || uri.equals("/docs")) {
+            serveSwaggerUI(ctx);
+        } else {
+            sendJsonResponse(ctx, NOT_FOUND, createError("Endpoint not found", 404));
+        }
+    }
+
+    private void handleApiRequest(ChannelHandlerContext ctx, FullHttpRequest request, String uri, HttpMethod method) {
+        try {
+            String apiKey = extractApiKey(request);
+            Object result = routeRequest(uri, method, request, apiKey);
+            if (result == null) {
+                sendJsonResponse(ctx, NOT_FOUND, createError("Resource not found", 404));
+            } else {
+                sendJsonResponse(ctx, OK, result);
+            }
+        } catch (SecurityException e) {
+            log.warn("Unauthorized access: {}", e.getMessage());
+            sendJsonResponse(ctx, UNAUTHORIZED, createError(e.getMessage(), 401));
+        } catch (IllegalArgumentException e) {
+            log.warn("Bad request: {}", e.getMessage());
+            sendJsonResponse(ctx, BAD_REQUEST, createError(e.getMessage(), 400));
+        } catch (Exception e) {
+            log.error("Error handling request: {}", uri, e);
+            sendJsonResponse(ctx, INTERNAL_SERVER_ERROR, createError("Internal server error", 500));
+        }
+    }
+
+    private String extractApiKey(FullHttpRequest request) {
+        String auth = request.headers().get(HttpHeaderNames.AUTHORIZATION);
+        if (auth != null && auth.startsWith("Bearer ")) {
+            return auth.substring(7);
+        }
+        return null;
+    }
+
+    private void checkPermission(String apiKey, Permission required) {
+        if (!apiKeyStore.hasPermission(apiKey, required)) {
+            throw new SecurityException("Insufficient permissions or invalid API key");
+        }
+    }
+
+    private Object routeRequest(String uri, HttpMethod method, FullHttpRequest request, String apiKey) {
+        QueryStringDecoder decoder = new QueryStringDecoder(uri);
+        String path = decoder.path();
+        Map<String, String> params = new HashMap<>();
+        decoder.parameters().forEach((key, values) -> {
+            if (!values.isEmpty()) {
+                params.put(key, values.get(0));
+            }
+        });
+
+        if (path.equals("/api/v1/accounts") && method == HttpMethod.GET) {
+            checkPermission(apiKey, Permission.READ);
+            PageRequest pageRequest = PageRequest.parse(params.get("page"), params.get("size"));
+            return handleGetAccounts(pageRequest);
+        }
+
+        if (path.matches("/api/v1/accounts/[^/]+/balance") && method == HttpMethod.GET) {
+            checkPermission(apiKey, Permission.READ);
+            String address = extractPathParam(path, 3);
+            String blockNumber = params.getOrDefault("blockNumber", "latest");
+            return handleGetBalance(address, blockNumber);
+        }
+
+        if (path.matches("/api/v1/accounts/[^/]+/nonce") && method == HttpMethod.GET) {
+            checkPermission(apiKey, Permission.READ);
+            String address = extractPathParam(path, 3);
+            String blockNumber = params.getOrDefault("blockNumber", "latest");
+            return handleGetTransactionCount(address, blockNumber);
+        }
+
+        if (path.equals("/api/v1/blocks/number") && method == HttpMethod.GET) {
+            return handleGetBlockNumber();
+        }
+
+        if (path.matches("/api/v1/blocks/[^/]+") && method == HttpMethod.GET) {
+            String blockNumber = extractPathParam(path, 4);
+            boolean fullTx = Boolean.parseBoolean(params.getOrDefault("fullTransactions", "false"));
+            return handleGetBlockByNumber(blockNumber, fullTx);
+        }
+
+        if (path.matches("/api/v1/blocks/hash/[^/]+") && method == HttpMethod.GET) {
+            String blockHash = extractPathParam(path, 5);
+            boolean fullTx = Boolean.parseBoolean(params.getOrDefault("fullTransactions", "false"));
+            return handleGetBlockByHash(blockHash, fullTx);
+        }
+
+        if (path.matches("/api/v1/transactions/[^/]+") && method == HttpMethod.GET) {
+            String txHash = extractPathParam(path, 4);
+            return handleGetTransactionByHash(txHash);
+        }
+
+        if (path.equals("/api/v1/transactions") && method == HttpMethod.POST) {
+            checkPermission(apiKey, Permission.WRITE);
+            try {
+                String body = request.content().toString(CharsetUtil.UTF_8);
+                Map<String, String> bodyParams = objectMapper.readValue(body, Map.class);
+                String signedData = bodyParams.get("signedTransactionData");
+                return handleSendRawTransaction(signedData);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Invalid request body: " + e.getMessage());
+            }
+        }
+
+        if (path.equals("/api/v1/network/syncing") && method == HttpMethod.GET) {
+            return handleGetSyncing();
+        }
+
+        if (path.equals("/api/v1/network/chainId") && method == HttpMethod.GET) {
+            return handleGetChainId();
+        }
+
+        if (path.equals("/api/v1/network/peers/count") && method == HttpMethod.GET) {
+            return handleGetPeerCount();
+        }
+
+        if (path.equals("/api/v1/network/protocol") && method == HttpMethod.GET) {
+            return handleGetProtocolVersion();
+        }
+
+        if (path.equals("/api/v1/network/coinbase") && method == HttpMethod.GET) {
+            return handleGetCoinbase();
+        }
+
+        return null;
+    }
+
+    private PagedResponse<AccountsResponse.AccountInfo> handleGetAccounts(PageRequest pageRequest) {
+        int totalCount = accountApiService.getAccounts(Integer.MAX_VALUE).size();
+        List<AccountInfo> accounts = accountApiService.getAccounts(pageRequest.getSize());
+
+        List<AccountsResponse.AccountInfo> accountInfos = new ArrayList<>();
+        int start = pageRequest.getOffset();
+        int end = Math.min(start + pageRequest.getSize(), accounts.size());
+
+        for (int i = start; i < end; i++) {
+            if (i < accounts.size()) {
+                AccountInfo accountInfo = accounts.get(i);
+                accountInfos.add(AccountsResponse.AccountInfo.builder()
+                        .address(accountInfo.getAddress())
+                        .balance(accountInfo.getBalance().toDecimal(9, XUnit.XDAG).toPlainString())
+                        .nonce(accountInfo.getNonce())
+                        .type("hd")
+                        .build());
+            }
+        }
+
+        PaginationInfo pagination = PaginationInfo.of(pageRequest, totalCount);
+        return PagedResponse.of(accountInfos, pagination);
+    }
+
+    private AccountBalanceResponse handleGetBalance(String address, String blockNumber) {
+        AccountInfo accountInfo = accountApiService.getAccountByAddress(address);
+
+        if (accountInfo == null) {
+            return AccountBalanceResponse.builder()
+                    .address(address)
+                    .balance("0")
+                    .blockNumber(resolveBlockNumber(blockNumber))
+                    .build();
+        }
+
+        return AccountBalanceResponse.builder()
+                .address(address)
+                .balance(accountInfo.getBalance().toDecimal(9, XUnit.XDAG).toPlainString())
+                .blockNumber(resolveBlockNumber(blockNumber))
+                .build();
+    }
+
+    private AccountNonceResponse handleGetTransactionCount(String address, String blockNumber) {
+        AccountInfo accountInfo = accountApiService.getAccountByAddress(address);
+        long nonce = (accountInfo != null) ? accountInfo.getNonce() : 0;
+
+        return AccountNonceResponse.builder()
+                .address(address)
+                .nonce(String.format("0x%x", nonce))
+                .blockNumber(resolveBlockNumber(blockNumber))
+                .build();
+    }
+
+    private BlockNumberResponse handleGetBlockNumber() {
+        ChainStatsInfo stats = chainApiService.getChainStats();
+        long height = (stats != null && stats.getTopBlockHeight() != null) ? stats.getTopBlockHeight() : 0;
+
+        return BlockNumberResponse.builder()
+                .blockNumber(String.format("0x%x", height))
+                .build();
+    }
+
+    private BlockDetailResponse handleGetBlockByNumber(String blockNumber, boolean fullTransactions) {
+        long height = parseBlockNumber(blockNumber);
+
+        io.xdag.core.Block block = dagKernel.getDagChain().getMainBlockByHeight(height);
+        if (block == null) {
+            return null;
+        }
+
+        BlockDetail blockDetail = blockApiService.getBlockDetail(block.getHash());
+        return convertBlockDetailToResponse(blockDetail, fullTransactions);
+    }
+
+    private BlockDetailResponse handleGetBlockByHash(String blockHash, boolean fullTransactions) {
+        Bytes32 hash = BasicUtils.address2Hash(blockHash);
+        BlockDetail blockDetail = blockApiService.getBlockDetail(hash);
+
+        if (blockDetail == null) {
+            return null;
+        }
+
+        return convertBlockDetailToResponse(blockDetail, fullTransactions);
+    }
+
+    private TransactionDetailResponse handleGetTransactionByHash(String transactionHash) {
+        Bytes32 txHash = Bytes32.fromHexString(transactionHash);
+        TransactionInfo tx = transactionApiService.getTransaction(txHash);
+
+        if (tx == null) {
+            return null;
+        }
+
+        return convertTransactionInfoToResponse(tx);
+    }
+
+    private SendTransactionResponse handleSendRawTransaction(String signedTransactionData) {
+        log.warn("Transaction submission not yet implemented");
+        return SendTransactionResponse.builder()
+                .transactionHash("0x0")
+                .status("failed")
+                .build();
+    }
+
+    private Object handleGetSyncing() {
+        ChainStatsInfo stats = chainApiService.getChainStats();
+
+        if (stats == null || stats.getSyncProgress() >= 100.0) {
+            return false;
+        }
+
+        return SyncingResponse.builder()
+                .syncing(true)
+                .startingBlock("0x0")
+                .currentBlock(String.format("0x%x", stats.getTopBlockHeight() != null ? stats.getTopBlockHeight() : 0))
+                .highestBlock(String.format("0x%x", stats.getTopBlockHeight() != null ? stats.getTopBlockHeight() : 0))
+                .progress(stats.getSyncProgress())
+                .build();
+    }
+
+    private ChainIdResponse handleGetChainId() {
+        Network network = dagKernel.getConfig().getNodeSpec().getNetwork();
+        String chainId = switch (network) {
+            case MAINNET -> "0x1";
+            case TESTNET -> "0x2";
+            case DEVNET -> "0x3";
+            default -> "0x0";
+        };
+
+        return ChainIdResponse.builder()
+                .chainId(chainId)
+                .networkType(network.name().toLowerCase())
+                .build();
+    }
+
+    private PeerCountResponse handleGetPeerCount() {
+        return PeerCountResponse.builder().peerCount("0x0").build();
+    }
+
+    private ProtocolVersionResponse handleGetProtocolVersion() {
+        return ProtocolVersionResponse.builder().protocolVersion("5.1.0").build();
+    }
+
+    private CoinbaseResponse handleGetCoinbase() {
+        if (dagKernel.getWallet() != null && dagKernel.getWallet().getDefKey() != null) {
+            return CoinbaseResponse.builder()
+                    .coinbase(AddressUtils.toBase58Address(dagKernel.getWallet().getDefKey()))
+                    .build();
+        }
+        return null;
+    }
+
+    private String extractPathParam(String path, int position) {
+        String[] parts = path.split("/");
+        if (parts.length > position) {
+            return parts[position];
+        }
+        throw new IllegalArgumentException("Invalid path: " + path);
+    }
+
+    private long parseBlockNumber(String blockNumber) {
+        if (blockNumber == null || blockNumber.equalsIgnoreCase("latest")) {
+            ChainStatsInfo stats = chainApiService.getChainStats();
+            return (stats != null && stats.getTopBlockHeight() != null) ? stats.getTopBlockHeight() : 0;
+        }
+
+        if (blockNumber.equalsIgnoreCase("earliest")) {
+            return 0;
+        }
+
+        if (blockNumber.equalsIgnoreCase("pending")) {
+            ChainStatsInfo stats = chainApiService.getChainStats();
+            return (stats != null && stats.getTopBlockHeight() != null) ? stats.getTopBlockHeight() : 0;
+        }
+
+        if (blockNumber.startsWith("0x")) {
+            return Long.parseLong(blockNumber.substring(2), 16);
+        }
+
+        return Long.parseLong(blockNumber);
+    }
+
+    private String resolveBlockNumber(String blockNumber) {
+        try {
+            long height = parseBlockNumber(blockNumber);
+            return String.format("0x%x", height);
+        } catch (Exception e) {
+            ChainStatsInfo stats = chainApiService.getChainStats();
+            long height = (stats != null && stats.getTopBlockHeight() != null) ? stats.getTopBlockHeight() : 0;
+            return String.format("0x%x", height);
+        }
+    }
+
+    private BlockDetailResponse convertBlockDetailToResponse(BlockDetail blockDetail, boolean fullTransactions) {
+        BlockDetailResponse.BlockDetailResponseBuilder builder = BlockDetailResponse.builder()
+                .number(blockDetail.getHeight() != null ? String.format("0x%x", blockDetail.getHeight()) : "0x0")
+                .hash(blockDetail.getHash() != null ? blockDetail.getHash() : "0x0")
+                .timestamp(String.format("0x%x", blockDetail.getTimestamp()))
+                .epoch(String.format("0x%x", blockDetail.getEpoch()))
+                .difficulty(blockDetail.getDifficulty() != null ? blockDetail.getDifficulty().toHexString() : "0x0")
+                .coinbase(blockDetail.getCoinbase() != null ? blockDetail.getCoinbase() : "")
+                .state(blockDetail.getState() != null ? blockDetail.getState() : "unknown");
+
+        List<Object> transactions = new ArrayList<>();
+        if (blockDetail.getTransactions() != null) {
+            builder.transactionCount(blockDetail.getTransactions().size());
+            for (TransactionInfo tx : blockDetail.getTransactions()) {
+                if (fullTransactions) {
+                    transactions.add(convertTransactionInfoToResponse(tx));
+                } else {
+                    transactions.add(tx.getHash());
+                }
+            }
+        } else {
+            builder.transactionCount(0);
+        }
+        builder.transactions(transactions);
+
+        List<BlockDetailResponse.LinkInfo> links = new ArrayList<>();
+        if (blockDetail.getBlockLinks() != null) {
+            for (BlockDetail.LinkInfo linkInfo : blockDetail.getBlockLinks()) {
+                links.add(BlockDetailResponse.LinkInfo.builder()
+                        .hash(linkInfo.getHash() != null ? linkInfo.getHash() : "0x0")
+                        .height(linkInfo.getHeight() != null ? String.format("0x%x", linkInfo.getHeight()) : "0x0")
+                        .type("parent")
+                        .build());
+            }
+        }
+        builder.links(links);
+
+        return builder.build();
+    }
+
+    private TransactionDetailResponse convertTransactionInfoToResponse(TransactionInfo tx) {
+        TransactionDetailResponse.TransactionDetailResponseBuilder builder = TransactionDetailResponse.builder()
+                .hash(tx.getHash() != null ? tx.getHash() : "0x0")
+                .from(tx.getFrom() != null ? tx.getFrom() : "")
+                .to(tx.getTo() != null ? tx.getTo() : "")
+                .amount(tx.getAmount() != null ? tx.getAmount().toDecimal(9, XUnit.XDAG).toPlainString() : "0")
+                .fee("0")
+                .nonce(String.format("0x%x", tx.getNonce()))
+                .data("0x")
+                .blockNumber(tx.getBlockHeight() != null ? String.format("0x%x", tx.getBlockHeight()) : "0x0")
+                .blockHash(tx.getBlockHash() != null ? tx.getBlockHash() : "0x0")
+                .timestamp(tx.getTimestamp() != null ? String.format("0x%x", tx.getTimestamp()) : "0x0")
+                .status(tx.getStatus() != null ? tx.getStatus() : "unknown")
+                .valid(true)
+                .signatureValid(true);
+
+        if (tx.getSignature() != null && !tx.getSignature().isEmpty()) {
+            builder.signature(TransactionDetailResponse.SignatureInfo.builder()
+                    .v("0x0")
+                    .r("0x0")
+                    .s("0x0")
+                    .build());
+        }
+
+        return builder.build();
+    }
+
+    private void serveOpenApiSpec(ChannelHandlerContext ctx) {
+        try {
+            InputStream is = getClass().getClassLoader().getResourceAsStream("api/openapi.yaml");
+
+            if (is != null) {
+                byte[] yamlContent = is.readAllBytes();
+                sendResponse(ctx, OK, "application/x-yaml", yamlContent);
+            } else {
+                sendJsonResponse(ctx, NOT_FOUND, createError("OpenAPI spec not found", 404));
+            }
+        } catch (Exception e) {
+            log.error("Error serving OpenAPI spec", e);
+            sendJsonResponse(ctx, INTERNAL_SERVER_ERROR, createError("Failed to load OpenAPI spec", 500));
+        }
+    }
+
+    private void serveSwaggerUI(ChannelHandlerContext ctx) {
+        String redirectUrl = "https://petstore.swagger.io/?url=http://localhost:10001/openapi.json";
+        FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, FOUND);
+        response.headers().set(HttpHeaderNames.LOCATION, redirectUrl);
+        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
+        ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+    }
+
+    private void sendJsonResponse(ChannelHandlerContext ctx, HttpResponseStatus status, Object data) {
+        try {
+            String json = objectMapper.writeValueAsString(data);
+            sendResponse(ctx, status, "application/json", json.getBytes(StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            log.error("Error serializing response", e);
+            sendResponse(ctx, INTERNAL_SERVER_ERROR, "text/plain",
+                    "Internal server error".getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    private void sendResponse(ChannelHandlerContext ctx, HttpResponseStatus status,
+                               String contentType, byte[] content) {
+        ByteBuf buffer = ctx.alloc().buffer(content.length);
+        buffer.writeBytes(content);
+
+        FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, status, buffer);
+        response.headers().set(HttpHeaderNames.CONTENT_TYPE, contentType);
+        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, content.length);
+        response.headers().set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+
+        ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
+    }
+
+    private Map<String, Object> createError(String message, int code) {
+        Map<String, Object> error = new HashMap<>();
+        error.put("error", message);
+        error.put("code", code);
+        return error;
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+        log.error("Exception in HTTP handler", cause);
+        ctx.close();
+    }
+}

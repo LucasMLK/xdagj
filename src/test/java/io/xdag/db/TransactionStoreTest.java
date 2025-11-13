@@ -51,7 +51,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 /**
- * Unit tests for TransactionStore (Phase 4 - v5.1)
+ * Unit tests for TransactionStore ()
  *
  * Tests the RocksDB-based storage layer for Transaction objects.
  * Verifies core operations, indexing, batch operations, and serialization.

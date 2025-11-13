@@ -30,7 +30,7 @@ import lombok.Value;
 import org.apache.tuweni.bytes.Bytes32;
 
 /**
- * Lightweight DAG edge (Link) for XDAG v5.1
+ * Lightweight DAG edge (Link) for XDAG
  *
  * Design principles:
  * 1. Extreme simplicity: only 33 bytes (32 bytes hash + 1 byte type)
@@ -42,7 +42,7 @@ import org.apache.tuweni.bytes.Bytes32;
  * Key difference from BlockLink:
  * - Link is ultra-simple (33 bytes): just hash + type
  * - BlockLink is feature-rich: includes LinkType enum, amount, remark
- * - Link is used in v5.1 Block structure for maximum performance
+ * - Link is used in Block structure for maximum performance
  * - BlockLink is used for internal tracking and analysis
  *
  * Size calculation:
@@ -54,7 +54,7 @@ import org.apache.tuweni.bytes.Bytes32;
  * - 48MB / 33 bytes = 1,485,000 links
  * - 1,485,000 txs / 64 seconds = 23,200 TPS (96.7% Visa level)
  *
- * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">v5.1 Design</a>
+ * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">Design</a>
  */
 @Value
 public class Link implements Serializable {

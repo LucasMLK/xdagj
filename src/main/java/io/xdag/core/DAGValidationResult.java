@@ -29,7 +29,7 @@ import lombok.Data;
 import org.apache.tuweni.bytes.Bytes32;
 
 /**
- * DAG validation result for XDAG v5.1
+ * DAG validation result for XDAG
  *
  * <p>Contains the result of DAG structure validation with detailed error information.
  *
@@ -42,7 +42,7 @@ import org.apache.tuweni.bytes.Bytes32;
  *   <li><strong>Traversal depth</strong>: Path depth from genesis must not exceed 1000 layers</li>
  * </ul>
  *
- * @since v5.1
+ * @since XDAGJ
  */
 @Data
 @Builder

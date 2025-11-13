@@ -33,12 +33,12 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * DagChain interface for XDAG v5.1 epoch-based DAG consensus
+ * DagChain interface for XDAG epoch-based DAG consensus
  *
  * <p>This interface defines blockchain operations for XDAG's Directed Acyclic Graph (DAG)
  * architecture with epoch-based consensus mechanism.
  *
- * <h2>XDAG v5.1 Core Concepts</h2>
+ * <h2>XDAG Core Concepts</h2>
  *
  * <h3>1. Epoch-Based Consensus</h3>
  * <ul>
@@ -88,7 +88,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  *   <li><strong>Candidate Block</strong>: Competing in current epoch (not yet determined)</li>
  * </ul>
  *
- * @since v5.1
+ * @since XDAGJ
  * @see Block
  * @see Transaction
  * @see Link
@@ -220,7 +220,7 @@ public interface DagChain {
     /**
      * Create the genesis block with deterministic coinbase (Bitcoin/Ethereum approach)
      *
-     * <p>This is the way to create genesis blocks in XDAG v5.1.
+     * <p>This is the way to create genesis blocks in XDAG.
      * All nodes must use a predefined coinbase address from genesis.json
      * to ensure deterministic genesis block creation.
      *
@@ -261,55 +261,9 @@ public interface DagChain {
      * @param timestamp genesis block timestamp (XDAG timestamp format)
      * @return genesis block ready for import
      * @see #tryToConnect(Block)
-     * @since v5.1 Phase 12.5
+     * @since XDAGJ
      */
     Block createGenesisBlock(Bytes coinbase, long timestamp);
-
-    /**
-     * Create a reward block for pool distribution
-     *
-     * <p>Creates a Block containing multiple Transaction references for distributing
-     * mining rewards to pool participants (foundation, pool operator, miners).
-     *
-     * <p><strong>Process</strong>:
-     * <ol>
-     *   <li>Create Transaction objects for each recipient (foundation, pool, miners)</li>
-     *   <li>Sign each Transaction with the source key (reward source block's key)</li>
-     *   <li>Save Transactions to TransactionStore</li>
-     *   <li>Create Block with Link.toTransaction() references</li>
-     *   <li>Caller must import via {@link #tryToConnect(Block)} to finalize</li>
-     * </ol>
-     *
-     * <p><strong>Reward Distribution Example</strong>:
-     * <pre>
-     * Source block: Block A (earned 10 XDAG mining reward)
-     * Recipients:
-     *   - Foundation: 1 XDAG (10%)
-     *   - Pool operator: 2 XDAG (20%)
-     *   - Miner 1: 3 XDAG (30%)
-     *   - Miner 2: 4 XDAG (40%)
-     * Total fee: 0.4 XDAG (divided among 4 transactions)
-     * </pre>
-     *
-     * @param sourceBlockHash hash of source block (where funds come from)
-     * @param recipients list of recipient addresses
-     * @param amounts list of amounts for each recipient (must match recipients size)
-     * @param sourceKey ECKeyPair for signing transactions (must own source block)
-     * @param nonce account nonce for first transaction (subsequent transactions use nonce+1, nonce+2, ...)
-     * @param totalFee total transaction fee (distributed evenly across all transactions)
-     * @return Block containing reward transactions
-     * @throws IllegalArgumentException if recipients.size() != amounts.size()
-     * @see Transaction#createTransfer(Bytes32, Bytes32, XAmount, long, XAmount)
-     * @see Link#toTransaction(Bytes32)
-     * @see #tryToConnect(Block)
-     */
-    Block createRewardBlock(
-            Bytes32 sourceBlockHash,
-            List<Bytes32> recipients,
-            List<XAmount> amounts,
-            ECKeyPair sourceKey,
-            long nonce,
-            XAmount totalFee);
 
     // ==================== Main Chain Queries (Height-Based) ====================
 
@@ -624,7 +578,7 @@ public interface DagChain {
     /**
      * Calculate cumulative difficulty for a block
      *
-     * <p>XDAG v5.1 uses cumulative difficulty to select the best chain.
+     * <p>XDAG uses cumulative difficulty to select the best chain.
      * The chain with maximum cumulative difficulty becomes the main chain.
      *
      * <p><strong>Calculation Algorithm</strong>:
@@ -730,7 +684,7 @@ public interface DagChain {
     /**
      * Check if a block is in the main chain
      *
-     * <p>In XDAG v5.1 DAG structure, a block is on the main chain if:
+     * <p>In XDAG DAG structure, a block is on the main chain if:
      * <ul>
      *   <li>It is a main block (BlockInfo.height &gt; 0), OR</li>
      *   <li>It is directly or indirectly referenced by a main block</li>
@@ -788,7 +742,7 @@ public interface DagChain {
     /**
      * Check and update the main chain
      *
-     * <p>In XDAG v5.1, this method performs periodic main chain maintenance:
+     * <p>In XDAG, this method performs periodic main chain maintenance:
      * <ol>
      *   <li><strong>Scan Recent Epochs</strong>: Check recent epochs for winners (smallest hash)</li>
      *   <li><strong>Calculate Cumulative Difficulty</strong>: Compare competing chains</li>

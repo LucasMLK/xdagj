@@ -45,22 +45,22 @@ import java.util.concurrent.atomic.AtomicLong;
  * HybridSyncManager - Hybrid Synchronization Protocol Manager
  *
  * <p><strong>Purpose</strong>:
- * Implements the hybrid sync protocol for XDAG v5.1, combining linear main chain
+ * Implements the hybrid sync protocol for XDAG, combining linear main chain
  * synchronization with DAG area synchronization for optimal performance.
  *
  * <p><strong>Protocol Overview</strong>:
  * <pre>
- * Phase 1: Linear Main Chain Sync
+ *  Linear Main Chain Sync
  * ├─ Query remote height
  * ├─ Batch download main blocks (1000 blocks/batch)
  * └─ Import blocks sequentially
  *
- * Phase 2: DAG Area Sync
+ *  DAG Area Sync
  * ├─ Query epoch block hashes
  * ├─ Identify missing blocks
  * └─ Batch download missing blocks
  *
- * Phase 3: Solidification
+ *  Solidification
  * ├─ Identify missing block references
  * ├─ Batch download missing blocks
  * ├─ Identify missing transactions
@@ -84,7 +84,7 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * @see <a href="../../../HYBRID_SYNC_MESSAGES.md">Hybrid Sync Protocol Design</a>
  * @see <a href="../../../DAG_SYNC_PROTOCOL_GAP_ANALYSIS.md">Protocol Gap Analysis</a>
- * @since v5.1 Phase 1.5
+ * @since XDAGJ
  */
 @Slf4j
 public class HybridSyncManager {
@@ -124,8 +124,8 @@ public class HybridSyncManager {
 
     // ========== Dependencies ==========
 
-    private final DagKernel dagKernel;  // v5.1 standalone DagKernel
-    private final DagChain dagChain;  // v5.1 DagChain interface
+    private final DagKernel dagKernel;  // standalone DagKernel
+    private final DagChain dagChain;  // DagChain interface
 
   @Getter
   private final HybridSyncP2pAdapter p2pAdapter;
@@ -219,7 +219,7 @@ public class HybridSyncManager {
                 return false;
             }
 
-            long localHeight = dagChain.getMainChainLength();  // v5.1: use getMainChainLength()
+            long localHeight = dagChain.getMainChainLength();  //  use getMainChainLength()
             long remoteHeight = remoteInfo.mainHeight;
             long finalizedHeight = remoteInfo.finalizedHeight;
 
@@ -422,7 +422,7 @@ public class HybridSyncManager {
                 return;
             }
 
-            // Get available P2P channels (Phase 12.5)
+            // Get available P2P channels (5)
             List<Channel> peers = p2pAdapter.getAvailableChannels();
 
             if (peers.isEmpty()) {
@@ -453,7 +453,7 @@ public class HybridSyncManager {
         }
     }
 
-    // ========== Phase 1: Query Remote Height ==========
+    // ==========  Query Remote Height ==========
 
     /**
      * Remote height information
@@ -515,7 +515,7 @@ public class HybridSyncManager {
         }
     }
 
-    // ========== Phase 2: Sync Finalized Main Chain ==========
+    // ==========  Sync Finalized Main Chain ==========
 
     /**
      * Synchronize finalized main chain blocks in batches
@@ -615,7 +615,7 @@ public class HybridSyncManager {
         }
     }
 
-    // ========== Phase 3: Sync Active DAG Area ==========
+    // ==========  Sync Active DAG Area ==========
 
     /**
      * Synchronize active DAG area (recent blocks)
@@ -651,7 +651,7 @@ public class HybridSyncManager {
             // Filter out blocks we already have
             List<Bytes32> missingHashes = new ArrayList<>();
             for (Bytes32 hash : epochHashes) {
-                if (dagChain.getBlockByHash(hash, false) == null) {  // v5.1: use dagChain
+                if (dagChain.getBlockByHash(hash, false) == null) {  //  use dagChain
                     missingHashes.add(hash);
                 }
             }
@@ -755,7 +755,7 @@ public class HybridSyncManager {
         }
     }
 
-    // ========== Phase 4: Solidification ==========
+    // ==========  Solidification ==========
 
     /**
      * Solidify the chain by filling in missing blocks and transactions
@@ -904,7 +904,7 @@ public class HybridSyncManager {
      */
     private boolean importBlock(Block block) {
         try {
-            // v5.1: Use DagChain.tryToConnect() which returns DagImportResult
+            //  Use DagChain.tryToConnect() which returns DagImportResult
             DagImportResult result = dagChain.tryToConnect(block);
 
             return result != null &&

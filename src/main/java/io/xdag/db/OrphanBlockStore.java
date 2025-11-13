@@ -29,7 +29,7 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.bouncycastle.util.encoders.Hex;
 
 /**
- * OrphanBlockStore interface for v5.1
+ * OrphanBlockStore interface
  *
  * Manages orphan blocks (blocks without parent reference yet).
  * Uses Bytes32 hash for block identification instead of Address.

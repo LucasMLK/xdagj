@@ -36,7 +36,7 @@ import static org.junit.Assert.*;
  * <p>Tests mining architecture components in isolation without requiring
  * full DagKernel initialization.
  *
- * @since v5.1 Phase 12.4
+ * @since @since XDAGJ
  */
 public class MiningComponentsTest {
 

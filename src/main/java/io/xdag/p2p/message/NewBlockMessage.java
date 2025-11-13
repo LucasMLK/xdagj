@@ -30,7 +30,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * NewBlockMessage - v5.1 new block broadcast message
+ * NewBlockMessage - new block broadcast message
  *
  * Phase 3 - Network Layer Migration: This message enables Block transmission over P2P network.
  *
@@ -56,14 +56,14 @@ import lombok.Setter;
  * - Protocol negotiation determines which message type to use
  *
  * @see NewBlockMessage for legacy Block version
- * @see Block for v5.1 block structure
+ * @see Block for block structure
  */
 @Getter
 @Setter
 public class NewBlockMessage extends Message {
 
     /**
-     * Block instance (v5.1 block structure)
+     * Block instance (block structure)
      */
     private Block block;
 

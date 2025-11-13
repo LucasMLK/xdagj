@@ -30,9 +30,9 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * BlockInfo - Block metadata (v5.1 极简设计)
+ * BlockInfo - Block metadata (极简设计)
  *
- * v5.1 Design principles (from CORE_DATA_STRUCTURES.md):
+ * Design principles (from CORE_DATA_STRUCTURES.md):
  * 1. 职责单一：只包含Block的元信息（索引、状态判断、PoW验证）
  * 2. 极简设计：只有4个必需字段
  * 3. DRY原则：所有可推导的数据都不存储
@@ -47,9 +47,9 @@ import org.apache.tuweni.units.bigints.UInt256;
  * - prevMainBlock → query via getBlockByHeight(height - 1)
  * - amount/fee → calculate from Block's Transactions
  * - snapshot → managed by independent SnapshotManager
- * - type, flags, ref, maxDiffLink → removed in v5.1
+ * - type, flags, ref, maxDiffLink → removed
  *
- * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">v5.1 Design</a>
+ * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">Design</a>
  */
 @Value
 @Builder(toBuilder = true)
@@ -83,7 +83,7 @@ public class BlockInfo implements Serializable {
 
     /**
      * 是否为主块
-     * v5.1: Simply check height > 0
+     *  Simply check height > 0
      */
     public boolean isMainBlock() {
         return height > 0;
@@ -91,7 +91,7 @@ public class BlockInfo implements Serializable {
 
     /**
      * 是否为孤块
-     * v5.1: Simply check height == 0
+     *  Simply check height == 0
      */
     public boolean isOrphanBlock() {
         return height == 0;

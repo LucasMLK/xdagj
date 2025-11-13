@@ -36,7 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * AccountStore - EVM-compatible account state storage for XDAG v5.1
+ * AccountStore - EVM-compatible account state storage for XDAG
  *
  * <p>This is the primary storage interface for managing account state in XDAG.
  * It provides CRUD operations for accounts with EVM-compatible semantics.
@@ -79,7 +79,7 @@ import java.util.Optional;
  * store.incrementNonce(address);
  * </pre>
  *
- * @since v5.1 AccountStore
+ * @since AccountStore
  */
 public interface AccountStore extends XdagLifecycle {
 

@@ -41,7 +41,7 @@ import org.apache.tuweni.bytes.Bytes32;
  *   <li>SHA256 digest state (for non-RandomX)</li>
  * </ul>
  *
- * @since v5.1 Phase 12.4
+ * @since XDAGJ
  */
 @Getter
 public class MiningTask {

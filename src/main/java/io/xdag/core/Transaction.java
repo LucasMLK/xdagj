@@ -38,7 +38,7 @@ import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 
 /**
- * Independent Transaction class for XDAG v5.1
+ * Independent Transaction class for XDAG
  *
  * Design principles:
  * 1. Independent existence: separate broadcast and storage from Block
@@ -48,13 +48,11 @@ import org.apache.tuweni.bytes.Bytes32;
  * 5. No PoW required: validated through signature
  * 6. Hash caching: lazy computation, calculated on first use
  *
- * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">v5.1 Design</a>
+ * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">Design</a>
  */
 @Value
 @Builder(toBuilder = true)
 public class Transaction implements Serializable {
-
-    // ========== Transaction Data (participates in hash calculation) ==========
 
     /**
      * Source account address (20 bytes, hash160)

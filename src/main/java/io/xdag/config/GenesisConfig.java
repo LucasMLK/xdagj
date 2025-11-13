@@ -80,7 +80,7 @@ import java.util.Map;
  *   <li>Migration: Import old XDAG chain via snapshot configuration</li>
  * </ol>
  *
- * @since v5.1 Phase 12
+ * @since XDAGJ
  */
 @Data
 public class GenesisConfig {
@@ -132,7 +132,7 @@ public class GenesisConfig {
      * Can be used to embed version info, signatures, etc.
      */
     @JsonProperty("extraData")
-    private String extraData = "XDAG v5.1 Genesis";
+    private String extraData = "XDAG Genesis";
 
     /**
      * Genesis block coinbase address (base58check encoded XDAG address)

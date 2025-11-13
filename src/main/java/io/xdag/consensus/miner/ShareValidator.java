@@ -47,7 +47,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *   <li>Single Responsibility: Only validates shares and tracks best solution</li>
  *   <li>Thread Safety: All operations are thread-safe using atomic operations</li>
  *   <li>Algorithm Support: Supports both RandomX and SHA256 POW algorithms</li>
- *   <li>v5.1 Alignment: Uses DagChain data structures</li>
+ *   <li>Alignment: Uses DagChain data structures</li>
  * </ul>
  *
  * <h2>Hash Calculation</h2>
@@ -79,7 +79,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * }
  * </pre>
  *
- * @since v5.1 Phase 12.4
+ * @since XDAGJ
  */
 @Slf4j
 public class ShareValidator {

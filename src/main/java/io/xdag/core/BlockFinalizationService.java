@@ -65,7 +65,7 @@ public class BlockFinalizationService {
 
     private final DagKernel kernel;
     private final DagStore dagStore;
-    // TODO v5.1: FinalizedBlockStore temporarily disabled
+    // TODO  FinalizedBlockStore temporarily disabled
     // private final FinalizedBlockStore finalizedBlockStore;
     private final ScheduledExecutorService scheduler;
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
@@ -75,7 +75,7 @@ public class BlockFinalizationService {
     public BlockFinalizationService(DagKernel kernel) {
         this.kernel = kernel;
         this.dagStore = kernel.getDagStore();
-        // TODO v5.1: FinalizedBlockStore temporarily disabled
+        // TODO  FinalizedBlockStore temporarily disabled
         // this.finalizedBlockStore = kernel.getFinalizedBlockStore();
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "BlockFinalizationService");
@@ -232,7 +232,7 @@ public class BlockFinalizationService {
     */
 
     /**
-     * Stub method for Phase 7.3 - Block finalization temporarily disabled
+     * Stub method for 3 - Block finalization temporarily disabled
      */
     private void finalizeOldBlocks() {
         log.debug("Block finalization temporarily disabled - waiting for Block migration");

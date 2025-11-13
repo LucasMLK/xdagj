@@ -68,7 +68,7 @@ import static io.xdag.core.XUnit.NANO_XDAG;
  * ProcessingResult result = processor.processBlockTransactions(block, txs);
  * </pre>
  *
- * @since v5.1 Phase 10
+ * @since XDAGJ
  */
 @Slf4j
 public class DagTransactionProcessor {

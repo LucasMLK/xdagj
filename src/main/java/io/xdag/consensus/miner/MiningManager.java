@@ -43,7 +43,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * MiningManager - Coordinates the mining process
  *
- * <p>This component is the main coordinator for the improved v5.1 mining architecture.
+ * <p>This component is the main coordinator for the improved mining architecture.
  * It replaces the legacy XdagPow class with a cleaner separation of concerns.
  *
  * <h2>Architecture</h2>
@@ -58,7 +58,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * <h2>Design Principles</h2>
  * <ul>
  *   <li>Single Responsibility: Only coordinates mining, delegates work to components</li>
- *   <li>v5.1 Alignment: Uses DagKernel and DagChain APIs</li>
+ *   <li>Alignment: Uses DagKernel and DagChain APIs</li>
  *   <li>Clean Lifecycle: Simple start/stop semantics</li>
  *   <li>Mode Flexibility: Supports pool mode and local mining (future)</li>
  * </ul>
@@ -83,7 +83,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * manager.stop();
  * </pre>
  *
- * @since v5.1 Phase 12.4
+ * @since XDAGJ
  */
 @Slf4j
 public class MiningManager {
@@ -338,7 +338,7 @@ public class MiningManager {
             shareValidator.reset();
 
             // Step 4: Send task to pools (if pool mode)
-            // TODO Phase 12.5: Integrate with pool interface
+            // TODO  Integrate with pool interface
             // sendTaskToPools(task);
 
             // DEVNET TEST MODE: Auto-submit a test share for immediate block creation
@@ -400,7 +400,7 @@ public class MiningManager {
             Bytes32 preHash = candidateBlock.getHash();
 
             // XdagSha256Digest not available yet, so pass null for now
-            // TODO Phase 12.5: Implement proper SHA256 digest state
+            // TODO  Implement proper SHA256 digest state
             return new MiningTask(candidateBlock, preHash, timestamp, taskIdx, (io.xdag.crypto.hash.XdagSha256Digest) null);
         }
     }
@@ -415,7 +415,7 @@ public class MiningManager {
             return new byte[32];  // Empty seed if RandomX not available
         }
 
-        // TODO Phase 12.5: Get seed from RandomX memory
+        // TODO  Get seed from RandomX memory
         // For now, return empty seed
         return new byte[32];
     }

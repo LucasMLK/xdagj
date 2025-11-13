@@ -63,7 +63,7 @@ import java.util.stream.Collectors;
  *   <li>Memory: ~14 MB L1 cache + 2-4 GB L2 RocksDB cache</li>
  * </ul>
  *
- * @since v5.1 AccountStore
+ * @since AccountStore
  */
 @Slf4j
 public class AccountStoreImpl implements AccountStore {

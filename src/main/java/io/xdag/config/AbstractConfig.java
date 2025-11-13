@@ -30,7 +30,7 @@ import io.xdag.Network;
 import io.xdag.config.spec.AdminSpec;
 import io.xdag.config.spec.FundSpec;
 import io.xdag.config.spec.NodeSpec;
-import io.xdag.config.spec.RPCSpec;
+import io.xdag.config.spec.HttpSpec;
 import io.xdag.config.spec.RandomxSpec;
 import io.xdag.config.spec.SnapshotSpec;
 import io.xdag.config.spec.WalletSpec;
@@ -50,7 +50,7 @@ import org.apache.commons.lang3.SystemUtils;
 @Slf4j
 @Getter
 @Setter
-public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, RPCSpec, SnapshotSpec, RandomxSpec, FundSpec {
+public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, HttpSpec, SnapshotSpec, RandomxSpec, FundSpec {
 
     protected String configName;
 
@@ -82,9 +82,9 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     protected int netHandshakeExpiry = 5 * 60 * 1000;
     protected int netChannelIdleTimeout = 2 * 60 * 1000;
 
-    // Prioritized network messages (Phase 7.3.0: Updated to Block messages)
+    // Prioritized network messages ( Updated to Block messages)
     protected Set<XdagMessageCode> netPrioritizedMessages = new HashSet<>(Arrays.asList(
-            XdagMessageCode.NEW_BLOCK,  // Phase 7.3.0: Changed from NEW_BLOCK
+            XdagMessageCode.NEW_BLOCK,  //  Changed from NEW_BLOCK
             XdagMessageCode.BLOCK_REQUEST));
 
     // Node configuration
@@ -137,6 +137,8 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     protected String  rpcHttpsCertFile;
     protected String rpcHttpsKeyFile;
     protected int rpcHttpMaxContentLength = 1024 * 1024; // 1MB
+    protected boolean rpcHttpAuthEnabled = false;
+    protected String[] rpcHttpApiKeys = new String[0];
 
     // RPC netty configuration
     protected int rpcHttpBossThreads = 1;
@@ -167,7 +169,7 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     }
 
     @Override
-    public RPCSpec getRPCSpec() {
+    public HttpSpec getHttpSpec() {
         return this;
     }
 
@@ -268,6 +270,11 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
         if (rpcHttpEnabled) {
             rpcHttpHost = config.hasPath("rpc.http.host") ? config.getString("rpc.http.host") : "127.0.0.1";
             rpcHttpPort = config.hasPath("rpc.http.port") ? config.getInt("rpc.http.port") : 10001;
+            rpcHttpAuthEnabled = config.hasPath("rpc.http.auth.enabled") && config.getBoolean("rpc.http.auth.enabled");
+            if (rpcHttpAuthEnabled && config.hasPath("rpc.http.auth.apiKeys")) {
+                List<String> keyList = config.getStringList("rpc.http.auth.apiKeys");
+                rpcHttpApiKeys = keyList.toArray(new String[0]);
+            }
         }
         flag = config.hasPath("randomx.flags.fullmem") && config.getBoolean("randomx.flags.fullmem");
 
@@ -374,6 +381,12 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
 
     @Override
     public String getRpcHttpsKeyFile() {return rpcHttpsKeyFile;}
+
+    @Override
+    public boolean isRpcHttpAuthEnabled() {return rpcHttpAuthEnabled;}
+
+    @Override
+    public String[] getRpcHttpApiKeys() {return rpcHttpApiKeys;}
 
     @Override
     public boolean isSnapshotEnabled() {

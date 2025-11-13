@@ -49,7 +49,7 @@ public enum XdagMessageCode implements IMessageCode {
     BLOCK_REQUEST(0x16),
     SYNCBLOCK_REQUEST(0x1A),
 
-    // v5.1 messages (Phase 3 - Network Layer Migration)
+    // messages (Phase 3 - Network Layer Migration)
     /**
      * [0x1B] NEW_BLOCK_V5 - Broadcast new Block to peers
      * Uses Block structure instead of legacy Block

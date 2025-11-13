@@ -24,14 +24,14 @@
 package io.xdag.pool;
 
 // ========================================
-// TODO: 矿池奖励功能暂时禁用
+// TODO: Mining pool reward functionality temporarily disabled
 //
-// 原因：需要适配 v5.1 新架构：
+// Reason: Needs adaptation for new architecture:
 // - Kernel -> DagKernel
 // - Blockchain -> DagChain
 // - SyncManager -> HybridSyncManager
 //
-// 计划在后续版本中重新实现
+// Will be re-implemented in future versions
 // ========================================
 
 /*

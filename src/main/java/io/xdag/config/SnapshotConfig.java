@@ -34,7 +34,7 @@ import java.io.File;
  * SnapshotConfig - Configuration for importing old XDAG chain snapshots
  *
  * <p><strong>Purpose</strong>:
- * Enables migration from old XDAG versions to v5.1 by:
+ * Enables migration from old XDAG versions to by:
  * <ul>
  *   <li>Loading a chain snapshot at specific height</li>
  *   <li>Importing account balances and state</li>
@@ -68,7 +68,7 @@ import java.io.File;
  *      }
  *    }
  *
- * 3. Start v5.1 node:
+ * 3. Start node:
  *    - DagKernel detects snapshot config
  *    - Imports snapshot data
  *    - Creates genesis block referencing snapshot state
@@ -81,7 +81,7 @@ import java.io.File;
  * - Height must be positive
  * - Data file must exist and be readable
  *
- * @since v5.1 Phase 12
+ * @since XDAGJ
  */
 @Data
 public class SnapshotConfig {
@@ -140,7 +140,7 @@ public class SnapshotConfig {
     /**
      * Snapshot format version
      * - v1: Old XDAG binary format
-     * - v2: v5.1 optimized format
+     * - v2: optimized format
      */
     @JsonProperty("format")
     private String format = "v1";

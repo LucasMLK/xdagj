@@ -30,7 +30,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * SyncBlockMessage - v5.1 block synchronization message
+ * SyncBlockMessage - block synchronization message
  *
  * Phase 3 - Network Layer Migration: This message enables Block synchronization over P2P network.
  *
@@ -61,14 +61,14 @@ import lombok.Setter;
  *
  * @see SyncBlockMessage for legacy Block version
  * @see NewBlockMessage for block broadcasting
- * @see Block for v5.1 block structure
+ * @see Block for block structure
  */
 @Getter
 @Setter
 public class SyncBlockMessage extends Message {
 
     /**
-     * Block instance (v5.1 block structure)
+     * Block instance (block structure)
      */
     private Block block;
 

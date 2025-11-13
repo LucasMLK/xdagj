@@ -35,7 +35,7 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.bouncycastle.util.encoders.Hex;
 
 /**
- * OrphanBlockStore implementation for v5.1
+ * OrphanBlockStore implementation
  *
  * Stores orphan blocks with their timestamps.
  * Returns Bytes32 hashes instead of Address objects.
@@ -74,7 +74,7 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
     }
 
     /**
-     * Get orphan block hashes (v5.1)
+     * Get orphan block hashes
      *
      * Returns list of Bytes32 hashes instead of Address objects.
      * Filters by timestamp and returns up to 'num' orphans.
@@ -100,7 +100,7 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
                 long time =  BytesUtils.bytesToLong(an.getValue(), 0, true);
                 if (time <= sendtime[0]) {
                     addNum--;
-                    // v5.1: Return Bytes32 hash directly (skip prefix byte)
+                    //  Return Bytes32 hash directly (skip prefix byte)
                     res.add(Bytes32.wrap(an.getKey(), 1));
                     sendtime[1] = Math.max(sendtime[1],time);
                 }
@@ -118,7 +118,7 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
     }
 
     /**
-     * Add orphan block to queue (v5.1)
+     * Add orphan block to queue
      *
      * @param hash orphan block hash (Bytes32)
      * @param timestamp block timestamp

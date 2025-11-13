@@ -54,7 +54,7 @@ import org.apache.tuweni.bytes.MutableBytes;
  * }</pre>
  *
  * @see NewBlockMessage for the typical response
- * @since v5.1 Phase 7.3
+ * @since XDAGJ
  */
 @Getter
 @Setter

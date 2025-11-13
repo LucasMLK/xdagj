@@ -63,7 +63,7 @@ import java.util.List;
  * }
  * </pre>
  *
- * @since v5.1 Phase 10
+ * @since XDAGJ
  */
 @Slf4j
 public class DagBlockProcessor {
@@ -260,7 +260,8 @@ public class DagBlockProcessor {
      */
     @Value
     public static class ProcessingResult {
-        boolean success;
+
+      boolean success;
         String error;
 
         /**
@@ -282,16 +283,7 @@ public class DagBlockProcessor {
             return new ProcessingResult(false, error);
         }
 
-        /**
-         * Check if processing succeeded
-         *
-         * @return true if success
-         */
-        public boolean isSuccess() {
-            return success;
-        }
-
-        /**
+      /**
          * Check if processing failed
          *
          * @return true if error

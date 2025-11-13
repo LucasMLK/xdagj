@@ -28,12 +28,22 @@ import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 import static io.xdag.utils.BasicUtils.address2Hash;
 import static io.xdag.utils.BasicUtils.address2PubAddress;
 import static io.xdag.utils.BasicUtils.getHash;
-import static io.xdag.utils.BasicUtils.hash2Address;
 import static io.xdag.utils.WalletUtils.checkAddress;
 import static io.xdag.utils.WalletUtils.fromBase58;
 
 import com.google.common.collect.Lists;
 import io.xdag.DagKernel;
+import io.xdag.api.dto.AccountInfo;
+import io.xdag.api.dto.BlockDetail;
+import io.xdag.api.dto.BlockSummary;
+import io.xdag.api.dto.ChainStatsInfo;
+import io.xdag.api.dto.EpochInfo;
+import io.xdag.api.dto.TransactionInfo;
+import io.xdag.api.service.AccountApiService;
+import io.xdag.api.service.BlockApiService;
+import io.xdag.api.service.ChainApiService;
+import io.xdag.api.service.NetworkApiService;
+import io.xdag.api.service.TransactionApiService;
 import io.xdag.core.BlockHeader;
 import io.xdag.core.BlockInfo;
 import io.xdag.core.Block;
@@ -46,7 +56,6 @@ import io.xdag.core.XUnit;
 import io.xdag.crypto.exception.AddressFormatException;
 import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.keys.ECKeyPair;
-import io.xdag.utils.BasicUtils;
 import io.xdag.utils.XdagTime;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
@@ -66,7 +75,7 @@ import org.apache.tuweni.units.bigints.UInt64;
 import org.bouncycastle.util.encoders.Hex;
 
 /**
- * Command line interface for XDAG operations
+ * Command line interface for XDAG operations (with API services)
  */
 @Getter
 @Slf4j
@@ -74,14 +83,26 @@ public class Commands {
 
     private final DagKernel dagKernel;
 
-    // Block state string constants (Phase 7.1: Replacing BlockState enum)
+    // API Services
+    private final AccountApiService accountApiService;
+    private final TransactionApiService transactionApiService;
+    private final BlockApiService blockApiService;
+    private final ChainApiService chainApiService;
+    private final NetworkApiService networkApiService;
+
+    // Block state string constants ( Replacing BlockState enum)
     private static final String MAIN_STATE = "Main";
 
     public Commands(DagKernel dagKernel) {
         this.dagKernel = dagKernel;
-    }
 
-    // ========== v5.1 AccountStore Helper Methods ==========
+        // Initialize API services
+        this.accountApiService = new AccountApiService(dagKernel);
+        this.transactionApiService = new TransactionApiService(dagKernel);
+        this.blockApiService = new BlockApiService(dagKernel, transactionApiService);
+        this.chainApiService = new ChainApiService(dagKernel, accountApiService);
+        this.networkApiService = new NetworkApiService(dagKernel);
+    }
 
     /**
      * Convert UInt256 to XAmount for display
@@ -114,73 +135,136 @@ public class Commands {
     }
 
     /**
-     * List addresses, balances and nonces (v5.1 implementation)
-     * <p>
-     * Phase 8.1: Restored using v5.1 AccountStore.
-     * Shows account addresses with balances and transaction nonces.
-     * <p>
-     * v5.1 Simplifications:
-     * - Uses AccountStore.getBalance() for account balances
-     * - Uses AccountStore.getNonce() instead of txQuantity
-     * - No longer shows "Confirmed TX Quantity" (simplified in v5.1)
+     * List addresses, balances and nonces
      *
      * @param num Number of addresses to display
-     * @return Formatted account list
+     * @return Formatted account list with neat table layout
      */
     public String account(int num) {
-        StringBuilder str = new StringBuilder();
-        List<ECKeyPair> list = dagKernel.getWallet().getAccounts();
+        // Use API service to get account data
+        List<AccountInfo> accounts = accountApiService.getAccounts(num);
 
-        // Sort by balance descending
-        list.sort((o1, o2) -> {
-            Bytes addr1 = Bytes.wrap(toBytesAddress(o1));
-            Bytes addr2 = Bytes.wrap(toBytesAddress(o2));
-            XAmount balance1 = getAccountBalance(addr1);
-            XAmount balance2 = getAccountBalance(addr2);
-            return balance2.compareTo(balance1); // Descending order
-        });
-
-        for (ECKeyPair keyPair : list) {
-            if (num == 0) {
-                break;
-            }
-
-            Bytes addr = Bytes.wrap(toBytesAddress(keyPair));
-            XAmount balance = getAccountBalance(addr);
-            long nonce = getAccountNonce(addr);
-
-            str.append(AddressUtils.toBase58Address(keyPair))
-                    .append(" ")
-                    .append(balance.toDecimal(9, XUnit.XDAG).toPlainString())
-                    .append(" XDAG")
-                    .append("  [Nonce: ")
-                    .append(nonce)
-                    .append("]")
-                    .append("\n");
-            num--;
+        if (accounts.isEmpty()) {
+            return "No accounts found in wallet.";
         }
 
-        return str.toString();
+        StringBuilder output = new StringBuilder();
+
+        // Header
+        output.append("═══════════════════════════════════════════════════════════════════════════════════════════════\n");
+        output.append("Wallet Accounts\n");
+        output.append("═══════════════════════════════════════════════════════════════════════════════════════════════\n");
+        output.append(String.format("%-50s %20s %12s\n", "Address", "Balance (XDAG)", "Nonce"));
+        output.append("───────────────────────────────────────────────────────────────────────────────────────────────\n");
+
+        // Account rows
+        for (AccountInfo accountInfo : accounts) {
+            output.append(String.format("%-50s %20s %,12d\n",
+                    accountInfo.getAddress(),
+                    accountInfo.getBalance().toDecimal(9, XUnit.XDAG).toPlainString(),
+                    accountInfo.getNonce()));
+        }
+
+        // Footer
+        output.append("═══════════════════════════════════════════════════════════════════════════════════════════════\n");
+        output.append(String.format("Total: %d account%s displayed\n", accounts.size(), accounts.size() == 1 ? "" : "s"));
+
+        return output.toString();
     }
 
     /**
-     * Print header for block list display (enhanced v5.1 format)
+     * Query transaction details by hash
+     *
+     * @param txHash Transaction hash to query
+     * @return Formatted transaction details
+     */
+    public String transaction(Bytes32 txHash) {
+        // Use API service to get transaction data
+        TransactionInfo tx = transactionApiService.getTransaction(txHash);
+
+        if (tx == null) {
+            return "Transaction not found: " + txHash.toHexString();
+        }
+
+        StringBuilder output = new StringBuilder();
+
+        // Header
+        output.append("═══════════════════════════════════════════════════\n");
+        output.append("Transaction Details\n");
+        output.append("═══════════════════════════════════════════════════\n");
+        output.append(String.format("Hash:            %s\n", tx.getHash()));
+        output.append("\n");
+
+        // Transaction Information
+        output.append("Transaction Info:\n");
+        output.append(String.format("  From:          %s\n", tx.getFrom()));
+        output.append(String.format("  To:            %s\n", tx.getTo()));
+        output.append(String.format("  Amount:        %s XDAG\n",
+                tx.getAmount().toDecimal(9, XUnit.XDAG).toPlainString()));
+        output.append(String.format("  Fee:           %s XDAG\n",
+                tx.getFee().toDecimal(9, XUnit.XDAG).toPlainString()));
+        output.append(String.format("  Nonce:         %d\n", tx.getNonce()));
+        output.append("\n");
+
+        // Data/Remark (if present)
+        if (tx.getRemark() != null && !tx.getRemark().isEmpty()) {
+            output.append("Remark:\n");
+            output.append(String.format("  %s\n", tx.getRemark()));
+            output.append("\n");
+        }
+
+        // Signature Information
+        if (tx.getSignature() != null) {
+            output.append("Signature:\n");
+            output.append(String.format("  %s...\n", tx.getSignature()));
+            output.append("\n");
+        }
+
+        // Block Information
+        if (tx.getBlockHash() != null) {
+            output.append("Block Information:\n");
+            output.append(String.format("  Block Hash:    %s\n", tx.getBlockHash()));
+
+            if (tx.getTimestamp() != null) {
+                output.append(String.format("  Timestamp:     %s UTC\n",
+                        FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss").format(tx.getTimestamp())));
+            }
+
+            if (tx.getBlockHeight() != null) {
+                output.append(String.format("  Block Height:  %d (Main Chain)\n", tx.getBlockHeight()));
+            }
+
+            if (tx.getEpoch() != null) {
+                output.append(String.format("  Epoch:         %d\n", tx.getEpoch()));
+            }
+
+            output.append(String.format("  Status:        %s\n", tx.getStatus()));
+        } else {
+            output.append("Block Information:\n");
+            output.append(String.format("  Status:        %s\n", tx.getStatus()));
+        }
+
+        output.append("\n");
+        output.append("Verification:\n");
+        output.append(String.format("  Valid:         %s\n", tx.isValid() ? "✓ Yes" : "✗ No"));
+        output.append(String.format("  Signature OK:  %s\n", tx.isSignatureValid() ? "✓ Yes" : "✗ No"));
+
+        return output.toString();
+    }
+
+    /**
+     * Print header for block list display
      */
     public static String printHeaderBlockList() {
         return """
-                ═══════════════════════════════════════════════════════════════════════════════════════
-                Height    Address                            Time                  Difficulty    Txs
-                ═══════════════════════════════════════════════════════════════════════════════════════
+                ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+                Height    Hash                                                              Time                  Difficulty    Txs
+                ═══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
                 """;
     }
 
-    // ========== Phase 8.1: Block Display Methods ==========
-
     /**
-     * Print Block in list format (v5.1 enhanced implementation)
-     * <p>
-     * Phase 8.1: Block display for CLI commands.
-     * Enhanced to show v5.1 fields: height, address, time, difficulty, transaction count.
+     * Print Block in list format
      *
      * @param block Block to print
      * @param dagKernel DagKernel for querying transaction count
@@ -204,24 +288,16 @@ public class Commands {
             difficultyStr = difficultyStr.substring(0, 10) + "...";
         }
 
-        return String.format("%08d  %s  %s  %-12s  %3d",
+        return String.format("%08d  %-64s  %s  %-12s  %3d",
                 info.getHeight(),
-                hash2Address(block.getHash()),
+                block.getHash().toHexString(),
                 FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss").format(time),
                 difficultyStr,
                 txCount);
     }
 
     /**
-     * Print detailed Block info (v5.1 enhanced implementation)
-     * <p>
-     * Phase 8.1: Block detailed display for block info command.
-     * Enhanced to show Link and Transaction details as designed in CLI_REDESIGN_V5.1.md
-     * <p>
-     * Shows:
-     * - Basic block info (height, time, state, hash, difficulty, epoch)
-     * - Link details (block references with their heights and epochs)
-     * - Transaction details (from TransactionStore)
+     * Print detailed Block info
      *
      * @param block Block to display
      * @param dagKernel DagKernel instance for querying link and transaction details
@@ -239,7 +315,7 @@ public class Commands {
 
         StringBuilder output = new StringBuilder();
         output.append("═══════════════════════════════════════════════════\n");
-        output.append("Block Information (v5.1)\n");
+        output.append("Block Info\n");
         output.append("═══════════════════════════════════════════════════\n");
         output.append(String.format("Hash:            %s\n", Hex.toHexString(block.getHash().toArray())));
         output.append(String.format("Timestamp:       %s UTC\n",
@@ -325,22 +401,14 @@ public class Commands {
     }
 
     /**
-     * Print detailed Block info (v5.1 implementation)
-     * <p>
-     * Phase 8.1: Block detailed display for block info command.
-     * v5.1 minimal design shows only available fields from BlockInfo.
-     * <p>
-     * Note: Transaction details and history are NOT shown here because:
-     * - v5.1 uses Link-based references (not embedded amounts)
-     * - Transaction data stored separately in TransactionStore
-     * - Would require additional queries to show full transaction details
+     * Print detailed Block info
      *
      * @param block Block to display
      * @return Formatted detailed block information
      * @deprecated Use printBlockInfoV5Enhanced() for richer output
      */
     @Deprecated
-    public static String printBlockInfoV5(Block block) {
+    public static String printBlockInfo(Block block) {
         BlockInfo info = block.getInfo();
 
         if (info == null) {
@@ -350,7 +418,6 @@ public class Commands {
         long time = XdagTime.xdagTimestampToMs(block.getTimestamp());
         String state = info.isMainBlock() ? MAIN_STATE : "Orphan";
 
-        // v5.1 minimal info display (only BlockInfo fields)
         String format = """
                   height: %s
                     time: %s
@@ -374,9 +441,9 @@ public class Commands {
     }
 
   /**
-     * Get balance for address (Phase 8.1: Fully restored using Transaction APIs)
+     * Get balance for address ( Fully restored using Transaction APIs)
      * <p>
-     * Phase 8.1: Restored both account and block balance lookups.
+     *  Restored both account and block balance lookups.
      * - Account balance: Uses AddressStore (unchanged)
      * - Block balance: Calculates from Transactions using TransactionStore
      *
@@ -386,7 +453,7 @@ public class Commands {
      */
     public String balance(String address) throws AddressFormatException {
         if (StringUtils.isEmpty(address)) {
-            // Account balance lookup (v5.1: Using AccountStore)
+            // Account balance lookup
             XAmount ourBalance = XAmount.ZERO;
             List<ECKeyPair> list = dagKernel.getWallet().getAccounts();
             for (ECKeyPair k : list) {
@@ -420,7 +487,7 @@ public class Commands {
                     return "Block not found";
                 }
 
-                // v5.1: Calculate balance from Transactions
+                // Calculate balance from Transactions
                 List<Transaction> transactions = dagKernel.getTransactionStore().getTransactionsByBlock(hash);
                 XAmount totalAmount = XAmount.ZERO;
 
@@ -438,7 +505,7 @@ public class Commands {
 
     public String txQuantity(String address) throws AddressFormatException {
         if (StringUtils.isEmpty(address)) {
-            // v5.1: Using nonce from AccountStore (replaces txQuantity)
+            //  Using nonce from AccountStore (replaces txQuantity)
             long totalNonce = 0;
             List<ECKeyPair> list = dagKernel.getWallet().getAccounts();
             for (ECKeyPair key : list) {
@@ -448,7 +515,7 @@ public class Commands {
             return String.format("Total Transaction Nonce: %d\n", totalNonce);
         } else {
             if (checkAddress(address)) {
-                // v5.1: Get nonce for account address
+                //  Get nonce for account address
                 Bytes addr = Bytes.wrap(fromBase58(address).toArray());
                 long nonce = getAccountNonce(addr);
                 return String.format("Transaction Nonce: %d\n", nonce);
@@ -458,94 +525,76 @@ public class Commands {
         }
     }
 
-  /**
-     * Get current blockchain statistics (v5.1 enhanced implementation)
-     * <p>
-     * Phase 8.1: Restored using v5.1 ChainStats.
-     * Enhanced with professional formatting and comprehensive statistics.
-     * <p>
-     * v5.1 Simplifications:
-     * - Uses ChainStats for all chain metrics
-     * - P2P statistics temporarily unavailable (pending P2pService implementation)
-     * - Shows available metrics: blocks, difficulty, orphans, sync status
+    /**
+     * Get current blockchain statistics ( Using API service)
      *
      * @return Formatted statistics string with enhanced layout
      */
     public String stats() {
-        ChainStats chainStats = dagKernel.getDagChain().getChainStats();
+        // Use API service to get chain statistics
+        ChainStatsInfo stats = chainApiService.getChainStats();
+
+        if (stats == null) {
+            return "Unable to retrieve chain statistics";
+        }
 
         StringBuilder output = new StringBuilder();
         output.append("═══════════════════════════════════════════════════\n");
-        output.append("XDAG Network Statistics (v5.1)\n");
+        output.append("XDAG Network Statistics\n");
         output.append("═══════════════════════════════════════════════════\n");
         output.append("\n");
 
         // Chain Status
         output.append("Chain Status:\n");
         output.append(String.format("  Main Chain Length:      %,d blocks\n",
-                chainStats.getMainBlockCount()));
+                stats.getMainBlockCount()));
+
+        // Show top block height
+        if (stats.getTopBlockHeight() != null) {
+            output.append(String.format("  Top Block Height:       %,d\n",
+                    stats.getTopBlockHeight()));
+        }
+
         output.append(String.format("  Total Blocks:           %,d\n",
-                chainStats.getTotalBlockCount()));
+                stats.getTotalBlockCount()));
         output.append(String.format("  Current Epoch:          %,d\n",
-                dagKernel.getDagChain().getCurrentEpoch()));
+                stats.getCurrentEpoch()));
 
         // Show top block info
-        if (chainStats.getTopBlock() != null) {
+        if (stats.getTopBlockHash() != null) {
             output.append(String.format("  Top Block Hash:         %s\n",
-                    chainStats.getTopBlock().toHexString().substring(0, 16) + "..."));
+                    stats.getTopBlockHash()));
         }
         output.append("\n");
 
         // Network Statistics
         output.append("Network:\n");
-
-        // Get P2P statistics (v5.1: Using P2pService if available)
-        int connectedHosts = 0;
-        int totalHosts = chainStats.getTotalHostCount();
-        if (dagKernel.getP2pService() != null) {
-            // TODO: Implement P2pService.getActiveChannelCount()
-            connectedHosts = 0; // Placeholder
-        }
         output.append(String.format("  Connected Peers:        %d of %d\n",
-                connectedHosts, totalHosts));
-
+                stats.getConnectedPeers(), stats.getTotalHosts()));
         output.append(String.format("  Orphan Blocks:          %,d\n",
-                chainStats.getNoRefCount()));
+                stats.getOrphanCount()));
         output.append(String.format("  Waiting Sync:           %,d\n",
-                chainStats.getWaitingSyncCount()));
+                stats.getWaitingSyncCount()));
         output.append(String.format("  Sync Progress:          %.1f%%\n",
-                chainStats.getSyncProgress()));
+                stats.getSyncProgress()));
         output.append("\n");
 
         // Consensus & Difficulty
         output.append("Consensus:\n");
-        UInt256 currentDiff = chainStats.getTopDifficulty() != null ?
-                chainStats.getTopDifficulty() : UInt256.ZERO;
-        UInt256 maxDiff = chainStats.getMaxDifficulty();
-
         output.append(String.format("  Current Difficulty:     %s\n",
-                formatDifficulty(currentDiff)));
+                formatDifficulty(stats.getCurrentDifficulty())));
         output.append(String.format("  Max Difficulty:         %s\n",
-                formatDifficulty(maxDiff)));
+                formatDifficulty(stats.getMaxDifficulty())));
         output.append(String.format("  Finality Window:        %,d epochs (≈12 days)\n",
                 16384));
         output.append("\n");
 
         // Wallet Statistics
         output.append("Wallet:\n");
-        XAmount totalBalance = XAmount.ZERO;
-        int accountCount = 0;
-        List<ECKeyPair> accounts = dagKernel.getWallet().getAccounts();
-        for (ECKeyPair account : accounts) {
-            Bytes addr = Bytes.wrap(toBytesAddress(account));
-            totalBalance = totalBalance.add(getAccountBalance(addr));
-            accountCount++;
-        }
-
         output.append(String.format("  XDAG in Wallets:        %s XDAG\n",
-                totalBalance.toDecimal(9, XUnit.XDAG).toPlainString()));
+                stats.getTotalWalletBalance().toDecimal(9, XUnit.XDAG).toPlainString()));
         output.append(String.format("  Number of Wallets:      %d\n",
-                accountCount));
+                stats.getAccountCount()));
 
         return output.toString();
     }
@@ -561,44 +610,43 @@ public class Commands {
         return "0x" + hex;
     }
 
+
     /**
-     * Connect to remote node (v5.1: Using P2pService)
+     * Connect to remote node ( Using P2pService)
      */
     public void connect(String server, int port) {
         if (dagKernel.getP2pService() != null) {
             // TODO: Implement P2pService connect method
-            log.warn("P2P connect not yet implemented in v5.1");
+            log.warn("P2P connect not yet implemented");
         } else {
             log.warn("P2pService not available");
         }
     }
-
     /**
-     * Get block info by hash (Phase 8.1: Enhanced with Link and Transaction details)
-     * <p>
-     * Phase 8.1: Restored CLI command using Block.
-     * Uses getBlockByHash() from Blockchain and printBlockInfoV5Enhanced() for rich display.
+     * Get block info by hash ( Using API service)
      *
      * @param blockhash Block hash to lookup
      * @return Formatted block information with Links and Transactions
      */
     public String block(Bytes32 blockhash) {
         try {
-            Block block = dagKernel.getDagChain().getBlockByHash(blockhash, true);
-            if (block == null) {
+            // Use API service to get block details
+            BlockDetail blockDetail = blockApiService.getBlockDetail(blockhash);
+
+            if (blockDetail == null) {
                 return "Block not found";
             }
-            return printBlockInfoV5Enhanced(block, dagKernel);
+
+            return formatBlockDetail(blockDetail);
         } catch (Exception e) {
             log.error(e.getMessage(), e);
+            return "error, please check log";
         }
-        return "error, please check log";
     }
 
     /**
-     * Get block info by address (Phase 8.1: Enhanced with Link and Transaction details)
+     * Get block info by address ( Using API service)
      * <p>
-     * Phase 8.1: Restored CLI command using Block.
      * Converts address to hash, then uses block(Bytes32).
      *
      * @param address Block address (various formats supported)
@@ -609,19 +657,98 @@ public class Commands {
         return block(hash);
     }
 
-  /**
-     * List main blocks (Phase 8.1: Enhanced with v5.1 formatting)
-     * <p>
-     * Phase 8.1: Restored CLI command using Block display.
-     * Enhanced to show difficulty and transaction count.
+    /**
+     * Format BlockDetail for display
+     */
+    private String formatBlockDetail(BlockDetail blockDetail) {
+        StringBuilder output = new StringBuilder();
+
+        output.append("═══════════════════════════════════════════════════\n");
+        output.append("Block Info\n");
+        output.append("═══════════════════════════════════════════════════\n");
+        output.append(String.format("Hash:            %s\n", blockDetail.getHash()));
+
+        long time = XdagTime.xdagTimestampToMs(blockDetail.getTimestamp());
+        output.append(String.format("Timestamp:       %s UTC\n",
+                FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss").format(time)));
+        output.append(String.format("Epoch:           %d\n", blockDetail.getEpoch()));
+
+        if (blockDetail.getHeight() != null) {
+            output.append(String.format("Height:          %d (Main Chain)\n", blockDetail.getHeight()));
+        } else {
+            output.append("Height:          N/A (Orphan)\n");
+        }
+        output.append(String.format("State:           %s\n", blockDetail.getState()));
+        output.append("\n");
+
+        output.append("Block Details:\n");
+        output.append(String.format("  Difficulty:    %s\n",
+                blockDetail.getDifficulty().toBigInteger().toString(16)));
+        output.append(String.format("  Coinbase:      %s\n", blockDetail.getCoinbase()));
+        output.append("\n");
+
+        // Show Links (Block References)
+        if (blockDetail.getBlockLinks() != null && !blockDetail.getBlockLinks().isEmpty()) {
+            output.append("Links (Block References):\n");
+            for (BlockDetail.LinkInfo link : blockDetail.getBlockLinks()) {
+                output.append(String.format("  → %s", link.getHash()));
+                if (link.getHeight() != null && link.getEpoch() != null) {
+                    output.append(String.format(" (height: %d, epoch: %d)", link.getHeight(), link.getEpoch()));
+                }
+                output.append("\n");
+            }
+            output.append(String.format("  [Total: %d block links]\n", blockDetail.getBlockLinks().size()));
+            output.append("\n");
+        }
+
+        // Show Transactions
+        if (blockDetail.getTransactions() != null && !blockDetail.getTransactions().isEmpty()) {
+            output.append("Transactions:\n");
+
+            // Display first 10 transactions
+            int displayCount = Math.min(blockDetail.getTransactions().size(), 10);
+            for (int i = 0; i < displayCount; i++) {
+                TransactionInfo tx = blockDetail.getTransactions().get(i);
+                String fromShort = tx.getFrom().length() > 16 ?
+                        tx.getFrom().substring(0, 8) + "..." : tx.getFrom();
+                String toShort = tx.getTo().length() > 16 ?
+                        tx.getTo().substring(0, 8) + "..." : tx.getTo();
+                String hashShort = tx.getHash().length() > 32 ?
+                        tx.getHash().substring(0, 16) + "..." : tx.getHash();
+
+                output.append(String.format("  ✓ %s (from: %s, to: %s, amount: %s XDAG, fee: %s XDAG)\n",
+                        hashShort,
+                        fromShort,
+                        toShort,
+                        tx.getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
+                        tx.getFee().toDecimal(9, XUnit.XDAG).toPlainString()));
+            }
+
+            if (blockDetail.getTransactions().size() > displayCount) {
+                output.append(String.format("  ... and %d more transactions\n",
+                        blockDetail.getTransactions().size() - displayCount));
+            }
+
+            output.append(String.format("  [Total: %d transactions, %s XDAG transferred, %s XDAG fees]\n",
+                    blockDetail.getTransactions().size(),
+                    blockDetail.getTotalAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
+                    blockDetail.getTotalFees().toDecimal(9, XUnit.XDAG).toPlainString()));
+        }
+
+        return output.toString();
+    }
+
+    /**
+     * List main blocks ( Using API service)
      *
      * @param n Number of blocks to list
      * @return Formatted list of main blocks with detailed information
      */
-    public String mainblocks(int n) {
-        List<Block> blockList = dagKernel.getDagChain().listMainBlocks(n);
+    public String chain(int n) {
+        // Use API service to get main blocks
+        List<BlockSummary> blockList = blockApiService.getMainBlocks(n);
 
-        if (CollectionUtils.isEmpty(blockList)) {
+        if (blockList.isEmpty()) {
             return "No main blocks found";
         }
 
@@ -629,47 +756,85 @@ public class Commands {
         output.append("Main Chain Blocks (Latest ").append(blockList.size()).append(")\n");
         output.append(printHeaderBlockList());
 
-        for (Block block : blockList) {
-            output.append(printBlockEnhanced(block, dagKernel)).append("\n");
+        for (BlockSummary blockSummary : blockList) {
+            // Format block summary for display
+            long time = XdagTime.xdagTimestampToMs(blockSummary.getTimestamp());
+            String difficultyStr = blockSummary.getDifficulty().toBigInteger().toString(16);
+            if (difficultyStr.length() > 10) {
+                difficultyStr = difficultyStr.substring(0, 10) + "...";
+            }
+
+            output.append(String.format("%08d  %-64s  %s  %-12s  %3d\n",
+                    blockSummary.getHeight(),
+                    blockSummary.getHash(),
+                    FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss").format(time),
+                    difficultyStr,
+                    blockSummary.getTransactionCount())).append("\n");
         }
 
         return output.toString();
     }
 
     /**
-     * List mined blocks (Phase 8.1: Enhanced with v5.1 formatting)
+     * List mined blocks ( Using API service)
      * <p>
-     * Phase 8.1: Restored CLI command using Block display.
-     * Enhanced to show difficulty and transaction count.
+     * Uses BlockApiService to filter mined blocks by wallet coinbase.
      *
      * @param n Number of blocks to list
      * @return Formatted list of mined blocks with detailed information
      */
     public String minedBlocks(int n) {
-        List<Block> blockList = dagKernel.getDagChain().listMinedBlocks(n);
+        try {
+            // Get wallet addresses from API service
+            List<Bytes> walletAddresses = blockApiService.getWalletAddresses();
 
-        if (CollectionUtils.isEmpty(blockList)) {
-            return "No mined blocks found";
+            if (walletAddresses.isEmpty()) {
+                return "No accounts in wallet to check for mined blocks.";
+            }
+
+            // Use API service to get mined blocks
+            List<BlockSummary> minedBlocks = blockApiService.getMinedBlocks(n, walletAddresses);
+
+            if (minedBlocks.isEmpty()) {
+                return "No mined blocks found for this wallet.";
+            }
+
+            // Format output
+            StringBuilder output = new StringBuilder();
+            output.append("Blocks Mined by This Node (Latest ").append(minedBlocks.size()).append(")\n");
+            output.append(printHeaderBlockList());
+
+            for (BlockSummary blockSummary : minedBlocks) {
+                // Format block summary for display
+                long time = XdagTime.xdagTimestampToMs(blockSummary.getTimestamp());
+                String difficultyStr = blockSummary.getDifficulty().toBigInteger().toString(16);
+                if (difficultyStr.length() > 10) {
+                    difficultyStr = difficultyStr.substring(0, 10) + "...";
+                }
+
+                output.append(String.format("%08d  %-64s  %s  %-12s  %3d\n",
+                        blockSummary.getHeight(),
+                        blockSummary.getHash(),
+                        FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss").format(time),
+                        difficultyStr,
+                        blockSummary.getTransactionCount()));
+            }
+
+            // Calculate total rewards (simplified - assuming 1024 XDAG per block)
+            // TODO: Use actual reward calculation from blockchain consensus
+            XAmount totalRewards = XAmount.of(minedBlocks.size() * 1024L, XUnit.XDAG);
+
+            output.append("\n");
+            output.append(String.format("Total Mined: %d blocks\n", minedBlocks.size()));
+            output.append(String.format("Estimated Rewards: %s XDAG\n",
+                    totalRewards.toDecimal(9, XUnit.XDAG).toPlainString()));
+
+            return output.toString();
+
+        } catch (Exception e) {
+            log.error("minedBlocks query failed: {}", e.getMessage(), e);
+            return "Error querying mined blocks: " + e.getMessage();
         }
-
-        StringBuilder output = new StringBuilder();
-        output.append("Blocks Mined by This Node (Latest ").append(blockList.size()).append(")\n");
-        output.append(printHeaderBlockList());
-
-        for (Block block : blockList) {
-            output.append(printBlockEnhanced(block, dagKernel)).append("\n");
-        }
-
-        // Calculate total rewards (simplified - assuming 1024 XDAG per block)
-        // TODO: Use actual reward calculation from blockchain consensus
-        XAmount totalRewards = XAmount.of(blockList.size() * 1024L, XUnit.XDAG);
-
-        output.append("\n");
-        output.append(String.format("Total Mined: %d blocks\n", blockList.size()));
-        output.append(String.format("Estimated Rewards: %s XDAG\n",
-                totalRewards.toDecimal(9, XUnit.XDAG).toPlainString()));
-
-        return output.toString();
     }
 
     /**
@@ -691,28 +856,28 @@ public class Commands {
     }
 
     /**
-     * List active connections (v5.1: Using P2pService)
+     * List active connections
      */
     public String listConnect() {
         if (dagKernel.getP2pService() != null) {
             // TODO: Implement P2pService channel list
-            return "P2P channel listing not yet implemented in v5.1";
+            return "P2P channel listing not yet implemented";
         } else {
             return "P2pService not available";
         }
     }
 
     /**
-     * Show websocket channel pool (v5.1: Mining pool disabled)
+     * Show websocket channel pool
      */
     public String pool() {
-        // TODO: Re-implement pool functionality in v5.1
-        return "Mining pool functionality temporarily disabled in v5.1\n" +
+        // TODO: Re-implement pool functionality
+        return "Mining pool functionality temporarily disabled\n" +
                "Will be re-implemented in future version";
     }
 
     /**
-     * Generate new key pair (v5.1: Simplified without XdagState)
+     * Generate new key pair
      */
     public String keygen() {
         dagKernel.getWallet().addAccountRandom();
@@ -722,7 +887,7 @@ public class Commands {
     }
 
     /**
-     * Get current XDAG state (v5.1: Using DagChain stats)
+     * Get current XDAG state
      */
     public String state() {
         ChainStats stats = dagKernel.getDagChain().getChainStats();
@@ -741,113 +906,85 @@ public class Commands {
     }
 
     /**
-     * Get epoch information (NEW v5.1 command)
-     * <p>
-     * CLI Redesign v5.1: New epoch command for querying epoch details.
-     * Shows epoch time range, candidates, winner, and consensus information.
+     * Get epoch information ( Using API service)
      *
      * @param epochNumber Epoch number to query (null for current epoch)
      * @return Formatted epoch information
      */
     public String epoch(Long epochNumber) {
         try {
-            // Get epoch number (current if not specified)
-            long epoch = epochNumber != null ? epochNumber : dagKernel.getDagChain().getCurrentEpoch();
-            long currentEpoch = dagKernel.getDagChain().getCurrentEpoch();
-            boolean isCurrent = (epoch == currentEpoch);
+            // Use API service to get epoch information
+            EpochInfo epochInfo = chainApiService.getEpochInfo(epochNumber);
 
-            // Get epoch time range
-            long[] timeRange = dagKernel.getDagChain().getEpochTimeRange(epoch);
-            long startTime = timeRange[0];
-            long endTime = timeRange[1];
-            long duration = endTime - startTime; // in seconds
-
-            // Get candidate blocks in this epoch
-            List<Block> candidates = dagKernel.getDagChain().getCandidateBlocksInEpoch(epoch);
+            if (epochInfo == null) {
+                return "Unable to retrieve epoch information";
+            }
 
             StringBuilder output = new StringBuilder();
             output.append("═══════════════════════════════════════════════════\n");
-            if (isCurrent) {
+            if (epochInfo.isCurrent()) {
                 output.append("Current Epoch Information\n");
             } else {
-                output.append(String.format("Epoch %d Information\n", epoch));
+                output.append(String.format("Epoch %d Information\n", epochInfo.getEpochNumber()));
             }
             output.append("═══════════════════════════════════════════════════\n");
-            output.append(String.format("Epoch Number:    %d%s\n", epoch, isCurrent ? " (Current)" : ""));
+            output.append(String.format("Epoch Number:    %d%s\n",
+                    epochInfo.getEpochNumber(),
+                    epochInfo.isCurrent() ? " (Current)" : ""));
 
             // Format time range
-            long startTimeMs = XdagTime.xdagTimestampToMs(startTime);
-            long endTimeMs = XdagTime.xdagTimestampToMs(endTime);
+            long startTimeMs = XdagTime.xdagTimestampToMs(epochInfo.getStartTime());
+            long endTimeMs = XdagTime.xdagTimestampToMs(epochInfo.getEndTime());
             output.append(String.format("Time Range:      %s - %s\n",
                     FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss").format(startTimeMs),
                     FastDateFormat.getInstance("HH:mm:ss").format(endTimeMs)));
-            output.append(String.format("Duration:        %d seconds\n", duration));
+            output.append(String.format("Duration:        %d seconds\n", epochInfo.getDuration()));
 
             // If current epoch, show progress
-            if (isCurrent) {
-                long currentTime = XdagTime.getCurrentTimestamp();
-                long elapsed = currentTime - startTime;
-                double progress = (double) elapsed / duration * 100.0;
+            if (epochInfo.isCurrent() && epochInfo.getElapsed() != null) {
                 output.append(String.format("Elapsed:         %d / %d seconds (%.1f%%)\n",
-                        elapsed, duration, progress));
-                output.append(String.format("Next Epoch:      In %d seconds\n", duration - elapsed));
+                        epochInfo.getElapsed(),
+                        epochInfo.getDuration(),
+                        epochInfo.getProgress()));
+                output.append(String.format("Next Epoch:      In %d seconds\n",
+                        epochInfo.getTimeToNext()));
             }
 
             output.append("\n");
             output.append("Blocks in Epoch:\n");
-            output.append(String.format("  Total Candidates:  %d blocks\n", candidates.size()));
+            output.append(String.format("  Total Candidates:  %d blocks\n",
+                    epochInfo.getCandidateCount()));
 
-            // Find winner and orphans
-            Block winner = null;
-            List<Block> orphans = new ArrayList<>();
-            UInt256 minHash = UInt256.MAX_VALUE;
-
-            for (Block block : candidates) {
-                // Winner is the block with smallest hash
-                UInt256 blockHash = UInt256.fromBytes(block.getHash());
-                if (blockHash.compareTo(minHash) < 0) {
-                    if (winner != null) {
-                        orphans.add(winner);
-                    }
-                    winner = block;
-                    minHash = blockHash;
-                } else {
-                    orphans.add(block);
+            if (epochInfo.getWinnerHash() != null) {
+                output.append(String.format("  Winner:            %s",
+                        epochInfo.getWinnerHash()));
+                if (epochInfo.getWinnerHeight() != null) {
+                    output.append(String.format(" (height: %d)", epochInfo.getWinnerHeight()));
                 }
-            }
-
-            if (winner != null) {
-                output.append(String.format("  Winner:            %s (height: %d)\n",
-                        Hex.toHexString(winner.getHash().toArray()).substring(0, 16) + "...",
-                        winner.getInfo().getHeight()));
+                output.append("\n");
             } else {
                 output.append("  Winner:            Not yet determined\n");
             }
-            output.append(String.format("  Orphans:           %d blocks\n", orphans.size()));
+            output.append(String.format("  Orphans:           %d blocks\n",
+                    epochInfo.getOrphanCount()));
 
             // Show consensus details
             output.append("\n");
             output.append("Consensus:\n");
             output.append("  Selection Rule:    Smallest hash wins\n");
 
-            if (!candidates.isEmpty()) {
-                // Calculate average difficulty
-                UInt256 totalDifficulty = UInt256.ZERO;
-                for (Block block : candidates) {
-                    totalDifficulty = totalDifficulty.add(block.getInfo().getDifficulty());
-                }
-                UInt256 avgDifficulty = totalDifficulty.divide(candidates.size());
+            if (epochInfo.getCandidateCount() > 0) {
                 output.append(String.format("  Average Difficulty: %s\n",
-                        avgDifficulty.toBigInteger().toString(16)));
+                        epochInfo.getAverageDifficulty().toBigInteger().toString(16)));
                 output.append(String.format("  Total Difficulty:   %s\n",
-                        totalDifficulty.toBigInteger().toString(16)));
+                        epochInfo.getTotalDifficulty().toBigInteger().toString(16)));
             }
 
             return output.toString();
 
         } catch (Exception e) {
-          log.error("epoch command failed: {}", e.getMessage(), e);
-          return "Error querying epoch information: " + e.getMessage();
+            log.error("epoch command failed: {}", e.getMessage(), e);
+            return "Error querying epoch information: " + e.getMessage();
         }
     }
 
@@ -859,17 +996,12 @@ public class Commands {
     }
 
     /**
-     * Calculate maximum transferable balance (Phase 8.1: Using AccountStore)
-     * <p>
-     * v5.1: Simplified implementation using account balances from AccountStore.
-     * In v5.1, balances are tracked by addresses (not blocks), so we sum
-     * confirmed address balances directly.
+     * Calculate maximum transferable balance
      *
      * @param dagKernel Kernel instance
      * @return Formatted maximum transferable balance
      */
     public static String getBalanceMaxXfer(DagKernel dagKernel) {
-        // v5.1: Sum up all account balances
         XAmount totalBalance = XAmount.ZERO;
         List<ECKeyPair> accounts = dagKernel.getWallet().getAccounts();
 
@@ -883,12 +1015,12 @@ public class Commands {
     }
 
     /**
-     * Get address transaction history (Phase 8.1: Restored using Transaction APIs)
+     * Get address transaction history ( Restored using Transaction APIs)
      * <p>
-     * Phase 8.1: Restored address transaction history using TransactionStore.
+     *  Restored address transaction history using TransactionStore.
      * Shows all transactions involving the address (sent or received).
      * <p>
-     * Note: Pagination not yet implemented in v5.1 TransactionStore.
+     * Note: Pagination not yet implemented in TransactionStore.
      * Future enhancement: Add paging support to TransactionStore.getTransactionsByAddress()
      *
      * @param wrap Address bytes (20 bytes)
@@ -896,7 +1028,7 @@ public class Commands {
      * @return Formatted transaction history
      */
     public String address(Bytes wrap, int page) {
-        // Get address balance (v5.1: Using AccountStore)
+        // Get address balance ( Using AccountStore)
         XAmount balance = getAccountBalance(wrap);
 
         String overview = " OverView\n" +
@@ -928,7 +1060,7 @@ public class Commands {
                 otherAddress = tx.getFrom();
             }
 
-            // Phase 9.1: Get transaction timestamp from containing block
+            //  Get transaction timestamp from containing block
             String timeStr = "";
             Bytes32 blockHash = dagKernel.getTransactionStore().getBlockByTransaction(tx.getHash());
             if (blockHash != null) {
@@ -953,16 +1085,16 @@ public class Commands {
                     timeStr));
         }
 
-        // Phase 9.1: Transaction timestamp lookup implemented using reverse index
+        //  Transaction timestamp lookup implemented using reverse index
         return overview + "\n" + txHistory;
     }
 
-  // ========== Phase 4 Layer 3: v5.1 Transaction Methods ==========
+  // ========== Phase 4 Layer 3: Transaction Methods ==========
 
     /**
      * Transfer XDAG to another address
      * <p>
-     * Uses v5.1 Transaction + Block architecture with configurable fee and remark support.
+     * Uses Transaction + Block architecture with configurable fee and remark support.
      * This is a convenience method that uses the default fee of 100 milli-XDAG.
      *
      * @param sendAmount Amount to send
@@ -978,7 +1110,7 @@ public class Commands {
     /**
      * Transfer XDAG to another address (full implementation)
      * <p>
-     * Uses v5.1 Transaction + Block architecture with configurable fee and remark support.
+     * Uses Transaction + Block architecture with configurable fee and remark support.
      * <p>
      * Key features:
      * 1. Uses Transaction instead of legacy Address
@@ -1011,7 +1143,7 @@ public class Commands {
                 return "Invalid recipient address format. Please use Base58 address format.";
             }
 
-            // Find account with sufficient balance (v5.1: Using AccountStore)
+            // Find account with sufficient balance ( Using AccountStore)
             ECKeyPair fromAccount = null;
             Bytes fromAddress = null;
             long currentNonce = 0;
@@ -1023,7 +1155,7 @@ public class Commands {
                 if (balance.compareTo(totalRequired) >= 0) {
                     fromAccount = account;
                     fromAddress = Bytes.wrap(toBytesAddress(account));
-                    // Get current nonce (v5.1: Using AccountStore)
+                    // Get current nonce ( Using AccountStore)
                     currentNonce = getAccountNonce(addr) + 1;
                     break;
                 }
@@ -1084,18 +1216,18 @@ public class Commands {
                     .info(null)  // Will be initialized by tryToConnectV2()
                     .build();
 
-            // Validate and add block (v5.1: DagImportResult)
+            // Validate and add block
             DagImportResult result = dagKernel.getDagChain().tryToConnect(block);
 
             if (result.isMainBlock()) {
-                // Update nonce in AccountStore (v5.1)
+                // Update nonce in AccountStore
                 Bytes fromAddr = Bytes.wrap(toBytesAddress(fromAccount));
                 updateAccountNonce(fromAddr, currentNonce);
 
-                // v5.1: Broadcast block using P2pService
+                //  Broadcast block using P2pService
                 if (dagKernel.getP2pService() != null) {
                     // TODO: Implement P2pService broadcast method
-                    log.info("Block broadcast not yet implemented in v5.1: {}", hash2Address(block.getHash()));
+                    log.info("Block broadcast not yet implemented in  {}", block.getHash().toHexString());
                 }
 
                 // Phase 2 Task 2.1: Build success message with optional remark
@@ -1103,8 +1235,7 @@ public class Commands {
                 successMsg.append("Transaction created successfully!\n");
                 successMsg.append(String.format("  Transaction hash: %s\n",
                         signedTx.getHash().toHexString().substring(0, 16) + "..."));
-                successMsg.append(String.format("  Block hash: %s\n",
-                        hash2Address(block.getHash())));
+                successMsg.append(String.format("  Block hash: %s\n",block.getHash().toHexString()));
                 successMsg.append(String.format("  From: %s\n",
                         fromAddress.toHexString().substring(0, 16) + "..."));
                 successMsg.append(String.format("  To: %s\n",
@@ -1143,10 +1274,10 @@ public class Commands {
     /**
      * Consolidate account balances to default address
      * <p>
-     * v5.1 implementation using address balances and Transaction architecture.
+     * implementation using address balances and Transaction architecture.
      * Transfers all account balances to the default key address.
      * <p>
-     * v5.1 Features:
+     * Features:
      * 1. Uses address balances from AccountStore
      * 2. AddressStore handles confirmation logic automatically
      * 3. Creates Transaction objects for each transfer
@@ -1157,13 +1288,13 @@ public class Commands {
     public String consolidate() {
         try {
             StringBuilder result = new StringBuilder();
-            result.append("Account Balance Transfer (v5.1):\n\n");
+            result.append("Account Balance Transfer:\n\n");
 
             // Target address (default key)
             Bytes toAddress = Bytes.wrap(toBytesAddress(dagKernel.getWallet().getDefKey()));
             String remark = "account balance to new address";
 
-            // v5.1: Collect address balances directly using AccountStore
+            //  Collect address balances directly using AccountStore
             Map<Integer, XAmount> accountBalances = new HashMap<>();
             List<ECKeyPair> accounts = dagKernel.getWallet().getAccounts();
 
@@ -1206,7 +1337,7 @@ public class Commands {
                 ECKeyPair fromAccount = dagKernel.getWallet().getAccounts().get(accountIndex);
                 Bytes fromAddress = Bytes.wrap(toBytesAddress(fromAccount));
 
-                // Get current nonce (v5.1: Using AccountStore)
+                // Get current nonce ( Using AccountStore)
                 Bytes addr = Bytes.wrap(toBytesAddress(fromAccount));
                 long currentNonce = getAccountNonce(addr) + 1;
 
@@ -1251,17 +1382,17 @@ public class Commands {
                         .info(null)
                         .build();
 
-                // Validate and add block (v5.1: DagImportResult)
+                // Validate and add block
                 DagImportResult importResult = dagKernel.getDagChain().tryToConnect(block);
 
                 if (importResult.isMainBlock()) {
-                    // Update nonce (v5.1: Using AccountStore)
+                    // Update nonce
                     updateAccountNonce(addr, currentNonce);
 
-                    // Broadcast (v5.1: Using P2pService)
+                    // Broadcast
                     if (dagKernel.getP2pService() != null) {
                         // TODO: Implement P2pService broadcast method
-                        log.info("Block broadcast not yet implemented in v5.1: {}", hash2Address(block.getHash()));
+                        log.info("Block broadcast not yet implemented in  {}", block.getHash().toHexString());
                     }
 
                     // Update stats
@@ -1272,7 +1403,7 @@ public class Commands {
                             accountIndex,
                             balance.toDecimal(9, XUnit.XDAG).doubleValue(),
                             transferAmount.toDecimal(9, XUnit.XDAG).doubleValue(),
-                            hash2Address(block.getHash())));
+                            block.getHash().toHexString()));
                 } else {
                     result.append(String.format("  Account %d: %.9f XDAG (❌ %s)\n",
                             accountIndex,

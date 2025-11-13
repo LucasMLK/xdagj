@@ -105,7 +105,7 @@ import java.util.List;
  *
  * @see SyncTransactionsRequestMessage for the request message
  * @see <a href="../../../../../HYBRID_SYNC_MESSAGES.md">Hybrid Sync Protocol</a>
- * @since v5.1 Phase 1.5
+ * @since XDAGJ
  */
 @Getter
 @Setter

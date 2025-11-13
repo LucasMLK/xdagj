@@ -63,7 +63,7 @@ import org.rocksdb.*;
  * 0xb3: Block Refs        - hash → List&lt;refHash&gt;
  * </pre>
  *
- * @since v5.1 Phase 8
+ * @since XDAGJ
  */
 @Slf4j
 public class DagStoreImpl implements DagStore {
@@ -418,7 +418,7 @@ public class DagStoreImpl implements DagStore {
         log.debug("Fetching main blocks: height [{}, {}], raw={}", fromHeight, toHeight, isRaw);
 
         try {
-            // Phase 1: Batch load height-to-hash mappings
+            //  Batch load height-to-hash mappings
             List<Bytes32> hashes = new ArrayList<>();
             List<byte[]> keys = new ArrayList<>();
 
@@ -457,7 +457,7 @@ public class DagStoreImpl implements DagStore {
                 }
             }
 
-            // Phase 2: Batch load blocks
+            //  Batch load blocks
             if (isRaw) {
                 // Load full block data
                 for (Bytes32 hash : hashes) {
@@ -1067,7 +1067,7 @@ public class DagStoreImpl implements DagStore {
      * - timestamp: 8 bytes
      * - height: 8 bytes
      * - difficulty: 32 bytes
-     * - flags: 4 bytes (v5.1 compatibility - always 0)
+     * - flags: 4 bytes (compatibility - always 0)
      *
      * @param info BlockInfo to serialize
      * @return Serialized bytes (84 bytes)
@@ -1078,7 +1078,7 @@ public class DagStoreImpl implements DagStore {
         buffer.putLong(info.getTimestamp());          // 8 bytes
         buffer.putLong(info.getHeight());             // 8 bytes
         buffer.put(info.getDifficulty().toBytes().toArray());  // 32 bytes
-        buffer.putInt(0);  // flags placeholder for v5.1 compatibility  // 4 bytes
+        buffer.putInt(0);  // flags placeholder for compatibility  // 4 bytes
         return buffer.array();
     }
 
@@ -1101,7 +1101,7 @@ public class DagStoreImpl implements DagStore {
         buffer.get(diffBytes);
         UInt256 difficulty = UInt256.fromBytes(Bytes32.wrap(diffBytes));
 
-        int flags = buffer.getInt();  // Read but ignore flags (v5.1 compatibility)
+        int flags = buffer.getInt();  // Read but ignore flags (compatibility)
 
         return BlockInfo.builder()
                 .hash(hash)

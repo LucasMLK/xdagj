@@ -91,7 +91,7 @@ import lombok.Setter;
  *
  * @see SyncMainBlocksReplyMessage for the response message
  * @see <a href="../../../../../HYBRID_SYNC_MESSAGES.md">Hybrid Sync Protocol</a>
- * @since v5.1 Phase 1.5
+ * @since XDAGJ
  */
 @Getter
 @Setter

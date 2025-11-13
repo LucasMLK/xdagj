@@ -28,12 +28,13 @@ import static io.xdag.config.Constants.MAIN_CHAIN_PERIOD;
 import static io.xdag.config.Constants.MIN_GAS;
 
 import io.xdag.DagKernel;
-import io.xdag.crypto.keys.ECKeyPair;
+import io.xdag.config.Constants.MessageType;
 import io.xdag.db.DagStore;
 import io.xdag.db.OrphanBlockStore;
 import io.xdag.db.TransactionStore;
 import io.xdag.db.store.DagEntityResolver;
 import io.xdag.db.store.ResolvedLinks;
+import io.xdag.listener.BlockMessage;
 import io.xdag.listener.Listener;
 import io.xdag.utils.XdagTime;
 import java.math.BigInteger;
@@ -49,12 +50,12 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * DagChain implementation for XDAG v5.1 epoch-based DAG consensus
+ * DagChain implementation for XDAG epoch-based DAG consensus
  *
  * <p>Implements epoch-based consensus with cumulative difficulty calculation.
  * Uses DagKernel exclusively for all storage operations.
  *
- * @since v5.1
+ * @since XDAGJ
  */
 @Slf4j
 public class DagChainImpl implements DagChain {
@@ -333,6 +334,21 @@ public class DagChainImpl implements DagChain {
             return DagImportResult.invalidBasic("Block structure validation failed");
         }
 
+        // SECURITY: Validate coinbase field length (must be exactly 20 bytes)
+        // This prevents BufferOverflowException during hash calculation
+        // and ensures all blocks follow the Ethereum-style 20-byte address format
+        Bytes coinbase = block.getHeader().getCoinbase();
+        if (coinbase == null) {
+            log.warn("SECURITY: Rejecting block {} - null coinbase", block.getHash().toHexString());
+            return DagImportResult.invalidBasic("Block coinbase is null");
+        }
+        if (coinbase.size() != 20) {
+            log.warn("SECURITY: Rejecting block {} - invalid coinbase length: {} bytes (expected 20)",
+                    block.getHash().toHexString(), coinbase.size());
+            return DagImportResult.invalidBasic(String.format(
+                    "Block coinbase must be exactly 20 bytes, got %d bytes", coinbase.size()));
+        }
+
         return null;  // Validation passed
     }
 
@@ -487,10 +503,7 @@ public class DagChainImpl implements DagChain {
             for (Listener listener : listeners) {
                 try {
                     byte[] blockBytes = block.toBytes();
-                    listener.onMessage(new io.xdag.listener.BlockMessage(
-                            org.apache.tuweni.bytes.Bytes.wrap(blockBytes),
-                            io.xdag.config.Constants.MessageType.NEW_LINK
-                    ));
+                    listener.onMessage(new BlockMessage(Bytes.wrap(blockBytes), MessageType.NEW_LINK));
                     log.debug("Notified listener {} of new block: {}",
                              listener.getClass().getSimpleName(),
                              block.getHash().toHexString().substring(0, 16) + "...");
@@ -589,8 +602,35 @@ public class DagChainImpl implements DagChain {
      * @param coinbase mining reward address (20 bytes)
      */
     public void setMiningCoinbase(Bytes coinbase) {
-        this.miningCoinbase = coinbase;
-        log.info("Mining coinbase address set: {}", coinbase.toHexString().substring(0, 16) + "...");
+        // BUGFIX: Ensure coinbase is exactly 20 bytes
+        // This prevents BufferOverflowException in Block.calculateHash()
+        if (coinbase == null) {
+            log.warn("Null coinbase provided, using zero address (20 bytes)");
+            this.miningCoinbase = Bytes.wrap(new byte[20]);
+            return;
+        }
+
+        if (coinbase.size() > 20) {
+            // Truncate to 20 bytes
+            log.warn("Coinbase address too long ({} bytes), truncating to 20 bytes: {} -> {}",
+                    coinbase.size(),
+                    coinbase.toHexString(),
+                    coinbase.slice(0, 20).toHexString());
+            this.miningCoinbase = coinbase.slice(0, 20);
+        } else if (coinbase.size() < 20) {
+            // Pad with zeros to 20 bytes
+            byte[] padded = new byte[20];
+            System.arraycopy(coinbase.toArray(), 0, padded, 0, coinbase.size());
+            log.warn("Coinbase address too short ({} bytes), padding to 20 bytes: {} -> {}",
+                    coinbase.size(),
+                    coinbase.toHexString(),
+                    Bytes.wrap(padded).toHexString());
+            this.miningCoinbase = Bytes.wrap(padded);
+        } else {
+            // Exactly 20 bytes, use as-is
+            this.miningCoinbase = coinbase;
+            log.info("Mining coinbase address set: {}", coinbase.toHexString().substring(0, 16) + "...");
+        }
     }
 
     @Override
@@ -598,11 +638,26 @@ public class DagChainImpl implements DagChain {
         log.info("Creating deterministic genesis block at timestamp {}", timestamp);
         log.info("  - Coinbase: {}", coinbase.toHexString());
 
+        // BUGFIX: Ensure coinbase is exactly 20 bytes (same as setMiningCoinbase)
+        Bytes normalizedCoinbase = coinbase;
+        if (coinbase == null) {
+            log.warn("Null coinbase for genesis, using zero address (20 bytes)");
+            normalizedCoinbase = Bytes.wrap(new byte[20]);
+        } else if (coinbase.size() > 20) {
+            log.warn("Genesis coinbase too long ({} bytes), truncating to 20 bytes", coinbase.size());
+            normalizedCoinbase = coinbase.slice(0, 20);
+        } else if (coinbase.size() < 20) {
+            byte[] padded = new byte[20];
+            System.arraycopy(coinbase.toArray(), 0, padded, 0, coinbase.size());
+            log.warn("Genesis coinbase too short ({} bytes), padding to 20 bytes", coinbase.size());
+            normalizedCoinbase = Bytes.wrap(padded);
+        }
+
         Block genesisBlock = Block.createWithNonce(
                 timestamp,
                 UInt256.ONE,
                 Bytes32.ZERO,
-                coinbase,
+                normalizedCoinbase,
                 List.of()
         );
 
@@ -610,17 +665,6 @@ public class DagChainImpl implements DagChain {
                 genesisBlock.getHash().toHexString(), genesisBlock.getEpoch());
 
         return genesisBlock;
-    }
-
-    @Override
-    public Block createRewardBlock(
-            Bytes32 sourceBlockHash,
-            List<Bytes32> recipients,
-            List<XAmount> amounts,
-            ECKeyPair sourceKey,
-            long nonce,
-            XAmount totalFee) {
-        throw new UnsupportedOperationException("createRewardBlock() not yet implemented");
     }
 
     // ==================== Main Chain Queries (Height-Based) ====================

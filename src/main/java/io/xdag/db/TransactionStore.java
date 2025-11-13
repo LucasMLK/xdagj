@@ -30,9 +30,9 @@ import java.util.List;
 import org.apache.tuweni.bytes.Bytes32;
 
 /**
- * TransactionStore for XDAG v5.1
+ * TransactionStore for XDAG
  *
- * Storage layer for Transaction objects. In v5.1 architecture, Transactions are:
+ * Storage layer for Transaction objects. In architecture, Transactions are:
  * 1. Independent objects (not embedded in blocks)
  * 2. Broadcast and stored separately from blocks
  * 3. Referenced by blocks via Link (only hash reference)
@@ -49,7 +49,7 @@ import org.apache.tuweni.bytes.Bytes32;
  *
  * @see Transaction
  * @see io.xdag.core.Link
- * @since Phase 4 - v5.1 Architecture
+ * @since Phase 4 - Architecture
  */
 public interface TransactionStore extends XdagLifecycle {
 
@@ -69,7 +69,7 @@ public interface TransactionStore extends XdagLifecycle {
     byte TX_BLOCK_INDEX = (byte) 0xe1;
 
     /**
-     * Transaction-to-Block reverse index: txHash -> blockHash (Phase 9.1)
+     * Transaction-to-Block reverse index: txHash -> blockHash (1)
      * Format: 0xe3 + txHash(32) -> blockHash(32)
      * Enables transaction timestamp lookup and block confirmation queries
      */
@@ -146,7 +146,7 @@ public interface TransactionStore extends XdagLifecycle {
     void indexTransactionToBlock(Bytes32 blockHash, Bytes32 txHash);
 
     /**
-     * Get the block hash that contains a specific transaction (Phase 9.1)
+     * Get the block hash that contains a specific transaction (1)
      *
      * This method uses the reverse index built by indexTransactionToBlock()
      * to find which block contains a given transaction. This enables:
@@ -156,7 +156,7 @@ public interface TransactionStore extends XdagLifecycle {
      *
      * @param txHash The transaction hash
      * @return Block hash containing the transaction, or null if not indexed
-     * @since Phase 9.1 v5.1
+     * @since XDAGJ
      */
     Bytes32 getBlockByTransaction(Bytes32 txHash);
 

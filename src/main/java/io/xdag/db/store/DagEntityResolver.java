@@ -44,7 +44,7 @@ import org.apache.tuweni.bytes.Bytes32;
  * across both {@link DagStore} and {@link TransactionStore}.
  *
  * <h2>Purpose</h2>
- * <p>In XDAG v5.1, a Block's Links can reference two types of entities:
+ * <p>In XDAG, a Block's Links can reference two types of entities:
  * <ul>
  *   <li><strong>Block</strong> - Stored in DagStore</li>
  *   <li><strong>Transaction</strong> - Stored in TransactionStore</li>
@@ -82,7 +82,7 @@ import org.apache.tuweni.bytes.Bytes32;
  * }
  * </pre>
  *
- * @since v5.1 Phase 8
+ * @since XDAGJ
  * @see DagStore
  * @see TransactionStore
  * @see ResolvedLinks

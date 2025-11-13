@@ -52,7 +52,7 @@ import static org.junit.Assert.*;
  * <p>Phase 10 Integration Test - Strategy B:
  * Start with integration tests to discover issues gradually.
  *
- * @since v5.1 Phase 10
+ * @since @since XDAGJ
  */
 public class DagKernelIntegrationTest {
 

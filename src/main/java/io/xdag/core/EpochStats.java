@@ -30,7 +30,7 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * Epoch statistics for XDAG v5.1
+ * Epoch statistics for XDAG
  *
  * <p>Contains comprehensive statistics for a specific epoch:
  * <ul>
@@ -41,7 +41,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  *   <li>Whether this epoch has a main block</li>
  * </ul>
  *
- * @since v5.1
+ * @since XDAGJ
  */
 @Data
 @Builder
