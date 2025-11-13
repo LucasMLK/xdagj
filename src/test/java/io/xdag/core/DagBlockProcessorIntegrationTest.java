@@ -28,6 +28,7 @@ import io.xdag.DagKernel;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
+import io.xdag.utils.XdagTime;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -275,7 +276,7 @@ public class DagBlockProcessorIntegrationTest {
     @Test
     public void testProcessValidBlockNoTransactions() {
         // Create valid block using factory method
-        long timestamp = System.currentTimeMillis();
+        long timestamp = XdagTime.getMainTime(); // Use XDAG main block time
         Block block = Block.createWithNonce(
                 timestamp,
                 org.apache.tuweni.units.bigints.UInt256.ONE,
@@ -320,8 +321,8 @@ public class DagBlockProcessorIntegrationTest {
         int blockCount = 5;
 
         for (int i = 0; i < blockCount; i++) {
-            // Create block
-            long timestamp = System.currentTimeMillis() + i;
+            // Create block - each in a different epoch to avoid timestamp collision
+            long timestamp = XdagTime.getMainTime() + (i * 0x10000L); // Offset by epochs
             Block block = Block.createWithNonce(
                     timestamp,
                     org.apache.tuweni.units.bigints.UInt256.ONE,
@@ -360,7 +361,7 @@ public class DagBlockProcessorIntegrationTest {
     @Test
     public void testGetBlockWithAndWithoutLinks() {
         // Create and process a valid block
-        long timestamp = System.currentTimeMillis();
+        long timestamp = XdagTime.getMainTime(); // Use XDAG main block time
         Block block = Block.createWithNonce(
                 timestamp,
                 org.apache.tuweni.units.bigints.UInt256.ONE,
@@ -404,7 +405,7 @@ public class DagBlockProcessorIntegrationTest {
     @Test
     public void testProcessDuplicateBlock() {
         // Create block
-        long timestamp = System.currentTimeMillis();
+        long timestamp = XdagTime.getMainTime(); // Use XDAG main block time
         Block block = Block.createWithNonce(
                 timestamp,
                 org.apache.tuweni.units.bigints.UInt256.ONE,

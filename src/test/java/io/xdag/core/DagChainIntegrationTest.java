@@ -29,6 +29,7 @@ import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.crypto.keys.ECKeyPair;
+import io.xdag.utils.XdagTime;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
@@ -220,8 +221,9 @@ public class DagChainIntegrationTest {
 
         // Create block with transaction link
         List<Link> links = List.of(Link.toTransaction(signedTx.getHash()));
+        long mainTime = XdagTime.getMainTime(); // Use XDAG main block time (低16位必须为0xffff)
         Block block = Block.createWithNonce(
-                System.currentTimeMillis(),
+                mainTime,
                 UInt256.ONE,
                 Bytes32.ZERO,
                 org.apache.tuweni.bytes.Bytes.random(20),
@@ -232,7 +234,7 @@ public class DagChainIntegrationTest {
                 .hash(block.getHash())
                 .height(1L)
                 .difficulty(UInt256.ONE)
-                .timestamp(System.currentTimeMillis())
+                .timestamp(mainTime)
                 .build();
 
         block = block.withInfo(blockInfo);
@@ -328,8 +330,9 @@ public class DagChainIntegrationTest {
 
         // Create block with transaction link
         List<Link> links = List.of(Link.toTransaction(signedTx.getHash()));
+        long mainTime = XdagTime.getMainTime(); // Use XDAG main block time (低16位必须为0xffff)
         Block block = Block.createWithNonce(
-                System.currentTimeMillis(),
+                mainTime,
                 UInt256.ONE,
                 Bytes32.ZERO,
                 org.apache.tuweni.bytes.Bytes.random(20),
@@ -340,7 +343,7 @@ public class DagChainIntegrationTest {
                 .hash(block.getHash())
                 .height(1L)
                 .difficulty(UInt256.ONE)
-                .timestamp(System.currentTimeMillis())
+                .timestamp(mainTime)
                 .build();
 
         block = block.withInfo(blockInfo);
