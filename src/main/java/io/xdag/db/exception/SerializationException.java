@@ -22,20 +22,14 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.db.execption;
-
-import java.io.IOException;
+package io.xdag.db.exception;
 
 /**
- * Base class for serialization/deserialization exceptions.
+ * {@link SerializationException} is thrown when there is a problem with serialization.
  */
-public abstract class SerDeException extends IOException {
+public final class SerializationException extends SerDeException {
 
-    public SerDeException(final String message) {
-        super(message);
-    }
-
-    public SerDeException(
+    public SerializationException(
             final String message,
             final Throwable throwable
     ) {

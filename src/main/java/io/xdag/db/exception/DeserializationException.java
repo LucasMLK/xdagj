@@ -21,15 +21,18 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
  */
-package io.xdag.pool;
 
-import org.apache.tuweni.bytes.Bytes32;
+package io.xdag.db.exception;
 
-public interface PoolAwardManager {
+/**
+ * {@link DeserializationException}  is thrown when there is a problem with deserialization.
+ */
+public final class DeserializationException extends SerDeException {
 
-    void start();
-
-    void stop();
-    void addAwardBlock(Bytes32 share, Bytes32 preHash,Bytes32 hash, long generateTime);
-
+    public DeserializationException(
+            final String message,
+            final Throwable throwable
+    ) {
+        super(message, throwable);
+    }
 }
