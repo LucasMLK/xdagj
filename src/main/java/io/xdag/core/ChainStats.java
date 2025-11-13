@@ -49,15 +49,23 @@ import org.apache.tuweni.units.bigints.UInt256;
 @With
 public class ChainStats implements Serializable {
 
-    // ========== Core Chain State ==========
+    // ========== Core Chain State (Cumulative Difficulty for Chain Selection) ==========
+    // NOTE: These cumulative difficulty fields are used for CHAIN SELECTION (heaviest chain wins)
+    // They are DIFFERENT from baseDifficultyTarget which is used for PoW VALIDATION
 
     /**
-     * Current chain difficulty
+     * Current chain cumulative difficulty (sum of all block difficulties from genesis)
+     * <p>
+     * This is used for chain selection (heaviest chain wins), NOT for PoW validation.
+     * For PoW validation, see baseDifficultyTarget below.
      */
     UInt256 difficulty;
 
     /**
-     * Maximum difficulty seen in the network
+     * Maximum cumulative difficulty seen in the network
+     * <p>
+     * This is used to determine which fork is the main chain (heaviest chain wins).
+     * Higher cumulative difficulty = main chain.
      */
     UInt256 maxDifficulty;
 
@@ -105,15 +113,45 @@ public class ChainStats implements Serializable {
      */
     XAmount balance;
 
-    // ========== Top Block State ( Merged from XdagTopStatus) ==========
+    // ========== Difficulty Management (New Consensus) ==========
 
     /**
-     * Current top block hash (highest difficulty)
+     * Base difficulty target for PoW validation
+     * <p>
+     * All blocks must satisfy: hash <= baseDifficultyTarget
+     * This prevents spam blocks and ensures minimum proof of work.
+     * <p>
+     * Adjusted periodically based on network hashrate to maintain
+     * target blocks per epoch (see OPTIMAL_CONSENSUS_DESIGN.md)
+     */
+    UInt256 baseDifficultyTarget;
+
+    /**
+     * Last epoch when difficulty was adjusted
+     * <p>
+     * Used to determine when next difficulty adjustment should occur.
+     * Adjustment happens every DIFFICULTY_ADJUSTMENT_INTERVAL epochs.
+     */
+    long lastDifficultyAdjustmentEpoch;
+
+    /**
+     * Last epoch when orphan blocks were cleaned up
+     * <p>
+     * Used to trigger periodic orphan block cleanup.
+     * Cleanup removes orphan blocks older than ORPHAN_RETENTION_WINDOW.
+     */
+    long lastOrphanCleanupEpoch;
+
+    // ========== Top Block State (Merged from XdagTopStatus) ==========
+    // NOTE: These are also CUMULATIVE difficulties, not PoW validation targets
+
+    /**
+     * Current top block hash (highest cumulative difficulty)
      */
     Bytes32 topBlock;
 
     /**
-     * Current top block difficulty
+     * Current top block cumulative difficulty
      */
     UInt256 topDifficulty;
 
@@ -123,7 +161,7 @@ public class ChainStats implements Serializable {
     Bytes32 preTopBlock;
 
     /**
-     * Previous top block difficulty
+     * Previous top block cumulative difficulty
      */
     UInt256 preTopDifficulty;
 
@@ -144,6 +182,9 @@ public class ChainStats implements Serializable {
                 .noRefCount(0)
                 .extraCount(0)
                 .balance(XAmount.ZERO)
+                .baseDifficultyTarget(null)  // Will be set during initialization
+                .lastDifficultyAdjustmentEpoch(0)
+                .lastOrphanCleanupEpoch(0)
                 .topBlock(null)
                 .topDifficulty(UInt256.ZERO)
                 .preTopBlock(null)
@@ -270,6 +311,10 @@ public class ChainStats implements Serializable {
      * [8 bytes] noRefCount
      * [8 bytes] extraCount
      * [8 bytes] balance (nano)
+     * [1 byte] baseDifficultyTarget null flag
+     * [32 bytes] baseDifficultyTarget (if not null)
+     * [8 bytes] lastDifficultyAdjustmentEpoch
+     * [8 bytes] lastOrphanCleanupEpoch
      * [1 byte] topBlock null flag (0=null, 1=not null)
      * [32 bytes] topBlock (if not null)
      * [32 bytes] topDifficulty
@@ -299,6 +344,18 @@ public class ChainStats implements Serializable {
 
         // Write balance as long (nano)
         enc.writeLong(balance.toXAmount().toLong());
+
+        // Write baseDifficultyTarget (nullable)
+        if (baseDifficultyTarget == null) {
+            enc.writeBoolean(false);
+        } else {
+            enc.writeBoolean(true);
+            enc.write(baseDifficultyTarget.toBytes().toArray());
+        }
+
+        // Write difficulty adjustment epochs
+        enc.writeLong(lastDifficultyAdjustmentEpoch);
+        enc.writeLong(lastOrphanCleanupEpoch);
 
         // Write topBlock (nullable)
         if (topBlock == null) {
@@ -357,6 +414,19 @@ public class ChainStats implements Serializable {
         long balanceNano = dec.readLong();
         XAmount balance = XAmount.of(balanceNano);
 
+        // Read baseDifficultyTarget (nullable)
+        UInt256 baseDifficultyTarget = null;
+        boolean hasBaseDifficultyTarget = dec.readBoolean();
+        if (hasBaseDifficultyTarget) {
+            byte[] baseDifficultyBytes = new byte[32];
+            dec.readBytes(baseDifficultyBytes);
+            baseDifficultyTarget = UInt256.fromBytes(org.apache.tuweni.bytes.Bytes.wrap(baseDifficultyBytes));
+        }
+
+        // Read difficulty adjustment epochs
+        long lastDifficultyAdjustmentEpoch = dec.readLong();
+        long lastOrphanCleanupEpoch = dec.readLong();
+
         // Read topBlock (nullable)
         Bytes32 topBlock = null;
         boolean hasTopBlock = dec.readBoolean();
@@ -397,6 +467,9 @@ public class ChainStats implements Serializable {
                 .noRefCount(noRefCount)
                 .extraCount(extraCount)
                 .balance(balance)
+                .baseDifficultyTarget(baseDifficultyTarget)
+                .lastDifficultyAdjustmentEpoch(lastDifficultyAdjustmentEpoch)
+                .lastOrphanCleanupEpoch(lastOrphanCleanupEpoch)
                 .topBlock(topBlock)
                 .topDifficulty(topDifficulty)
                 .preTopBlock(preTopBlock)

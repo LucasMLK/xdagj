@@ -162,6 +162,7 @@ public class DagBlockProcessor {
      *   <li>Block hash is not null</li>
      *   <li>Block info is not null</li>
      *   <li>Block has valid timestamp</li>
+     *   <li>Block timestamp is at epoch end (0xffff)</li>
      * </ul>
      *
      * @param block block to validate
@@ -185,6 +186,14 @@ public class DagBlockProcessor {
 
         if (block.getTimestamp() <= 0) {
             log.warn("Block has invalid timestamp: {}", block.getTimestamp());
+            return false;
+        }
+
+        // IMPORTANT: Main blocks must have timestamp at epoch end (lower 16 bits = 0xffff)
+        // This matches C code validation: (time & 0xffff) == 0xffff (block.c:677)
+        if ((block.getTimestamp() & 0xffff) != 0xffff) {
+            log.warn("Block timestamp {} is not at epoch end (must be 0xffff)",
+                    Long.toHexString(block.getTimestamp()));
             return false;
         }
 

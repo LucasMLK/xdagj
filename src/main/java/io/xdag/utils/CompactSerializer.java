@@ -171,9 +171,11 @@ public class CompactSerializer {
      *
      * 3 Optimization: Removed blockCount, hostCount, mainBlockTime,
      * globalMinerHash, ourLastBlockHash serialization for 33% size reduction.
+     *
+     * v2: Added new consensus fields (baseDifficultyTarget, adjustment epochs, top block info)
      */
     public static byte[] serialize(ChainStats stats) throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream(100);
+        ByteArrayOutputStream out = new ByteArrayOutputStream(200);
 
         // difficulty: 32 bytes
         out.write(stats.getDifficulty().toBytes().toArray());
@@ -195,6 +197,44 @@ public class CompactSerializer {
         // balance
         serializeXAmount(out, stats.getBalance());
 
+        // NEW CONSENSUS FIELDS (v2)
+
+        // baseDifficultyTarget (nullable UInt256)
+        if (stats.getBaseDifficultyTarget() == null) {
+            out.write(0); // absent
+        } else {
+            out.write(1); // present
+            out.write(stats.getBaseDifficultyTarget().toBytes().toArray());
+        }
+
+        // lastDifficultyAdjustmentEpoch
+        writeVarLong(out, stats.getLastDifficultyAdjustmentEpoch());
+
+        // lastOrphanCleanupEpoch
+        writeVarLong(out, stats.getLastOrphanCleanupEpoch());
+
+        // topBlock (nullable Bytes32)
+        if (stats.getTopBlock() == null) {
+            out.write(0); // absent
+        } else {
+            out.write(1); // present
+            out.write(stats.getTopBlock().toArray());
+        }
+
+        // topDifficulty (32 bytes)
+        out.write(stats.getTopDifficulty().toBytes().toArray());
+
+        // preTopBlock (nullable Bytes32)
+        if (stats.getPreTopBlock() == null) {
+            out.write(0); // absent
+        } else {
+            out.write(1); // present
+            out.write(stats.getPreTopBlock().toArray());
+        }
+
+        // preTopDifficulty (32 bytes)
+        out.write(stats.getPreTopDifficulty().toBytes().toArray());
+
         return out.toByteArray();
     }
 
@@ -203,6 +243,9 @@ public class CompactSerializer {
      *
      * 3 Optimization: Reads only the 10 core fields.
      * Deprecated fields are set to defaults in fromLegacy() if needed.
+     *
+     * v2: Reads new consensus fields with backward compatibility.
+     * If reading old format data (no new fields), returns with defaults.
      */
     public static ChainStats deserializeChainStats(byte[] data) throws IOException {
         ByteReader reader = new ByteReader(data);
@@ -221,6 +264,48 @@ public class CompactSerializer {
 
         XAmount balance = deserializeXAmount(reader);
 
+        // NEW CONSENSUS FIELDS (v2) - with backward compatibility
+        UInt256 baseDifficultyTarget = null;
+        long lastDifficultyAdjustmentEpoch = 0;
+        long lastOrphanCleanupEpoch = 0;
+        Bytes32 topBlock = null;
+        UInt256 topDifficulty = UInt256.ZERO;
+        Bytes32 preTopBlock = null;
+        UInt256 preTopDifficulty = UInt256.ZERO;
+
+        // Check if there's more data (v2 format)
+        if (reader.hasMoreData()) {
+            // baseDifficultyTarget (nullable)
+            byte baseDiffFlag = reader.readByte();
+            if (baseDiffFlag == 1) {
+                baseDifficultyTarget = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
+            }
+
+            // lastDifficultyAdjustmentEpoch
+            lastDifficultyAdjustmentEpoch = reader.readVarLong();
+
+            // lastOrphanCleanupEpoch
+            lastOrphanCleanupEpoch = reader.readVarLong();
+
+            // topBlock (nullable)
+            byte topBlockFlag = reader.readByte();
+            if (topBlockFlag == 1) {
+                topBlock = Bytes32.wrap(reader.readBytes(32));
+            }
+
+            // topDifficulty
+            topDifficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
+
+            // preTopBlock (nullable)
+            byte preTopBlockFlag = reader.readByte();
+            if (preTopBlockFlag == 1) {
+                preTopBlock = Bytes32.wrap(reader.readBytes(32));
+            }
+
+            // preTopDifficulty
+            preTopDifficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
+        }
+
         return ChainStats.builder()
                 .difficulty(difficulty)
                 .maxDifficulty(maxDifficulty)
@@ -232,6 +317,13 @@ public class CompactSerializer {
                 .noRefCount(noRefCount)
                 .extraCount(extraCount)
                 .balance(balance)
+                .baseDifficultyTarget(baseDifficultyTarget)
+                .lastDifficultyAdjustmentEpoch(lastDifficultyAdjustmentEpoch)
+                .lastOrphanCleanupEpoch(lastOrphanCleanupEpoch)
+                .topBlock(topBlock)
+                .topDifficulty(topDifficulty)
+                .preTopBlock(preTopBlock)
+                .preTopDifficulty(preTopDifficulty)
                 .build();
     }
 
@@ -385,6 +477,10 @@ public class CompactSerializer {
         public ByteReader(byte[] data) {
             this.data = data;
             this.position = 0;
+        }
+
+        public boolean hasMoreData() {
+            return position < data.length;
         }
 
         public byte readByte() throws IOException {

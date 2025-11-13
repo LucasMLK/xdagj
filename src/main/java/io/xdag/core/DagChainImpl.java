@@ -60,6 +60,67 @@ import org.apache.tuweni.units.bigints.UInt256;
 @Slf4j
 public class DagChainImpl implements DagChain {
 
+    // ==================== Consensus Parameters ====================
+
+    /**
+     * Initial base difficulty target for PoW validation
+     * <p>
+     * Requires hash to have approximately 8 zero bytes (hash < 2^192)
+     * Average mining time with 1 GH/s: ~5 hours per block
+     * Network effect (1000 miners @ 10 GH/s): ~346 blocks/epoch
+     */
+    private static final UInt256 INITIAL_BASE_DIFFICULTY_TARGET =
+            UInt256.valueOf(BigInteger.valueOf(2).pow(192));
+
+    /**
+     * Maximum blocks accepted per epoch (64 seconds)
+     * <p>
+     * Controls orphan block growth and storage consumption
+     * Effect: 10,000 nodes → 100 accepted blocks → 25 GB/year storage
+     */
+    private static final int MAX_BLOCKS_PER_EPOCH = 100;
+
+    /**
+     * Target blocks per epoch for difficulty adjustment
+     * <p>
+     * Set higher than MAX_BLOCKS_PER_EPOCH to maintain competition
+     * Adjustment keeps ~150 qualifying blocks, accepting top 100
+     */
+    private static final int TARGET_BLOCKS_PER_EPOCH = 150;
+
+    /**
+     * Difficulty adjustment interval (in epochs)
+     * <p>
+     * Adjust every 1000 epochs (~17.7 hours)
+     * Balances stability with adaptiveness to hashrate changes
+     */
+    private static final int DIFFICULTY_ADJUSTMENT_INTERVAL = 1000;
+
+    /**
+     * Orphan block retention window (in epochs)
+     * <p>
+     * XDAG rule: blocks can only reference blocks within 12 days (16384 epochs)
+     * After this window, orphan blocks cannot become main blocks anymore
+     */
+    private static final long ORPHAN_RETENTION_WINDOW = 16384;
+
+    /**
+     * Orphan cleanup interval (in epochs)
+     * <p>
+     * Run cleanup every 100 epochs (~1.78 hours)
+     */
+    private static final long ORPHAN_CLEANUP_INTERVAL = 100;
+
+    /**
+     * Maximum and minimum difficulty adjustment factors
+     * <p>
+     * Prevents drastic difficulty swings
+     */
+    private static final double MAX_ADJUSTMENT_FACTOR = 2.0;   // Max 2x increase
+    private static final double MIN_ADJUSTMENT_FACTOR = 0.5;   // Max 50% decrease
+
+    // ==================== Instance Fields ====================
+
     private final DagKernel dagKernel;
     private final DagStore dagStore;
     private final DagEntityResolver entityResolver;
@@ -86,10 +147,36 @@ public class DagChainImpl implements DagChain {
 
         this.chainStats = dagStore.getChainStats();
         if (this.chainStats == null) {
+            long currentEpoch = XdagTime.getCurrentTimestamp() / 64;
             this.chainStats = ChainStats.builder()
                     .mainBlockCount(0)
                     .maxDifficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
                     .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
+                    .baseDifficultyTarget(INITIAL_BASE_DIFFICULTY_TARGET)
+                    .lastDifficultyAdjustmentEpoch(currentEpoch)  // Start from current epoch to prevent immediate adjustment
+                    .lastOrphanCleanupEpoch(currentEpoch)          // Start from current epoch
+                    .topBlock(null)
+                    .topDifficulty(UInt256.ZERO)
+                    .preTopBlock(null)
+                    .preTopDifficulty(UInt256.ZERO)
+                    .build();
+            dagStore.saveChainStats(this.chainStats);
+        }
+
+        // Initialize new consensus fields for existing chains
+        if (this.chainStats.getBaseDifficultyTarget() == null) {
+            long currentEpoch = XdagTime.getCurrentTimestamp() / 64;
+            log.info("Initializing baseDifficultyTarget for existing chain");
+            this.chainStats = this.chainStats.toBuilder()
+                    .baseDifficultyTarget(INITIAL_BASE_DIFFICULTY_TARGET)
+                    .lastDifficultyAdjustmentEpoch(currentEpoch)
+                    .lastOrphanCleanupEpoch(currentEpoch)
+                    .topBlock(this.chainStats.getTopBlock())
+                    .topDifficulty(this.chainStats.getTopDifficulty() != null ?
+                            this.chainStats.getTopDifficulty() : UInt256.ZERO)
+                    .preTopBlock(this.chainStats.getPreTopBlock())
+                    .preTopDifficulty(this.chainStats.getPreTopDifficulty() != null ?
+                            this.chainStats.getPreTopDifficulty() : UInt256.ZERO)
                     .build();
             dagStore.saveChainStats(this.chainStats);
         }
@@ -112,6 +199,18 @@ public class DagChainImpl implements DagChain {
             DagImportResult basicValidation = validateBasicRules(block);
             if (basicValidation != null) {
                 return basicValidation;
+            }
+
+            // NEW CONSENSUS: Minimum PoW validation
+            DagImportResult powValidation = validateMinimumPoW(block);
+            if (powValidation != null) {
+                return powValidation;
+            }
+
+            // NEW CONSENSUS: Epoch limit validation
+            DagImportResult epochLimitValidation = validateEpochLimit(block);
+            if (epochLimitValidation != null) {
+                return epochLimitValidation;
             }
 
             // Link validation (Transaction and Block references)
@@ -250,6 +349,12 @@ public class DagChainImpl implements DagChain {
             // Update chain statistics
             if (isBestChain) {
                 updateChainStatsForNewMainBlock(blockInfo);
+
+                // NEW CONSENSUS: Check and adjust difficulty
+                checkAndAdjustDifficulty(blockInfo.getHeight(), block.getEpoch());
+
+                // NEW CONSENSUS: Cleanup old orphans
+                cleanupOldOrphans(block.getEpoch());
             }
 
             // Notify listeners
@@ -372,6 +477,134 @@ public class DagChainImpl implements DagChain {
         return block.getLinks().isEmpty() &&
                block.getHeader().getDifficulty() != null &&
                block.getHeader().getDifficulty().equals(UInt256.ONE);
+    }
+
+    /**
+     * Validate minimum PoW requirement (NEW CONSENSUS)
+     * <p>
+     * Ensures block hash satisfies the base difficulty target.
+     * This prevents spam blocks and ensures basic work was done.
+     * <p>
+     * Rule: hash <= baseDifficultyTarget
+     * <p>
+     * Genesis blocks are exempt from this check.
+     *
+     * @param block block to validate
+     * @return null if valid, error result if invalid
+     */
+    private DagImportResult validateMinimumPoW(Block block) {
+        // Skip genesis blocks
+        if (isGenesisBlock(block)) {
+            return null;
+        }
+
+        UInt256 baseDifficultyTarget = chainStats.getBaseDifficultyTarget();
+
+        // Skip validation if target not initialized (backward compatibility)
+        if (baseDifficultyTarget == null) {
+            log.warn("Base difficulty target not initialized, skipping PoW validation");
+            return null;
+        }
+
+        // Calculate block hash as UInt256
+        UInt256 blockHash = UInt256.fromBytes(block.getHash());
+
+        // Check: hash <= baseDifficultyTarget
+        if (blockHash.compareTo(baseDifficultyTarget) > 0) {
+            log.debug("Block {} rejected: insufficient PoW (hash {} > target {})",
+                    block.getHash().toHexString().substring(0, 16),
+                    blockHash.toHexString().substring(0, 16),
+                    baseDifficultyTarget.toHexString().substring(0, 16));
+
+            return DagImportResult.invalidBasic(String.format(
+                    "Insufficient proof of work: hash exceeds difficulty target (hash=%s, target=%s)",
+                    blockHash.toHexString().substring(0, 16) + "...",
+                    baseDifficultyTarget.toHexString().substring(0, 16) + "..."
+            ));
+        }
+
+        log.debug("Block {} passed minimum PoW check (hash {} <= target {})",
+                block.getHash().toHexString().substring(0, 16),
+                blockHash.toHexString().substring(0, 16),
+                baseDifficultyTarget.toHexString().substring(0, 16));
+
+        return null;  // Validation passed
+    }
+
+    /**
+     * Validate epoch block limit (NEW CONSENSUS)
+     * <p>
+     * Limits the number of blocks accepted per epoch to control orphan block growth.
+     * If epoch already has MAX_BLOCKS_PER_EPOCH blocks, only accept new blocks if they
+     * have better difficulty (smaller hash) than the worst existing block.
+     * <p>
+     * This implements a competitive admission policy:
+     * - First MAX_BLOCKS_PER_EPOCH blocks are always accepted
+     * - Additional blocks must beat the weakest accepted block
+     * - Maintains top N blocks per epoch
+     *
+     * @param block block to validate
+     * @return null if valid, error result if should be rejected
+     */
+    private DagImportResult validateEpochLimit(Block block) {
+        long epoch = block.getEpoch();
+        List<Block> candidates = getCandidateBlocksInEpoch(epoch);
+
+        // Filter out only non-orphan blocks (height > 0) for counting
+        List<Block> nonOrphanBlocks = candidates.stream()
+                .filter(b -> b.getInfo() != null && b.getInfo().getHeight() > 0)
+                .collect(Collectors.toList());
+
+        // If under limit, accept
+        if (nonOrphanBlocks.size() < MAX_BLOCKS_PER_EPOCH) {
+            log.debug("Block {} accepted: epoch {} has {} < {} non-orphan blocks",
+                    block.getHash().toHexString().substring(0, 16),
+                    epoch, nonOrphanBlocks.size(), MAX_BLOCKS_PER_EPOCH);
+            return null;  // Accept
+        }
+
+        // Epoch is full, check if this block is better than the worst one
+        UInt256 thisBlockWork = calculateBlockWork(block.getHash());
+
+        // Find the worst block (smallest work = largest hash)
+        Block worstBlock = null;
+        UInt256 worstWork = UInt256.MAX_VALUE;
+
+        for (Block candidate : nonOrphanBlocks) {
+            UInt256 candidateWork = calculateBlockWork(candidate.getHash());
+            if (candidateWork.compareTo(worstWork) < 0) {
+                worstWork = candidateWork;
+                worstBlock = candidate;
+            }
+        }
+
+        // Compare with worst block
+        if (thisBlockWork.compareTo(worstWork) > 0) {
+            // This block is better, will replace the worst one
+            log.info("Block {} will replace worse block {} in epoch {} (work {} > {})",
+                    block.getHash().toHexString().substring(0, 16),
+                    worstBlock.getHash().toHexString().substring(0, 16),
+                    epoch,
+                    thisBlockWork.toHexString().substring(0, 16),
+                    worstWork.toHexString().substring(0, 16));
+
+            // Demote worst block to orphan
+            demoteBlockToOrphan(worstBlock);
+
+            return null;  // Accept this block
+        } else {
+            // This block is not better than worst, reject
+            log.debug("Block {} rejected: epoch {} full and work {} <= worst {}",
+                    block.getHash().toHexString().substring(0, 16),
+                    epoch,
+                    thisBlockWork.toHexString().substring(0, 16),
+                    worstWork.toHexString().substring(0, 16));
+
+            return DagImportResult.invalidBasic(String.format(
+                    "Epoch %d full (%d blocks) and this block's work not in top %d",
+                    epoch, MAX_BLOCKS_PER_EPOCH, MAX_BLOCKS_PER_EPOCH
+            ));
+        }
     }
 
     /**
@@ -498,6 +731,167 @@ public class DagChainImpl implements DagChain {
     }
 
     /**
+     * Clean up old orphan blocks beyond retention window (NEW CONSENSUS)
+     * <p>
+     * Periodically removes orphan blocks older than ORPHAN_RETENTION_WINDOW (16384 epochs = 12 days).
+     * According to XDAG rules, blocks can only reference blocks within 12 days, so older orphan
+     * blocks cannot become main blocks anymore and can be safely deleted.
+     * <p>
+     * Runs every ORPHAN_CLEANUP_INTERVAL (100) epochs to maintain manageable orphan pool size.
+     *
+     * @param currentEpoch current epoch number
+     */
+    private synchronized void cleanupOldOrphans(long currentEpoch) {
+        long lastCleanupEpoch = chainStats.getLastOrphanCleanupEpoch();
+
+        // Check if cleanup interval reached
+        if (currentEpoch - lastCleanupEpoch < ORPHAN_CLEANUP_INTERVAL) {
+            return;  // Not time yet
+        }
+
+        log.info("Orphan cleanup triggered at epoch {} (last cleanup: epoch {})",
+                currentEpoch, lastCleanupEpoch);
+
+        long cutoffEpoch = currentEpoch - ORPHAN_RETENTION_WINDOW;
+        if (cutoffEpoch < 0) {
+            cutoffEpoch = 0;  // Don't go negative
+        }
+
+        int removedCount = 0;
+        long scanStartEpoch = Math.max(0, lastCleanupEpoch - ORPHAN_RETENTION_WINDOW);
+
+        // Scan epochs from last cleanup to cutoff epoch
+        for (long epoch = scanStartEpoch; epoch < cutoffEpoch; epoch++) {
+            List<Block> candidates = getCandidateBlocksInEpoch(epoch);
+
+            for (Block block : candidates) {
+                // Remove orphan blocks (height = 0)
+                if (block.getInfo() != null && block.getInfo().getHeight() == 0) {
+                    try {
+                        dagStore.deleteBlock(block.getHash());
+                        orphanBlockStore.deleteByHash(block.getHash().toArray());
+                        removedCount++;
+
+                        if (removedCount % 1000 == 0) {
+                            log.debug("Orphan cleanup progress: removed {} blocks so far", removedCount);
+                        }
+                    } catch (Exception e) {
+                        log.warn("Failed to delete orphan block {}: {}",
+                                block.getHash().toHexString().substring(0, 16), e.getMessage());
+                    }
+                }
+            }
+        }
+
+        log.info("Orphan cleanup completed: removed {} blocks from epochs {} to {} (~{} days old)",
+                removedCount, scanStartEpoch, cutoffEpoch,
+                (currentEpoch - cutoffEpoch) * 64 / 86400);
+
+        // Update last cleanup epoch
+        chainStats = chainStats.toBuilder()
+                .lastOrphanCleanupEpoch(currentEpoch)
+                .build();
+        dagStore.saveChainStats(chainStats);
+    }
+
+    /**
+     * Check and adjust difficulty target if needed (NEW CONSENSUS)
+     * <p>
+     * Adjusts baseDifficultyTarget every DIFFICULTY_ADJUSTMENT_INTERVAL (1000) epochs
+     * based on average blocks per epoch to maintain TARGET_BLOCKS_PER_EPOCH (150) blocks/epoch.
+     * <p>
+     * Algorithm:
+     * - If avgBlocksPerEpoch > TARGET * 1.5 → increase difficulty (lower target)
+     * - If avgBlocksPerEpoch < TARGET * 0.5 → decrease difficulty (raise target)
+     * - Adjustment limited to MIN_ADJUSTMENT_FACTOR (0.5x) to MAX_ADJUSTMENT_FACTOR (2x)
+     *
+     * @param currentHeight current main block height
+     * @param currentEpoch current epoch number
+     */
+    private synchronized void checkAndAdjustDifficulty(long currentHeight, long currentEpoch) {
+        long lastAdjustmentEpoch = chainStats.getLastDifficultyAdjustmentEpoch();
+
+        // Check if adjustment interval reached
+        if (currentEpoch - lastAdjustmentEpoch < DIFFICULTY_ADJUSTMENT_INTERVAL) {
+            return;  // Not time yet
+        }
+
+        log.info("Difficulty adjustment triggered at epoch {} (last adjustment: epoch {})",
+                currentEpoch, lastAdjustmentEpoch);
+
+        // Calculate average blocks per epoch in the adjustment period
+        int totalBlocks = 0;
+        int epochCount = 0;
+
+        for (long epoch = lastAdjustmentEpoch; epoch < currentEpoch; epoch++) {
+            List<Block> blocks = getCandidateBlocksInEpoch(epoch);
+            // Count non-orphan blocks only
+            long nonOrphanCount = blocks.stream()
+                    .filter(b -> b.getInfo() != null && b.getInfo().getHeight() > 0)
+                    .count();
+            totalBlocks += nonOrphanCount;
+            epochCount++;
+        }
+
+        double avgBlocksPerEpoch = epochCount > 0 ? (double) totalBlocks / epochCount : 0;
+
+        log.info("Average blocks per epoch in last {} epochs: {} (target: {})",
+                epochCount, String.format("%.2f", avgBlocksPerEpoch), TARGET_BLOCKS_PER_EPOCH);
+
+        // Calculate adjustment factor
+        double adjustmentFactor = 1.0;
+
+        if (avgBlocksPerEpoch > TARGET_BLOCKS_PER_EPOCH * 1.5) {
+            // Too many blocks → increase difficulty (lower target)
+            adjustmentFactor = TARGET_BLOCKS_PER_EPOCH / avgBlocksPerEpoch;
+            log.info("Too many blocks, increasing difficulty (lowering target) by factor {}",
+                    String.format("%.2f", adjustmentFactor));
+        } else if (avgBlocksPerEpoch < TARGET_BLOCKS_PER_EPOCH * 0.5) {
+            // Too few blocks → decrease difficulty (raise target)
+            adjustmentFactor = TARGET_BLOCKS_PER_EPOCH / avgBlocksPerEpoch;
+            log.info("Too few blocks, decreasing difficulty (raising target) by factor {}",
+                    String.format("%.2f", adjustmentFactor));
+        } else {
+            log.info("Block count in acceptable range, no adjustment needed");
+            // Update last adjustment epoch even if no change
+            chainStats = chainStats.toBuilder()
+                    .lastDifficultyAdjustmentEpoch(currentEpoch)
+                    .build();
+            dagStore.saveChainStats(chainStats);
+            return;
+        }
+
+        // Limit adjustment factor
+        adjustmentFactor = Math.max(MIN_ADJUSTMENT_FACTOR,
+                                    Math.min(MAX_ADJUSTMENT_FACTOR, adjustmentFactor));
+
+        log.info("Limited adjustment factor: {} (range: {} - {})",
+                String.format("%.2f", adjustmentFactor),
+                String.format("%.2f", MIN_ADJUSTMENT_FACTOR),
+                String.format("%.2f", MAX_ADJUSTMENT_FACTOR));
+
+        // Calculate new target
+        UInt256 currentTarget = chainStats.getBaseDifficultyTarget();
+        BigInteger newTargetBigInt = currentTarget.toBigInteger()
+                .multiply(BigInteger.valueOf((long)(adjustmentFactor * 1000)))
+                .divide(BigInteger.valueOf(1000));
+
+        UInt256 newTarget = UInt256.valueOf(newTargetBigInt);
+
+        log.info("Difficulty adjusted: old target={}, new target={}, factor={}",
+                currentTarget.toHexString().substring(0, 16) + "...",
+                newTarget.toHexString().substring(0, 16) + "...",
+                String.format("%.2f", adjustmentFactor));
+
+        // Update chain stats
+        chainStats = chainStats.toBuilder()
+                .baseDifficultyTarget(newTarget)
+                .lastDifficultyAdjustmentEpoch(currentEpoch)
+                .build();
+        dagStore.saveChainStats(chainStats);
+    }
+
+    /**
      * Notify listeners of new block
      */
     private void notifyListeners(Block block) {
@@ -530,27 +924,23 @@ public class DagChainImpl implements DagChain {
         long timestamp = XdagTime.getCurrentTimestamp();
         long epoch = timestamp / 64;
 
-        UInt256 difficulty = chainStats.getDifficulty();
-        if (difficulty == null || difficulty.isZero()) {
-            difficulty = UInt256.ONE;
-        }
-
-        // DEVNET ONLY: Use maximum difficulty target for fast testing
-        boolean isDevnet = dagKernel.getConfig().getNodeSpec().getNetwork().toString().toLowerCase().contains("devnet");
-        if (isDevnet) {
-            difficulty = UInt256.MAX_VALUE;
-            log.warn("⚠ DEVNET TEST MODE: Using maximum difficulty target (MAX) for easy PoW validation");
+        // Use baseDifficultyTarget from chain stats (NEW CONSENSUS)
+        UInt256 difficultyTarget = chainStats.getBaseDifficultyTarget();
+        if (difficultyTarget == null) {
+            // Fallback for uninitialized chains
+            difficultyTarget = INITIAL_BASE_DIFFICULTY_TARGET;
+            log.warn("Base difficulty target not set, using initial value: {}",
+                    difficultyTarget.toHexString().substring(0, 16) + "...");
         }
 
         Bytes coinbase = miningCoinbase;
-
         List<Link> links = collectCandidateLinks();
 
-        Block candidateBlock = Block.createCandidate(timestamp, difficulty, coinbase, links);
+        Block candidateBlock = Block.createCandidate(timestamp, difficultyTarget, coinbase, links);
 
-        log.info("Created mining candidate block: epoch={}, difficulty={}, links={}, hash={}",
+        log.info("Created mining candidate block: epoch={}, target={}, links={}, hash={}",
                 epoch,
-                difficulty.toDecimalString(),
+                difficultyTarget.toHexString().substring(0, 16) + "...",
                 links.size(),
                 candidateBlock.getHash().toHexString().substring(0, 16) + "...");
 
@@ -562,30 +952,55 @@ public class DagChainImpl implements DagChain {
      *
      * <p>Collects block references for mining candidate:
      * <ol>
-     *   <li>Previous main block (parent with highest cumulative difficulty)</li>
+     *   <li>Previous main block with epoch boundary check (matching C code logic)</li>
      *   <li>Recent orphan blocks (for network health and connectivity)</li>
      * </ol>
+     *
+     * <p>IMPORTANT: This implements XDAG's epoch-based link reference rules
+     * matching C code (block.c:1028-1040). If the new block and current main block
+     * are in the SAME epoch, we must reference the previous epoch's main block instead
+     * to avoid same-epoch difficulty accumulation.
      *
      * @return list of links (1-16 block references)
      */
     private List<Link> collectCandidateLinks() {
         List<Link> links = new ArrayList<>();
+        long timestamp = XdagTime.getCurrentTimestamp();
+        long sendEpoch = timestamp / 64;
 
         long currentMainHeight = chainStats.getMainBlockCount();
-        log.debug("Collecting candidate links: mainBlockCount={}", currentMainHeight);
+        log.debug("Collecting candidate links: mainBlockCount={}, sendEpoch={}", currentMainHeight, sendEpoch);
 
+        // Add previous main block reference (with epoch boundary check)
         if (currentMainHeight > 0) {
             Block prevMainBlock = dagStore.getMainBlockByHeight(currentMainHeight, false);
+
             if (prevMainBlock != null) {
-                links.add(Link.toBlock(prevMainBlock.getHash()));
-                log.debug("Added prevMainBlock reference: height={}, hash={}",
-                        currentMainHeight, prevMainBlock.getHash().toHexString().substring(0, 16) + "...");
+                long prevEpoch = prevMainBlock.getEpoch();
+
+                if (prevEpoch < sendEpoch) {
+                    // Different epoch → Reference directly (C code: pretop = top_main_chain)
+                    links.add(Link.toBlock(prevMainBlock.getHash()));
+                    log.debug("Added main block reference: {} (epoch {}, different from send epoch {})",
+                            prevMainBlock.getHash().toHexString().substring(0, 16), prevEpoch, sendEpoch);
+                } else {
+                    // Same epoch → Find previous epoch's main block (C code: pretop = pretop_main_chain)
+                    Block preEpochMainBlock = findPreviousEpochMainBlock(prevMainBlock, sendEpoch);
+                    if (preEpochMainBlock != null) {
+                        links.add(Link.toBlock(preEpochMainBlock.getHash()));
+                        log.debug("Added pre-epoch main block reference: {} (epoch {}, avoiding same-epoch reference)",
+                                preEpochMainBlock.getHash().toHexString().substring(0, 16),
+                                preEpochMainBlock.getEpoch());
+                    } else {
+                        log.warn("Could not find previous epoch main block, skipping main block reference");
+                    }
+                }
             }
         }
 
-        int maxOrphans = Block.MAX_BLOCK_LINKS - links.size();
+        // Add recent orphan blocks (as many as possible, up to block field limit)
+        int maxOrphans = Block.MAX_BLOCK_LINKS - links.size() - 2;  // Reserve space for nonce and signatures
         if (maxOrphans > 0) {
-            long timestamp = XdagTime.getCurrentTimestamp();
             long[] sendTime = new long[2];
             sendTime[0] = timestamp;
 
@@ -598,8 +1013,51 @@ public class DagChainImpl implements DagChain {
             }
         }
 
-        log.debug("Collected {} candidate links", links.size());
+        log.info("Collected {} links for candidate block (epoch {})", links.size(), sendEpoch);
         return links;
+    }
+
+    /**
+     * Find the closest main block from a previous epoch
+     *
+     * <p>Traverses the main chain backwards until finding a block in a different epoch.
+     * This matches C code's pretop_main_chain logic (block.c:952).
+     *
+     * <p>Purpose: Prevent same-epoch difficulty accumulation by ensuring cross-epoch
+     * references when building candidate blocks.
+     *
+     * @param currentBlock starting block (current main block)
+     * @param currentEpoch current epoch to avoid
+     * @return main block from previous epoch, or null if not found
+     */
+    private Block findPreviousEpochMainBlock(Block currentBlock, long currentEpoch) {
+        if (currentBlock == null || currentBlock.getInfo() == null) {
+            return null;
+        }
+
+        long currentHeight = currentBlock.getInfo().getHeight();
+        int maxIterations = 100;  // Safety limit to prevent infinite loops
+
+        // Traverse back through main chain by height
+        for (int i = 1; i <= maxIterations && (currentHeight - i) > 0; i++) {
+            long checkHeight = currentHeight - i;
+            Block block = dagStore.getMainBlockByHeight(checkHeight, false);
+
+            if (block != null) {
+                long blockEpoch = block.getEpoch();
+
+                if (blockEpoch < currentEpoch) {
+                    // Found a block in previous epoch
+                    log.debug("Found previous epoch main block: {} (height {}, epoch {}) after {} iterations",
+                            block.getHash().toHexString().substring(0, 16), checkHeight, blockEpoch, i);
+                    return block;
+                }
+            }
+        }
+
+        log.warn("Could not find previous epoch main block after {} iterations (starting from height {})",
+                maxIterations, currentHeight);
+        return null;
     }
 
     /**
@@ -908,16 +1366,35 @@ public class DagChainImpl implements DagChain {
 
     @Override
     public UInt256 calculateCumulativeDifficulty(Block block) {
-        // Find parent block with maximum cumulative difficulty
+        // IMPORTANT: This implements XDAG's epoch-based difficulty calculation
+        // matching C code logic in block.c:724-735
+        //
+        // Rule: Blocks in the SAME epoch do NOT accumulate difficulty
+        // Only cross-epoch references accumulate difficulty
+        // This ensures fair competition within each epoch
+
+        long blockEpoch = block.getEpoch();
         UInt256 maxParentDifficulty = UInt256.ZERO;
 
         for (Link link : block.getLinks()) {
             if (link.isBlock()) {
                 Block parent = dagStore.getBlockByHash(link.getTargetHash(), false);
                 if (parent != null && parent.getInfo() != null) {
-                    UInt256 parentDifficulty = parent.getInfo().getDifficulty();
-                    if (parentDifficulty.compareTo(maxParentDifficulty) > 0) {
-                        maxParentDifficulty = parentDifficulty;
+                    long parentEpoch = parent.getEpoch();
+
+                    if (parentEpoch < blockEpoch) {
+                        // Case 1: Parent is in PREVIOUS epoch
+                        // → Accumulate difficulty (C code: diff = xdag_diff_add(diff0, blockRef->difficulty))
+                        UInt256 parentDifficulty = parent.getInfo().getDifficulty();
+                        if (parentDifficulty.compareTo(maxParentDifficulty) > 0) {
+                            maxParentDifficulty = parentDifficulty;
+                        }
+                    } else {
+                        // Case 2: Parent is in SAME epoch
+                        // → Do NOT accumulate (C code: diff = blockRef->difficulty, skip same-epoch blocks)
+                        // Skip this parent and continue searching for cross-epoch references
+                        log.debug("Skipping same-epoch parent {} (epoch {})",
+                                parent.getHash().toHexString().substring(0, 16), parentEpoch);
                     }
                 }
             }
@@ -926,11 +1403,12 @@ public class DagChainImpl implements DagChain {
         // Calculate this block's work
         UInt256 blockWork = calculateBlockWork(block.getHash());
 
-        // Cumulative difficulty = parent max difficulty + block work
+        // Cumulative difficulty = parent max difficulty (from previous epochs) + block work
         UInt256 cumulativeDifficulty = maxParentDifficulty.add(blockWork);
 
-        log.debug("Calculated cumulative difficulty for block {}: parent={}, work={}, cumulative={}",
-                 block.getHash().toHexString(),
+        log.debug("Calculated cumulative difficulty for block {} (epoch {}): parent={}, work={}, cumulative={}",
+                 block.getHash().toHexString().substring(0, 16),
+                 blockEpoch,
                  maxParentDifficulty.toDecimalString(),
                  blockWork.toDecimalString(),
                  cumulativeDifficulty.toDecimalString());
