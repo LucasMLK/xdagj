@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.consensus;
+package io.xdag.consensus.sync;
 
 import io.xdag.DagKernel;
 import io.xdag.core.*;

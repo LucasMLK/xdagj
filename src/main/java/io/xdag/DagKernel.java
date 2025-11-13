@@ -26,9 +26,9 @@ package io.xdag;
 
 import io.xdag.config.Config;
 import io.xdag.config.GenesisConfig;
-import io.xdag.consensus.HybridSyncManager;
-import io.xdag.consensus.HybridSyncP2pAdapter;
-import io.xdag.consensus.RandomX;
+import io.xdag.consensus.sync.HybridSyncManager;
+import io.xdag.consensus.sync.HybridSyncP2pAdapter;
+import io.xdag.consensus.pow.RandomX;
 import io.xdag.consensus.miner.MiningManager;
 import io.xdag.core.*;
 import io.xdag.crypto.keys.ECKeyPair;

@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.consensus;
+package io.xdag.consensus.pow;
 
 import static io.xdag.config.RandomXConstants.RANDOMX_FORK_HEIGHT;
 import static io.xdag.config.RandomXConstants.RANDOMX_TESTNET_FORK_HEIGHT;

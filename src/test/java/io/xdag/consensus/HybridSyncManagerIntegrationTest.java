@@ -25,6 +25,8 @@
 package io.xdag.consensus;
 
 import io.xdag.DagKernel;
+import io.xdag.consensus.sync.HybridSyncManager;
+import io.xdag.consensus.sync.HybridSyncP2pAdapter;
 import io.xdag.core.*;
 import io.xdag.p2p.channel.Channel;
 import io.xdag.p2p.message.SyncBlocksReplyMessage;

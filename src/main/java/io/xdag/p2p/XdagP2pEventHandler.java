@@ -24,8 +24,8 @@
 package io.xdag.p2p;
 
 import io.xdag.DagKernel;
-import io.xdag.consensus.HybridSyncManager;
-import io.xdag.consensus.HybridSyncP2pAdapter;
+import io.xdag.consensus.sync.HybridSyncManager;
+import io.xdag.consensus.sync.HybridSyncP2pAdapter;
 import io.xdag.core.Block;
 import io.xdag.core.ChainStats;
 import io.xdag.core.DagChain;

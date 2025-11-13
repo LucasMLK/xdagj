@@ -24,7 +24,7 @@
 
 package io.xdag.consensus.miner;
 
-import io.xdag.consensus.RandomX;
+import io.xdag.consensus.pow.RandomX;
 import io.xdag.core.Block;
 import io.xdag.crypto.hash.XdagSha256Digest;
 import io.xdag.utils.XdagTime;

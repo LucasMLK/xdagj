@@ -22,7 +22,7 @@
  * THE SOFTWARE.
  */
 
-package io.xdag.consensus;
+package io.xdag.consensus.pow;
 
 /**
  * Interface for Proof of Work (PoW) implementation
