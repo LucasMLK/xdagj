@@ -50,7 +50,6 @@ import io.xdag.p2p.P2pService;
 import io.xdag.p2p.config.P2pConfig;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 import java.io.File;

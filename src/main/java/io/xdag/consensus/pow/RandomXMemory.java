@@ -49,4 +49,30 @@ public class RandomXMemory {
         this.switchTime = -1; // Initialize switchTime to -1 indicating no switch
         this.isSwitched = -1; // Initialize isSwitched to -1 indicating not switched
     }
+
+    /**
+     * Clean up resources (close templates)
+     *
+     * <p>This method should be called when the memory slot is no longer needed
+     * to release native RandomX resources.
+     */
+    public void cleanup() {
+        if (poolTemplate != null) {
+            try {
+                poolTemplate.close();
+            } catch (Exception e) {
+                // Log and continue - best effort cleanup
+            }
+            poolTemplate = null;
+        }
+
+        if (blockTemplate != null) {
+            try {
+                blockTemplate.close();
+            } catch (Exception e) {
+                // Log and continue - best effort cleanup
+            }
+            blockTemplate = null;
+        }
+    }
 }

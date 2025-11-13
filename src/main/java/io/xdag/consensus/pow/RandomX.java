@@ -24,372 +24,274 @@
 
 package io.xdag.consensus.pow;
 
-import static io.xdag.config.RandomXConstants.RANDOMX_FORK_HEIGHT;
-import static io.xdag.config.RandomXConstants.RANDOMX_TESTNET_FORK_HEIGHT;
-import static io.xdag.config.RandomXConstants.SEEDHASH_EPOCH_BLOCKS;
-import static io.xdag.config.RandomXConstants.SEEDHASH_EPOCH_LAG;
-import static io.xdag.config.RandomXConstants.SEEDHASH_EPOCH_TESTNET_BLOCKS;
-import static io.xdag.config.RandomXConstants.SEEDHASH_EPOCH_TESTNET_LAG;
 import static io.xdag.config.RandomXConstants.XDAG_RANDOMX;
-import static io.xdag.utils.BytesUtils.equalBytes;
 
 import io.xdag.config.Config;
-import io.xdag.config.MainnetConfig;
 import io.xdag.core.AbstractXdagLifecycle;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
-import io.xdag.crypto.randomx.RandomXCache;
 import io.xdag.crypto.randomx.RandomXFlag;
-import io.xdag.crypto.randomx.RandomXTemplate;
 import io.xdag.crypto.randomx.RandomXUtils;
-import io.xdag.utils.XdagTime;
 import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-import org.bouncycastle.util.Arrays;
-import org.bouncycastle.util.encoders.Hex;
 
-
+/**
+ * RandomX - Proof of Work Implementation
+ *
+ * <p>This class serves as the main facade for RandomX mining operations in XDAGJ.
+ * It coordinates three specialized services to provide a clean and maintainable API:
+ * <ul>
+ *   <li>{@link RandomXSeedManager} - Manages seed epochs and memory slot rotation</li>
+ *   <li>{@link RandomXHashService} - Provides hash calculation services</li>
+ *   <li>{@link RandomXSnapshotLoader} - Handles snapshot loading and state recovery</li>
+ * </ul>
+ *
+ * <h2>Key Features</h2>
+ * <ul>
+ *   <li>Dual-buffer seed management for seamless epoch transitions</li>
+ *   <li>Separate hash modes for pool mining and block validation</li>
+ *   <li>Efficient snapshot loading and state reconstruction</li>
+ *   <li>Thread-safe hash calculations</li>
+ * </ul>
+ *
+ * <h2>Usage Example</h2>
+ * <pre>{@code
+ * RandomX randomX = new RandomX(config);
+ * randomX.setDagchain(dagChain);
+ * randomX.start();
+ *
+ * // For mining
+ * Bytes32 poolHash = randomX.randomXPoolCalcHash(data, taskTime);
+ *
+ * // For validation
+ * byte[] blockHash = randomX.randomXBlockHash(data, blockTime);
+ * }</pre>
+ *
+ * @since XDAGJ 0.8.1
+ */
 @Slf4j
 @Getter
 @Setter
 public class RandomX extends AbstractXdagLifecycle {
-    protected final RandomXMemory[] globalMemory = new RandomXMemory[2];
-    protected final Config config;
-    protected boolean isTestNet = true;
-    protected int mineType;
-    protected Set<RandomXFlag> flagSet;
-    protected long randomXForkSeedHeight;
-    protected long randomXForkLag;
-    // Default to maximum value
-    protected long randomXForkTime = Long.MAX_VALUE;
-    protected long randomXPoolMemIndex;
-    protected long randomXHashEpochIndex;
-    protected DagChain dagchain;
-    protected boolean isFullMem;
-    protected boolean isLargePages;
 
+    // ========== Configuration ==========
+
+    private final Config config;
+    private final int mineType = XDAG_RANDOMX;
+
+    @Setter
+    private DagChain dagchain;
+
+    // ========== Service Components ==========
+
+    private final Set<RandomXFlag> flags;
+    private RandomXSeedManager seedManager;
+    private RandomXHashService hashService;
+    private RandomXSnapshotLoader snapshotLoader;
+
+    // ========== Constructor ==========
+
+    /**
+     * Creates a new RandomX instance
+     *
+     * @param config System configuration
+     */
     public RandomX(Config config) {
         this.config = config;
-        if (config instanceof MainnetConfig) {
-            isTestNet = false;
-        }
-        this.mineType = XDAG_RANDOMX;
 
-        flagSet = RandomXUtils.getRecommendedFlags();
+        // Initialize RandomX flags
+        this.flags = RandomXUtils.getRecommendedFlags();
         if (config.getRandomxSpec().getRandomxFlag()) {
-            flagSet.add(RandomXFlag.LARGE_PAGES);
-            flagSet.add(RandomXFlag.FULL_MEM);
+            flags.add(RandomXFlag.LARGE_PAGES);
+            flags.add(RandomXFlag.FULL_MEM);
         }
+
+        log.info("RandomX created: mineType={}, flags={}", mineType, flags);
     }
 
-    // Public method to check if it's a RandomX fork
-    public boolean isRandomxFork(long epoch) {
-        return mineType == XDAG_RANDOMX && epoch > randomXForkTime;
-    }
+    // ========== Lifecycle ==========
 
-    // Public method to set the fork time
-    //  Updated to accept Block instead of Block
-    public void randomXSetForkTime(Block block) {
-        long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
-        seedEpoch -= 1;
-        if (block.getInfo().getHeight() >= randomXForkSeedHeight) {
-            long nextMemIndex = randomXHashEpochIndex + 1;
-            RandomXMemory nextMemory = globalMemory[(int) (nextMemIndex) & 1];
-            if (block.getInfo().getHeight() == randomXForkSeedHeight) {
-                randomXForkTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag;
-                log.debug("From block height:{}, time:{}, set fork time to:{}", block.getInfo().getHeight(),
-                        block.getTimestamp(), randomXForkTime);
-            }
-
-            byte[] hash;
-            if ((block.getInfo().getHeight() & seedEpoch) == 0) {
-                nextMemory.switchTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag + 1;
-                nextMemory.seedTime = block.getTimestamp();
-                nextMemory.seedHeight = block.getInfo().getHeight();
-                log.debug("Set switch time to {}", Long.toHexString(nextMemory.switchTime));
-
-                hash = dagchain.getMainBlockByHeight(block.getInfo().getHeight() - randomXForkLag).getInfo()
-                        .getHash().toArray();
-                if (nextMemory.seed == null || !equalBytes(nextMemory.seed, hash)) {
-                    nextMemory.seed = Arrays.reverse(hash);
-                    log.debug("Next Memory Seed:{}", Hex.toHexString(hash));
-                    randomXPoolUpdateSeed(nextMemIndex);
-                }
-                randomXHashEpochIndex = nextMemIndex;
-                nextMemory.isSwitched = 0;
-            }
-        }
-    }
-
-    // Public method to unset the fork time
-    //  Updated to accept Block instead of Block
-    public void randomXUnsetForkTime(Block block) {
-        long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
-        seedEpoch -= 1;
-        if (block.getInfo().getHeight() >= randomXForkSeedHeight) {
-            if (block.getInfo().getHeight() == randomXForkSeedHeight) {
-                randomXForkTime = -1;
-            }
-            if ((block.getInfo().getHeight() & seedEpoch) == 0) {
-                RandomXMemory memory = globalMemory[(int) (randomXHashEpochIndex & 1)];
-                randomXHashEpochIndex -= 1;
-                memory.seedTime = -1;
-                memory.seedHeight = -1;
-                memory.switchTime = -1;
-                memory.isSwitched = -1;
-            }
-        }
-    }
-
-
-    // Used during system initialization
-    // Wallet type is fast, pool is light
     @Override
     protected void doStart() {
-        if (isTestNet) {
-            randomXForkSeedHeight = RANDOMX_TESTNET_FORK_HEIGHT;
-            randomXForkLag = SEEDHASH_EPOCH_TESTNET_LAG;
-        } else {
-            randomXForkSeedHeight = RANDOMX_FORK_HEIGHT;
-            randomXForkLag = SEEDHASH_EPOCH_LAG;
+        if (dagchain == null) {
+            throw new IllegalStateException("DagChain must be set before starting RandomX");
         }
 
-        long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
-        if ((randomXForkSeedHeight & (seedEpoch - 1)) != 0) {
-            log.error("RandomX fork height {} is not aligned with seed epoch {}, RandomX initialization aborted",
-                    randomXForkSeedHeight, seedEpoch);
-            throw new IllegalStateException(
-                    String.format("RandomX fork height %d must be aligned with seed epoch %d",
-                            randomXForkSeedHeight, seedEpoch));
-        }
+        // Initialize service components
+        seedManager = new RandomXSeedManager(config, dagchain, flags);
+        hashService = new RandomXHashService(seedManager);
+        snapshotLoader = new RandomXSnapshotLoader(config, dagchain, seedManager);
 
-        // Initialize memory and lock
-        for (int i = 0; i < 2; i++) {
-            globalMemory[i] = new RandomXMemory();
-        }
+        // Initialize seed manager
+        seedManager.initialize();
+
+        log.info("RandomX started successfully");
     }
 
     @Override
     protected void doStop() {
+        if (seedManager != null) {
+            seedManager.cleanup();
+        }
+        log.info("RandomX stopped");
     }
 
+    // ========== Public API - Fork Management ==========
 
+    /**
+     * Checks if RandomX fork is active for the given epoch
+     *
+     * @param epoch Epoch number to check
+     * @return true if RandomX is active, false otherwise
+     */
+    public boolean isRandomxFork(long epoch) {
+        return mineType == XDAG_RANDOMX && seedManager != null && seedManager.isAfterFork(epoch);
+    }
+
+    /**
+     * Updates RandomX state when a new block is connected
+     *
+     * @param block Newly connected block
+     */
+    public void randomXSetForkTime(Block block) {
+        if (seedManager != null) {
+            seedManager.updateSeedForBlock(block);
+        }
+    }
+
+    /**
+     * Reverts RandomX state when a block is disconnected
+     *
+     * @param block Block being disconnected
+     */
+    public void randomXUnsetForkTime(Block block) {
+        if (seedManager != null) {
+            seedManager.revertSeedForBlock(block);
+        }
+    }
+
+    // ========== Public API - Hash Calculation ==========
+
+    /**
+     * Calculates a hash for mining pool share validation
+     *
+     * @param data Input data to hash
+     * @param taskTime Mining task timestamp
+     * @return 32-byte hash result
+     * @throws IllegalArgumentException if data is null
+     * @throws IllegalStateException if hash service is not initialized
+     */
     public Bytes32 randomXPoolCalcHash(Bytes data, long taskTime) {
-        if (data == null) {
-            throw new IllegalArgumentException("Input data cannot be null");
+        if (hashService == null) {
+            throw new IllegalStateException("RandomX not started");
         }
-
-        Bytes32 hash;
-        RandomXMemory memory = globalMemory[(int) (randomXPoolMemIndex) & 1];
-
-        if (taskTime < memory.switchTime) {
-            memory = globalMemory[(int) (randomXPoolMemIndex - 1) & 1];
-        }
-
-        byte[] bytes = memory.poolTemplate.calculateHash(data.toArray());
-        hash = Bytes32.wrap(bytes);
-
-        return hash;
+        return hashService.calculatePoolHash(data, taskTime);
     }
 
+    /**
+     * Calculates a hash for block proof-of-work validation
+     *
+     * @param data Raw block data to hash
+     * @param blockTime Block timestamp
+     * @return 32-byte hash result, or null if no seed is available
+     * @throws IllegalArgumentException if data is null
+     * @throws IllegalStateException if hash service is not initialized
+     */
     public byte[] randomXBlockHash(byte[] data, long blockTime) {
-        if (data == null) {
-            throw new IllegalArgumentException("Input data cannot be null");
+        if (hashService == null) {
+            throw new IllegalStateException("RandomX not started");
         }
-
-        byte[] hash;
-        RandomXMemory memory;
-        // If there is no seed
-        if (randomXHashEpochIndex == 0) {
-            log.debug("RandomX hash index is 0, no seed available");
-            return null;
-        } else if (randomXHashEpochIndex == 1) { // first seed
-            memory = globalMemory[(int) (randomXHashEpochIndex) & 1];
-            if (blockTime < memory.switchTime) {
-                // Block time is less than switch time
-                log.debug("Block time {} less than switch time {}", Long.toHexString(blockTime),
-                        Long.toHexString(memory.switchTime));
-                return null;
-            }
-        } else {
-            memory = globalMemory[(int) (randomXHashEpochIndex) & 1];
-            if (blockTime < memory.switchTime) {
-                memory = globalMemory[(int) (randomXHashEpochIndex - 1) & 1];
-            }
-        }
-
-        log.debug("Use seed {}", Hex.toHexString(Arrays.reverse(memory.seed)));
-        hash = memory.blockTemplate.calculateHash(data);
-
-        return hash;
+        return hashService.calculateBlockHash(data, blockTime);
     }
 
-    public void randomXPoolUpdateSeed(long memIndex) {
-        RandomXMemory rx_memory = globalMemory[(int) (memIndex) & 1];
-        // Note: changeKey() updates the RandomX VM with new seed without full re-initialization
-        // This is more efficient than creating new templates
-        if (rx_memory.getPoolTemplate() == null) {
-            RandomXCache cache = new RandomXCache(flagSet);
-            cache.init(rx_memory.seed);
-            RandomXTemplate template = RandomXTemplate.builder()
-                    .cache(cache)
-                    .miningMode(config.getRandomxSpec().getRandomxFlag())
-                    .flags(flagSet)
-                    .build();
-            template.init();
-            rx_memory.setPoolTemplate(template);
-            rx_memory.getPoolTemplate().changeKey(rx_memory.seed);
-        } else {
-            rx_memory.getPoolTemplate().changeKey(rx_memory.seed);
-        }
+    // ========== Public API - Snapshot Loading ==========
 
-        if (rx_memory.getBlockTemplate() == null) {
-            RandomXCache cache = new RandomXCache(flagSet);
-            cache.init(rx_memory.seed);
-            RandomXTemplate template = RandomXTemplate.builder()
-                    .cache(cache)
-                    .miningMode(config.getRandomxSpec().getRandomxFlag())
-                    .flags(flagSet)
-                    .build();
-            template.init();
-            rx_memory.setBlockTemplate(template);
-            rx_memory.getBlockTemplate().changeKey(rx_memory.seed);
-        } else {
-            rx_memory.getBlockTemplate().changeKey(rx_memory.seed);
-        }
-    }
-
+    /**
+     * Loads RandomX state from a snapshot with a pre-computed seed
+     *
+     * @param preseed Pre-computed seed from snapshot
+     */
     public void randomXLoadingSnapshot(byte[] preseed) {
-        // Load RandomX state from snapshot with preseed
-        long firstMemIndex = randomXHashEpochIndex + 1;
-        randomXPoolMemIndex = -1;
-        RandomXMemory firstMemory = globalMemory[(int) (firstMemIndex) & 1];
-        firstMemory.seed = preseed;
-        randomXPoolUpdateSeed(firstMemIndex);
-        randomXHashEpochIndex = firstMemIndex;
-        firstMemory.isSwitched = 0;
-
-        long lag = isTestNet ? SEEDHASH_EPOCH_TESTNET_LAG : SEEDHASH_EPOCH_LAG;
-        //  Blockchain interface now returns Block
-        randomXForkTime = XdagTime
-                .getEpoch(
-                        dagchain.getMainBlockByHeight(config.getSnapshotSpec().getSnapshotHeight() - lag).getTimestamp());
-        Block block;
-        for (long i = lag; i >= 0; i--) {
-            block = dagchain.getMainBlockByHeight(config.getSnapshotSpec().getSnapshotHeight() - i);
-            if (block == null) {
-                continue;
-            }
-            randomXSetForkTime(block);
+        if (snapshotLoader == null) {
+            throw new IllegalStateException("RandomX not started");
         }
+        snapshotLoader.loadWithPreseed(preseed);
     }
 
+    /**
+     * Loads RandomX state conditionally based on chain state
+     *
+     * @param preseed Pre-computed seed (may be used or ignored)
+     */
     public void randomXLoadingForkTimeSnapshot(byte[] preseed) {
-        // If the snapshot is being restarted before the next seed change cycle, use the initial preseed
-        //  Use ChainStats directly (XdagStats deleted)
-        if (dagchain.getChainStats().getMainBlockCount() < config.getSnapshotSpec().getSnapshotHeight() + (isTestNet
-                ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS)) {
-            randomXLoadingSnapshot(preseed);
-        } else {
-            this.randomXLoadingSnapshot();
+        if (snapshotLoader == null) {
+            throw new IllegalStateException("RandomX not started");
         }
+        snapshotLoader.loadConditional(preseed);
     }
 
+    /**
+     * Loads RandomX state from current blockchain state
+     */
     public void randomXLoadingSnapshot() {
-        //  Blockchain interface now returns Block
-        Block block;
-        long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
-        //  Use ChainStats directly (XdagStats deleted)
-        if (dagchain.getChainStats().getMainBlockCount() >= config.getSnapshotSpec().getSnapshotHeight()) {
-            block = dagchain.getMainBlockByHeight(
-                    config.getSnapshotSpec().getSnapshotHeight());
-            randomXForkTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag;
-
-            seedEpoch -= 1;
-          doRandomXSeed(seedEpoch);
+        if (snapshotLoader == null) {
+            throw new IllegalStateException("RandomX not started");
         }
+        snapshotLoader.loadFromCurrentState();
     }
 
-    public void randomXLoadingSnapshotJ() {
-        //  Blockchain interface now returns Block
-        Block block;
-        long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
-        //  Use ChainStats directly (XdagStats deleted)
-        if (dagchain.getChainStats().getMainBlockCount() >= config.getSnapshotSpec().getSnapshotHeight()) {
-            if (config.getSnapshotSpec().getSnapshotHeight() > RANDOMX_FORK_HEIGHT) {
-                block = dagchain.getMainBlockByHeight(
-                        config.getSnapshotSpec().getSnapshotHeight() - config.getSnapshotSpec().getSnapshotHeight() % seedEpoch);
-                randomXForkTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag;
-            }
-            seedEpoch -= 1;
-          doRandomXSeed(seedEpoch);
-        }
-    }
-
+    /**
+     * Loads RandomX state from the fork activation block
+     */
     public void randomXLoadingForkTime() {
-        //  Blockchain interface now returns Block
-        Block block;
-        //  Use ChainStats directly (XdagStats deleted)
-        if (dagchain.getChainStats().getMainBlockCount() >= randomXForkSeedHeight) {
-            block = dagchain.getMainBlockByHeight(randomXForkSeedHeight);
-            randomXForkTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag;
+        if (snapshotLoader == null) {
+            throw new IllegalStateException("RandomX not started");
+        }
+        snapshotLoader.loadFromForkHeight();
+    }
 
-            long seedEpoch = isTestNet ? SEEDHASH_EPOCH_TESTNET_BLOCKS : SEEDHASH_EPOCH_BLOCKS;
-            seedEpoch -= 1;
-          doRandomXSeed(seedEpoch);
+    // ========== Public API - Advanced (for compatibility) ==========
+
+    /**
+     * Updates seed for a specific memory index
+     *
+     * <p><strong>Deprecated:</strong> This method is kept for backward compatibility.
+     * Prefer using the facade methods instead.
+     *
+     * @param memIndex Memory index to update
+     * @deprecated Use facade methods for seed management
+     */
+    @Deprecated
+    public void randomXPoolUpdateSeed(long memIndex) {
+        if (seedManager != null) {
+            seedManager.updateSeed(memIndex);
         }
     }
 
-  private void doRandomXSeed(long seedEpoch) {
-    //  Blockchain interface now returns Block
-    Block block;
-    //  Use ChainStats directly (XdagStats deleted)
-    long seedHeight = dagchain.getChainStats().getMainBlockCount() & ~seedEpoch;
-    long preSeedHeight = seedHeight - seedEpoch - 1;
+    // ========== Status ==========
 
-    if (preSeedHeight >= randomXForkSeedHeight) {
-        randomXHashEpochIndex = 0;
-        randomXPoolMemIndex = -1;
-
-        block = dagchain.getMainBlockByHeight(preSeedHeight);
-        long memoryIndex = randomXHashEpochIndex + 1;
-        RandomXMemory memory = globalMemory[(int) (memoryIndex) & 1];
-        memory.seed = Arrays
-                .reverse(
-                    dagchain.getMainBlockByHeight(preSeedHeight - randomXForkLag).getInfo().getHash().toArray());
-        memory.switchTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag + 1;
-        memory.seedTime = block.getTimestamp();
-        memory.seedHeight = block.getInfo().getHeight();
-
-        randomXPoolUpdateSeed(memoryIndex);
-        randomXHashEpochIndex = memoryIndex;
-        memory.isSwitched = 1;
-    }
-
-    if (seedHeight >= randomXForkSeedHeight) {
-        block = dagchain.getMainBlockByHeight(seedHeight);
-        long memoryIndex = randomXHashEpochIndex + 1;
-        RandomXMemory memory = globalMemory[(int) (memoryIndex) & 1];
-        memory.seed = Arrays
-                .reverse(dagchain.getMainBlockByHeight(seedHeight - randomXForkLag).getInfo().getHash().toArray());
-        memory.switchTime = XdagTime.getEpoch(block.getTimestamp()) + randomXForkLag + 1;
-        memory.seedTime = block.getTimestamp();
-        memory.seedHeight = block.getInfo().getHeight();
-
-        randomXPoolUpdateSeed(memoryIndex);
-        randomXHashEpochIndex = memoryIndex;
-        //  Use ChainStats directly (XdagStats deleted)
-        if (XdagTime.getEpoch(
-            dagchain.getMainBlockByHeight(dagchain.getChainStats().getMainBlockCount()).getTimestamp())
-                >= memory.getSwitchTime()) {
-            memory.isSwitched = 1;
-        } else {
-            memory.isSwitched = 0;
+    /**
+     * Gets current RandomX status information
+     *
+     * @return Status string for debugging
+     */
+    public String getStatus() {
+        if (hashService == null) {
+            return "RandomX[NOT_STARTED]";
         }
+        return hashService.getStatus();
     }
-  }
+
+    /**
+     * Checks if RandomX is ready for hash calculations
+     *
+     * @return true if ready, false otherwise
+     */
+    public boolean isReady() {
+        return hashService != null && hashService.isReady();
+    }
 }
