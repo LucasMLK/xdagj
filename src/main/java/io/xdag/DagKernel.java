@@ -30,6 +30,7 @@ import io.xdag.consensus.sync.HybridSyncManager;
 import io.xdag.consensus.sync.HybridSyncP2pAdapter;
 import io.xdag.consensus.pow.PowAlgorithm;
 import io.xdag.consensus.pow.RandomXPow;
+import io.xdag.consensus.pow.Sha256Pow;
 import io.xdag.consensus.miner.MiningManager;
 import io.xdag.core.*;
 import io.xdag.crypto.keys.ECKeyPair;
@@ -257,9 +258,14 @@ public class DagKernel {
       this.hybridSyncManager = new HybridSyncManager(this, dagChain, hybridSyncP2pAdapter);
       log.info("   ✓ HybridSyncManager initialized");
 
-      // 7. Create RandomXPow (PoW algorithm for mining)
+      // 7. Create PoW Algorithm (choose one):
+      // Option A: RandomX (default - for blocks after fork)
       this.powAlgorithm = new RandomXPow(config, dagChain);
       log.info("   ✓ RandomXPow initialized");
+
+      // Option B: SHA256 (for blocks before fork, uncomment to use)
+      // this.powAlgorithm = new Sha256Pow(config);
+      // log.info("   ✓ Sha256Pow initialized");
 
       // 8. Create MiningManager (4)
       // TTL is taken from config (default is 8)
@@ -336,10 +342,10 @@ public class DagKernel {
               log.info("✓ HybridSyncManager started (auto-sync enabled)");
           }
 
-          // Start RandomXPow (must start before mining)
+          // Start PoW Algorithm (RandomX or SHA256)
           if (powAlgorithm != null) {
               powAlgorithm.start();
-              log.info("✓ RandomXPow started");
+              log.info("✓ PoW Algorithm started: {}", powAlgorithm.getName());
           }
 
           // Start MiningManager (4)
@@ -396,10 +402,10 @@ public class DagKernel {
               log.info("✓ MiningManager stopped");
           }
 
-          // Stop RandomXPow (must stop after mining)
+          // Stop PoW Algorithm (RandomX or SHA256)
           if (powAlgorithm != null) {
               powAlgorithm.stop();
-              log.info("✓ RandomXPow stopped");
+              log.info("✓ PoW Algorithm stopped: {}", powAlgorithm.getName());
           }
 
           // Stop P2P service (5)
