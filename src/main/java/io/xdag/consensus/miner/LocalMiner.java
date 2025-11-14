@@ -37,77 +37,105 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * LocalMiner - Simple CPU miner for testing and development
+ * LocalMiner - CPU miner implementation (DEPRECATED)
  *
- * <p><strong>⚠️ FOR TESTING/DEVELOPMENT ONLY</strong>:
- * This is a basic CPU miner for local testing. For production mining, use dedicated
- * mining software (GPU miners, optimized CPU miners) that connect to the pool server.
+ * <p><strong>⚠️ DEPRECATION NOTICE</strong>:
+ * This class implements a <strong>CPU miner for testing</strong> that is deprecated and will be
+ * removed in version <strong>0.9.0</strong>. Mining functionality should be moved to the
+ * standalone <strong>xdagj-miner</strong> project.
  *
- * <h2>What This Component Does</h2>
+ * <h2>Why Deprecated?</h2>
+ * <p>Miner should be a separate standalone program, not part of the node:
  * <ul>
- *   <li>✅ Implements the missing "nonce iteration loop"</li>
- *   <li>✅ Tries different nonces to find valid PoW solutions</li>
- *   <li>✅ Submits better shares to {@link MiningManager}</li>
- *   <li>✅ Supports both RandomX and SHA256 algorithms</li>
- *   <li>✅ Multi-threaded mining (configurable threads)</li>
+ *   <li>❌ Mining is compute-intensive and should run separately from node</li>
+ *   <li>❌ Users should be able to run multiple miners against one pool</li>
+ *   <li>❌ GPU miners, optimized CPU miners should be separate projects</li>
+ *   <li>❌ Couples mining logic with blockchain node</li>
  * </ul>
  *
- * <h2>Architecture</h2>
+ * <h2>Migration Path</h2>
+ * <p><strong>OLD (Deprecated)</strong>:
  * <pre>
- * LocalMiner (THIS is where actual mining happens!)
- *     │
- *     ├─> Mining Threads (nonce iteration loops)
- *     │    └─> Calculate hash for each nonce
- *     │         └─> If hash better than previous best:
- *     │              └─> Submit to MiningManager
- *     │
- *     └─> MiningManager.receiveShare(nonce, taskIdx)
+ * // Internal miner tied to node
+ * LocalMiner miner = new LocalMiner(miningManager, powAlgorithm, 4);
+ * miner.start();
+ * // Miner directly calls MiningManager.receiveShare()
  * </pre>
  *
- * <h2>Mining Loop (Per Thread)</h2>
+ * <p><strong>NEW (Recommended)</strong>:
  * <pre>
- * while (mining && task active) {
- *     // 1. Get next nonce
- *     nonce = getNextNonce();
+ * // Separate miner program (xdagj-miner)
+ * // Connects to pool via Stratum protocol
  *
- *     // 2. Calculate hash
- *     if (task.isRandomX()) {
- *         hash = powAlgorithm.calculateHash(blockData, nonce);
- *     } else {
- *         hash = SHA256(SHA256(blockData || nonce));
- *     }
+ * // In xdagj-miner project:
+ * StratumClient client = new StratumClient("pool.example.com", 3333);
+ * client.connect();
  *
- *     // 3. Check if better than current best
- *     if (hash < bestHashSoFar) {
- *         // 4. Submit share to pool server
- *         miningManager.receiveShare(nonce, taskIdx);
+ * // Miner receives jobs via Stratum
+ * MiningJob job = client.getJob();
+ *
+ * // Mine and submit via Stratum
+ * while (mining) {
+ *     Bytes32 nonce = tryNextNonce();
+ *     Bytes32 hash = calculateHash(job, nonce);
+ *     if (hash < target) {
+ *         client.submitShare(job.id, nonce);
  *     }
  * }
  * </pre>
  *
- * <h2>Usage Example</h2>
+ * <h2>Architecture Evolution</h2>
  * <pre>
- * // Create local miner with 4 threads
- * LocalMiner miner = new LocalMiner(miningManager, powAlgorithm, 4);
- * miner.start();
+ * OLD (Deprecated):
+ * Node → MiningManager (internal pool) → LocalMiner
+ *                                         ↓
+ *                                     receiveShare()
  *
- * // Miner automatically fetches tasks from MiningManager
- * // and submits shares when better solutions are found
- *
- * miner.stop();
+ * NEW (Three-layer):
+ * Node (xdagj) ← RPC ← Pool (xdagj-pool) ← Stratum ← Miner (xdagj-miner)
  * </pre>
  *
- * <h2>Performance Notes</h2>
+ * <h2>Temporary Usage (Testing Only)</h2>
+ * <p>For development and testing, you can still use LocalMiner, but be aware:
  * <ul>
- *   <li>CPU mining is VERY SLOW compared to GPU mining</li>
- *   <li>This is primarily for testing the mining flow</li>
- *   <li>For production, use optimized external miners</li>
+ *   <li>⚠️ CPU mining is VERY SLOW (use for testing only)</li>
+ *   <li>⚠️ Not recommended for production mining</li>
+ *   <li>⚠️ Will be removed in v0.9.0</li>
+ *   <li>⚠️ No GPU acceleration</li>
+ *   <li>⚠️ No optimization</li>
  * </ul>
  *
+ * <h2>What This Class Does</h2>
+ * <ul>
+ *   <li>✅ Implements the nonce iteration loop (THIS is where mining happens!)</li>
+ *   <li>✅ Multi-threaded CPU mining</li>
+ *   <li>✅ Supports RandomX and SHA256 algorithms</li>
+ *   <li>✅ Submits shares to internal MiningManager</li>
+ *   <li>✅ Good for understanding mining flow</li>
+ * </ul>
+ *
+ * <h2>Timeline</h2>
+ * <ul>
+ *   <li><strong>v0.8.2</strong>: Marked as @Deprecated (current)</li>
+ *   <li><strong>v0.8.4</strong>: xdagj-miner project available with GPU support</li>
+ *   <li><strong>v0.9.0</strong>: LocalMiner removed (breaking change)</li>
+ * </ul>
+ *
+ * <h2>For Users Who Need Mining</h2>
+ * <p>After v0.9.0, use the three-layer architecture:
+ * <ol>
+ *   <li>Run xdagj node with RPC enabled</li>
+ *   <li>Run xdagj-pool connecting to node via RPC</li>
+ *   <li>Run xdagj-miner (or other miners) connecting to pool via Stratum</li>
+ * </ol>
+ *
  * @since XDAGJ v5.1
- * @see MiningManager
- * @see ShareValidator
+ * @deprecated Since v0.8.2, scheduled for removal in v0.9.0.
+ *             Use standalone xdagj-miner connecting to xdagj-pool via Stratum protocol.
+ * @see io.xdag.consensus.miner.MiningManager
+ * @see io.xdag.rpc.service.MiningRpcServiceImpl
  */
+@Deprecated(since = "0.8.2", forRemoval = true)
 @Slf4j
 public class LocalMiner {
 

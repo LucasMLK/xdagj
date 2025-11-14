@@ -36,41 +36,75 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * BlockBroadcaster - Broadcasts mined blocks to the network
+ * BlockBroadcaster - Pool-specific block broadcasting (DEPRECATED)
  *
- * <p>This component is responsible for importing successfully mined blocks
- * to the local DAG chain and broadcasting them to the P2P network.
+ * <p><strong>⚠️ DEPRECATION NOTICE</strong>:
+ * This class implements <strong>pool-specific functionality</strong> that is deprecated and will be
+ * removed in version <strong>0.9.0</strong>. Block broadcasting logic should be handled by the
+ * node's RPC layer when pools submit mined blocks.
  *
- * <h2>Design Principles</h2>
+ * <h2>Why Deprecated?</h2>
+ * <p>Block broadcasting is already handled by the node, pool doesn't need separate broadcaster:
  * <ul>
- *   <li>Single Responsibility: Only handles block importing and broadcasting</li>
- *   <li>Alignment: Uses DagChain API instead of legacy Blockchain</li>
- *   <li>Separation: Broadcasting is separate from mining and validation</li>
- *   <li>Future-ready: P2P integration points clearly marked</li>
+ *   <li>❌ Duplicates functionality already in DagChain.tryToConnect()</li>
+ *   <li>❌ Only used by internal pool (MiningManager)</li>
+ *   <li>❌ External pools use RPC interface which handles broadcasting internally</li>
+ *   <li>❌ Couples pool-specific logic with node functionality</li>
  * </ul>
  *
- * <h2>Block Import Process</h2>
- * <ol>
- *   <li>Import block to local DagChain</li>
- *   <li>Check if block became a main block</li>
- *   <li>If main block: broadcast to P2P network</li>
- *   <li>If orphan: log but don't broadcast</li>
- * </ol>
- *
- * <h2>Usage Example</h2>
+ * <h2>Migration Path</h2>
+ * <p><strong>OLD (Deprecated)</strong>:
  * <pre>
+ * // Internal pool broadcasts blocks via BlockBroadcaster
  * BlockBroadcaster broadcaster = new BlockBroadcaster(dagKernel, 8);
- *
- * // Broadcast a mined block
  * boolean success = broadcaster.broadcast(minedBlock);
- *
- * if (success) {
- *     System.out.println("Block imported and broadcast!");
- * }
  * </pre>
  *
- * @since XDAGJ
+ * <p><strong>NEW (Recommended)</strong>:
+ * <pre>
+ * // External pool submits via RPC (node handles broadcasting internally)
+ * // In xdagj-pool project:
+ * NodeRpcClient nodeClient = new NodeRpcClient("http://localhost:10001");
+ * BlockSubmitResult result = nodeClient.submitMinedBlock(minedBlock, "pool-1");
+ *
+ * // Node's MiningRpcServiceImpl internally does:
+ * // 1. Validates block against cached candidate
+ * // 2. Calls dagChain.tryToConnect(block) - which broadcasts automatically
+ * // 3. Returns result to pool
+ * </pre>
+ *
+ * <h2>Temporary Usage (Testing Only)</h2>
+ * <p>For development and testing, you can still use BlockBroadcaster, but be aware:
+ * <ul>
+ *   <li>⚠️ Not recommended for production</li>
+ *   <li>⚠️ Will be removed in v0.9.0</li>
+ *   <li>⚠️ No new features will be added</li>
+ *   <li>⚠️ Bugs may not be fixed</li>
+ * </ul>
+ *
+ * <h2>What This Class Does</h2>
+ * <ul>
+ *   <li>Imports mined blocks to local DagChain</li>
+ *   <li>Checks if block became main block or orphan</li>
+ *   <li>Broadcasts main blocks to P2P network</li>
+ *   <li>Tracks broadcast statistics</li>
+ * </ul>
+ *
+ * <h2>Timeline</h2>
+ * <ul>
+ *   <li><strong>v0.8.2</strong>: Marked as @Deprecated (current)</li>
+ *   <li><strong>v0.8.3</strong>: xdagj-pool uses RPC interface instead</li>
+ *   <li><strong>v0.9.0</strong>: BlockBroadcaster removed (breaking change)</li>
+ * </ul>
+ *
+ * @since XDAGJ v5.1
+ * @deprecated Since v0.8.2, scheduled for removal in v0.9.0.
+ *             Pools should use {@link io.xdag.rpc.service.MiningRpcServiceImpl#submitMinedBlock}
+ *             which handles import and broadcast internally.
+ * @see io.xdag.rpc.service.MiningRpcServiceImpl
+ * @see io.xdag.core.DagChain#tryToConnect(Block)
  */
+@Deprecated(since = "0.8.2", forRemoval = true)
 @Slf4j
 public class BlockBroadcaster {
 

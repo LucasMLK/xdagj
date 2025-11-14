@@ -270,13 +270,16 @@ public class DagKernel {
       // this.powAlgorithm = new Sha256Pow(config);
       // log.info("   ✓ Sha256Pow initialized");
 
-      // 8. Create MiningManager (4)
+      // 8. Create MiningManager (4) - DEPRECATED
       // TTL is taken from config (default is 8)
       if (wallet != null) {
           int ttl = config.getNodeSpec() != null ? config.getNodeSpec().getTTL() : 8;
           this.miningManager = new MiningManager(
                   this, wallet, powAlgorithm, ttl);
           log.info("   ✓ MiningManager initialized (TTL={})", ttl);
+          log.warn("   ⚠️ DEPRECATION WARNING: MiningManager is deprecated since v0.8.2");
+          log.warn("   → Will be removed in v0.9.0 (use external xdagj-pool instead)");
+          log.warn("   → See: io.xdag.consensus.miner.MiningManager for migration guide");
       } else {
           log.warn("   ⚠ MiningManager not initialized (wallet required)");
       }
@@ -360,10 +363,12 @@ public class DagKernel {
               log.info("✓ PoW Algorithm started: {}", powAlgorithm.getName());
           }
 
-          // Start MiningManager (4)
+          // Start MiningManager (4) - DEPRECATED
           if (miningManager != null) {
               miningManager.start();
               log.info("✓ MiningManager started (mining enabled)");
+              log.warn("⚠️  DEPRECATED: Internal pool mining will be removed in v0.9.0");
+              log.warn("→  Migrate to three-layer architecture: Node ← RPC ← Pool ← Miner");
           }
 
           running = true;

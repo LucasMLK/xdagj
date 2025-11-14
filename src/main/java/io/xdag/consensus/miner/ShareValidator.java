@@ -37,51 +37,75 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * ShareValidator - Validates mining shares and tracks best solution
+ * ShareValidator - Pool-specific share validation (DEPRECATED)
  *
- * <p>This component is responsible for validating mining shares (solutions) submitted
- * by miners or pools. It handles both RandomX and SHA256 hash calculation and maintains
- * the best solution found so far.
+ * <p><strong>⚠️ DEPRECATION NOTICE</strong>:
+ * This class implements <strong>pool-specific functionality</strong> that is deprecated and will be
+ * removed in version <strong>0.9.0</strong>. Share validation logic should be moved to the
+ * standalone <strong>xdagj-pool</strong> project.
  *
- * <h2>Design Principles</h2>
+ * <h2>Why Deprecated?</h2>
+ * <p>Share validation is pool server functionality, not blockchain node functionality:
  * <ul>
- *   <li>Single Responsibility: Only validates shares and tracks best solution</li>
- *   <li>Thread Safety: All operations are thread-safe using atomic operations</li>
- *   <li>Algorithm Support: Supports both RandomX and SHA256 POW algorithms</li>
- *   <li>Alignment: Uses DagChain data structures</li>
+ *   <li>❌ Only relevant for pool servers managing multiple miners</li>
+ *   <li>❌ Blockchain nodes don't need to track "best shares"</li>
+ *   <li>❌ Couples pool logic with node implementation</li>
+ *   <li>❌ Should be in separate pool server project</li>
  * </ul>
  *
- * <h2>Hash Calculation</h2>
- * <p>The validator supports two POW algorithms:</p>
- * <ul>
- *   <li><strong>RandomX</strong>: For blocks after RandomX fork
- *       <pre>hash = RandomX(preHash, nonce)</pre>
- *   </li>
- *   <li><strong>SHA256</strong>: For blocks before RandomX fork
- *       <pre>hash = SHA256(SHA256_State + nonce)</pre>
- *   </li>
- * </ul>
- *
- * <h2>Best Share Tracking</h2>
- * <p>The validator maintains the best (lowest) hash found so far. A share is considered
- * better if its hash is numerically smaller than the current best.</p>
- *
- * <h2>Usage Example</h2>
+ * <h2>Migration Path</h2>
+ * <p><strong>OLD (Deprecated)</strong>:
  * <pre>
- * ShareValidator validator = new ShareValidator(randomX);
- *
- * // Validate a share
- * Bytes32 nonce = ... // nonce from miner
- * boolean isBest = validator.validateShare(nonce, miningTask);
- *
- * if (isBest) {
- *     // This is the best solution so far
- *     Block minedBlock = validator.createMinedBlock(miningTask);
- * }
+ * // Node has internal pool with share validation
+ * ShareValidator validator = new ShareValidator(powAlgorithm);
+ * boolean isBest = validator.validateShare(nonce, task);
  * </pre>
  *
- * @since XDAGJ
+ * <p><strong>NEW (Recommended)</strong>:
+ * <pre>
+ * // Separate pool server (xdagj-pool) validates shares
+ * // Node only receives final mined blocks via RPC
+ *
+ * // In xdagj-pool project:
+ * PoolShareValidator validator = new PoolShareValidator(difficulty);
+ * boolean isValid = validator.validateWorkerShare(nonce, target);
+ *
+ * // When block found, submit to node:
+ * Block minedBlock = buildBlock(bestNonce);
+ * nodeRpcClient.submitMinedBlock(minedBlock);
+ * </pre>
+ *
+ * <h2>Temporary Usage (Testing Only)</h2>
+ * <p>For development and testing, you can still use ShareValidator, but be aware:
+ * <ul>
+ *   <li>⚠️ Not recommended for production</li>
+ *   <li>⚠️ Will be removed in v0.9.0</li>
+ *   <li>⚠️ No new features will be added</li>
+ *   <li>⚠️ Bugs may not be fixed</li>
+ * </ul>
+ *
+ * <h2>What This Class Does</h2>
+ * <ul>
+ *   <li>Validates mining shares (nonces) submitted by miners</li>
+ *   <li>Calculates hash using RandomX or SHA256</li>
+ *   <li>Tracks the best (lowest) hash found so far</li>
+ *   <li>Creates mined block with best nonce</li>
+ * </ul>
+ *
+ * <h2>Timeline</h2>
+ * <ul>
+ *   <li><strong>v0.8.2</strong>: Marked as @Deprecated (current)</li>
+ *   <li><strong>v0.8.3</strong>: xdagj-pool project available with equivalent functionality</li>
+ *   <li><strong>v0.9.0</strong>: ShareValidator removed (breaking change)</li>
+ * </ul>
+ *
+ * @since XDAGJ v5.1
+ * @deprecated Since v0.8.2, scheduled for removal in v0.9.0.
+ *             Use pool-specific share validation in xdagj-pool project instead.
+ * @see io.xdag.rpc.service.MiningRpcServiceImpl
+ * @see io.xdag.consensus.miner.MiningManager
  */
+@Deprecated(since = "0.8.2", forRemoval = true)
 @Slf4j
 public class ShareValidator {
 

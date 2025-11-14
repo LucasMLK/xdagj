@@ -41,82 +41,77 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * MiningManager - Coordinates the mining process (POOL SERVER ARCHITECTURE)
+ * MiningManager - Internal pool server (DEPRECATED)
  *
- * <p><strong>⚠️ IMPORTANT ARCHITECTURAL NOTE</strong>:
- * This is a <strong>POOL SERVER</strong> implementation, NOT a standalone miner!
- * The actual PoW computation (nonce iteration loop) is performed by <strong>EXTERNAL MINERS</strong>.
+ * <p><strong>⚠️ DEPRECATION NOTICE</strong>:
+ * This class implements an <strong>internal pool server</strong> that is deprecated and will be
+ * removed in version <strong>0.9.0</strong>. Mining pool functionality should be moved to the
+ * standalone <strong>xdagj-pool</strong> project.
+ *
+ * <h2>Why Deprecated?</h2>
+ * <p>Mixing pool server functionality with blockchain node violates separation of concerns:
+ * <ul>
+ *   <li>❌ Node becomes too complex (blockchain + pool + mining)</li>
+ *   <li>❌ Cannot scale pool and node independently</li>
+ *   <li>❌ Cannot run multiple pools against single node</li>
+ *   <li>❌ Harder to maintain and test</li>
+ * </ul>
+ *
+ * <h2>Migration Path</h2>
+ * <p><strong>OLD (Deprecated)</strong>:
+ * <pre>
+ * // Node with internal pool (deprecated)
+ * MiningManager manager = new MiningManager(dagKernel, wallet, powAlgorithm, 8);
+ * manager.start();
+ * // Miners connect directly to node
+ * </pre>
+ *
+ * <p><strong>NEW (Recommended)</strong>:
+ * <pre>
+ * // 1. Node exposes RPC interface
+ * MiningRpcServiceImpl rpcService = kernel.getMiningRpcService();
+ *
+ * // 2. Deploy separate pool server (xdagj-pool)
+ * PoolServer pool = new PoolServer(config);
+ * pool.connectToNode("http://localhost:10001");
+ * pool.start();
+ *
+ * // 3. Miners connect to pool (not node)
+ * // Node → Pool → Miners (proper architecture)
+ * </pre>
+ *
+ * <h2>Temporary Usage (Testing Only)</h2>
+ * <p>For development and testing, you can still use MiningManager, but be aware:
+ * <ul>
+ *   <li>⚠️ Not recommended for production</li>
+ *   <li>⚠️ Will be removed in v0.9.0</li>
+ *   <li>⚠️ No new features will be added</li>
+ *   <li>⚠️ Bugs may not be fixed</li>
+ * </ul>
  *
  * <h2>What This Class Does</h2>
  * <ul>
- *   <li>✅ Generates candidate blocks every 64 seconds</li>
- *   <li>✅ Receives mining shares from external miners via {@link #receiveShare(Bytes32, long)}</li>
- *   <li>✅ Validates shares and tracks the best solution</li>
- *   <li>✅ Broadcasts the best block when epoch ends</li>
- *   <li>❌ Does NOT iterate nonces (no mining loop)</li>
- *   <li>❌ Does NOT compute hashes in a loop</li>
+ *   <li>Generates candidate blocks every 64 seconds</li>
+ *   <li>Receives mining shares from external miners via {@link #receiveShare(Bytes32, long)}</li>
+ *   <li>Validates shares and tracks the best solution</li>
+ *   <li>Broadcasts the best block when epoch ends</li>
  * </ul>
  *
- * <h2>External Miner Requirements</h2>
- * <p>External miners must:</p>
- * <ol>
- *   <li>Fetch mining task from node (via HTTP API or RPC)</li>
- *   <li>Iterate nonces (0 to MAX_NONCE) in a loop</li>
- *   <li>Calculate hash for each nonce (RandomX or SHA256)</li>
- *   <li>Submit better shares to node via {@link #receiveShare(Bytes32, long)}</li>
- * </ol>
- *
- * <h2>Architecture</h2>
- * <pre>
- * MiningManager (Pool Server)
- *   ├─> BlockGenerator (generates candidate blocks)
- *   ├─> ShareValidator (validates mining shares)
- *   ├─> BlockBroadcaster (broadcasts mined blocks)
- *   └─> External Miners (via HTTP/RPC)
- *        ├─> CPU Miner (xdag-miner)
- *        ├─> GPU Miner (xdag-cuda)
- *        └─> Pool Miners
- * </pre>
- *
- * <h2>Design Principles</h2>
+ * <h2>Timeline</h2>
  * <ul>
- *   <li>Single Responsibility: Only coordinates mining, delegates work to components</li>
- *   <li>Alignment: Uses DagKernel and DagChain APIs</li>
- *   <li>Clean Lifecycle: Simple start/stop semantics</li>
- *   <li>Pool Mode: Designed for pool server architecture</li>
+ *   <li><strong>v0.8.2</strong>: Marked as @Deprecated (current)</li>
+ *   <li><strong>v0.8.3</strong>: xdagj-pool project available</li>
+ *   <li><strong>v0.9.0</strong>: MiningManager removed (breaking change)</li>
  * </ul>
- *
- * <h2>Mining Flow</h2>
- * <ol>
- *   <li>Every 64 seconds: {@code mineBlock()} generates candidate block</li>
- *   <li>Create {@link MiningTask} with candidate block + preHash</li>
- *   <li>[EXTERNAL MINER] Fetch task, iterate nonces, submit shares</li>
- *   <li>{@code receiveShare()} validates incoming shares</li>
- *   <li>{@link ShareValidator} tracks best share (lowest hash)</li>
- *   <li>On timeout: create mined block with best share and broadcast</li>
- * </ol>
- *
- * <h2>Usage Example</h2>
- * <pre>
- * MiningManager manager = new MiningManager(dagKernel, wallet, powAlgorithm, 8);
- * manager.start();
- *
- * // Manager runs automatically every 64 seconds
- * // External miners connect and submit shares:
- * // manager.receiveShare(nonce, taskIndex);
- *
- * manager.stop();
- * </pre>
- *
- * <h2>For Standalone Mining</h2>
- * <p>If you need standalone CPU mining (for testing), create a {@code LocalMiner} component
- * that implements the nonce iteration loop and calls {@link #receiveShare(Bytes32, long)}.
  *
  * @since XDAGJ v5.1
- * @see BlockGenerator
- * @see ShareValidator
- * @see MiningTask
+ * @deprecated Since v0.8.2, scheduled for removal in v0.9.0.
+ *             Use external pool server (xdagj-pool) connecting via
+ *             {@link io.xdag.rpc.service.MiningRpcServiceImpl} instead.
+ * @see io.xdag.rpc.service.MiningRpcServiceImpl
+ * @see io.xdag.rpc.service.NodeMiningRpcService
  */
+@Deprecated(since = "0.8.2", forRemoval = true)
 @Slf4j
 public class MiningManager {
 
