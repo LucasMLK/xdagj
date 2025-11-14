@@ -26,7 +26,6 @@ package io.xdag.core;
 
 import io.xdag.DagKernel;
 import io.xdag.db.DagStore;
-import io.xdag.db.FinalizedBlockStore;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -36,14 +35,32 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Service for automatically finalizing old blocks
- * <p>
- * Blocks older than FINALIZATION_THRESHOLD epochs are considered finalized
- * and are migrated from the active BlockStore to the FinalizedBlockStore.
- * <p>
- * Phase 2 refactor - Part of the storage optimization strategy.
  *
- * @see io.xdag.db.store.FinalizedBlockStore
- * @see <a href="docs/refactor-design/FINALIZED_BLOCK_STORAGE.md">FINALIZED_BLOCK_STORAGE.md</a>
+ * <p><strong>STATUS: Work In Progress (Phase 2 Feature)</strong>
+ *
+ * <p>This service is part of a future storage optimization strategy where
+ * blocks older than FINALIZATION_THRESHOLD epochs are considered finalized
+ * and migrated to a specialized storage layer.
+ *
+ * <p><strong>Current Status:</strong>
+ * <ul>
+ *   <li>Core finalization logic: ✅ Implemented</li>
+ *   <li>FinalizedBlockStore: ❌ Not yet implemented</li>
+ *   <li>Service status: ⏸️ Temporarily disabled</li>
+ * </ul>
+ *
+ * <p><strong>Design Goals:</strong>
+ * <ul>
+ *   <li>Optimize storage for blocks older than ~12 days (16384 epochs)</li>
+ *   <li>Reduce active storage pressure</li>
+ *   <li>Maintain fast access to recent blocks</li>
+ * </ul>
+ *
+ * <p><strong>When Enabled:</strong>
+ * This service will run periodic checks (every 60 minutes) to migrate
+ * finalized blocks to optimized storage.
+ *
+ * @since XDAGJ 5.0 (Phase 2 - Planned)
  */
 @Slf4j
 public class BlockFinalizationService {
@@ -65,8 +82,6 @@ public class BlockFinalizationService {
 
     private final DagKernel kernel;
     private final DagStore dagStore;
-    // TODO  FinalizedBlockStore temporarily disabled
-    // private final FinalizedBlockStore finalizedBlockStore;
     private final ScheduledExecutorService scheduler;
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
     private final AtomicLong lastFinalizedEpoch = new AtomicLong(-1);
@@ -75,8 +90,6 @@ public class BlockFinalizationService {
     public BlockFinalizationService(DagKernel kernel) {
         this.kernel = kernel;
         this.dagStore = kernel.getDagStore();
-        // TODO  FinalizedBlockStore temporarily disabled
-        // this.finalizedBlockStore = kernel.getFinalizedBlockStore();
         this.scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread thread = new Thread(r, "BlockFinalizationService");
             thread.setDaemon(true);
@@ -125,13 +138,13 @@ public class BlockFinalizationService {
         }
     }
 
-    // Temporarily disabled - waiting for migration to Block
+    // TODO: Phase 2 - Implement FinalizedBlockStore and enable block migration
     /*
     /**
      * Finalize blocks older than the threshold
      * <p>
-     * This method is called periodically to migrate old blocks from BlockStore
-     * to FinalizedBlockStore.
+     * This method will be called periodically to migrate old blocks from BlockStore
+     * to a specialized FinalizedBlockStore (to be implemented).
      */
     /*
     private void finalizeOldBlocks() {
@@ -232,10 +245,12 @@ public class BlockFinalizationService {
     */
 
     /**
-     * Stub method for 3 - Block finalization temporarily disabled
+     * Stub method - Block finalization temporarily disabled
+     *
+     * <p>Waiting for FinalizedBlockStore implementation (Phase 2).
      */
     private void finalizeOldBlocks() {
-        log.debug("Block finalization temporarily disabled - waiting for Block migration");
+        log.debug("Block finalization temporarily disabled - waiting for FinalizedBlockStore implementation (Phase 2)");
     }
 
     /**

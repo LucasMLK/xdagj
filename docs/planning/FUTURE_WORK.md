@@ -278,33 +278,38 @@ private void sendBlocksInBatches(BlocksRequestMessage msg) {
 
 ### BlockFinalizationService.java
 
-#### 可选删除finalized区块节省空间
-**文件**: `src/main/java/io/xdag/core/BlockFinalizationService.java:207`
-**TODO**: Optionally delete from active BlockStore to save space
+#### ❌ Block Finalization Storage Infrastructure - 已删除 (2025-11-14)
+**文件**: `src/main/java/io/xdag/core/BlockFinalizationService.java`
+**状态**: ❌ **Phase 2 Feature - Implementation Removed**
 
-**描述**: 将 finalized 区块从活跃存储移除，只保留在 FinalizedBlockStore。
+**原TODO**: Optionally delete from active BlockStore to save space
 
-**影响**: 中 - 存储优化
-**优先级**: P3
-**预估工作量**: 4-6小时
+**描述**: Block finalization service 是一个 Phase 2 计划特性，用于将旧区块迁移到优化存储层。
 
-**实现建议**:
-```java
-// Add config option
-private boolean deleteFromActiveStore = false;
+**实现状态**:
+- BlockFinalizationService.java: ✅ 保留（服务框架）
+- FinalizedBlockStore interface: ❌ 已删除（未实现）
+- FinalizedBlockStoreImpl: ❌ 已删除（未实现）
+- CachedBlockStore: ❌ 已删除（未使用）
+- BloomFilterBlockStore: ❌ 已删除（未使用）
 
-private void finalizeBlock(Block block) {
-    // Save to FinalizedBlockStore
-    finalizedBlockStore.saveBlock(block);
+**删除原因**:
+1. 整个 FinalizedBlockStore 基础设施完全未被使用
+2. BlockFinalizationService 内部实现完全被注释（stub method）
+3. Phase 2 特性尚未确定具体实现方案
+4. 删除 ~820 行未使用代码，提高代码库可维护性
 
-    // Optionally delete from active store
-    if (deleteFromActiveStore) {
-        blockStore.deleteBlock(block.getHash());
-        log.debug("Deleted finalized block from active store: {}",
-                 block.getHash().toHexString());
-    }
-}
-```
+**未来实施**:
+- 需要首先确定 Phase 2 存储优化策略
+- 重新设计 FinalizedBlockStore 接口和实现
+- 集成到 BlockFinalizationService
+- 预估工作量: 8-12 小时（完整实现）
+
+**影响**: 低 - Phase 2 特性，不影响当前核心功能
+**优先级**: P4（Phase 2 规划中）
+**预估工作量**: 8-12小时（重新实现）
+
+**Git 提交**: [To be committed]
 
 ---
 
