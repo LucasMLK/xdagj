@@ -405,13 +405,13 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
 
     private Object handleGetRandomXInfo() {
         try {
-            io.xdag.rpc.service.NodeMiningRpcService miningRpc = dagKernel.getMiningRpcService();
-            if (miningRpc == null) {
-                log.warn("Mining RPC service not available");
+            io.xdag.api.service.MiningApiService miningApi = dagKernel.getMiningApiService();
+            if (miningApi == null) {
+                log.warn("Mining API service not available");
                 return null;
             }
 
-            io.xdag.rpc.service.RandomXInfo info = miningRpc.getRandomXInfo();
+            io.xdag.api.dto.RandomXInfo info = miningApi.getRandomXInfo();
             if (info == null) {
                 log.warn("RandomX info returned null");
                 return null;
@@ -435,13 +435,13 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
 
     private Object handleGetCandidateBlock(String poolId) {
         try {
-            io.xdag.rpc.service.NodeMiningRpcService miningRpc = dagKernel.getMiningRpcService();
-            if (miningRpc == null) {
-                log.warn("Mining RPC service not available");
+            io.xdag.api.service.MiningApiService miningApi = dagKernel.getMiningApiService();
+            if (miningApi == null) {
+                log.warn("Mining API service not available");
                 return null;
             }
 
-            io.xdag.core.Block block = miningRpc.getCandidateBlock(poolId);
+            io.xdag.core.Block block = miningApi.getCandidateBlock(poolId);
             if (block == null) {
                 log.warn("Failed to generate candidate block for pool '{}'", poolId);
                 return null;
@@ -477,12 +477,12 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
 
     private Object handleSubmitMinedBlock(Map<String, Object> params) {
         try {
-            io.xdag.rpc.service.NodeMiningRpcService miningRpc = dagKernel.getMiningRpcService();
-            if (miningRpc == null) {
-                log.warn("Mining RPC service not available");
+            io.xdag.api.service.MiningApiService miningApi = dagKernel.getMiningApiService();
+            if (miningApi == null) {
+                log.warn("Mining API service not available");
                 Map<String, Object> error = new HashMap<>();
                 error.put("accepted", false);
-                error.put("message", "Mining RPC service not available");
+                error.put("message", "Mining API service not available");
                 error.put("errorCode", "SERVICE_UNAVAILABLE");
                 return error;
             }
@@ -503,8 +503,8 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
             byte[] blockBytes = org.apache.tuweni.bytes.Bytes.fromHexString(blockDataHex).toArray();
             io.xdag.core.Block block = io.xdag.core.Block.fromBytes(blockBytes);
 
-            // Submit to mining RPC service
-            io.xdag.rpc.service.BlockSubmitResult result = miningRpc.submitMinedBlock(block, poolId);
+            // Submit to mining API service
+            io.xdag.api.dto.BlockSubmitResult result = miningApi.submitMinedBlock(block, poolId);
 
             // Convert result to response
             Map<String, Object> response = new HashMap<>();
@@ -532,13 +532,13 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
 
     private Object handleGetDifficulty() {
         try {
-            io.xdag.rpc.service.NodeMiningRpcService miningRpc = dagKernel.getMiningRpcService();
-            if (miningRpc == null) {
-                log.warn("Mining RPC service not available");
+            io.xdag.api.service.MiningApiService miningApi = dagKernel.getMiningApiService();
+            if (miningApi == null) {
+                log.warn("Mining API service not available");
                 return null;
             }
 
-            org.apache.tuweni.units.bigints.UInt256 difficulty = miningRpc.getCurrentDifficultyTarget();
+            org.apache.tuweni.units.bigints.UInt256 difficulty = miningApi.getCurrentDifficultyTarget();
             if (difficulty == null) {
                 log.warn("Difficulty returned null");
                 return null;

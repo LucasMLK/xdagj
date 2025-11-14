@@ -130,8 +130,8 @@ public class DagKernel {
   // PoW Algorithm (RandomX or SHA256)
   private PowAlgorithm powAlgorithm;
 
-  // Mining RPC service (for pool server integration)
-  private io.xdag.rpc.service.MiningRpcServiceImpl miningRpcService;
+  // Mining API service (for pool server integration)
+  private io.xdag.api.service.MiningApiServiceImpl miningApiService;
 
   // P2P service (5)
   private P2pService p2pService;
@@ -268,13 +268,13 @@ public class DagKernel {
       // this.powAlgorithm = new Sha256Pow(config);
       // log.info("   ✓ Sha256Pow initialized");
 
-      // Create Mining RPC Service (for pool server integration)
+      // Create Mining API Service (for pool server integration)
       if (wallet != null) {
-          this.miningRpcService = new io.xdag.rpc.service.MiningRpcServiceImpl(
+          this.miningApiService = new io.xdag.api.service.MiningApiServiceImpl(
                   dagChain, wallet, powAlgorithm);
-          log.info("   ✓ MiningRpcService initialized (pool server interface ready)");
+          log.info("   ✓ MiningApiService initialized (pool server interface ready)");
       } else {
-          log.warn("   ⚠ MiningRpcService not initialized (wallet required)");
+          log.warn("   ⚠ MiningApiService not initialized (wallet required)");
       }
 
       log.info("   ✓ Consensus layer initialization complete");
