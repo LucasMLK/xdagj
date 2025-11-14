@@ -131,7 +131,7 @@ public class DagKernel {
   private PowAlgorithm powAlgorithm;
 
   // Mining API service (for pool server integration)
-  private io.xdag.api.service.MiningApiServiceImpl miningApiService;
+  private io.xdag.api.service.MiningApiService miningApiService;
 
   // P2P service (5)
   private P2pService p2pService;
@@ -270,7 +270,7 @@ public class DagKernel {
 
       // Create Mining API Service (for pool server integration)
       if (wallet != null) {
-          this.miningApiService = new io.xdag.api.service.MiningApiServiceImpl(
+          this.miningApiService = new io.xdag.api.service.MiningApiService(
                   dagChain, wallet, powAlgorithm);
           log.info("   ✓ MiningApiService initialized (pool server interface ready)");
       } else {

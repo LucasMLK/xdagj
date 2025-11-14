@@ -56,7 +56,7 @@ public class MiningApiServiceTest {
     private Config config;
     private Path tempDir;
     private Wallet testWallet;
-    private MiningApiServiceImpl miningApiService;
+    private MiningApiService miningApiService;
 
     @Before
     public void setUp() throws IOException {
@@ -287,7 +287,7 @@ public class MiningApiServiceTest {
         // Get cache statistics
         String stats = miningApiService.getCacheStatistics();
         assertNotNull("Cache statistics should not be null", stats);
-        assertTrue("Cache should contain at least 1 entry", stats.contains("1 entries cached"));
+        assertTrue("Cache should contain at least 1 entry", stats.contains("size:1") || stats.contains("size: 1"));
 
         System.out.println("✓ Cache statistics retrieved");
         System.out.println("  - " + stats);

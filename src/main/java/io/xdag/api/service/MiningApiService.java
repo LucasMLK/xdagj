@@ -24,135 +24,454 @@
 
 package io.xdag.api.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.stats.CacheStats;
+import io.xdag.Wallet;
 import io.xdag.api.dto.BlockSubmitResult;
 import io.xdag.api.dto.RandomXInfo;
+import io.xdag.consensus.miner.BlockGenerator;
+import io.xdag.consensus.pow.PowAlgorithm;
 import io.xdag.core.Block;
+import io.xdag.core.DagChain;
+import io.xdag.core.DagImportResult;
+import io.xdag.utils.XdagTime;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
+import java.time.Duration;
+
 /**
- * MiningApiService - HTTP API interface for mining pool integration
+ * MiningApiService - Node mining API service for pool server integration
  *
- * <p><strong>Architecture Note</strong>:
- * This interface defines the boundary between the XDAG node and external pool servers.
- * Pool servers connect to the node via this HTTP API to fetch mining tasks and
- * submit mined blocks.
+ * <p>This service allows external pool servers to connect to the XDAG node
+ * and coordinate mining activities via HTTP API.
  *
- * <p><strong>Protocol Note</strong>:
- * Although named "API", this uses HTTP + JSON (RESTful style), not traditional RPC.
- * The term follows blockchain industry conventions (Ethereum JSON-RPC, Bitcoin JSON-RPC).
- *
- * <h2>Three-Layer Architecture</h2>
+ * <h2>Architecture</h2>
  * <pre>
- * xdagj (Node)
- *   └─> MiningApiService ← YOU ARE HERE
- *        ↓ HTTP + JSON
- * xdagj-pool (Pool Server)
- *   └─> StratumService
- *        ↓ Stratum Protocol
- * xdagj-miner (Miner)
- *   └─> Nonce iteration loop
+ * Pool Server (xdagj-pool)
+ *      │
+ *      │ HTTP + JSON
+ *      ▼
+ * MiningApiService ← YOU ARE HERE
+ *      ├─> BlockGenerator (generates candidate blocks)
+ *      ├─> DagChain (imports mined blocks)
+ *      └─> CandidateBlockCache (validates submissions)
  * </pre>
  *
- * <h2>HTTP Endpoints</h2>
- * <pre>
- * GET  /api/v1/mining/randomx    - Get RandomX info
- * GET  /api/v1/mining/candidate  - Get candidate block
- * POST /api/v1/mining/submit     - Submit mined block
- * GET  /api/v1/mining/difficulty - Get current difficulty
- * </pre>
- *
- * <h2>Interface Methods</h2>
+ * <h2>Key Responsibilities</h2>
  * <ul>
- *   <li>{@link #getCandidateBlock(String)} - Pool fetches candidate block to mine</li>
- *   <li>{@link #submitMinedBlock(Block, String)} - Pool submits best mined block</li>
- *   <li>{@link #getCurrentDifficultyTarget()} - Get current network difficulty</li>
- *   <li>{@link #getRandomXInfo()} - Get RandomX fork status and epoch info</li>
+ *   <li>Generate candidate blocks for pools to mine</li>
+ *   <li>Cache candidate blocks to validate submissions</li>
+ *   <li>Validate and import mined blocks from pools</li>
+ *   <li>Provide network difficulty and RandomX status</li>
  * </ul>
  *
- * <h2>Usage Flow</h2>
- * <ol>
- *   <li>Pool server calls {@code getCandidateBlock(poolId)} every epoch (64 seconds)</li>
- *   <li>Pool distributes work to miners via Stratum protocol</li>
- *   <li>Miners find shares and submit to pool</li>
- *   <li>Pool tracks best share and calls {@code submitMinedBlock()} before epoch ends</li>
- *   <li>Node validates and imports block to blockchain</li>
- * </ol>
+ * <h2>Thread Safety</h2>
+ * <p>This class is thread-safe and supports multiple concurrent pool connections.
+ *
+ * <h2>Usage Example</h2>
+ * <pre>
+ * MiningApiService apiService = new MiningApiService(dagChain, wallet, powAlgorithm);
+ *
+ * // Pool fetches candidate block
+ * Block candidate = apiService.getCandidateBlock("pool1");
+ *
+ * // Pool mines and submits result
+ * Block minedBlock = candidate.withNonce(foundNonce);
+ * BlockSubmitResult result = apiService.submitMinedBlock(minedBlock, "pool1");
+ * </pre>
  *
  * @since XDAGJ v5.1
- * @see MiningApiServiceImpl
  */
-public interface MiningApiService {
+@Slf4j
+public class MiningApiService {
+
+  // ========== Dependencies ==========
+
+
+  @Getter
+  private final DagChain dagChain;
+
+  @Getter
+  private final BlockGenerator blockGenerator;
+  private final PowAlgorithm powAlgorithm;
+
+  // ========== State ==========
+
+  /**
+   * Cache of candidate blocks provided to pools
+   */
+  private final CandidateBlockCache blockCache;
+
+  // ========== Constructor ==========
+
+  /**
+   * Create a new MiningApiService
+   *
+   * @param dagChain     DagChain for block operations
+   * @param wallet       Wallet for coinbase addresses
+   * @param powAlgorithm PoW algorithm instance (can be null if not using RandomX)
+   */
+  public MiningApiService(DagChain dagChain, Wallet wallet, PowAlgorithm powAlgorithm) {
+    if (dagChain == null) {
+      throw new IllegalArgumentException("DagChain cannot be null");
+    }
+    if (wallet == null) {
+      throw new IllegalArgumentException("Wallet cannot be null");
+    }
+
+    this.dagChain = dagChain;
+    this.powAlgorithm = powAlgorithm;
+    this.blockGenerator = new BlockGenerator(dagChain, wallet, powAlgorithm);
+    this.blockCache = new CandidateBlockCache();
+
+    log.info("MiningApiService initialized");
+  }
+
+  // ========== API Methods ==========
+
+  /**
+   * Get current candidate block for mining
+   *
+   * <p>Pool servers call this method periodically (typically every 64 seconds at epoch start)
+   * to fetch a fresh candidate block to mine.
+   *
+   * @param poolId Unique identifier for the pool (for logging and authentication)
+   * @return Candidate block ready for mining, or null if unable to generate
+   */
+  public Block getCandidateBlock(String poolId) {
+    try {
+      log.info("Pool '{}' requesting candidate block", poolId);
+
+      // Generate candidate block via BlockGenerator
+      Block candidate = blockGenerator.generateCandidate();
+
+      if (candidate == null) {
+        log.error("Failed to generate candidate block for pool '{}'", poolId);
+        return null;
+      }
+
+      // Cache the candidate block (keyed by hash without nonce)
+      Bytes32 cacheKey = calculateHashWithoutNonce(candidate);
+      blockCache.put(cacheKey, candidate);
+
+      log.info("Provided candidate block to pool '{}': hash={}, epoch={}, cache_size={}",
+          poolId,
+          candidate.getHash().toHexString().substring(0, 18) + "...",
+          XdagTime.getEpoch(candidate.getTimestamp()),
+          blockCache.size());
+
+      return candidate;
+
+    } catch (Exception e) {
+      log.error("Error generating candidate block for pool '{}'", poolId, e);
+      return null;
+    }
+  }
+
+  /**
+   * Submit a mined block to the node
+   *
+   * <p>Pool servers call this method when they have found a valid block (best share
+   * with nonce filled in).
+   *
+   * @param block  The mined block with nonce filled in
+   * @param poolId Unique identifier for the pool submitting the block
+   * @return Result indicating success or failure reason
+   */
+  public BlockSubmitResult submitMinedBlock(Block block, String poolId) {
+    try {
+      log.info("Pool '{}' submitting mined block: hash={}",
+          poolId,
+          block.getHash().toHexString().substring(0, 18) + "...");
+
+      // Step 1: Validate that block is based on a known candidate
+      Bytes32 hashWithoutNonce = calculateHashWithoutNonce(block);
+      if (!blockCache.contains(hashWithoutNonce)) {
+        log.warn("Pool '{}' submitted unknown block (not based on our candidate)", poolId);
+        return BlockSubmitResult.rejected("Unknown candidate block", "UNKNOWN_CANDIDATE");
+      }
+
+      // Step 2: Import block to blockchain via DagChain
+      DagImportResult importResult = dagChain.tryToConnect(block);
+
+      // Step 3: Process result
+      if (importResult.isSuccess()) {
+        log.info("✓ Block from pool '{}' accepted and imported: hash={}",
+            poolId, block.getHash().toHexString().substring(0, 18) + "...");
+
+        // Remove from cache (block is now on-chain)
+        blockCache.remove(hashWithoutNonce);
+
+        return BlockSubmitResult.accepted(block.getHash());
+
+      } else {
+        log.warn("✗ Block from pool '{}' rejected: {}",
+            poolId, importResult.getErrorMessage());
+
+        return BlockSubmitResult.rejected(
+            importResult.getErrorMessage() != null ? importResult.getErrorMessage()
+                : "Import failed",
+            "IMPORT_FAILED"
+        );
+      }
+
+    } catch (Exception e) {
+      log.error("Error processing submitted block from pool '{}'", poolId, e);
+      return BlockSubmitResult.rejected("Internal error: " + e.getMessage(), "INTERNAL_ERROR");
+    }
+  }
+
+  /**
+   * Get current network difficulty target
+   *
+   * @return Current difficulty target as UInt256
+   */
+  public UInt256 getCurrentDifficultyTarget() {
+    try {
+      // Get current difficulty from chain stats
+      UInt256 difficulty = dagChain.getChainStats().getBaseDifficultyTarget();
+
+      log.debug("Current difficulty target: {}", difficulty.toHexString().substring(0, 18) + "...");
+
+      return difficulty;
+
+    } catch (Exception e) {
+      log.error("Error getting current difficulty", e);
+      // Return a default high difficulty on error
+      return UInt256.MAX_VALUE;
+    }
+  }
+
+  /**
+   * Get RandomX mining information
+   *
+   * @return RandomX status information
+   */
+  public RandomXInfo getRandomXInfo() {
+    try {
+      long currentEpoch = XdagTime.getEpoch(XdagTime.getCurrentTimestamp());
+
+      // Check if RandomX is enabled
+      if (powAlgorithm == null) {
+        log.debug("RandomX not enabled, returning disabled status");
+        return RandomXInfo.disabled(currentEpoch);
+      }
+
+      // Get RandomX fork epoch from constants
+      long forkEpoch = io.xdag.config.RandomXConstants.RANDOMX_FORK_HEIGHT
+          / io.xdag.config.RandomXConstants.SEEDHASH_EPOCH_BLOCKS;
+
+      boolean isActive = powAlgorithm.isActive(currentEpoch);
+      boolean vmReady = powAlgorithm.isReady();
+
+      log.debug("RandomX info: currentEpoch={}, forkEpoch={}, active={}, vmReady={}",
+          currentEpoch, forkEpoch, isActive, vmReady);
+
+      if (isActive) {
+        return RandomXInfo.postFork(currentEpoch, forkEpoch, vmReady);
+      } else {
+        return RandomXInfo.preFork(currentEpoch, forkEpoch);
+      }
+
+    } catch (Exception e) {
+      log.error("Error getting RandomX info", e);
+      // Return safe default
+      long currentEpoch = XdagTime.getEpoch(XdagTime.getCurrentTimestamp());
+      return RandomXInfo.disabled(currentEpoch);
+    }
+  }
+
+  // ========== Helper Methods ==========
+
+  /**
+   * Calculate hash of block without considering the nonce
+   *
+   * <p>This is used as a cache key to identify candidate blocks.
+   * When a pool submits a mined block with a different nonce, we can still identify which candidate
+   * it was based on.
+   *
+   * @param block Block to calculate hash for
+   * @return Hash without nonce consideration
+   */
+  private Bytes32 calculateHashWithoutNonce(Block block) {
+    // Create a copy of the block with zeroed nonce
+    Block blockWithoutNonce = block.withNonce(Bytes32.ZERO);
+    return blockWithoutNonce.getHash();
+  }
+
+  // ========== Statistics and Monitoring ==========
+
+  /**
+   * Get cache statistics
+   *
+   * @return Human-readable cache stats
+   */
+  public String getCacheStatistics() {
+    return blockCache.getStatisticsSummary();
+  }
+
+  /**
+   * Clear the candidate block cache
+   *
+   * <p>This is useful for testing or when resetting the node.
+   */
+  public void clearCache() {
+    blockCache.clear();
+  }
+
+  // ========== Inner Class: CandidateBlockCache ==========
+
+  /**
+   * CandidateBlockCache - Caffeine-based cache for candidate blocks
+   *
+   * <p>This cache stores candidate blocks that have been provided to pool servers.
+   * When pools submit mined blocks, the node validates that they are based on known candidate
+   * blocks.
+   *
+   * <h2>Why Cache Candidate Blocks?</h2>
+   * <p>Pool servers may submit mined blocks at any time. The node needs to verify that:
+   * <ul>
+   *   <li>The block was based on a candidate block we provided</li>
+   *   <li>The pool didn't create arbitrary blocks</li>
+   *   <li>The block structure matches what we sent</li>
+   * </ul>
+   *
+   * <h2>Cache Configuration</h2>
+   * <pre>
+   * Max Size:  100 entries (~1.7 hours at 64s/epoch)
+   * TTL:       192 seconds (3 epochs)
+   * Eviction:  LRU (via Caffeine TinyLFU)
+   * Stats:     Enabled (hit rate, eviction count, etc.)
+   * </pre>
+   *
+   * <h2>Why 3 Epochs TTL?</h2>
+   * <ul>
+   *   <li>1 epoch = 64s (normal mining time)</li>
+   *   <li>2-3 epochs = 128-192s (allows delayed submissions)</li>
+   *   <li>Beyond 3 epochs, candidate is definitely stale</li>
+   * </ul>
+   *
+   * @since XDAGJ v5.1
+   */
+  private static class CandidateBlockCache {
 
     /**
-     * Get current candidate block for mining
-     *
-     * <p>Pool servers call this method periodically (typically every 64 seconds at epoch start)
-     * to fetch a fresh candidate block to mine.
-     *
-     * <p>The candidate block contains:
-     * <ul>
-     *   <li>Timestamp and epoch information</li>
-     *   <li>Links to recent blocks (DAG structure)</li>
-     *   <li>Coinbase transaction (reward address)</li>
-     *   <li>Empty nonce field (to be filled by miners)</li>
-     * </ul>
-     *
-     * <p>The node caches returned candidate blocks to validate submitted blocks later.
-     *
-     * @param poolId Unique identifier for the pool (for logging and authentication)
-     * @return Candidate block ready for mining, or null if unable to generate
+     * Caffeine cache: hashWithoutNonce → candidate block
      */
-    Block getCandidateBlock(String poolId);
+    private final Cache<Bytes32, Block> cache;
 
     /**
-     * Submit a mined block to the node
-     *
-     * <p>Pool servers call this method when they have found a valid block (best share
-     * with nonce filled in). The node validates the block and attempts to import it
-     * to the blockchain.
-     *
-     * <p>Validation checks include:
-     * <ul>
-     *   <li>Block is based on a known candidate block</li>
-     *   <li>Nonce produces valid PoW hash</li>
-     *   <li>Block timestamp is within epoch bounds</li>
-     *   <li>Block links are valid</li>
-     * </ul>
-     *
-     * @param block The mined block with nonce filled in
-     * @param poolId Unique identifier for the pool submitting the block
-     * @return Result indicating success or failure reason
+     * Initialize cache with Caffeine
      */
-    BlockSubmitResult submitMinedBlock(Block block, String poolId);
+    CandidateBlockCache() {
+      this.cache = Caffeine.newBuilder()
+          .maximumSize(100)  // Max 100 candidate blocks (~1.7 hours)
+          .expireAfterWrite(Duration.ofSeconds(192))  // 3 epochs TTL
+          .recordStats()  // Enable statistics
+          .build();
+
+      log.info("CandidateBlockCache initialized: max=100, ttl=192s, eviction=LRU");
+    }
 
     /**
-     * Get current network difficulty target
+     * Add a candidate block to the cache
      *
-     * <p>Returns the current base difficulty target that blocks must meet.
-     * This is used by pools to set share difficulty for miners.
-     *
-     * <p>In XDAG, lower hash values indicate higher difficulty (Bitcoin-style).
-     * A valid block hash must be less than or equal to this target.
-     *
-     * @return Current difficulty target as UInt256
+     * @param hashWithoutNonce Hash of block before nonce is filled in
+     * @param candidateBlock   The candidate block
      */
-    UInt256 getCurrentDifficultyTarget();
+    void put(Bytes32 hashWithoutNonce, Block candidateBlock) {
+      if (hashWithoutNonce == null || candidateBlock == null) {
+        log.warn("Attempted to cache null candidate block");
+        return;
+      }
+
+      cache.put(hashWithoutNonce, candidateBlock);
+
+      log.debug("Cached candidate block: hash={}, cache_size={}",
+          hashWithoutNonce.toHexString().substring(0, 16) + "...",
+          cache.estimatedSize());
+    }
 
     /**
-     * Get RandomX mining information
+     * Check if a candidate block exists in the cache
      *
-     * <p>Returns information about the RandomX proof-of-work fork status.
-     * Pools and miners use this to determine which hashing algorithm to use.
-     *
-     * <p>Information includes:
-     * <ul>
-     *   <li>Whether RandomX fork is active</li>
-     *   <li>Current epoch number</li>
-     *   <li>Fork activation epoch</li>
-     *   <li>RandomX VM initialization status</li>
-     * </ul>
-     *
-     * @return RandomX status information
+     * @param hashWithoutNonce Hash of block before nonce
+     * @return true if candidate is in cache, false otherwise
      */
-    RandomXInfo getRandomXInfo();
+    boolean contains(Bytes32 hashWithoutNonce) {
+      return hashWithoutNonce != null && cache.getIfPresent(hashWithoutNonce) != null;
+    }
+
+    /**
+     * Get a candidate block from the cache
+     *
+     * @param hashWithoutNonce Hash of block before nonce
+     * @return Candidate block, or null if not found
+     */
+    Block get(Bytes32 hashWithoutNonce) {
+      return hashWithoutNonce != null ? cache.getIfPresent(hashWithoutNonce) : null;
+    }
+
+    /**
+     * Remove a candidate block from the cache
+     *
+     * @param hashWithoutNonce Hash of block before nonce
+     * @return The removed block, or null if not found
+     */
+    Block remove(Bytes32 hashWithoutNonce) {
+      if (hashWithoutNonce == null) {
+        return null;
+      }
+      Block block = cache.getIfPresent(hashWithoutNonce);
+      cache.invalidate(hashWithoutNonce);
+      return block;
+    }
+
+    /**
+     * Clear all cached candidate blocks
+     */
+    void clear() {
+      cache.invalidateAll();
+      log.info("Cleared candidate block cache");
+    }
+
+    /**
+     * Get current cache size
+     *
+     * @return Number of cached candidate blocks
+     */
+    int size() {
+      return (int) cache.estimatedSize();
+    }
+
+    /**
+     * Get cache statistics
+     *
+     * @return Caffeine CacheStats
+     */
+    CacheStats getStats() {
+      return cache.stats();
+    }
+
+    /**
+     * Get detailed statistics summary
+     *
+     * @return Human-readable statistics
+     */
+    String getStatisticsSummary() {
+      CacheStats stats = cache.stats();
+      return String.format(
+          "CandidateBlockCache[size:%d, hits:%d, misses:%d, hitRate:%.2f%%, evictions:%d]",
+          cache.estimatedSize(),
+          stats.hitCount(),
+          stats.missCount(),
+          stats.hitRate() * 100,
+          stats.evictionCount()
+      );
+    }
+  }
 }
