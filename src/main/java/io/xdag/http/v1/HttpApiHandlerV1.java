@@ -221,6 +221,31 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
             return handleGetCoinbase();
         }
 
+        // Mining RPC endpoints (for pool server)
+        if (path.equals("/api/v1/mining/randomx") && method == HttpMethod.GET) {
+            return handleGetRandomXInfo();
+        }
+
+        if (path.equals("/api/v1/mining/candidate") && method == HttpMethod.GET) {
+            String poolId = params.getOrDefault("poolId", "unknown");
+            return handleGetCandidateBlock(poolId);
+        }
+
+        if (path.equals("/api/v1/mining/submit") && method == HttpMethod.POST) {
+            checkPermission(apiKey, Permission.WRITE);
+            try {
+                String body = request.content().toString(CharsetUtil.UTF_8);
+                Map<String, Object> bodyParams = objectMapper.readValue(body, Map.class);
+                return handleSubmitMinedBlock(bodyParams);
+            } catch (Exception e) {
+                throw new IllegalArgumentException("Invalid request body: " + e.getMessage());
+            }
+        }
+
+        if (path.equals("/api/v1/mining/difficulty") && method == HttpMethod.GET) {
+            return handleGetDifficulty();
+        }
+
         return null;
     }
 
@@ -374,6 +399,160 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
                     .build();
         }
         return null;
+    }
+
+    // ========== Mining RPC Handlers ==========
+
+    private Object handleGetRandomXInfo() {
+        try {
+            io.xdag.rpc.service.NodeMiningRpcService miningRpc = dagKernel.getMiningRpcService();
+            if (miningRpc == null) {
+                log.warn("Mining RPC service not available");
+                return null;
+            }
+
+            io.xdag.rpc.service.RandomXInfo info = miningRpc.getRandomXInfo();
+            if (info == null) {
+                log.warn("RandomX info returned null");
+                return null;
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("enabled", info.isEnabled());
+            response.put("currentEpoch", info.getCurrentEpoch());
+            response.put("forkEpoch", info.getForkEpoch());
+            response.put("vmReady", info.isVmReady());
+            response.put("seedEpochInterval", info.getSeedEpochInterval());
+            response.put("forkActive", info.isForkActive());
+            response.put("algorithmName", info.getAlgorithmName());
+
+            return response;
+        } catch (Exception e) {
+            log.error("Error getting RandomX info", e);
+            return null;
+        }
+    }
+
+    private Object handleGetCandidateBlock(String poolId) {
+        try {
+            io.xdag.rpc.service.NodeMiningRpcService miningRpc = dagKernel.getMiningRpcService();
+            if (miningRpc == null) {
+                log.warn("Mining RPC service not available");
+                return null;
+            }
+
+            io.xdag.core.Block block = miningRpc.getCandidateBlock(poolId);
+            if (block == null) {
+                log.warn("Failed to generate candidate block for pool '{}'", poolId);
+                return null;
+            }
+
+            // Convert Block to response format
+            Map<String, Object> response = new HashMap<>();
+            response.put("hash", block.getHash().toHexString());
+            response.put("timestamp", block.getTimestamp());
+            response.put("epoch", io.xdag.utils.XdagTime.getEpoch(block.getTimestamp()));
+
+            // Block header information
+            if (block.getHeader() != null) {
+                response.put("difficulty", block.getHeader().getDifficulty().toHexString());
+                response.put("nonce", block.getHeader().getNonce().toHexString());
+            }
+
+            // Serialize full block data as hex
+            byte[] blockBytes = block.toBytes();
+            response.put("blockData", org.apache.tuweni.bytes.Bytes.wrap(blockBytes).toHexString());
+            response.put("size", blockBytes.length);
+
+            log.info("Provided candidate block to pool '{}': hash={}", poolId,
+                    block.getHash().toHexString().substring(0, 18) + "...");
+
+            return response;
+
+        } catch (Exception e) {
+            log.error("Error getting candidate block for pool '{}'", poolId, e);
+            return null;
+        }
+    }
+
+    private Object handleSubmitMinedBlock(Map<String, Object> params) {
+        try {
+            io.xdag.rpc.service.NodeMiningRpcService miningRpc = dagKernel.getMiningRpcService();
+            if (miningRpc == null) {
+                log.warn("Mining RPC service not available");
+                Map<String, Object> error = new HashMap<>();
+                error.put("accepted", false);
+                error.put("message", "Mining RPC service not available");
+                error.put("errorCode", "SERVICE_UNAVAILABLE");
+                return error;
+            }
+
+            // Parse block from request
+            String blockDataHex = (String) params.get("blockData");
+            String poolId = (String) params.getOrDefault("poolId", "unknown");
+
+            if (blockDataHex == null || blockDataHex.isEmpty()) {
+                Map<String, Object> error = new HashMap<>();
+                error.put("accepted", false);
+                error.put("message", "Missing blockData parameter");
+                error.put("errorCode", "INVALID_REQUEST");
+                return error;
+            }
+
+            // Convert hex string to Block object
+            byte[] blockBytes = org.apache.tuweni.bytes.Bytes.fromHexString(blockDataHex).toArray();
+            io.xdag.core.Block block = io.xdag.core.Block.fromBytes(blockBytes);
+
+            // Submit to mining RPC service
+            io.xdag.rpc.service.BlockSubmitResult result = miningRpc.submitMinedBlock(block, poolId);
+
+            // Convert result to response
+            Map<String, Object> response = new HashMap<>();
+            response.put("accepted", result.isAccepted());
+            response.put("message", result.getMessage());
+            response.put("errorCode", result.getErrorCode());
+
+            if (result.getBlockHash() != null) {
+                response.put("blockHash", result.getBlockHash().toHexString());
+            }
+
+            log.info("Block submission from pool '{}': accepted={}", poolId, result.isAccepted());
+
+            return response;
+
+        } catch (Exception e) {
+            log.error("Error submitting mined block", e);
+            Map<String, Object> error = new HashMap<>();
+            error.put("accepted", false);
+            error.put("message", "Failed to submit block: " + e.getMessage());
+            error.put("errorCode", "INTERNAL_ERROR");
+            return error;
+        }
+    }
+
+    private Object handleGetDifficulty() {
+        try {
+            io.xdag.rpc.service.NodeMiningRpcService miningRpc = dagKernel.getMiningRpcService();
+            if (miningRpc == null) {
+                log.warn("Mining RPC service not available");
+                return null;
+            }
+
+            org.apache.tuweni.units.bigints.UInt256 difficulty = miningRpc.getCurrentDifficultyTarget();
+            if (difficulty == null) {
+                log.warn("Difficulty returned null");
+                return null;
+            }
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("difficulty", difficulty.toHexString());
+            response.put("difficultyDecimal", difficulty.toString());
+
+            return response;
+        } catch (Exception e) {
+            log.error("Error getting difficulty", e);
+            return null;
+        }
     }
 
     private String extractPathParam(String path, int position) {

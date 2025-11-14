@@ -73,6 +73,14 @@ public class DagChainImpl implements DagChain {
             UInt256.valueOf(BigInteger.valueOf(2).pow(192));
 
     /**
+     * DEVNET difficulty target - accepts any block (no PoW required)
+     * <p>
+     * Used in development/testing environments where PoW validation
+     * would prevent tests from running (random blocks won't pass real PoW).
+     */
+    private static final UInt256 DEVNET_DIFFICULTY_TARGET = UInt256.MAX_VALUE;
+
+    /**
      * Maximum blocks accepted per epoch (64 seconds)
      * <p>
      * Controls orphan block growth and storage consumption
@@ -148,11 +156,21 @@ public class DagChainImpl implements DagChain {
         this.chainStats = dagStore.getChainStats();
         if (this.chainStats == null) {
             long currentEpoch = XdagTime.getCurrentTimestamp() / 64;
+
+            // DEVNET: Use relaxed difficulty target (no PoW required)
+            // MAINNET/TESTNET: Use real difficulty target (requires actual mining)
+            boolean isDevnet = dagKernel.getConfig().getNodeSpec().getNetwork().toString().toLowerCase().contains("devnet");
+            UInt256 initialTarget = isDevnet ? DEVNET_DIFFICULTY_TARGET : INITIAL_BASE_DIFFICULTY_TARGET;
+
+            if (isDevnet) {
+                log.info("DEVNET mode detected - using relaxed difficulty target (no PoW required)");
+            }
+
             this.chainStats = ChainStats.builder()
                     .mainBlockCount(0)
                     .maxDifficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
                     .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)
-                    .baseDifficultyTarget(INITIAL_BASE_DIFFICULTY_TARGET)
+                    .baseDifficultyTarget(initialTarget)
                     .lastDifficultyAdjustmentEpoch(currentEpoch)  // Start from current epoch to prevent immediate adjustment
                     .lastOrphanCleanupEpoch(currentEpoch)          // Start from current epoch
                     .topBlock(null)
@@ -166,9 +184,17 @@ public class DagChainImpl implements DagChain {
         // Initialize new consensus fields for existing chains
         if (this.chainStats.getBaseDifficultyTarget() == null) {
             long currentEpoch = XdagTime.getCurrentTimestamp() / 64;
-            log.info("Initializing baseDifficultyTarget for existing chain");
+
+            // DEVNET: Use relaxed difficulty target (no PoW required)
+            // MAINNET/TESTNET: Use real difficulty target (requires actual mining)
+            boolean isDevnet = dagKernel.getConfig().getNodeSpec().getNetwork().toString().toLowerCase().contains("devnet");
+            UInt256 initialTarget = isDevnet ? DEVNET_DIFFICULTY_TARGET : INITIAL_BASE_DIFFICULTY_TARGET;
+
+            log.info("Initializing baseDifficultyTarget for existing chain (devnet={}, target={})",
+                    isDevnet, initialTarget.toHexString().substring(0, 16) + "...");
+
             this.chainStats = this.chainStats.toBuilder()
-                    .baseDifficultyTarget(INITIAL_BASE_DIFFICULTY_TARGET)
+                    .baseDifficultyTarget(initialTarget)
                     .lastDifficultyAdjustmentEpoch(currentEpoch)
                     .lastOrphanCleanupEpoch(currentEpoch)
                     .topBlock(this.chainStats.getTopBlock())

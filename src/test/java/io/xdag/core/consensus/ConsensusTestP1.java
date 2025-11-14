@@ -26,6 +26,7 @@ package io.xdag.core.consensus;
 
 import io.xdag.core.*;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.After;
@@ -309,7 +310,7 @@ public class ConsensusTestP1 {
 
         for (int i = 1; i <= 2; i++) {
             long timestamp = genesisTimestamp + (i * 64);
-            Bytes32 coinbase = Bytes32.random();
+            Bytes coinbase = Bytes.random(20);  // 20-byte Ethereum-style address
             List<Link> links = List.of(Link.toBlock(commonChain.get(i - 1).getHash()));
 
             Block block = Block.createWithNonce(
@@ -536,7 +537,7 @@ public class ConsensusTestP1 {
         Bytes32 smallestHash = null;
 
         for (int attempt = 0; attempt < 1000; attempt++) {
-            Bytes32 coinbase = Bytes32.random();
+            Bytes coinbase = Bytes.random(20);  // 20-byte Ethereum-style address
 
             Block block = Block.createWithNonce(
                     timestamp,
@@ -586,7 +587,7 @@ public class ConsensusTestP1 {
         Bytes32 largestHash = null;
 
         for (int attempt = 0; attempt < 1000; attempt++) {
-            Bytes32 coinbase = Bytes32.random();
+            Bytes coinbase = Bytes.random(20);  // 20-byte Ethereum-style address
 
             Block block = Block.createWithNonce(
                     timestamp,

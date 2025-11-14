@@ -400,46 +400,6 @@ public class Commands {
         return output.toString();
     }
 
-    /**
-     * Print detailed Block info
-     *
-     * @param block Block to display
-     * @return Formatted detailed block information
-     * @deprecated Use printBlockInfoV5Enhanced() for richer output
-     */
-    @Deprecated
-    public static String printBlockInfo(Block block) {
-        BlockInfo info = block.getInfo();
-
-        if (info == null) {
-            return "Block info not available";
-        }
-
-        long time = XdagTime.xdagTimestampToMs(block.getTimestamp());
-        String state = info.isMainBlock() ? MAIN_STATE : "Orphan";
-
-        String format = """
-                  height: %s
-                    time: %s
-               timestamp: %s
-                   state: %s
-                    hash: %s
-              difficulty: %s
-                   epoch: %d
-                   links: %d
-               \s""";
-
-        return String.format(format,
-                info.isMainBlock() ? String.format("%08d", info.getHeight()) : "N/A (orphan)",
-                FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss.SSS").format(time),
-                Long.toHexString(block.getTimestamp()),
-                state,
-                Hex.toHexString(block.getHash().toArray()),
-                info.getDifficulty().toBigInteger().toString(16),
-                info.getEpoch(),
-                block.getLinks().size());
-    }
-
   /**
      * Get balance for address ( Fully restored using Transaction APIs)
      * <p>

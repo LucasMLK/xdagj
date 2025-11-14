@@ -238,20 +238,31 @@ public class MiningRpcServiceTest {
     public void testSubmitUnknownBlock() {
         System.out.println("\n========== Test 5: Submit Unknown Block (Should Reject) ==========");
 
-        // Get a candidate block
+        // Get a candidate block from pool 1
         String poolId = "test-pool-1";
         Block candidate = miningRpcService.getCandidateBlock(poolId);
         assertNotNull(candidate);
 
-        // Create a different block (not based on our candidate)
-        Block unknownBlock = candidate.withNonce(org.apache.tuweni.bytes.Bytes32.random());
+        // Create a completely different block (not based on our candidate)
+        // Use a very old timestamp to ensure it's different from any cached candidate
+        long unknownTimestamp = config.getXdagEra() + 1000; // Very old timestamp
+        Block unknownBlock = Block.createCandidate(
+                unknownTimestamp,
+                miningRpcService.getCurrentDifficultyTarget(),
+                org.apache.tuweni.bytes.Bytes.random(20),
+                new java.util.ArrayList<>()  // Empty links - completely different from candidate
+        );
+        assertNotNull("Unknown block should be generated", unknownBlock);
 
-        // Try to submit it - should be rejected
+        // Try to submit it - should be rejected because it's not based on our cached candidate
         BlockSubmitResult result = miningRpcService.submitMinedBlock(unknownBlock, poolId);
 
         assertNotNull("Result should not be null", result);
         assertFalse("Unknown block should be rejected", result.isAccepted());
         assertNotNull("Error message should be present", result.getMessage());
+        assertTrue("Error should mention unknown candidate",
+                result.getMessage().contains("Unknown candidate") ||
+                        result.getMessage().contains("UNKNOWN_CANDIDATE"));
 
         System.out.println("✓ Unknown block correctly rejected");
         System.out.println("  - Accepted: " + result.isAccepted());
@@ -321,15 +332,15 @@ public class MiningRpcServiceTest {
         // Verify DagStore still works
         assertNotNull("DagStore should not be null", dagKernel.getDagStore());
 
-        // Verify MiningManager still works (if initialized)
-        if (dagKernel.getMiningManager() != null) {
-            assertNotNull("MiningManager should not be null", dagKernel.getMiningManager());
+        // Verify PoW Algorithm still works (if initialized)
+        if (dagKernel.getPowAlgorithm() != null) {
+            assertNotNull("PoW Algorithm should not be null", dagKernel.getPowAlgorithm());
         }
 
         System.out.println("✓ Existing functionality verified");
         System.out.println("  - DagChain: operational");
         System.out.println("  - DagStore: operational");
-        System.out.println("  - MiningManager: " + (dagKernel.getMiningManager() != null ? "operational" : "not initialized"));
+        System.out.println("  - PoW Algorithm: " + (dagKernel.getPowAlgorithm() != null ? "operational" : "not initialized"));
         System.out.println("========== Test 8 PASSED ==========\n");
     }
 }

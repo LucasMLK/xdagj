@@ -69,6 +69,7 @@ public class DagChainConsensusTest {
     // Test parameters matching implementation
     private static final UInt256 INITIAL_BASE_DIFFICULTY_TARGET =
             UInt256.valueOf(BigInteger.valueOf(2).pow(192));
+    private static final UInt256 DEVNET_DIFFICULTY_TARGET = UInt256.MAX_VALUE;
     private static final int MAX_BLOCKS_PER_EPOCH = 100;
     private static final int TARGET_BLOCKS_PER_EPOCH = 150;
 
@@ -174,8 +175,14 @@ public class DagChainConsensusTest {
 
         // Verify new consensus fields are initialized
         assertNotNull("baseDifficultyTarget should be initialized", stats.getBaseDifficultyTarget());
-        assertEquals("baseDifficultyTarget should equal INITIAL_BASE_DIFFICULTY_TARGET",
-                INITIAL_BASE_DIFFICULTY_TARGET, stats.getBaseDifficultyTarget());
+
+        // DEVNET mode: expect DEVNET_DIFFICULTY_TARGET (UInt256.MAX_VALUE)
+        // MAINNET/TESTNET: expect INITIAL_BASE_DIFFICULTY_TARGET (2^192)
+        boolean isDevnet = config.getNodeSpec().getNetwork().toString().toLowerCase().contains("devnet");
+        UInt256 expectedTarget = isDevnet ? DEVNET_DIFFICULTY_TARGET : INITIAL_BASE_DIFFICULTY_TARGET;
+
+        assertEquals("baseDifficultyTarget should match network mode (DEVNET uses MAX_VALUE, others use 2^192)",
+                expectedTarget, stats.getBaseDifficultyTarget());
 
         assertTrue("lastDifficultyAdjustmentEpoch should be >= 0",
                 stats.getLastDifficultyAdjustmentEpoch() >= 0);
@@ -438,15 +445,22 @@ public class DagChainConsensusTest {
 
         System.out.println("Consensus parameters:");
         System.out.println("  Base Difficulty Target: " + stats.getBaseDifficultyTarget().toHexString().substring(0, 20) + "...");
-        System.out.println("  Expected: 2^192 = " + INITIAL_BASE_DIFFICULTY_TARGET.toHexString().substring(0, 20) + "...");
 
-        // Verify base difficulty target
-        assertEquals("Base difficulty target should be 2^192",
-                INITIAL_BASE_DIFFICULTY_TARGET,
+        // DEVNET mode: expect DEVNET_DIFFICULTY_TARGET (UInt256.MAX_VALUE)
+        // MAINNET/TESTNET: expect INITIAL_BASE_DIFFICULTY_TARGET (2^192)
+        boolean isDevnet = config.getNodeSpec().getNetwork().toString().toLowerCase().contains("devnet");
+        UInt256 expectedTarget = isDevnet ? DEVNET_DIFFICULTY_TARGET : INITIAL_BASE_DIFFICULTY_TARGET;
+
+        System.out.println("  Expected (network mode " + (isDevnet ? "DEVNET" : "MAINNET/TESTNET") + "): "
+                + expectedTarget.toHexString().substring(0, 20) + "...");
+
+        // Verify base difficulty target matches network mode
+        assertEquals("Base difficulty target should match network mode",
+                expectedTarget,
                 stats.getBaseDifficultyTarget());
 
         System.out.println("\nAll consensus parameters verified:");
-        System.out.println("  ✓ Base difficulty target: 2^192");
+        System.out.println("  ✓ Base difficulty target: " + (isDevnet ? "MAX_VALUE (DEVNET)" : "2^192 (MAINNET)"));
         System.out.println("  ✓ Max blocks per epoch: " + MAX_BLOCKS_PER_EPOCH);
         System.out.println("  ✓ Target blocks per epoch: " + TARGET_BLOCKS_PER_EPOCH);
 

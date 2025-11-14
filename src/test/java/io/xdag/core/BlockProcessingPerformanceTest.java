@@ -393,6 +393,10 @@ public class BlockProcessingPerformanceTest {
     private Block createBlockWithTransactions(int txCount, long unusedNonceOffset) {
         List<Link> links = new ArrayList<>();
 
+        // BUGFIX: Add at least one Block reference (required by Block.isValid())
+        // Use a dummy block hash as reference (simulates prevMainBlock)
+        links.add(Link.toBlock(Bytes32.random()));
+
         // Get current sender nonce (will be incremented by block processor after processing)
         UInt64 currentNonce = accountManager.getNonce(senderAddress);
         long baseNonce = currentNonce.toLong();
@@ -420,7 +424,10 @@ public class BlockProcessingPerformanceTest {
         }
 
         // Create block
-        long timestamp = System.currentTimeMillis();
+        // BUGFIX: Use XDAG main block timestamp (lower 16 bits must be 0xffff)
+        // This matches C code validation: (time & 0xffff) == 0xffff
+        long currentTime = System.currentTimeMillis();
+        long timestamp = (currentTime & ~0xffffL) | 0xffff;  // Set lower 16 bits to 0xffff
         Block block = Block.createWithNonce(
                 timestamp,
                 UInt256.ONE,

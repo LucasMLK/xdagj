@@ -190,11 +190,30 @@ public class Block implements Serializable {
 
         ByteBuffer buffer = ByteBuffer.allocate(headerSize + linksSize);
 
-        // Serialize header
-        buffer.putLong(header.getTimestamp());
-        buffer.put(header.getDifficulty().toBytes().toArray());
-        buffer.put(header.getNonce().toArray());
-        buffer.put(header.getCoinbase().toArray());
+        // Serialize header (ensure fixed sizes for big-endian representation)
+        buffer.putLong(header.getTimestamp());  // 8 bytes
+
+        // Difficulty: ensure exactly 32 bytes (big-endian, pad left with zeros)
+        Bytes difficultyBytes = header.getDifficulty().toBytes();
+        byte[] diffArray = new byte[32];
+        int diffOffset = 32 - difficultyBytes.size();
+        if (diffOffset < 0) {
+            throw new IllegalStateException("Difficulty bytes exceed 32 bytes: " + difficultyBytes.size());
+        }
+        System.arraycopy(difficultyBytes.toArray(), 0, diffArray, diffOffset, difficultyBytes.size());
+        buffer.put(diffArray);  // 32 bytes
+
+        buffer.put(header.getNonce().toArray());  // 32 bytes
+
+        // Coinbase: ensure exactly 20 bytes (big-endian, pad left with zeros)
+        Bytes coinbaseBytes = header.getCoinbase();
+        byte[] coinbaseArray = new byte[20];
+        int coinbaseOffset = 20 - coinbaseBytes.size();
+        if (coinbaseOffset < 0) {
+            throw new IllegalStateException("Coinbase bytes exceed 20 bytes: " + coinbaseBytes.size());
+        }
+        System.arraycopy(coinbaseBytes.toArray(), 0, coinbaseArray, coinbaseOffset, coinbaseBytes.size());
+        buffer.put(coinbaseArray);  // 20 bytes
 
         // Serialize links
         buffer.putInt(links.size());
@@ -442,6 +461,19 @@ public class Block implements Serializable {
             Bytes coinbase,
             List<Link> links) {
 
+        // BUGFIX: Validate coinbase size (must be exactly 20 bytes)
+        // This prevents BufferOverflowException during hash calculation
+        if (coinbase == null) {
+            throw new IllegalArgumentException("Coinbase cannot be null");
+        }
+        if (coinbase.size() != 20) {
+            throw new IllegalArgumentException(String.format(
+                    "Coinbase must be exactly 20 bytes (Ethereum-style address), got %d bytes. " +
+                    "Please ensure wallet address generation returns 20-byte addresses. " +
+                    "Address: %s",
+                    coinbase.size(), coinbase.toHexString()));
+        }
+
         BlockHeader header = BlockHeader.builder()
                 .timestamp(timestamp)
                 .difficulty(difficulty)
@@ -472,6 +504,19 @@ public class Block implements Serializable {
             Bytes32 nonce,
             Bytes coinbase,
             List<Link> links) {
+
+        // BUGFIX: Validate coinbase size (must be exactly 20 bytes)
+        // This prevents BufferOverflowException during hash calculation
+        if (coinbase == null) {
+            throw new IllegalArgumentException("Coinbase cannot be null");
+        }
+        if (coinbase.size() != 20) {
+            throw new IllegalArgumentException(String.format(
+                    "Coinbase must be exactly 20 bytes (Ethereum-style address), got %d bytes. " +
+                    "Please ensure wallet address generation returns 20-byte addresses. " +
+                    "Address: %s",
+                    coinbase.size(), coinbase.toHexString()));
+        }
 
         BlockHeader header = BlockHeader.builder()
                 .timestamp(timestamp)

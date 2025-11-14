@@ -27,6 +27,7 @@ package io.xdag.core.consensus;
 import io.xdag.core.*;
 import io.xdag.utils.XdagTime;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.After;
@@ -113,8 +114,8 @@ public class ConsensusTestP0 {
         long targetEpoch = blockTimestamp / 64;
 
         // Create blocks with different hashes (by using different coinbases)
-        Bytes32 coinbaseA = Bytes32.random(); // This will create block with hashA
-        Bytes32 coinbaseB = Bytes32.random(); // This will create block with hashB
+        Bytes coinbaseA = Bytes.random(20);  // 20-byte Ethereum-style address
+        Bytes coinbaseB = Bytes.random(20);  // 20-byte Ethereum-style address
 
         // Build links to genesis
         List<Link> linksA = List.of(Link.toBlock(genesisA.getHash()));
@@ -302,7 +303,7 @@ public class ConsensusTestP0 {
 
         for (int i = 1; i <= 3; i++) {
             long timestamp = genesisTimestamp + (i * 64); // Different epochs
-            Bytes32 coinbase = Bytes32.random();
+            Bytes coinbase = Bytes.random(20);  // 20-byte Ethereum-style address
             List<Link> links = List.of(Link.toBlock(chain.get(i - 1).getHash()));
 
             Block block = Block.createWithNonce(
@@ -433,7 +434,7 @@ public class ConsensusTestP0 {
         int winnerIndex = -1;
 
         for (int i = 0; i < 5; i++) {
-            Bytes32 coinbase = Bytes32.random(); // Different coinbase creates different hash
+            Bytes coinbase = Bytes.random(20);  // 20-byte Ethereum-style address
             List<Link> links = List.of(Link.toBlock(genesis.getHash()));
 
             blocks[i] = Block.createWithNonce(
@@ -573,7 +574,7 @@ public class ConsensusTestP0 {
                 genesisTimestamp + 64,
                 UInt256.MAX_VALUE,
                 Bytes32.ZERO,
-                Bytes32.random(),
+                Bytes.random(20),  // 20-byte Ethereum-style address
                 List.of(Link.toBlock(genesis.getHash()))
         );
 
@@ -673,7 +674,7 @@ public class ConsensusTestP0 {
                     futureTimestamp,
                     UInt256.MAX_VALUE,
                     Bytes32.ZERO,
-                    Bytes32.random(),
+                    Bytes.random(20),  // 20-byte Ethereum-style address
                     List.of(Link.toBlock(genesis.getHash()))
             );
 
@@ -703,7 +704,7 @@ public class ConsensusTestP0 {
                     beforeEraTimestamp,
                     UInt256.MAX_VALUE,
                     Bytes32.ZERO,
-                    Bytes32.random(),
+                    Bytes.random(20),  // 20-byte Ethereum-style address
                     List.of(Link.toBlock(genesis.getHash()))
             );
 
@@ -734,7 +735,7 @@ public class ConsensusTestP0 {
                     validTimestamp,
                     UInt256.MAX_VALUE,
                     Bytes32.ZERO,
-                    Bytes32.random(),
+                    Bytes.random(20),  // 20-byte Ethereum-style address
                     List.of(Link.toBlock(nonExistentHash))
             );
 
@@ -760,7 +761,7 @@ public class ConsensusTestP0 {
                     validTimestamp,
                     UInt256.MAX_VALUE,
                     Bytes32.ZERO,
-                    Bytes32.random(),
+                    Bytes.random(20),  // 20-byte Ethereum-style address
                     List.of() // Empty links
             );
 

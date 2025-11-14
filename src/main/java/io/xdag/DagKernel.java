@@ -31,7 +31,6 @@ import io.xdag.consensus.sync.HybridSyncP2pAdapter;
 import io.xdag.consensus.pow.PowAlgorithm;
 import io.xdag.consensus.pow.RandomXPow;
 import io.xdag.consensus.pow.Sha256Pow;
-import io.xdag.consensus.miner.MiningManager;
 import io.xdag.core.*;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.db.AccountStore;
@@ -128,9 +127,8 @@ public class DagKernel {
   private HybridSyncManager hybridSyncManager;
   private HybridSyncP2pAdapter hybridSyncP2pAdapter;
 
-  // Mining component (4)
-  private MiningManager miningManager;
-  private PowAlgorithm powAlgorithm;  // RandomXPow instance
+  // PoW Algorithm (RandomX or SHA256)
+  private PowAlgorithm powAlgorithm;
 
   // Mining RPC service (for pool server integration)
   private io.xdag.rpc.service.MiningRpcServiceImpl miningRpcService;
@@ -270,21 +268,7 @@ public class DagKernel {
       // this.powAlgorithm = new Sha256Pow(config);
       // log.info("   ✓ Sha256Pow initialized");
 
-      // 8. Create MiningManager (4) - DEPRECATED
-      // TTL is taken from config (default is 8)
-      if (wallet != null) {
-          int ttl = config.getNodeSpec() != null ? config.getNodeSpec().getTTL() : 8;
-          this.miningManager = new MiningManager(
-                  this, wallet, powAlgorithm, ttl);
-          log.info("   ✓ MiningManager initialized (TTL={})", ttl);
-          log.warn("   ⚠️ DEPRECATION WARNING: MiningManager is deprecated since v0.8.2");
-          log.warn("   → Will be removed in v0.9.0 (use external xdagj-pool instead)");
-          log.warn("   → See: io.xdag.consensus.miner.MiningManager for migration guide");
-      } else {
-          log.warn("   ⚠ MiningManager not initialized (wallet required)");
-      }
-
-      // 9. Create Mining RPC Service (for pool server integration)
+      // Create Mining RPC Service (for pool server integration)
       if (wallet != null) {
           this.miningRpcService = new io.xdag.rpc.service.MiningRpcServiceImpl(
                   dagChain, wallet, powAlgorithm);
@@ -363,23 +347,12 @@ public class DagKernel {
               log.info("✓ PoW Algorithm started: {}", powAlgorithm.getName());
           }
 
-          // Start MiningManager (4) - DEPRECATED
-          if (miningManager != null) {
-              miningManager.start();
-              log.info("✓ MiningManager started (mining enabled)");
-              log.warn("⚠️  DEPRECATED: Internal pool mining will be removed in v0.9.0");
-              log.warn("→  Migrate to three-layer architecture: Node ← RPC ← Pool ← Miner");
-          }
-
           running = true;
           log.info("========================================");
           log.info("✓ DagKernel started successfully");
           log.info("  - Storage: DagStore + TransactionStore + AccountStore + OrphanBlockStore");
           log.info("  - Cache: DagCache (13.8 MB L1) + DagEntityResolver");
           log.info("  - Consensus: DagChain + HybridSyncManager");
-          if (miningManager != null) {
-              log.info("  - Mining: MiningManager (enabled)");
-          }
           log.info("  - Main Chain Height: {}", dagChain.getMainChainLength());
           log.info("  - Max Difficulty: {}", dagChain.getChainStats().getMaxDifficulty().toDecimalString());
           log.info("========================================");
@@ -413,12 +386,6 @@ public class DagKernel {
       log.info("========================================");
 
       try {
-          // Stop MiningManager first (4)
-          if (miningManager != null) {
-              miningManager.stop();
-              log.info("✓ MiningManager stopped");
-          }
-
           // Stop PoW Algorithm (RandomX or SHA256)
           if (powAlgorithm != null) {
               powAlgorithm.stop();
