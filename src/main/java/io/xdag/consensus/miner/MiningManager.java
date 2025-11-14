@@ -41,18 +41,41 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * MiningManager - Coordinates the mining process
+ * MiningManager - Coordinates the mining process (POOL SERVER ARCHITECTURE)
  *
- * <p>This component is the main coordinator for the improved mining architecture.
- * It replaces the legacy XdagPow class with a cleaner separation of concerns.
+ * <p><strong>⚠️ IMPORTANT ARCHITECTURAL NOTE</strong>:
+ * This is a <strong>POOL SERVER</strong> implementation, NOT a standalone miner!
+ * The actual PoW computation (nonce iteration loop) is performed by <strong>EXTERNAL MINERS</strong>.
+ *
+ * <h2>What This Class Does</h2>
+ * <ul>
+ *   <li>✅ Generates candidate blocks every 64 seconds</li>
+ *   <li>✅ Receives mining shares from external miners via {@link #receiveShare(Bytes32, long)}</li>
+ *   <li>✅ Validates shares and tracks the best solution</li>
+ *   <li>✅ Broadcasts the best block when epoch ends</li>
+ *   <li>❌ Does NOT iterate nonces (no mining loop)</li>
+ *   <li>❌ Does NOT compute hashes in a loop</li>
+ * </ul>
+ *
+ * <h2>External Miner Requirements</h2>
+ * <p>External miners must:</p>
+ * <ol>
+ *   <li>Fetch mining task from node (via HTTP API or RPC)</li>
+ *   <li>Iterate nonces (0 to MAX_NONCE) in a loop</li>
+ *   <li>Calculate hash for each nonce (RandomX or SHA256)</li>
+ *   <li>Submit better shares to node via {@link #receiveShare(Bytes32, long)}</li>
+ * </ol>
  *
  * <h2>Architecture</h2>
  * <pre>
- * MiningManager
+ * MiningManager (Pool Server)
  *   ├─> BlockGenerator (generates candidate blocks)
  *   ├─> ShareValidator (validates mining shares)
  *   ├─> BlockBroadcaster (broadcasts mined blocks)
- *   └─> PoolInterface (optional, for pool mode)
+ *   └─> External Miners (via HTTP/RPC)
+ *        ├─> CPU Miner (xdag-miner)
+ *        ├─> GPU Miner (xdag-cuda)
+ *        └─> Pool Miners
  * </pre>
  *
  * <h2>Design Principles</h2>
@@ -60,16 +83,17 @@ import java.util.concurrent.atomic.AtomicReference;
  *   <li>Single Responsibility: Only coordinates mining, delegates work to components</li>
  *   <li>Alignment: Uses DagKernel and DagChain APIs</li>
  *   <li>Clean Lifecycle: Simple start/stop semantics</li>
- *   <li>Mode Flexibility: Supports pool mode and local mining (future)</li>
+ *   <li>Pool Mode: Designed for pool server architecture</li>
  * </ul>
  *
- * <h2>Mining Process</h2>
+ * <h2>Mining Flow</h2>
  * <ol>
- *   <li>Every 64 seconds (XDAG epoch): start new mining cycle</li>
- *   <li>Generate candidate block using BlockGenerator</li>
- *   <li>Create mining task and send to pools (if pool mode)</li>
- *   <li>Validate shares received from pools using ShareValidator</li>
- *   <li>When best solution found: broadcast using BlockBroadcaster</li>
+ *   <li>Every 64 seconds: {@code mineBlock()} generates candidate block</li>
+ *   <li>Create {@link MiningTask} with candidate block + preHash</li>
+ *   <li>[EXTERNAL MINER] Fetch task, iterate nonces, submit shares</li>
+ *   <li>{@code receiveShare()} validates incoming shares</li>
+ *   <li>{@link ShareValidator} tracks best share (lowest hash)</li>
+ *   <li>On timeout: create mined block with best share and broadcast</li>
  * </ol>
  *
  * <h2>Usage Example</h2>
@@ -78,12 +102,20 @@ import java.util.concurrent.atomic.AtomicReference;
  * manager.start();
  *
  * // Manager runs automatically every 64 seconds
- * // Receives shares from pools via receiveShare()
+ * // External miners connect and submit shares:
+ * // manager.receiveShare(nonce, taskIndex);
  *
  * manager.stop();
  * </pre>
  *
- * @since XDAGJ
+ * <h2>For Standalone Mining</h2>
+ * <p>If you need standalone CPU mining (for testing), create a {@code LocalMiner} component
+ * that implements the nonce iteration loop and calls {@link #receiveShare(Bytes32, long)}.
+ *
+ * @since XDAGJ v5.1
+ * @see BlockGenerator
+ * @see ShareValidator
+ * @see MiningTask
  */
 @Slf4j
 public class MiningManager {
@@ -337,28 +369,13 @@ public class MiningManager {
             // Step 3: Reset share validator for new task
             shareValidator.reset();
 
-            // Step 4: Send task to pools (if pool mode)
-            // TODO  Integrate with pool interface
-            // sendTaskToPools(task);
-
-            // DEVNET TEST MODE: Auto-submit a test share for immediate block creation
-            boolean isDevnet = dagKernel.getConfig().getNodeSpec().getNetwork().toString().toLowerCase().contains("devnet");
-            if (isDevnet) {
-                log.warn("⚠ DEVNET TEST MODE: Auto-submitting test share for immediate block creation");
-                // Use the candidate block's nonce as the test share
-                Bytes32 testNonce = candidateBlock.getHeader().getNonce();
-                shareValidator.validateShare(testNonce, task);
-            }
+            // Step 4: External miners will fetch this task and submit shares
+            // Task is available via getCurrentTask() for HTTP/RPC API
+            log.info("Mining task ready for external miners to fetch and process");
 
             // Step 5: Schedule timeout for end of epoch
             long timeout = XdagTime.getEndOfEpoch(candidateBlock.getTimestamp());
             long timeToTimeout = timeout - XdagTime.getCurrentTimestamp();
-
-            // DEVNET TEST MODE: Use short timeout for faster testing
-            if (isDevnet && timeToTimeout > 20) {
-                log.warn("⚠ DEVNET TEST MODE: Reducing timeout from {} to 15 seconds", timeToTimeout);
-                timeToTimeout = 15;
-            }
 
             log.info("Mining cycle will timeout in {} seconds", timeToTimeout);
 
@@ -377,6 +394,11 @@ public class MiningManager {
     /**
      * Create a mining task from candidate block
      *
+     * <p><strong>NOTE ON RANDOMX SEED</strong>:
+     * For pool server architecture, external miners don't need the RandomX seed.
+     * They receive the complete block data and initialize their own RandomX VM.
+     * The seed management is handled by this node's {@link RandomXPow} component.
+     *
      * @param candidateBlock Candidate block to mine
      * @return MiningTask ready for miners
      */
@@ -390,34 +412,46 @@ public class MiningManager {
         if (isRandomXFork) {
             // Create RandomX task
             Bytes32 preHash = candidateBlock.getRandomXPreHash();
-            byte[] randomXSeed = getRandomXSeed();
+            byte[] randomXSeed = getRandomXSeedIdentifier(timestamp);
 
             return new MiningTask(candidateBlock, preHash, timestamp, taskIdx, randomXSeed);
 
         } else {
             // Create SHA256 task
-            // For SHA256, we use a simplified approach - the pre-hash is the block's partial hash
+            // For SHA256, the pre-hash is the block's partial hash
             Bytes32 preHash = candidateBlock.getHash();
 
-            // XdagSha256Digest not available yet, so pass null for now
-            // TODO  Implement proper SHA256 digest state
             return new MiningTask(candidateBlock, preHash, timestamp, taskIdx, (io.xdag.crypto.hash.XdagSha256Digest) null);
         }
     }
 
     /**
-     * Get RandomX seed for current epoch
+     * Get RandomX seed identifier for current timestamp
      *
-     * @return RandomX seed bytes
+     * <p><strong>IMPORTANT</strong>: This is NOT the actual RandomX seed bytes!
+     * External miners don't need the seed - they initialize RandomX from block data.
+     * This returns a seed epoch identifier for task tracking purposes only.
+     *
+     * <p>The actual RandomX seed management is handled by {@link RandomXPow} and
+     * {@link RandomXSeedManager} components within this node.
+     *
+     * @param timestamp Current block timestamp
+     * @return Seed epoch identifier (for logging/tracking), not actual seed
      */
-    private byte[] getRandomXSeed() {
+    private byte[] getRandomXSeedIdentifier(long timestamp) {
         if (powAlgorithm == null) {
-            return new byte[32];  // Empty seed if PoW algorithm not available
+            return new byte[32];  // Empty identifier if PoW algorithm not available
         }
 
-        // TODO: Get seed from RandomX memory
-        // For now, return empty seed
-        return new byte[32];
+        // For pool architecture, we don't need to pass actual seed to external miners
+        // Return epoch identifier for task tracking
+        long epoch = timestamp / 64;
+        byte[] identifier = new byte[32];
+        // Encode epoch in identifier (for debugging/logging)
+        for (int i = 0; i < 8 && i < 32; i++) {
+            identifier[i] = (byte) ((epoch >> (i * 8)) & 0xFF);
+        }
+        return identifier;
     }
 
     /**

@@ -553,7 +553,7 @@ public class DagChainImpl implements DagChain {
         // Filter out only non-orphan blocks (height > 0) for counting
         List<Block> nonOrphanBlocks = candidates.stream()
                 .filter(b -> b.getInfo() != null && b.getInfo().getHeight() > 0)
-                .collect(Collectors.toList());
+                .toList();
 
         // If under limit, accept
         if (nonOrphanBlocks.size() < MAX_BLOCKS_PER_EPOCH) {
@@ -820,8 +820,8 @@ public class DagChainImpl implements DagChain {
                 currentEpoch, lastAdjustmentEpoch);
 
         // Calculate average blocks per epoch in the adjustment period
-        int totalBlocks = 0;
-        int epochCount = 0;
+        long totalBlocks = 0;
+        long epochCount = 0;
 
         for (long epoch = lastAdjustmentEpoch; epoch < currentEpoch; epoch++) {
             List<Block> blocks = getCandidateBlocksInEpoch(epoch);
@@ -1728,7 +1728,7 @@ public class DagChainImpl implements DagChain {
             potentialForkHeads.sort((b1, b2) ->
                 b2.getInfo().getDifficulty().compareTo(b1.getInfo().getDifficulty()));
 
-            Block bestForkHead = potentialForkHeads.get(0);
+            Block bestForkHead = potentialForkHeads.getFirst();
 
             log.info("Best fork head: {} (difficulty: {})",
                     bestForkHead.getHash().toHexString(),
@@ -1807,7 +1807,7 @@ public class DagChainImpl implements DagChain {
         }
 
         // Step 5: Update chain statistics
-        Block newTip = newMainChainBlocks.get(0);  // First element is the new head
+        Block newTip = newMainChainBlocks.getFirst();  // First element is the new head
         chainStats = chainStats
                 .withMainBlockCount(currentHeight)
                 .withMaxDifficulty(newTip.getInfo().getDifficulty())

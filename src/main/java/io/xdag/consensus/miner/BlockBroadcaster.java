@@ -28,6 +28,8 @@ import io.xdag.DagKernel;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
 import io.xdag.core.DagImportResult;
+import io.xdag.p2p.P2pService;
+import io.xdag.p2p.channel.Channel;
 import io.xdag.p2p.message.NewBlockMessage;
 import lombok.extern.slf4j.Slf4j;
 
@@ -213,7 +215,7 @@ public class BlockBroadcaster {
      */
     private void broadcastToNetwork(Block block) {
         // Check if P2P service is available
-        io.xdag.p2p.P2pService p2pService = dagKernel.getP2pService();
+        P2pService p2pService = dagKernel.getP2pService();
         if (p2pService == null) {
             log.warn("P2P service not available, cannot broadcast block {}",
                     block.getHash().toHexString());
@@ -222,14 +224,13 @@ public class BlockBroadcaster {
 
         try {
             // Create NewBlockMessage
-            NewBlockMessage message =
-                    new NewBlockMessage(block, ttl);
+            NewBlockMessage message = new NewBlockMessage(block, ttl);
 
             // Broadcast to all connected peers
             // 5 FIX: Send Message object directly, not raw bytes
             // Channel.send(Message) will handle proper encoding with message code prefix
             int sentCount = 0;
-            for (io.xdag.p2p.channel.Channel channel : p2pService.getChannelManager().getChannels().values()) {
+            for (Channel channel : p2pService.getChannelManager().getChannels().values()) {
                 if (channel.isFinishHandshake()) {
                     try {
                         channel.send(message);  // Send Message object, not bytes

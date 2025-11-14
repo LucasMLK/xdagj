@@ -132,6 +132,9 @@ public class DagKernel {
   private MiningManager miningManager;
   private PowAlgorithm powAlgorithm;  // RandomXPow instance
 
+  // Mining RPC service (for pool server integration)
+  private io.xdag.rpc.service.MiningRpcServiceImpl miningRpcService;
+
   // P2P service (5)
   private P2pService p2pService;
 
@@ -276,6 +279,15 @@ public class DagKernel {
           log.info("   ✓ MiningManager initialized (TTL={})", ttl);
       } else {
           log.warn("   ⚠ MiningManager not initialized (wallet required)");
+      }
+
+      // 9. Create Mining RPC Service (for pool server integration)
+      if (wallet != null) {
+          this.miningRpcService = new io.xdag.rpc.service.MiningRpcServiceImpl(
+                  dagChain, wallet, powAlgorithm);
+          log.info("   ✓ MiningRpcService initialized (pool server interface ready)");
+      } else {
+          log.warn("   ⚠ MiningRpcService not initialized (wallet required)");
       }
 
       log.info("   ✓ Consensus layer initialization complete");

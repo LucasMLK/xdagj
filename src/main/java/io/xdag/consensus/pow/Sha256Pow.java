@@ -27,6 +27,7 @@ package io.xdag.consensus.pow;
 import io.xdag.config.Config;
 import io.xdag.config.RandomXConstants;
 import io.xdag.crypto.hash.HashUtils;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
@@ -66,166 +67,154 @@ import org.apache.tuweni.bytes.Bytes32;
 @Slf4j
 public class Sha256Pow implements PowAlgorithm {
 
-    private final Config config;
-    private final long forkEpoch;
-    private volatile boolean started = false;
+  private final Config config;
 
-    /**
-     * Create SHA256 PoW algorithm
-     *
-     * @param config System configuration
-     * @throws IllegalArgumentException if config is null
-     */
-    public Sha256Pow(Config config) {
-        if (config == null) {
-            throw new IllegalArgumentException("Config cannot be null");
-        }
+  @Getter
+  private final long forkEpoch;
 
-        this.config = config;
+  @Getter
+  private volatile boolean started = false;
 
-        // Determine fork epoch based on network type
-        boolean isTestnet = !(config instanceof io.xdag.config.MainnetConfig);
-        if (isTestnet) {
-            this.forkEpoch = RandomXConstants.RANDOMX_TESTNET_FORK_HEIGHT / RandomXConstants.SEEDHASH_EPOCH_TESTNET_BLOCKS;
-        } else {
-            this.forkEpoch = RandomXConstants.RANDOMX_FORK_HEIGHT / RandomXConstants.SEEDHASH_EPOCH_BLOCKS;
-        }
-
-        log.info("Sha256Pow initialized: forkEpoch={}", forkEpoch);
+  /**
+   * Create SHA256 PoW algorithm
+   *
+   * @param config System configuration
+   * @throws IllegalArgumentException if config is null
+   */
+  public Sha256Pow(Config config) {
+    if (config == null) {
+      throw new IllegalArgumentException("Config cannot be null");
     }
 
-    // ========== Lifecycle ==========
+    this.config = config;
 
-    @Override
-    public void start() {
-        if (started) {
-            log.warn("Sha256Pow already started");
-            return;
-        }
-
-        started = true;
-        log.info("Sha256Pow started (active before epoch {})", forkEpoch);
+    // Determine fork epoch based on network type
+    boolean isTestnet = !(config instanceof io.xdag.config.MainnetConfig);
+    if (isTestnet) {
+      this.forkEpoch = RandomXConstants.RANDOMX_TESTNET_FORK_HEIGHT
+          / RandomXConstants.SEEDHASH_EPOCH_TESTNET_BLOCKS;
+    } else {
+      this.forkEpoch =
+          RandomXConstants.RANDOMX_FORK_HEIGHT / RandomXConstants.SEEDHASH_EPOCH_BLOCKS;
     }
 
-    @Override
-    public void stop() {
-        if (!started) {
-            log.warn("Sha256Pow not started");
-            return;
-        }
+    log.info("Sha256Pow initialized: forkEpoch={}", forkEpoch);
+  }
 
-        started = false;
-        log.info("Sha256Pow stopped");
+  // ========== Lifecycle ==========
+
+  @Override
+  public void start() {
+    if (started) {
+      log.warn("Sha256Pow already started");
+      return;
     }
 
-    @Override
-    public boolean isReady() {
-        return started;
+    started = true;
+    log.info("Sha256Pow started (active before epoch {})", forkEpoch);
+  }
+
+  @Override
+  public void stop() {
+    if (!started) {
+      log.warn("Sha256Pow not started");
+      return;
     }
 
-    // ========== PowAlgorithm Implementation ==========
+    started = false;
+    log.info("Sha256Pow stopped");
+  }
 
-    @Override
-    public byte[] calculateBlockHash(byte[] data, HashContext context) {
-        if (!started) {
-            log.warn("Sha256Pow not started, hash calculation may fail");
-            return null;
-        }
+  @Override
+  public boolean isReady() {
+    return started;
+  }
 
-        if (data == null) {
-            log.warn("Block data is null");
-            return null;
-        }
+  // ========== PowAlgorithm Implementation ==========
 
-        if (context == null) {
-            log.warn("Hash context is null");
-            return null;
-        }
-
-        // SHA256 hash calculation (double SHA256 for security)
-        // hash = SHA256(SHA256(data))
-        try {
-            Bytes32 hash = HashUtils.sha256(HashUtils.sha256(Bytes.wrap(data)));
-            return hash.toArray();
-        } catch (Exception e) {
-            log.error("Failed to calculate SHA256 hash", e);
-            return null;
-        }
+  @Override
+  public byte[] calculateBlockHash(byte[] data, HashContext context) {
+    if (!started) {
+      log.warn("Sha256Pow not started, hash calculation may fail");
+      return null;
     }
 
-    @Override
-    public Bytes32 calculatePoolHash(byte[] data, HashContext context) {
-        if (!started) {
-            log.warn("Sha256Pow not started, pool hash calculation may fail");
-            return null;
-        }
-
-        if (data == null) {
-            log.warn("Pool data is null");
-            return null;
-        }
-
-        if (context == null) {
-            log.warn("Hash context is null");
-            return null;
-        }
-
-        // Pool hash: single SHA256
-        try {
-            return HashUtils.sha256(Bytes.wrap(data));
-        } catch (Exception e) {
-            log.error("Failed to calculate SHA256 pool hash", e);
-            return null;
-        }
+    if (data == null) {
+      log.warn("Block data is null");
+      return null;
     }
 
-    @Override
-    public boolean isActive(long epoch) {
-        // SHA256 is active BEFORE the RandomX fork
-        return epoch < forkEpoch;
+    if (context == null) {
+      log.warn("Hash context is null");
+      return null;
     }
 
-    @Override
-    public String getName() {
-        return "SHA256";
+    // SHA256 hash calculation (double SHA256 for security)
+    // hash = SHA256(SHA256(data))
+    try {
+      Bytes32 hash = HashUtils.sha256(HashUtils.sha256(Bytes.wrap(data)));
+      return hash.toArray();
+    } catch (Exception e) {
+      log.error("Failed to calculate SHA256 hash", e);
+      return null;
+    }
+  }
+
+  @Override
+  public Bytes32 calculatePoolHash(byte[] data, HashContext context) {
+    if (!started) {
+      log.warn("Sha256Pow not started, pool hash calculation may fail");
+      return null;
     }
 
-    // ========== Status ==========
-
-    /**
-     * Get fork epoch
-     *
-     * @return RandomX fork epoch (SHA256 active before this)
-     */
-    public long getForkEpoch() {
-        return forkEpoch;
+    if (data == null) {
+      log.warn("Pool data is null");
+      return null;
     }
 
-    /**
-     * Check if started
-     *
-     * @return true if started
-     */
-    public boolean isStarted() {
-        return started;
+    if (context == null) {
+      log.warn("Hash context is null");
+      return null;
     }
 
-    /**
-     * Get diagnostic information
-     *
-     * @return diagnostic string
-     */
-    public String getDiagnostics() {
-        return String.format(
-            "Sha256Pow[started=%s, forkEpoch=%d, ready=%s]",
-            started,
-            forkEpoch,
-            isReady()
-        );
+    // Pool hash: single SHA256
+    try {
+      return HashUtils.sha256(Bytes.wrap(data));
+    } catch (Exception e) {
+      log.error("Failed to calculate SHA256 pool hash", e);
+      return null;
     }
+  }
 
-    @Override
-    public String toString() {
-        return getDiagnostics();
-    }
+  @Override
+  public boolean isActive(long epoch) {
+    // SHA256 is active BEFORE the RandomX fork
+    return epoch < forkEpoch;
+  }
+
+  @Override
+  public String getName() {
+    return "SHA256";
+  }
+
+  // ========== Status ==========
+
+  /**
+   * Get diagnostic information
+   *
+   * @return diagnostic string
+   */
+  public String getDiagnostics() {
+    return String.format(
+        "Sha256Pow[started=%s, forkEpoch=%d, ready=%s]",
+        started,
+        forkEpoch,
+        isReady()
+    );
+  }
+
+  @Override
+  public String toString() {
+    return getDiagnostics();
+  }
 }
