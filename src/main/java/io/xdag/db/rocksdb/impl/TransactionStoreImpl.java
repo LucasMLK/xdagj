@@ -26,9 +26,13 @@ package io.xdag.db.rocksdb.impl;
 
 import com.google.common.collect.Lists;
 import io.xdag.core.Transaction;
+import io.xdag.core.TransactionExecutionInfo;
 import io.xdag.db.TransactionStore;
 import io.xdag.db.rocksdb.base.KVSource;
+import io.xdag.db.rocksdb.transaction.TransactionException;
+import io.xdag.db.rocksdb.transaction.TransactionalStore;
 import io.xdag.utils.BytesUtils;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
@@ -63,6 +67,11 @@ public class TransactionStoreImpl implements TransactionStore {
     private final KVSource<byte[], byte[]> indexSource;
 
     /**
+     * Optional transactional store for atomic operations (Phase 0.5)
+     */
+    private TransactionalStore transactionalStore;
+
+    /**
      * Constructor
      *
      * @param txSource Primary transaction storage
@@ -73,6 +82,21 @@ public class TransactionStoreImpl implements TransactionStore {
             KVSource<byte[], byte[]> indexSource) {
         this.txSource = txSource;
         this.indexSource = indexSource;
+    }
+
+    /**
+     * Set the transactional store for atomic operations.
+     *
+     * <p>This must be called to enable transactional operations
+     * (xxxInTransaction methods). If not set, calling transactional
+     * methods will throw IllegalStateException.
+     *
+     * @param transactionalStore transactional store instance
+     * @since Phase 0.5 - Transaction Support Infrastructure
+     */
+    public void setTransactionalStore(TransactionalStore transactionalStore) {
+        this.transactionalStore = transactionalStore;
+        log.info("TransactionalStore configured for TransactionStoreImpl");
     }
 
     // ========== Lifecycle Methods ==========
@@ -337,5 +361,228 @@ public class TransactionStoreImpl implements TransactionStore {
         }
 
         return result;
+    }
+
+    // ==================== Transactional Operations (Phase 0.5) ====================
+
+    /**
+     * Check if transactional store is available.
+     *
+     * @throws IllegalStateException if transactional store not configured
+     */
+    private void ensureTransactionalStoreAvailable() {
+        if (transactionalStore == null) {
+            throw new IllegalStateException(
+                    "TransactionalStore not configured. Call setTransactionalStore() first.");
+        }
+    }
+
+    /**
+     * Save a transaction in a transaction.
+     *
+     * <p>This operation is queued and will be executed atomically when the transaction commits.
+     *
+     * @param txId transaction ID
+     * @param tx transaction to save
+     * @throws TransactionException if transaction operation fails
+     * @since Phase 0.5 - Transaction Support Infrastructure
+     */
+    public void saveTransactionInTransaction(String txId, Transaction tx)
+            throws TransactionException {
+        ensureTransactionalStoreAvailable();
+
+        // Serialize transaction
+        byte[] key = BytesUtils.merge(TX_DATA, tx.getHash().toArray());
+        byte[] value = tx.toBytes();
+        transactionalStore.putInTransaction(txId, key, value);
+
+        if (log.isDebugEnabled()) {
+            log.debug("Transaction {}: saveTransaction({})",
+                    txId, tx.getHash().toHexString().substring(0, 16));
+        }
+    }
+
+    /**
+     * Delete a transaction in a transaction.
+     *
+     * @param txId transaction ID
+     * @param hash transaction hash to delete
+     * @throws TransactionException if transaction operation fails
+     * @since Phase 0.5 - Transaction Support Infrastructure
+     */
+    public void deleteTransactionInTransaction(String txId, Bytes32 hash)
+            throws TransactionException {
+        ensureTransactionalStoreAvailable();
+
+        byte[] key = BytesUtils.merge(TX_DATA, hash.toArray());
+        transactionalStore.deleteInTransaction(txId, key);
+
+        if (log.isDebugEnabled()) {
+            log.debug("Transaction {}: deleteTransaction({})",
+                    txId, hash.toHexString().substring(0, 16));
+        }
+    }
+
+    /**
+     * Index a transaction to a block in a transaction.
+     *
+     * <p>This creates both forward index (blockHash -> txHash) and
+     * reverse index (txHash -> blockHash) atomically.
+     *
+     * @param txId transaction ID
+     * @param blockHash block hash
+     * @param txHash transaction hash
+     * @throws TransactionException if transaction operation fails
+     * @since Phase 0.5 - Transaction Support Infrastructure
+     */
+    public void indexTransactionToBlockInTransaction(String txId, Bytes32 blockHash, Bytes32 txHash)
+            throws TransactionException {
+        ensureTransactionalStoreAvailable();
+
+        // Forward index: blockHash -> List<txHash>
+        byte[] blockIndexKey = BytesUtils.merge(TX_BLOCK_INDEX, blockHash.toArray());
+        byte[] existingValue = indexSource.get(blockIndexKey);
+
+        byte[] newValue;
+        if (existingValue == null) {
+            // First transaction for this block
+            newValue = txHash.toArray();
+        } else {
+            // Append to existing list
+            newValue = BytesUtils.merge(existingValue, txHash.toArray());
+        }
+
+        transactionalStore.putInTransaction(txId, blockIndexKey, newValue);
+
+        // Reverse index: txHash -> blockHash
+        byte[] reverseKey = BytesUtils.merge(TRANSACTION_TO_BLOCK_INDEX, txHash.toArray());
+        transactionalStore.putInTransaction(txId, reverseKey, blockHash.toArray());
+
+        if (log.isDebugEnabled()) {
+            log.debug("Transaction {}: indexTransactionToBlock(block={}, tx={})",
+                    txId,
+                    blockHash.toHexString().substring(0, 16),
+                    txHash.toHexString().substring(0, 16));
+        }
+    }
+
+    // ==================== Transaction Execution Status Tracking (Phase 1 - Task 1.2) ====================
+
+    @Override
+    public boolean isTransactionExecuted(Bytes32 txHash) {
+        try {
+            byte[] key = BytesUtils.merge(TX_EXECUTION_STATUS, txHash.toArray());
+            return indexSource.get(key) != null;
+        } catch (Exception e) {
+            log.error("Failed to check transaction execution status: {}", txHash.toHexString(), e);
+            return false;
+        }
+    }
+
+    @Override
+    public void markTransactionExecuted(Bytes32 txHash, Bytes32 blockHash, long blockHeight) {
+        try {
+            TransactionExecutionInfo info = TransactionExecutionInfo.create(blockHash, blockHeight);
+            byte[] key = BytesUtils.merge(TX_EXECUTION_STATUS, txHash.toArray());
+            byte[] value = serializeExecutionInfo(info);
+            indexSource.put(key, value);
+
+            log.debug("Marked transaction {} as executed by block {} at height {}",
+                    txHash.toHexString().substring(0, 16),
+                    blockHash.toHexString().substring(0, 16),
+                    blockHeight);
+        } catch (Exception e) {
+            log.error("Failed to mark transaction as executed: {}", txHash.toHexString(), e);
+        }
+    }
+
+    @Override
+    public void unmarkTransactionExecuted(Bytes32 txHash) {
+        try {
+            byte[] key = BytesUtils.merge(TX_EXECUTION_STATUS, txHash.toArray());
+            indexSource.delete(key);
+
+            log.debug("Unmarked transaction {} as executed (rollback)",
+                    txHash.toHexString().substring(0, 16));
+        } catch (Exception e) {
+            log.error("Failed to unmark transaction execution: {}", txHash.toHexString(), e);
+        }
+    }
+
+    @Override
+    public TransactionExecutionInfo getExecutionInfo(Bytes32 txHash) {
+        try {
+            byte[] key = BytesUtils.merge(TX_EXECUTION_STATUS, txHash.toArray());
+            byte[] value = indexSource.get(key);
+
+            if (value == null) {
+                return null;
+            }
+
+            return deserializeExecutionInfo(value);
+        } catch (Exception e) {
+            log.error("Failed to get execution info for transaction: {}", txHash.toHexString(), e);
+            return null;
+        }
+    }
+
+    // ========== Execution Info Serialization ==========
+
+    /**
+     * Serialize TransactionExecutionInfo to bytes.
+     *
+     * Format (49 bytes total):
+     * - executingBlockHash: 32 bytes
+     * - executingBlockHeight: 8 bytes (long)
+     * - executionTimestamp: 8 bytes (long)
+     * - isReversed: 1 byte (boolean)
+     *
+     * @param info execution info to serialize
+     * @return serialized bytes
+     */
+    private byte[] serializeExecutionInfo(TransactionExecutionInfo info) {
+        ByteBuffer buffer = ByteBuffer.allocate(49);
+        buffer.put(info.getExecutingBlockHash().toArray());  // 32 bytes
+        buffer.putLong(info.getExecutingBlockHeight());      // 8 bytes
+        buffer.putLong(info.getExecutionTimestamp());        // 8 bytes
+        buffer.put((byte) (info.isReversed() ? 1 : 0));      // 1 byte
+        return buffer.array();
+    }
+
+    /**
+     * Deserialize TransactionExecutionInfo from bytes.
+     *
+     * @param data serialized bytes
+     * @return deserialized execution info
+     */
+    private TransactionExecutionInfo deserializeExecutionInfo(byte[] data) {
+        if (data == null || data.length != 49) {
+            log.warn("Invalid execution info data length: {} (expected 49)",
+                    data != null ? data.length : 0);
+            return null;
+        }
+
+        ByteBuffer buffer = ByteBuffer.wrap(data);
+
+        // Read executingBlockHash (32 bytes)
+        byte[] blockHashBytes = new byte[32];
+        buffer.get(blockHashBytes);
+        Bytes32 blockHash = Bytes32.wrap(blockHashBytes);
+
+        // Read executingBlockHeight (8 bytes)
+        long blockHeight = buffer.getLong();
+
+        // Read executionTimestamp (8 bytes)
+        long timestamp = buffer.getLong();
+
+        // Read isReversed (1 byte)
+        boolean isReversed = buffer.get() == 1;
+
+        return TransactionExecutionInfo.builder()
+                .executingBlockHash(blockHash)
+                .executingBlockHeight(blockHeight)
+                .executionTimestamp(timestamp)
+                .isReversed(isReversed)
+                .build();
     }
 }

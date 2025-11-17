@@ -352,28 +352,31 @@ public class DagChainImpl implements DagChain {
                     blockWithInfo.getTimestamp(),
                     blockWithInfo.getInfo().getHeight());
 
-            // Process block transactions and update account state
-            if (dagKernel != null) {
-                DagBlockProcessor blockProcessor = dagKernel.getDagBlockProcessor();
-                if (blockProcessor != null) {
-                    DagBlockProcessor.ProcessingResult processResult =
-                            blockProcessor.processBlock(blockWithInfo);
-
-                    if (!processResult.isSuccess()) {
-                        log.warn("Block {} transaction processing failed: {}",
-                                block.getHash().toHexString(), processResult.getError());
-                    } else {
-                        log.debug("Block {} transactions processed successfully",
-                                block.getHash().toHexString());
-                    }
-                }
-            }
-
-            // Index transactions
+            // Index transactions (for all blocks)
             indexTransactions(block);
 
-            // Update chain statistics
+            // Update chain statistics and process transactions (ONLY for main blocks)
             if (isBestChain) {
+                // Process block transactions and update account state
+                // IMPORTANT: Only execute transactions for main blocks to prevent orphan block transactions from affecting state
+                if (dagKernel != null) {
+                    DagBlockProcessor blockProcessor = dagKernel.getDagBlockProcessor();
+                    if (blockProcessor != null) {
+                        DagBlockProcessor.ProcessingResult processResult =
+                                blockProcessor.processBlock(blockWithInfo);
+
+                        if (!processResult.isSuccess()) {
+                            log.error("Block {} transaction processing failed: {}",
+                                    block.getHash().toHexString(), processResult.getError());
+                            // Transaction execution failed but block is valid, continue
+                        } else {
+                            log.info("Block {} transactions executed successfully",
+                                    block.getHash().toHexString());
+                        }
+                    }
+                }
+
+                // Update chain statistics
                 updateChainStatsForNewMainBlock(blockInfo);
 
                 // NEW CONSENSUS: Check and adjust difficulty
@@ -2223,6 +2226,11 @@ public class DagChainImpl implements DagChain {
             return;
         }
 
+        // Rollback transaction executions (Phase 1 - Task 1.4)
+        // When a block is demoted, unmark all its transactions as executed
+        // so they can be re-executed if the block becomes main again
+        rollbackBlockTransactions(block);
+
         // Update BlockInfo to mark as orphan (height = 0)
         BlockInfo updatedInfo = block.getInfo().toBuilder()
                 .height(0)
@@ -2242,6 +2250,144 @@ public class DagChainImpl implements DagChain {
 
         log.info("Demoted block {} from height {} to orphan (epoch competition loser)",
                 block.getHash().toHexString(), previousHeight);
+    }
+
+    /**
+     * Rollback transaction executions for a demoted block (Phase 1 - Task 1.4)
+     *
+     * <p>When a block is demoted from main chain to orphan status (e.g., during chain
+     * reorganization or epoch competition), all transactions executed by that block
+     * must be unmarked AND their state changes must be reverted.
+     *
+     * <p>This is critical for:
+     * <ul>
+     *   <li>Chain reorganization: When blocks are demoted, their state changes must be reverted</li>
+     *   <li>Epoch competition: When a block loses to a new winner with smaller hash</li>
+     *   <li>Transaction replay: Allows transactions to be re-executed in a different block</li>
+     * </ul>
+     *
+     * <p>Rollback operations for each transaction:
+     * <ol>
+     *   <li>Sender: Restore balance (refund amount + fee), decrement nonce</li>
+     *   <li>Receiver: Deduct balance (remove received amount)</li>
+     *   <li>Unmark transaction as executed</li>
+     * </ol>
+     *
+     * @param block the block being demoted
+     */
+    private void rollbackBlockTransactions(Block block) {
+        try {
+            // Get all transaction hashes in this block
+            List<Bytes32> txHashes = transactionStore.getTransactionHashesByBlock(block.getHash());
+
+            if (txHashes.isEmpty()) {
+                log.debug("No transactions to rollback for block {}",
+                        block.getHash().toHexString().substring(0, 16));
+                return;
+            }
+
+            // Get account manager for state rollback
+            DagAccountManager accountManager = dagKernel.getDagAccountManager();
+            if (accountManager == null) {
+                log.error("Cannot rollback transactions: DagAccountManager not available");
+                return;
+            }
+
+            // Rollback each transaction
+            int rolledBackCount = 0;
+            for (Bytes32 txHash : txHashes) {
+                try {
+                    // Load transaction
+                    Transaction tx = transactionStore.getTransaction(txHash);
+                    if (tx == null) {
+                        log.warn("Transaction {} not found in store, skipping rollback",
+                                txHash.toHexString().substring(0, 16));
+                        continue;
+                    }
+
+                    // Rollback account state changes
+                    rollbackTransactionState(tx, accountManager);
+
+                    // Unmark transaction as executed
+                    transactionStore.unmarkTransactionExecuted(txHash);
+
+                    rolledBackCount++;
+
+                    if (log.isDebugEnabled()) {
+                        log.debug("Rolled back transaction {} from block {}",
+                                txHash.toHexString().substring(0, 16),
+                                block.getHash().toHexString().substring(0, 16));
+                    }
+
+                } catch (Exception e) {
+                    log.error("Failed to rollback transaction {}: {}",
+                            txHash.toHexString().substring(0, 16), e.getMessage());
+                }
+            }
+
+            log.info("Rolled back {} transactions (state + execution status) for demoted block {}",
+                    rolledBackCount, block.getHash().toHexString().substring(0, 16));
+
+        } catch (Exception e) {
+            log.error("Failed to rollback transactions for block {}: {}",
+                    block.getHash().toHexString().substring(0, 16), e.getMessage());
+        }
+    }
+
+    /**
+     * Rollback account state changes for a single transaction
+     *
+     * <p>Reverses the state changes applied during transaction execution:
+     * <ul>
+     *   <li>Sender: Restore balance (refund amount + fee), decrement nonce</li>
+     *   <li>Receiver: Deduct balance (remove received amount)</li>
+     * </ul>
+     *
+     * @param tx transaction to rollback
+     * @param accountManager account manager for state operations
+     */
+    private void rollbackTransactionState(Transaction tx, DagAccountManager accountManager) {
+        // Convert XAmount to UInt256 (nano units)
+        UInt256 txAmount = UInt256.valueOf(tx.getAmount().toDecimal(0, XUnit.NANO_XDAG).longValue());
+        UInt256 txFee = UInt256.valueOf(tx.getFee().toDecimal(0, XUnit.NANO_XDAG).longValue());
+
+        // Rollback sender account: refund amount + fee, decrement nonce
+        try {
+            accountManager.addBalance(tx.getFrom(), txAmount.add(txFee));
+            accountManager.decrementNonce(tx.getFrom());
+
+            if (log.isDebugEnabled()) {
+                log.debug("Rolled back sender {}: refunded {}, decremented nonce",
+                        tx.getFrom().toHexString().substring(0, 8),
+                        txAmount.add(txFee).toDecimalString());
+            }
+        } catch (Exception e) {
+            log.error("Failed to rollback sender account {}: {}",
+                    tx.getFrom().toHexString().substring(0, 8), e.getMessage());
+        }
+
+        // Rollback receiver account: deduct amount
+        try {
+            UInt256 receiverBalance = accountManager.getBalance(tx.getTo());
+            if (receiverBalance.compareTo(txAmount) >= 0) {
+                accountManager.subtractBalance(tx.getTo(), txAmount);
+
+                if (log.isDebugEnabled()) {
+                    log.debug("Rolled back receiver {}: deducted {}",
+                            tx.getTo().toHexString().substring(0, 8),
+                            txAmount.toDecimalString());
+                }
+            } else {
+                // This shouldn't happen in normal operation
+                log.warn("Cannot fully rollback receiver {}: insufficient balance ({} < {})",
+                        tx.getTo().toHexString().substring(0, 8),
+                        receiverBalance.toDecimalString(),
+                        txAmount.toDecimalString());
+            }
+        } catch (Exception e) {
+            log.error("Failed to rollback receiver account {}: {}",
+                    tx.getTo().toHexString().substring(0, 8), e.getMessage());
+        }
     }
 
     // ==================== DAG Chain Event Listeners ====================

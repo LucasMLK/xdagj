@@ -150,6 +150,12 @@ public class DagTransactionProcessor {
      * <p>Processes transactions sequentially. If any transaction fails,
      * the entire block processing fails and no further transactions are processed.
      *
+     * <p>For each successfully processed transaction:
+     * <ul>
+     *   <li>Updates account states (balance, nonce)</li>
+     *   <li>Marks transaction as executed by this block</li>
+     * </ul>
+     *
      * @param block block being processed
      * @param transactions transactions to process
      * @return processing result
@@ -169,10 +175,28 @@ public class DagTransactionProcessor {
                         String.format("Block transaction processing failed: %s", result.getError())
                 );
             }
+
+            // Mark transaction as executed by this block (Phase 1 - Task 1.2)
+            try {
+                transactionStore.markTransactionExecuted(
+                        tx.getHash(),
+                        block.getHash(),
+                        block.getInfo().getHeight()
+                );
+                log.debug("Marked transaction {} as executed by block {} at height {}",
+                        tx.getHash().toHexString().substring(0, 16),
+                        block.getHash().toHexString().substring(0, 16),
+                        block.getInfo().getHeight());
+            } catch (Exception e) {
+                log.error("Failed to mark transaction {} as executed: {}",
+                        tx.getHash().toHexString().substring(0, 16), e.getMessage());
+                // Continue processing - marking execution status is informational
+            }
+
             processedTxHashes.add(tx.getHash().toHexString());
         }
 
-        log.info("Successfully processed {} transactions for block {}",
+        log.info("Successfully processed {} transactions for block {} (states updated + execution marked)",
                 transactions.size(), block.getHash().toHexString());
 
         return ProcessingResult.success();

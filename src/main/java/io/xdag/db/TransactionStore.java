@@ -82,6 +82,13 @@ public interface TransactionStore extends XdagLifecycle {
      */
     byte TX_ADDRESS_INDEX = (byte) 0xe2;
 
+    /**
+     * Transaction execution status: txHash -> TransactionExecutionInfo
+     * Format: 0xe4 + txHash(32) -> execution info bytes
+     * Tracks which block executed each transaction (Phase 1 - Task 1.2)
+     */
+    byte TX_EXECUTION_STATUS = (byte) 0xe4;
+
     // ========== Core Operations ==========
 
     /**
@@ -210,4 +217,46 @@ public interface TransactionStore extends XdagLifecycle {
      * Reset the transaction database (for testing or migration)
      */
     void reset();
+
+    // ========== Transaction Execution Status Tracking (Phase 1 - Task 1.2) ==========
+
+    /**
+     * Check if a transaction has been executed.
+     *
+     * <p>This is used to prevent duplicate execution when the same transaction
+     * is referenced by multiple blocks.
+     *
+     * @param txHash transaction hash
+     * @return true if the transaction has been executed
+     */
+    boolean isTransactionExecuted(Bytes32 txHash);
+
+    /**
+     * Mark a transaction as executed.
+     *
+     * <p>This should be called immediately after successfully executing a transaction.
+     *
+     * @param txHash transaction hash
+     * @param blockHash hash of the block that executed this transaction
+     * @param blockHeight height of the executing block
+     */
+    void markTransactionExecuted(Bytes32 txHash, Bytes32 blockHash, long blockHeight);
+
+    /**
+     * Unmark a transaction as executed (for chain reorganization rollback).
+     *
+     * <p>This allows the transaction to be executed again when it appears
+     * in a different block after chain reorganization.
+     *
+     * @param txHash transaction hash
+     */
+    void unmarkTransactionExecuted(Bytes32 txHash);
+
+    /**
+     * Get execution information for a transaction.
+     *
+     * @param txHash transaction hash
+     * @return execution info, or null if not executed
+     */
+    io.xdag.core.TransactionExecutionInfo getExecutionInfo(Bytes32 txHash);
 }

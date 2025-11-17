@@ -29,9 +29,13 @@ import io.xdag.consensus.sync.HybridSyncP2pAdapter;
 import io.xdag.core.Block;
 import io.xdag.core.ChainStats;
 import io.xdag.core.DagChain;
+import io.xdag.core.DagImportResult;
 import io.xdag.core.Transaction;
+import io.xdag.core.TransactionBroadcastManager;
+import io.xdag.core.TransactionPool;
 import io.xdag.p2p.channel.Channel;
 import io.xdag.p2p.message.BlockRequestMessage;
+import io.xdag.p2p.message.NewTransactionMessage;
 import io.xdag.p2p.message.XdagMessageCode;
 import io.xdag.p2p.message.NewBlockMessage;
 import io.xdag.p2p.message.SyncBlockMessage;
@@ -94,16 +98,19 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
         this.messageTypes.add(XdagMessageCode.SYNC_BLOCKS_REPLY.toByte());
         this.messageTypes.add(XdagMessageCode.SYNC_TRANSACTIONS_REQUEST.toByte());
         this.messageTypes.add(XdagMessageCode.SYNC_TRANSACTIONS_REPLY.toByte());
+
+        //  Register transaction broadcast message (Phase 3)
+        this.messageTypes.add(XdagMessageCode.NEW_TRANSACTION.toByte());
     }
 
     @Override
-    public void onConnect(io.xdag.p2p.channel.Channel channel) {
+    public void onConnect(Channel channel) {
         log.info("Peer connected: {} (Node ID: {})",
                 channel.getRemoteAddress(), channel.getNodeId());
     }
 
     @Override
-    public void onDisconnect(io.xdag.p2p.channel.Channel channel) {
+    public void onDisconnect(Channel channel) {
         log.info("Peer disconnected: {} (Node ID: {})",
                 channel.getRemoteAddress(), channel.getNodeId());
     }
@@ -178,6 +185,9 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
                 case SYNC_TRANSACTIONS_REPLY:
                     handleSyncTransactionsReply(channel, body);
                     break;
+                case NEW_TRANSACTION:
+                    handleNewTransaction(channel, body);
+                    break;
                 default:
                     log.warn("Unknown message type {} from {}",
                             messageType, channel.getRemoteAddress());
@@ -189,29 +199,60 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle NEW_BLOCK message - a new Block propagated through the network (5)
-     * <p>
-     * Simplified implementation using DagChain.tryToConnect() directly
+     * Handle NEW_BLOCK message - a new Block propagated through the network with TTL
      *
+     * <p>This handler implements TTL-based hop limiting for block broadcasting:
+     * <ol>
+     *   <li>Check TTL > 0, drop if TTL expired</li>
+     *   <li>Import block via DagChain</li>
+     *   <li>Forward to other peers with TTL - 1 (excluding sender) if imported successfully</li>
+     * </ol>
+     *
+     * @param channel the channel that sent this block
      * @param body message body (without message code prefix)
      */
-    private void handleNewBlock(io.xdag.p2p.channel.Channel channel, Bytes body) {
+    private void handleNewBlock(Channel channel, Bytes body) {
         try {
+            // 1. Deserialize block message
             NewBlockMessage msg = new NewBlockMessage(body.toArray());
             Block block = msg.getBlock();
+            Bytes32 blockHash = block.getHash();
+            int ttl = msg.getTtl();
 
-            log.info("Received NEW_BLOCK: {} from {} (height={}, epoch={})",
-                    block.getHash().toHexString().substring(0, 18) + "...",
+            log.info("Received NEW_BLOCK: {} from {} (height={}, epoch={}, TTL={})",
+                    blockHash.toHexString().substring(0, 18) + "...",
                     channel.getRemoteAddress(),
                     block.getInfo() != null ? block.getInfo().getHeight() : "unknown",
-                    block.getEpoch());
+                    block.getEpoch(),
+                    ttl);
 
-            //  Import block directly via DagChain
-            io.xdag.core.DagImportResult result = dagChain.tryToConnect(block);
+            // 2. Check TTL (hop limit)
+            if (ttl <= 0) {
+                log.trace("Block {} dropped: TTL expired (TTL={})",
+                        blockHash.toHexString().substring(0, 16) + "...", ttl);
+                return;  // TTL expired, do not process or forward
+            }
+
+            // 3. Import block directly via DagChain
+            DagImportResult result = dagChain.tryToConnect(block);
 
             if (result != null && result.isMainBlock()) {
                 log.info("✓ Received block imported as main block at height {}",
                         result.getHeight());
+
+                // 4. Forward to other peers with decremented TTL (exclude sender)
+                if (msg.shouldForward()) {
+                    NewBlockMessage forwardMsg = msg.decrementTTL();
+                    if (forwardMsg.shouldForward()) {
+                        broadcastBlockMessage(forwardMsg, channel);
+                        log.debug("Forwarded block {} to other peers (TTL: {} -> {})",
+                                blockHash.toHexString().substring(0, 16) + "...",
+                                ttl, forwardMsg.getTtl());
+                    } else {
+                        log.trace("Block {} not forwarded: TTL would expire (TTL={})",
+                                blockHash.toHexString().substring(0, 16) + "...", ttl);
+                    }
+                }
             } else if (result != null && result.isOrphan()) {
                 log.info("Received block imported as orphan");
             } else if (result != null) {
@@ -231,7 +272,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      *
      * @param body message body (without message code prefix)
      */
-    private void handleSyncBlock(io.xdag.p2p.channel.Channel channel, Bytes body) {
+    private void handleSyncBlock(Channel channel, Bytes body) {
         try {
             SyncBlockMessage msg = new SyncBlockMessage(body.toArray());
             Block block = msg.getBlock();
@@ -256,7 +297,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      *
      * @param body message body (without message code prefix)
      */
-    private void handleBlockRequest(io.xdag.p2p.channel.Channel channel, Bytes body) {
+    private void handleBlockRequest(Channel channel, Bytes body) {
         try {
             BlockRequestMessage msg = new BlockRequestMessage(body.toArray());
             Bytes hash = msg.getHash();
@@ -288,7 +329,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      *
      * @param body message body (without message code prefix)
      */
-    private void handleSyncHeightRequest(io.xdag.p2p.channel.Channel channel, Bytes body) {
+    private void handleSyncHeightRequest(Channel channel, Bytes body) {
         try {
             SyncHeightRequestMessage request = new SyncHeightRequestMessage(body.toArray());
 
@@ -327,7 +368,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      *
      * @param body message body (without message code prefix)
      */
-    private void handleSyncHeightReply(io.xdag.p2p.channel.Channel channel, Bytes body) {
+    private void handleSyncHeightReply(Channel channel, Bytes body) {
         try {
             SyncHeightReplyMessage reply = new SyncHeightReplyMessage(body.toArray());
 
@@ -352,7 +393,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      *
      * @param body message body (without message code prefix)
      */
-    private void handleSyncMainBlocksRequest(io.xdag.p2p.channel.Channel channel, Bytes body) {
+    private void handleSyncMainBlocksRequest(Channel channel, Bytes body) {
         try {
             SyncMainBlocksRequestMessage request = new SyncMainBlocksRequestMessage(body.toArray());
 
@@ -393,7 +434,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      *
      * @param body message body (without message code prefix)
      */
-    private void handleSyncMainBlocksReply(io.xdag.p2p.channel.Channel channel, Bytes body) {
+    private void handleSyncMainBlocksReply(Channel channel, Bytes body) {
         try {
             SyncMainBlocksReplyMessage reply = new SyncMainBlocksReplyMessage(body.toArray());
 
@@ -418,7 +459,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      *
      * @param body message body (without message code prefix)
      */
-    private void handleSyncEpochBlocksRequest(io.xdag.p2p.channel.Channel channel, Bytes body) {
+    private void handleSyncEpochBlocksRequest(Channel channel, Bytes body) {
         try {
             SyncEpochBlocksRequestMessage request = new SyncEpochBlocksRequestMessage(body.toArray());
 
@@ -452,7 +493,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      *
      * @param body message body (without message code prefix)
      */
-    private void handleSyncEpochBlocksReply(io.xdag.p2p.channel.Channel channel, Bytes body) {
+    private void handleSyncEpochBlocksReply(Channel channel, Bytes body) {
         try {
             SyncEpochBlocksReplyMessage reply = new SyncEpochBlocksReplyMessage(body.toArray());
 
@@ -477,7 +518,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      *
      * @param body message body (without message code prefix)
      */
-    private void handleSyncBlocksRequest(io.xdag.p2p.channel.Channel channel, Bytes body) {
+    private void handleSyncBlocksRequest(Channel channel, Bytes body) {
         try {
             SyncBlocksRequestMessage request = new SyncBlocksRequestMessage(body.toArray());
 
@@ -514,7 +555,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      *
      * @param body message body (without message code prefix)
      */
-    private void handleSyncBlocksReply(io.xdag.p2p.channel.Channel channel, Bytes body) {
+    private void handleSyncBlocksReply(Channel channel, Bytes body) {
         try {
             SyncBlocksReplyMessage reply = new SyncBlocksReplyMessage(body.toArray());
 
@@ -539,7 +580,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      *
      * @param body message body (without message code prefix)
      */
-    private void handleSyncTransactionsRequest(io.xdag.p2p.channel.Channel channel, Bytes body) {
+    private void handleSyncTransactionsRequest(Channel channel, Bytes body) {
         try {
             SyncTransactionsRequestMessage request = new SyncTransactionsRequestMessage(body.toArray());
 
@@ -573,7 +614,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
      *
      * @param body message body (without message code prefix)
      */
-    private void handleSyncTransactionsReply(io.xdag.p2p.channel.Channel channel, Bytes body) {
+    private void handleSyncTransactionsReply(Channel channel, Bytes body) {
         try {
             SyncTransactionsReplyMessage reply = new SyncTransactionsReplyMessage(body.toArray());
 
@@ -590,6 +631,186 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
         } catch (Exception e) {
             log.error("Error handling SYNC_TRANSACTIONS_REPLY from {}: {}",
                     channel.getRemoteAddress(), e.getMessage(), e);
+        }
+    }
+
+    // ==========  Transaction Broadcast Handler (Phase 3) ==========
+
+    /**
+     * Handle NEW_TRANSACTION - received new transaction from peer (Phase 3)
+     *
+     * <p>This handler implements the anti-loop logic for transaction broadcasting:
+     * <ol>
+     *   <li>Check TTL > 0, drop if TTL expired</li>
+     *   <li>Check if we've seen this transaction recently → skip if yes</li>
+     *   <li>Add to transaction pool if valid</li>
+     *   <li>Forward to other peers with TTL - 1 (excluding sender)</li>
+     * </ol>
+     *
+     * @param channel the channel that sent this transaction
+     * @param body message body (without message code prefix)
+     */
+    private void handleNewTransaction(Channel channel, Bytes body) {
+        try {
+            // 1. Deserialize transaction message
+            NewTransactionMessage msg = new NewTransactionMessage(body.toArray());
+            Transaction tx = msg.getTransaction();
+            Bytes32 txHash = tx.getHash();
+            int ttl = msg.getTtl();
+
+            log.debug("Received NEW_TRANSACTION {} from {} (TTL={})",
+                    txHash.toHexString().substring(0, 16) + "...",
+                    channel.getRemoteAddress(),
+                    ttl);
+
+            // 2. Check TTL (hop limit)
+            if (ttl <= 0) {
+                log.trace("Transaction {} dropped: TTL expired (TTL={})",
+                        txHash.toHexString().substring(0, 16) + "...", ttl);
+                return;  // TTL expired, do not process or forward
+            }
+
+            // 3. Check if we've seen this transaction recently (anti-loop protection)
+            TransactionBroadcastManager broadcastManager =
+                    dagKernel.getTransactionBroadcastManager();
+            if (broadcastManager != null) {
+                if (!broadcastManager.shouldProcess(txHash)) {
+                    log.trace("Transaction {} already seen, skipping",
+                            txHash.toHexString().substring(0, 16) + "...");
+                    return;  // Prevents broadcast loop! ✓
+                }
+            }
+
+            // 4. Add to transaction pool
+            TransactionPool txPool = dagKernel.getTransactionPool();
+            if (txPool == null) {
+                log.warn("Transaction pool not available, cannot accept transaction {}",
+                        txHash.toHexString().substring(0, 16) + "...");
+                return;
+            }
+
+            boolean added = txPool.addTransaction(tx);
+            if (added) {
+                log.info("Received transaction {} from peer {} added to pool (TTL={})",
+                        txHash.toHexString().substring(0, 16) + "...",
+                        channel.getRemoteAddress(),
+                        ttl);
+
+                // 5. Forward to other peers with decremented TTL (exclude sender)
+                if (msg.shouldForward() && broadcastManager != null) {
+                    // Create new message with TTL - 1
+                    NewTransactionMessage forwardMsg = msg.decrementTTL();
+
+                    if (forwardMsg.shouldForward()) {
+                        broadcastManager.broadcastTransactionMessage(forwardMsg, channel);
+                        log.debug("Forwarded transaction {} to other peers (TTL: {} -> {})",
+                                txHash.toHexString().substring(0, 16) + "...",
+                                ttl, forwardMsg.getTtl());
+                    } else {
+                        log.trace("Transaction {} not forwarded: TTL would expire (TTL={})",
+                                txHash.toHexString().substring(0, 16) + "...", ttl);
+                    }
+                }
+            } else {
+                log.debug("Transaction {} from peer {} rejected by pool (duplicate/invalid) (TTL={})",
+                        txHash.toHexString().substring(0, 16) + "...",
+                        channel.getRemoteAddress(),
+                        ttl);
+            }
+
+        } catch (Exception e) {
+            log.error("Error handling NEW_TRANSACTION from {}: {}",
+                    channel.getRemoteAddress(), e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Broadcast a block message to all peers (excluding sender)
+     *
+     * <p>This method forwards received blocks with decremented TTL to prevent loops.
+     *
+     * @param message block message with custom TTL
+     * @param excludeChannel channel to exclude (sender), or null to broadcast to all
+     */
+    private void broadcastBlockMessage(NewBlockMessage message, Channel excludeChannel) {
+        try {
+            Block block = message.getBlock();
+            Bytes32 blockHash = block.getHash();
+            int ttl = message.getTtl();
+
+            // Get P2P service
+            io.xdag.p2p.P2pService p2pService = dagKernel.getP2pService();
+            if (p2pService == null) {
+                log.trace("P2P service not available, cannot broadcast block {}",
+                        blockHash.toHexString().substring(0, 16) + "...");
+                return;
+            }
+
+            // Get all active channels
+            List<Channel> channels = getActiveChannels(p2pService);
+            if (channels.isEmpty()) {
+                log.trace("No active peers to broadcast block {} (TTL={})",
+                        blockHash.toHexString().substring(0, 16) + "...", ttl);
+                return;
+            }
+
+            // Broadcast to all peers (excluding sender)
+            int broadcastCount = 0;
+            for (Channel channel : channels) {
+                if (channel != excludeChannel) {
+                    try {
+                        channel.send(message);
+                        broadcastCount++;
+                    } catch (Exception e) {
+                        log.warn("Failed to broadcast block {} to peer {}: {}",
+                                blockHash.toHexString().substring(0, 16) + "...",
+                                channel.getRemoteAddress(),
+                                e.getMessage());
+                    }
+                }
+            }
+
+            if (broadcastCount > 0) {
+                log.debug("Broadcasted block {} to {} peers (TTL={})",
+                        blockHash.toHexString().substring(0, 16) + "...",
+                        broadcastCount,
+                        ttl);
+            }
+
+        } catch (Exception e) {
+            log.error("Error broadcasting block message: {}", e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Get list of active channels from P2P service
+     *
+     * @param p2pService P2P service instance
+     * @return list of active channels
+     */
+    private List<Channel> getActiveChannels(io.xdag.p2p.P2pService p2pService) {
+        if (p2pService == null) {
+            return new ArrayList<>();
+        }
+
+        try {
+            io.xdag.p2p.channel.ChannelManager channelManager = p2pService.getChannelManager();
+            if (channelManager == null) {
+                return new ArrayList<>();
+            }
+
+            java.util.Map<java.net.InetSocketAddress, Channel> channels =
+                    channelManager.getChannels();
+
+            if (channels == null || channels.isEmpty()) {
+                return new ArrayList<>();
+            }
+
+            return new ArrayList<>(channels.values());
+
+        } catch (Exception e) {
+            log.error("Error getting active channels", e);
+            return new ArrayList<>();
         }
     }
 

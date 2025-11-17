@@ -346,11 +346,104 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
     }
 
     private SendTransactionResponse handleSendRawTransaction(String signedTransactionData) {
-        log.warn("Transaction submission not yet implemented");
-        return SendTransactionResponse.builder()
-                .transactionHash("0x0")
-                .status("failed")
-                .build();
+        try {
+            // 1. Validate input
+            if (signedTransactionData == null || signedTransactionData.isEmpty()) {
+                throw new IllegalArgumentException("signedTransactionData is required");
+            }
+
+            // Remove 0x prefix if present
+            String hexData = signedTransactionData.startsWith("0x")
+                    ? signedTransactionData.substring(2)
+                    : signedTransactionData;
+
+            // 2. Parse transaction from hex string
+            byte[] txBytes = org.apache.tuweni.bytes.Bytes.fromHexString(hexData).toArray();
+            io.xdag.core.Transaction transaction = io.xdag.core.Transaction.fromBytes(txBytes);
+
+            log.info("Received transaction submission: hash={}, from={}, to={}, amount={}, nonce={}",
+                    transaction.getHash().toHexString().substring(0, 16) + "...",
+                    transaction.getFrom().toHexString().substring(0, 16) + "...",
+                    transaction.getTo().toHexString().substring(0, 16) + "...",
+                    transaction.getAmount().toDecimal(9, io.xdag.core.XUnit.XDAG).toPlainString(),
+                    transaction.getNonce());
+
+            // 3. Basic validation
+            if (!transaction.isValid()) {
+                log.warn("Transaction validation failed: invalid transaction format");
+                return SendTransactionResponse.builder()
+                        .transactionHash(transaction.getHash().toHexString())
+                        .status("rejected")
+                        .message("Invalid transaction format")
+                        .build();
+            }
+
+            // 4. Verify signature
+            if (!transaction.verifySignature()) {
+                log.warn("Transaction signature verification failed");
+                return SendTransactionResponse.builder()
+                        .transactionHash(transaction.getHash().toHexString())
+                        .status("rejected")
+                        .message("Invalid signature")
+                        .build();
+            }
+
+            // 5. Add to transaction pool
+            io.xdag.core.TransactionPool txPool = dagKernel.getTransactionPool();
+            if (txPool == null) {
+                log.warn("Transaction pool not available");
+                return SendTransactionResponse.builder()
+                        .transactionHash(transaction.getHash().toHexString())
+                        .status("rejected")
+                        .message("Transaction pool not available")
+                        .build();
+            }
+
+            boolean added = txPool.addTransaction(transaction);
+            if (added) {
+                log.info("Transaction {} added to pool successfully",
+                        transaction.getHash().toHexString().substring(0, 16) + "...");
+
+                // Broadcast to P2P network (Phase 3)
+                io.xdag.core.TransactionBroadcastManager broadcastManager =
+                        dagKernel.getTransactionBroadcastManager();
+                if (broadcastManager != null) {
+                    // Broadcast to all peers (no exclusion since this is from RPC)
+                    broadcastManager.broadcastTransaction(transaction, null);
+                    log.debug("Transaction {} broadcast to network",
+                            transaction.getHash().toHexString().substring(0, 16) + "...");
+                }
+
+                return SendTransactionResponse.builder()
+                        .transactionHash(transaction.getHash().toHexString())
+                        .status("success")
+                        .message("Transaction submitted to pool")
+                        .build();
+            } else {
+                log.warn("Transaction {} rejected by pool (duplicate, invalid nonce, or insufficient balance)",
+                        transaction.getHash().toHexString().substring(0, 16) + "...");
+                return SendTransactionResponse.builder()
+                        .transactionHash(transaction.getHash().toHexString())
+                        .status("rejected")
+                        .message("Transaction rejected by pool (check nonce, balance, or duplicate)")
+                        .build();
+            }
+
+        } catch (IllegalArgumentException e) {
+            log.warn("Invalid transaction data: {}", e.getMessage());
+            return SendTransactionResponse.builder()
+                    .transactionHash("0x0")
+                    .status("error")
+                    .message("Invalid transaction data: " + e.getMessage())
+                    .build();
+        } catch (Exception e) {
+            log.error("Error processing transaction submission", e);
+            return SendTransactionResponse.builder()
+                    .transactionHash("0x0")
+                    .status("error")
+                    .message("Internal error: " + e.getMessage())
+                    .build();
+        }
     }
 
     private Object handleGetSyncing() {

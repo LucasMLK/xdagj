@@ -26,6 +26,7 @@ package io.xdag;
 
 import io.xdag.config.Config;
 import io.xdag.config.GenesisConfig;
+import io.xdag.config.spec.TransactionPoolSpec;
 import io.xdag.consensus.sync.HybridSyncManager;
 import io.xdag.consensus.sync.HybridSyncP2pAdapter;
 import io.xdag.consensus.pow.PowAlgorithm;
@@ -122,6 +123,8 @@ public class DagKernel {
   private DagAccountManager dagAccountManager;
   private DagTransactionProcessor dagTransactionProcessor;
   private DagBlockProcessor dagBlockProcessor;
+  private TransactionPool transactionPool;
+  private TransactionBroadcastManager transactionBroadcastManager;
 
   private DagChain dagChain;
   private HybridSyncManager hybridSyncManager;
@@ -247,19 +250,31 @@ public class DagKernel {
       );
       log.info("   ✓ DagBlockProcessor initialized");
 
-      // 4. Create DagChainImpl (requires fully constructed DagKernel)
+      // 4. Create TransactionPool
+      this.transactionPool = new TransactionPoolImpl(
+              TransactionPoolSpec.createDefault(),
+              dagAccountManager,
+              transactionStore
+      );
+      log.info("   ✓ TransactionPool initialized");
+
+      // 5. Create TransactionBroadcastManager (Phase 3)
+      this.transactionBroadcastManager = new TransactionBroadcastManager();
+      log.info("   ✓ TransactionBroadcastManager initialized (anti-loop protection ready)");
+
+      // 6. Create DagChainImpl (requires fully constructed DagKernel)
       this.dagChain = new DagChainImpl(this);
       log.info("   ✓ DagChain initialized");
 
-      // 5. Create HybridSyncP2pAdapter (bridge to P2P layer)
+      // 7. Create HybridSyncP2pAdapter (bridge to P2P layer)
       this.hybridSyncP2pAdapter = new HybridSyncP2pAdapter();
       log.info("   ✓ HybridSyncP2pAdapter initialized");
 
-      // 6. Create HybridSyncManager (inject adapter)
+      // 8. Create HybridSyncManager (inject adapter)
       this.hybridSyncManager = new HybridSyncManager(this, dagChain, hybridSyncP2pAdapter);
       log.info("   ✓ HybridSyncManager initialized");
 
-      // 7. Create PoW Algorithm (choose one):
+      // 9. Create PoW Algorithm (choose one):
       // Option A: RandomX (default - for blocks after fork)
       this.powAlgorithm = new RandomXPow(config, dagChain);
       log.info("   ✓ RandomXPow initialized");
@@ -541,6 +556,12 @@ public class DagKernel {
           if (hybridSyncP2pAdapter != null) {
               hybridSyncP2pAdapter.setP2pService(this.p2pService);
               log.info("✓ P2P service connected to HybridSyncP2pAdapter");
+          }
+
+          // Connect P2P service to TransactionBroadcastManager (Phase 3)
+          if (transactionBroadcastManager != null) {
+              transactionBroadcastManager.setP2pService(this.p2pService);
+              log.info("✓ P2P service connected to TransactionBroadcastManager");
           }
 
           log.info("✓ P2P service started (broadcasting enabled)");

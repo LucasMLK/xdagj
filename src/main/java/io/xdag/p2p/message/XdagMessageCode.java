@@ -136,7 +136,14 @@ public enum XdagMessageCode implements IMessageCode {
      * Returns list of transactions matching requested hashes
      * @see SyncTransactionsReplyMessage
      */
-    SYNC_TRANSACTIONS_REPLY(0x26);
+    SYNC_TRANSACTIONS_REPLY(0x26),
+
+    /**
+     * [0x27] NEW_TRANSACTION - Broadcast new transaction to peers (Phase 3)
+     * Used for real-time transaction propagation through the P2P network
+     * @see NewTransactionMessage
+     */
+    NEW_TRANSACTION(0x27);
 
 
     private static final XdagMessageCode[] map = new XdagMessageCode[256];

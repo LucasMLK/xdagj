@@ -40,7 +40,12 @@ public class SendTransactionResponse {
     private String transactionHash;
 
     /**
-     * Transaction status: "pending", "confirmed", or "failed"
+     * Transaction status: "success", "rejected", "error", or "failed"
      */
     private String status;
+
+    /**
+     * Optional message providing details about the result
+     */
+    private String message;
 }

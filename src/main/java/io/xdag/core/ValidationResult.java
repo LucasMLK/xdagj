@@ -27,78 +27,131 @@ package io.xdag.core;
 import lombok.Value;
 
 /**
- * ValidationResult - Validation result wrapper
+ * Result of transaction validation.
  *
- * <p>Unified validation result for transaction and block validation in Dag layer.
+ * <p>This class encapsulates the result of validating a transaction:
+ * <ul>
+ *   <li>Success/failure status</li>
+ *   <li>Error message (if validation failed)</li>
+ *   <li>Validation level that failed (syntax/state/economic)</li>
+ * </ul>
  *
- * <h2>Usage Example</h2>
- * <pre>
- * // Success case
- * ValidationResult result = ValidationResult.success();
- * if (result.isSuccess()) {
- *     // proceed
+ * <p>Usage:
+ * <pre>{@code
+ * ValidationResult result = validator.validate(tx);
+ * if (result.isValid()) {
+ *     // Process transaction
+ * } else {
+ *     log.warn("Validation failed: {}", result.getErrorMessage());
  * }
+ * }</pre>
  *
- * // Error case
- * ValidationResult result = ValidationResult.error("Insufficient balance");
- * if (result.isError()) {
- *     log.error("Validation failed: {}", result.getError());
- * }
- * </pre>
- *
- * @since XDAGJ
+ * @since Phase 1 - Task 1.3
  */
 @Value
 public class ValidationResult {
-    /**
-     * Whether validation succeeded
-     */
-    boolean success;
 
     /**
-     * Error message (null if success)
+     * Validation status
      */
-    String error;
+    boolean valid;
 
     /**
-     * Create a success result
+     * Error message (null if valid)
+     */
+    String errorMessage;
+
+    /**
+     * Validation level that failed (null if valid)
+     */
+    ValidationLevel failedLevel;
+
+    /**
+     * Validation levels in order of execution
+     */
+    public enum ValidationLevel {
+        /**
+         * Syntax validation: signature, format, field checks
+         */
+        SYNTAX,
+
+        /**
+         * State validation: nonce, replay protection
+         */
+        STATE,
+
+        /**
+         * Economic validation: balance, fee checks
+         */
+        ECONOMIC
+    }
+
+    /**
+     * Create a successful validation result.
      *
-     * @return success result with no error
+     * @return success result
      */
     public static ValidationResult success() {
-        return new ValidationResult(true, null);
+        return new ValidationResult(true, null, null);
     }
 
     /**
-     * Create an error result
+     * Create a failed validation result.
      *
-     * @param error error message
-     * @return error result with message
+     * @param level validation level that failed
+     * @param message error message
+     * @return failure result
      */
-    public static ValidationResult error(String error) {
-        return new ValidationResult(false, error);
+    public static ValidationResult failure(ValidationLevel level, String message) {
+        return new ValidationResult(false, message, level);
     }
 
     /**
-     * Check if validation succeeded
+     * Create a failed validation result (for backward compatibility).
      *
-     * @return true if success
+     * @param message error message
+     * @return failure result
+     */
+    public static ValidationResult error(String message) {
+        return new ValidationResult(false, message, null);
+    }
+
+    // ========== Compatibility Methods ==========
+
+    /**
+     * Check if validation succeeded (alias for isValid()).
+     *
+     * @return true if validation succeeded
      */
     public boolean isSuccess() {
-        return success;
+        return valid;
     }
 
     /**
-     * Check if validation failed
+     * Check if validation failed.
      *
-     * @return true if error
+     * @return true if validation failed
      */
     public boolean isError() {
-        return !success;
+        return !valid;
+    }
+
+    /**
+     * Get error message (alias for getErrorMessage()).
+     *
+     * @return error message, or null if valid
+     */
+    public String getError() {
+        return errorMessage;
     }
 
     @Override
     public String toString() {
-        return success ? "ValidationResult{success}" : "ValidationResult{error='" + error + "'}";
+        if (valid) {
+            return "ValidationResult{valid=true}";
+        } else {
+            return String.format("ValidationResult{valid=false, level=%s, message='%s'}",
+                    failedLevel, errorMessage);
+        }
     }
 }

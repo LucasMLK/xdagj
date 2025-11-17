@@ -56,7 +56,9 @@ import org.apache.commons.cli.HelpFormatter;
 import org.apache.commons.cli.Option;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.lang3.Strings;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 public class XdagCli extends Launcher {
 
     private static final Scanner scanner = new Scanner(new InputStreamReader(System.in, StandardCharsets.UTF_8));
@@ -266,7 +268,7 @@ public class XdagCli extends Launcher {
             Thread.currentThread().interrupt();
         } catch (Exception e) {
             System.err.println("Uncaught exception during kernel startup:" + e.getMessage());
-            e.printStackTrace();
+            log.error("Fatal error during kernel startup", e);
             exit(-1);
         }
     }
@@ -290,7 +292,7 @@ public class XdagCli extends Launcher {
 
         } catch (Exception e) {
             System.err.println("Failed to start API server: " + e.getMessage());
-            e.printStackTrace();
+            log.error("Failed to start API server", e);
         }
     }
 
@@ -550,37 +552,12 @@ public class XdagCli extends Launcher {
         return new String(console.readPassword(prompt));
     }
 
-    //  Removed boolean parameter - always deserialize to LegacyBlockInfo directly
-    // TODO  Snapshot functionality temporarily disabled, will be re-implemented later
+    // TODO: Snapshot functionality temporarily disabled, will be re-implemented later
     // SnapshotStore was removed in refactoring
     public void makeSnapshot() {
         System.out.println("Snapshot functionality temporarily disabled");
         System.out.println("Will be re-implemented in future version");
         System.out.println("Please use --enable-snapshot option to load existing snapshots");
-//        System.out.println("make snapshot start");
-//        long start = System.currentTimeMillis();
-//        this.getConfig().getSnapshotSpec().setSnapshotJ(true);
-//        RocksdbKVSource blockSource = new RocksdbKVSource(DatabaseName.TIME.toString());
-//        blockSource.setConfig(getConfig());
-//        blockSource.init();
-//        RocksdbKVSource snapshotSource = new RocksdbKVSource("SNAPSHOT/BLOCKS");
-//        snapshotSource.setConfig(getConfig());
-//        snapshotSource.init();
-//        RocksdbKVSource indexSource = new RocksdbKVSource(DatabaseName.INDEX.toString());
-//        indexSource.setConfig(getConfig());
-//        indexSource.init();
-//        SnapshotStore snapshotStore = new SnapshotStoreImpl(snapshotSource);
-//
-//        snapshotStore.makeSnapshot(blockSource,indexSource);
-//
-//        Path source = Paths.get(getConfig().getRootDir() + "/rocksdb/xdagdb/ADDRESS");
-//        Path target = Paths.get(getConfig().getRootDir() + "/rocksdb/xdagdb/SNAPSHOT/ADDRESS");
-//        copyDir(source.toString(),target.toString());
-//        long end = System.currentTimeMillis();
-//        System.out.println("make snapshot done");
-//        System.out.println("time：" + (end - start) + "ms");
-//        System.out.println("snapshot height: " + snapshotStore.getHeight());
-//        System.out.println("next start frame: " + Long.toHexString(XdagTime.getEndOfEpoch(snapshotStore.getNextTime()) + 1));
     }
 
     /**
@@ -620,7 +597,7 @@ public class XdagCli extends Launcher {
             }
             bos.flush();
         } catch(IOException e) {
-            e.printStackTrace();
+            log.error("IO error during file copy", e);
         }
     }
 }

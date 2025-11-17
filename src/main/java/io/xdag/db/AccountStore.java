@@ -200,6 +200,18 @@ public interface AccountStore extends XdagLifecycle {
      */
     UInt64 incrementNonce(Bytes address);
 
+    /**
+     * Decrement account nonce by 1
+     *
+     * <p>Used during transaction rollback when restoring account state.
+     * If account doesn't exist or nonce is already zero, throws IllegalStateException.
+     *
+     * @param address account address (20 bytes)
+     * @return new nonce value after decrement
+     * @throws IllegalStateException if account doesn't exist or nonce is zero
+     */
+    UInt64 decrementNonce(Bytes address);
+
     // ==================== Contract Operations ====================
 
     /**

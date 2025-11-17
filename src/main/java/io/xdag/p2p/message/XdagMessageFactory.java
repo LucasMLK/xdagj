@@ -71,6 +71,8 @@ public class XdagMessageFactory {
                 case SYNC_BLOCKS_REPLY -> new SyncBlocksReplyMessage(body);
                 case SYNC_TRANSACTIONS_REQUEST -> new SyncTransactionsRequestMessage(body);
                 case SYNC_TRANSACTIONS_REPLY -> new SyncTransactionsReplyMessage(body);
+                //  Transaction broadcast message (Phase 3)
+                case NEW_TRANSACTION -> new NewTransactionMessage(body);
             };
         } catch (Exception e) {
             throw new MessageException("Failed to decode message", e);

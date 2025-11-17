@@ -26,6 +26,8 @@ package io.xdag.core;
 
 import io.xdag.config.Config;
 import io.xdag.db.AccountStore;
+import io.xdag.db.rocksdb.transaction.TransactionException;
+import io.xdag.db.rocksdb.transaction.TransactionalStore;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -66,6 +68,7 @@ public class DagAccountManager {
 
     private final AccountStore accountStore;
     private final Config config;
+    private TransactionalStore transactionalStore;  // Optional: for transactional operations
 
     /**
      * Create DagAccountManager
@@ -76,6 +79,21 @@ public class DagAccountManager {
     public DagAccountManager(AccountStore accountStore, Config config) {
         this.accountStore = accountStore;
         this.config = config;
+    }
+
+    /**
+     * Set the transactional store for atomic operations.
+     *
+     * <p>This must be called to enable transactional operations
+     * (xxxInTransaction methods). If not set, calling transactional
+     * methods will throw IllegalStateException.
+     *
+     * @param transactionalStore transactional store instance
+     * @since Phase 0.5 - Transaction Support Infrastructure
+     */
+    public void setTransactionalStore(TransactionalStore transactionalStore) {
+        this.transactionalStore = transactionalStore;
+        log.info("TransactionalStore configured for DagAccountManager");
     }
 
     // ==================== Query Operations ====================
@@ -174,6 +192,19 @@ public class DagAccountManager {
     }
 
     /**
+     * Decrement account nonce by 1
+     *
+     * <p>Used during transaction rollback when restoring account state.
+     *
+     * @param address account address (20 bytes)
+     * @return new nonce value
+     * @throws IllegalStateException if nonce is already zero
+     */
+    public UInt64 decrementNonce(Bytes address) {
+        return accountStore.decrementNonce(address);
+    }
+
+    /**
      * Set account nonce
      *
      * @param address account address (20 bytes)
@@ -216,5 +247,175 @@ public class DagAccountManager {
         accountStore.saveAccount(account);
         log.debug("Created new account: {}, balance={}",
                 address.toHexString(), initialBalance.toDecimalString());
+    }
+
+    // ==================== Transactional Operations (Phase 0.5) ====================
+
+    /**
+     * Check if transactional store is available.
+     *
+     * @throws IllegalStateException if transactional store not configured
+     */
+    private void ensureTransactionalStoreAvailable() {
+        if (transactionalStore == null) {
+            throw new IllegalStateException(
+                    "TransactionalStore not configured. Call setTransactionalStore() first.");
+        }
+    }
+
+    /**
+     * Set account balance in a transaction.
+     *
+     * <p>This operation is queued and will be executed atomically when the transaction commits.
+     *
+     * @param txId transaction ID
+     * @param address account address
+     * @param balance new balance
+     * @throws TransactionException if transaction operation fails
+     * @since Phase 0.5 - Transaction Support Infrastructure
+     */
+    public void setBalanceInTransaction(String txId, Bytes address, UInt256 balance)
+            throws TransactionException {
+        ensureTransactionalStoreAvailable();
+
+        // Get current account state
+        Account account = accountStore.getAccount(address).orElse(null);
+        if (account == null) {
+            account = Account.createEOA(address);
+        }
+
+        // Update balance
+        Account updatedAccount = account.toBuilder()
+                .balance(balance)
+                .build();
+
+        // Serialize and store in transaction
+        byte[] key = address.toArray();
+        byte[] value = updatedAccount.toBytes();
+        transactionalStore.putInTransaction(txId, key, value);
+
+        if (log.isDebugEnabled()) {
+            log.debug("Transaction {}: setBalance({}, {})",
+                    txId, address.toHexString().substring(0, 16), balance.toDecimalString());
+        }
+    }
+
+    /**
+     * Add to account balance in a transaction.
+     *
+     * @param txId transaction ID
+     * @param address account address
+     * @param amount amount to add
+     * @throws TransactionException if transaction operation fails
+     * @since Phase 0.5 - Transaction Support Infrastructure
+     */
+    public void addBalanceInTransaction(String txId, Bytes address, UInt256 amount)
+            throws TransactionException {
+        ensureTransactionalStoreAvailable();
+
+        UInt256 currentBalance = getBalance(address);
+        UInt256 newBalance = currentBalance.add(amount);
+        setBalanceInTransaction(txId, address, newBalance);
+    }
+
+    /**
+     * Subtract from account balance in a transaction.
+     *
+     * @param txId transaction ID
+     * @param address account address
+     * @param amount amount to subtract
+     * @throws TransactionException if transaction operation fails
+     * @throws IllegalArgumentException if insufficient balance
+     * @since Phase 0.5 - Transaction Support Infrastructure
+     */
+    public void subtractBalanceInTransaction(String txId, Bytes address, UInt256 amount)
+            throws TransactionException {
+        ensureTransactionalStoreAvailable();
+
+        UInt256 currentBalance = getBalance(address);
+        if (currentBalance.compareTo(amount) < 0) {
+            throw new IllegalArgumentException(String.format(
+                    "Insufficient balance: have %s, need %s",
+                    currentBalance.toDecimalString(), amount.toDecimalString()));
+        }
+
+        UInt256 newBalance = currentBalance.subtract(amount);
+        setBalanceInTransaction(txId, address, newBalance);
+    }
+
+    /**
+     * Increment account nonce in a transaction.
+     *
+     * @param txId transaction ID
+     * @param address account address
+     * @throws TransactionException if transaction operation fails
+     * @since Phase 0.5 - Transaction Support Infrastructure
+     */
+    public void incrementNonceInTransaction(String txId, Bytes address)
+            throws TransactionException {
+        ensureTransactionalStoreAvailable();
+
+        // Get current account state
+        Account account = accountStore.getAccount(address).orElse(null);
+        if (account == null) {
+            account = Account.createEOA(address);
+        }
+
+        // Increment nonce
+        UInt64 newNonce = account.getNonce().add(UInt64.ONE);
+        Account updatedAccount = account.toBuilder()
+                .nonce(newNonce)
+                .build();
+
+        // Serialize and store in transaction
+        byte[] key = address.toArray();
+        byte[] value = updatedAccount.toBytes();
+        transactionalStore.putInTransaction(txId, key, value);
+
+        if (log.isDebugEnabled()) {
+            log.debug("Transaction {}: incrementNonce({}) to {}",
+                    txId, address.toHexString().substring(0, 16), newNonce.toLong());
+        }
+    }
+
+    /**
+     * Decrement account nonce in a transaction.
+     *
+     * <p>Used during transaction rollback when restoring account state.
+     *
+     * @param txId transaction ID
+     * @param address account address
+     * @throws TransactionException if transaction operation fails or nonce is already zero
+     * @since Phase 0.5 - Transaction Support Infrastructure
+     */
+    public void decrementNonceInTransaction(String txId, Bytes address)
+            throws TransactionException {
+        ensureTransactionalStoreAvailable();
+
+        // Get current account state
+        Account account = accountStore.getAccount(address).orElse(null);
+        if (account == null) {
+            throw new TransactionException("Cannot decrement nonce: account does not exist");
+        }
+
+        if (account.getNonce().equals(UInt64.ZERO)) {
+            throw new TransactionException("Cannot decrement nonce: already at zero");
+        }
+
+        // Decrement nonce
+        UInt64 newNonce = account.getNonce().subtract(UInt64.ONE);
+        Account updatedAccount = account.toBuilder()
+                .nonce(newNonce)
+                .build();
+
+        // Serialize and store in transaction
+        byte[] key = address.toArray();
+        byte[] value = updatedAccount.toBytes();
+        transactionalStore.putInTransaction(txId, key, value);
+
+        if (log.isDebugEnabled()) {
+            log.debug("Transaction {}: decrementNonce({}) to {}",
+                    txId, address.toHexString().substring(0, 16), newNonce.toLong());
+        }
     }
 }

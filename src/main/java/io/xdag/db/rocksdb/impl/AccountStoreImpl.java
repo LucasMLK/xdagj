@@ -471,6 +471,27 @@ public class AccountStoreImpl implements AccountStore {
         return account.getNonce();
     }
 
+    @Override
+    public UInt64 decrementNonce(Bytes address) {
+        Optional<Account> existing = getAccount(address);
+
+        if (existing.isEmpty()) {
+            throw new IllegalStateException("Cannot decrement nonce: account does not exist");
+        }
+
+        Account account = existing.get();
+        if (account.getNonce().equals(UInt64.ZERO)) {
+            throw new IllegalStateException("Cannot decrement nonce: already at zero");
+        }
+
+        // Decrement nonce
+        UInt64 newNonce = account.getNonce().subtract(UInt64.ONE);
+        Account updatedAccount = account.withNonce(newNonce);
+
+        saveAccount(updatedAccount);
+        return updatedAccount.getNonce();
+    }
+
     // ==================== Contract Operations ====================
 
     @Override
