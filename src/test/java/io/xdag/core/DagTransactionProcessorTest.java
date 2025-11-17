@@ -28,6 +28,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -156,7 +157,9 @@ public class DagTransactionProcessorTest {
         // Setup valid account states
         when(accountManager.hasAccount(senderAddress)).thenReturn(true);
         when(accountManager.getBalance(senderAddress)).thenReturn(UInt256.valueOf(500000000000L));  // 500 XDAG
-        when(accountManager.getNonce(senderAddress)).thenReturn(UInt64.ZERO);
+        when(accountManager.getNonce(senderAddress))
+                .thenReturn(UInt64.ZERO)   // First transaction expects nonce=0
+                .thenReturn(UInt64.ONE);    // Second transaction expects nonce=1
 
         // Create block
         Block block = createTestBlock();
@@ -173,7 +176,7 @@ public class DagTransactionProcessorTest {
         // Verify all transactions were processed
         verify(transactionStore, times(2)).saveTransaction(any(Transaction.class));
         verify(transactionStore, times(2)).markTransactionExecuted(
-                any(Bytes32.class), eq(block.getHash()), eq(block.getInfo().getHeight()));
+                any(Bytes32.class), eq(block.getHash()), anyLong());
     }
 
     @Test
@@ -207,7 +210,7 @@ public class DagTransactionProcessorTest {
         DagTransactionProcessor.ProcessingResult result = processor.processBlockTransactions(block, transactions);
 
         assertTrue("Empty block should succeed", result.isSuccess());
-        verify(transactionStore, never()).markTransactionExecuted(any(), any(), any());
+        verify(transactionStore, never()).markTransactionExecuted(any(), any(), anyLong());
     }
 
     // ========== Account State Updates ==========

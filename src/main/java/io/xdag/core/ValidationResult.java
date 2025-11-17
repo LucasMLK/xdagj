@@ -148,10 +148,9 @@ public class ValidationResult {
     @Override
     public String toString() {
         if (valid) {
-            return "ValidationResult{valid=true}";
+            return "ValidationResult{success}";
         } else {
-            return String.format("ValidationResult{valid=false, level=%s, message='%s'}",
-                    failedLevel, errorMessage);
+            return String.format("ValidationResult{error='%s'}", errorMessage);
         }
     }
 }
