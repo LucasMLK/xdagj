@@ -292,7 +292,7 @@ public class TransactionRollbackIntegrationTest {
     private Block createTestBlock(long height, Transaction... transactions) {
         BlockInfo info = BlockInfo.builder()
                 .hash(Bytes32.random())
-                .timestamp(System.currentTimeMillis() / 1000)
+                .epoch(System.currentTimeMillis() / 1000)
                 .height(height)
                 .difficulty(UInt256.valueOf(1000))
                 .build();

@@ -7,6 +7,7 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_NODES_DIR="$(dirname "$SCRIPT_DIR")"
+NODE_PID_FILE="xdag.pid"
 
 # Colors
 GREEN='\033[0;32m'
@@ -31,28 +32,34 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
+# Ensure a required artifact exists
+check_artifact() {
+    local path="$1"
+    local label="$2"
+    if [ ! -f "$path" ]; then
+        log_error "$label not found at $path"
+        exit 1
+    fi
+}
+
 # Start a node
 start_node() {
     local suite=$1
     local node_name=$2
+    local node_dir="$TEST_NODES_DIR/$suite/node"
+    local pid_file="$node_dir/$NODE_PID_FILE"
 
     log_info "Starting $node_name..."
 
-    cd "$TEST_NODES_DIR/$suite/node"
+    cd "$node_dir"
 
-    if [ -f "xdagj.pid" ]; then
-        local pid=$(cat xdagj.pid)
-        if ps -p $pid > /dev/null 2>&1; then
-            log_warn "$node_name already running (PID: $pid)"
-            return 0
-        fi
-    fi
-
+    # Always restart to pick up the latest binaries/config and avoid stale state
+    ./stop.sh >/dev/null 2>&1 || true
     ./start.sh
     sleep 2
 
-    if [ -f "xdagj.pid" ]; then
-        log_success "$node_name started"
+    if [ -f "$pid_file" ] && ps -p "$(cat "$pid_file")" > /dev/null 2>&1; then
+        log_success "$node_name started (PID: $(cat "$pid_file"))"
     else
         log_error "Failed to start $node_name"
         return 1
@@ -69,13 +76,8 @@ start_pool() {
 
     cd "$TEST_NODES_DIR/$suite/pool"
 
-    # Check if already running
-    if lsof -i :$port > /dev/null 2>&1; then
-        log_warn "$pool_name already running on port $port"
-        return 0
-    fi
-
-    nohup java -jar xdagj-pool.jar -c pool-config.conf > pool.log 2>&1 &
+    rm -f pool.pid
+    nohup java -jar xdagj-pool.jar --config pool-config.conf > pool.log 2>&1 &
     local pid=$!
     echo $pid > pool.pid
     sleep 2
@@ -97,12 +99,8 @@ start_miner() {
 
     cd "$TEST_NODES_DIR/$suite/miner"
 
-    # Check if already running
-    if pgrep -f "xdagj-miner.jar" > /dev/null 2>&1; then
-        log_warn "$miner_name might already be running"
-    fi
-
-    nohup java -jar xdagj-miner.jar > miner.log 2>&1 &
+    rm -f miner.pid
+    nohup java -jar xdagj-miner.jar --config miner-config.conf > miner.log 2>&1 &
     local pid=$!
     echo $pid > miner.pid
     sleep 1
@@ -122,20 +120,12 @@ main() {
     echo ""
 
     # Check if JAR files exist
-    if [ ! -f "$TEST_NODES_DIR/suite1/node/xdagj.jar" ]; then
-        log_error "xdagj.jar not found! Please run update-nodes.sh first"
-        exit 1
-    fi
-
-    if [ ! -f "$TEST_NODES_DIR/suite1/pool/xdagj-pool.jar" ]; then
-        log_error "xdagj-pool.jar not found! Please build xdagj-pool project"
-        exit 1
-    fi
-
-    if [ ! -f "$TEST_NODES_DIR/suite1/miner/xdagj-miner.jar" ]; then
-        log_error "xdagj-miner.jar not found! Please build xdagj-miner project"
-        exit 1
-    fi
+    check_artifact "$TEST_NODES_DIR/suite1/node/xdagj.jar" "Suite1 node jar"
+    check_artifact "$TEST_NODES_DIR/suite2/node/xdagj.jar" "Suite2 node jar"
+    check_artifact "$TEST_NODES_DIR/suite1/pool/xdagj-pool.jar" "Suite1 pool jar"
+    check_artifact "$TEST_NODES_DIR/suite2/pool/xdagj-pool.jar" "Suite2 pool jar"
+    check_artifact "$TEST_NODES_DIR/suite1/miner/xdagj-miner.jar" "Suite1 miner jar"
+    check_artifact "$TEST_NODES_DIR/suite2/miner/xdagj-miner.jar" "Suite2 miner jar"
 
     # Start Suite1
     echo ""

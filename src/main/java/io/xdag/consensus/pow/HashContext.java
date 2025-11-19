@@ -100,9 +100,9 @@ public final class HashContext {
             throw new IllegalArgumentException("Block and block info cannot be null");
         }
 
-        long timestamp = block.getTimestamp();
+        long timestamp = XdagTime.epochNumberToMainTime(block.getEpoch());
         long height = block.getInfo().getHeight();
-        long epoch = XdagTime.getEpoch(timestamp);
+        long epoch = block.getEpoch();
 
         return new HashContext(timestamp, height, epoch);
     }
@@ -117,7 +117,7 @@ public final class HashContext {
      * @return Hash context for pool mining
      */
     public static HashContext forMining(long timestamp) {
-        long epoch = XdagTime.getEpoch(timestamp);
+        long epoch = XdagTime.getEpochNumber(timestamp);
         return new HashContext(timestamp, -1, epoch);
     }
 
@@ -131,7 +131,7 @@ public final class HashContext {
      * @return Hash context
      */
     public static HashContext of(long timestamp, long blockHeight) {
-        long epoch = XdagTime.getEpoch(timestamp);
+        long epoch = XdagTime.getEpochNumber(timestamp);
         return new HashContext(timestamp, blockHeight, epoch);
     }
 

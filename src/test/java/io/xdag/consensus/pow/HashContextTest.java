@@ -51,11 +51,12 @@ public class HashContextTest {
         BlockHeader header = Mockito.mock(BlockHeader.class);
         BlockInfo info = Mockito.mock(BlockInfo.class);
 
-        long timestamp = 1700000000L;
+        long epoch = 256L;
+        long timestamp = XdagTime.epochNumberToMainTime(epoch);
         long height = 12345L;
-        long expectedEpoch = XdagTime.getEpoch(timestamp);
+        long expectedEpoch = epoch;
 
-        when(block.getTimestamp()).thenReturn(timestamp);
+        when(block.getEpoch()).thenReturn(epoch);
         when(block.getInfo()).thenReturn(info);
         when(block.getHeader()).thenReturn(header);
         when(info.getHeight()).thenReturn(height);
@@ -76,7 +77,7 @@ public class HashContextTest {
     @Test
     public void testForMining() {
         long timestamp = 1700000064L;
-        long expectedEpoch = XdagTime.getEpoch(timestamp);
+        long expectedEpoch = XdagTime.getEpochNumber(timestamp);
 
         // Create context for mining
         HashContext context = HashContext.forMining(timestamp);
@@ -186,7 +187,6 @@ public class HashContextTest {
     public void testForBlockWithNullInfo() {
         Block block = Mockito.mock(Block.class);
         when(block.getInfo()).thenReturn(null);
-        when(block.getTimestamp()).thenReturn(1700000000L);
 
         // Should throw IllegalArgumentException
         HashContext.forBlock(block);
@@ -215,10 +215,11 @@ public class HashContextTest {
         BlockInfo info = Mockito.mock(BlockInfo.class);
         BlockHeader header = Mockito.mock(BlockHeader.class);
 
-        long timestamp = 1700000000L;
+        long epochNumber = 300L;
+        long timestamp = XdagTime.epochNumberToMainTime(epochNumber);
         long height = 100L;
 
-        when(block.getTimestamp()).thenReturn(timestamp);
+        when(block.getEpoch()).thenReturn(epochNumber);
         when(block.getInfo()).thenReturn(info);
         when(block.getHeader()).thenReturn(header);
         when(info.getHeight()).thenReturn(height);

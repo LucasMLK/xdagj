@@ -29,15 +29,15 @@ import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 import io.xdag.DagKernel;
 import io.xdag.api.dto.ChainStatsInfo;
 import io.xdag.api.dto.EpochInfo;
+import io.xdag.api.dto.NodeStatusInfo;
 import io.xdag.core.Block;
 import io.xdag.core.ChainStats;
+import io.xdag.core.DagChainImpl;
 import io.xdag.core.XAmount;
-import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.utils.XdagTime;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.bouncycastle.util.encoders.Hex;
 
@@ -144,7 +144,7 @@ public class ChainApiService {
             Double progress = null;
             Long timeToNext = null;
             if (isCurrent) {
-                long currentTime = XdagTime.getCurrentTimestamp();
+                long currentTime = XdagTime.getCurrentEpoch();
                 elapsed = currentTime - startTime;
                 progress = (double) elapsed / duration * 100.0;
                 timeToNext = duration - elapsed;
@@ -203,6 +203,117 @@ public class ChainApiService {
 
         } catch (Exception e) {
             log.error("Failed to get epoch info for epoch: {}", epochNumber, e);
+            return null;
+        }
+    }
+
+    /**
+     * Get node synchronization status
+     * <p>
+     * Returns detailed information about node sync state, epoch gaps, and mining restrictions.
+     * Used for monitoring node health and detecting network partition scenarios.
+     *
+     * @return Node status information or null if failed
+     * @since XDAGJ v5.1
+     */
+    public NodeStatusInfo getNodeStatus() {
+        try {
+            // Check if DagChain supports partition handling
+            if (!(dagKernel.getDagChain() instanceof DagChainImpl)) {
+                log.warn("DagChain does not support partition handling (not DagChainImpl instance)");
+                return NodeStatusInfo.builder()
+                        .syncState("unknown")
+                        .isBehind(false)
+                        .miningStatus("unknown")
+                        .canMine(false)
+                        .message("Node status not available (DagChain implementation does not support isNodeBehind())")
+                        .warningLevel("info")
+                        .build();
+            }
+
+            DagChainImpl dagChain = (DagChainImpl) dagKernel.getDagChain();
+            ChainStats chainStats = dagChain.getChainStats();
+
+            // Get current epoch
+            long currentEpoch = dagChain.getCurrentEpoch();
+
+            // Get local latest main block
+            long mainChainLength = chainStats.getMainBlockCount();
+            Long localLatestEpoch = null;
+            String latestBlockHash = null;
+            Long latestBlockHeight = null;
+
+            if (mainChainLength > 0) {
+                Block latestBlock = dagChain.getMainBlockByHeight(mainChainLength);
+                if (latestBlock != null) {
+                    localLatestEpoch = latestBlock.getEpoch();
+                    latestBlockHash = latestBlock.getHash().toHexString().substring(0, 16) + "...";
+                    latestBlockHeight = latestBlock.getInfo() != null ?
+                            latestBlock.getInfo().getHeight() : null;
+                }
+            }
+
+            // Calculate epoch gap
+            long epochGap = localLatestEpoch != null ? (currentEpoch - localLatestEpoch) : currentEpoch;
+            long timeLagMinutes = epochGap * 64 / 60;  // 1 epoch = 64 seconds
+
+            // Determine sync state
+            boolean isBehind = dagChain.isNodeBehind();
+            String syncState = isBehind ? "behind" : "up-to-date";
+
+            // Determine mining status
+            long miningMaxReferenceDepth = 16;  // From DagChainImpl.MINING_MAX_REFERENCE_DEPTH
+            boolean canMine = epochGap <= miningMaxReferenceDepth;
+            String miningStatus = canMine ? "allowed" : "blocked";
+
+            // Determine warning level
+            String warningLevel;
+            String message;
+
+            if (epochGap == 0) {
+                warningLevel = "none";
+                message = "Node is fully synced and can mine";
+            } else if (epochGap <= 100) {
+                warningLevel = "none";
+                message = String.format("Node is up-to-date (lag: %d epochs, ~%d minutes)",
+                        epochGap, timeLagMinutes);
+            } else if (epochGap <= 1000) {
+                warningLevel = "info";
+                message = String.format("Node is behind and must sync before mining (lag: %d epochs, ~%.1f hours)",
+                        epochGap, epochGap * 64 / 3600.0);
+            } else if (epochGap <= 16384) {
+                warningLevel = "warning";
+                message = String.format("WARNING: Large epoch gap detected (lag: %d epochs, ~%.1f hours). " +
+                        "This may indicate a network partition or extended offline period. " +
+                        "Sync required before mining.",
+                        epochGap, epochGap * 64 / 3600.0);
+            } else {
+                warningLevel = "critical";
+                message = String.format("CRITICAL: Epoch gap exceeds XDAG protocol limit (lag: %d epochs, ~%.1f days). " +
+                        "Node is outside 12-day time window. Manual intervention may be required.",
+                        epochGap, epochGap * 64 / 86400.0);
+            }
+
+            return NodeStatusInfo.builder()
+                    .syncState(syncState)
+                    .isBehind(isBehind)
+                    .currentEpoch(currentEpoch)
+                    .localLatestEpoch(localLatestEpoch != null ? localLatestEpoch : 0)
+                    .epochGap(epochGap)
+                    .syncLagThreshold(100)  // From DagChainImpl.SYNC_LAG_THRESHOLD
+                    .timeLagMinutes(timeLagMinutes)
+                    .miningStatus(miningStatus)
+                    .canMine(canMine)
+                    .miningMaxReferenceDepth(miningMaxReferenceDepth)
+                    .mainChainLength(mainChainLength)
+                    .latestBlockHash(latestBlockHash)
+                    .latestBlockHeight(latestBlockHeight)
+                    .message(message)
+                    .warningLevel(warningLevel)
+                    .build();
+
+        } catch (Exception e) {
+            log.error("Failed to get node status", e);
             return null;
         }
     }

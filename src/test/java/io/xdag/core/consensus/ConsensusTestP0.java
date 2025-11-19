@@ -667,7 +667,7 @@ public class ConsensusTestP0 {
         // Test 3.1: Block with timestamp too far in future
         log.info("\n  Test 3.1: Block with future timestamp");
         {
-            long currentTime = XdagTime.getCurrentTimestamp();
+            long currentTime = XdagTime.getCurrentEpoch();
             long futureTimestamp = currentTime + 1000; // Far in future
 
             Block futureBlock = Block.createWithNonce(

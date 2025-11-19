@@ -29,52 +29,56 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * SyncEpochBlocksRequestMessage - Request all block hashes in an epoch
+ * SyncEpochBlocksRequestMessage - Request all block hashes in an epoch range
  *
  * <p>Hybrid Sync Protocol - Epoch Blocks Request (0x21)
  *
  * <p><strong>Purpose</strong>:
- * Request all block hashes for a specific epoch. Used for Phase 2
+ * Request all block hashes for a range of epochs. Used for Phase 2
  * (DAG Area Synchronization) of hybrid sync to get all candidate
- * blocks in an epoch.
+ * blocks in multiple epochs with a single request.
  *
  * <p><strong>Message Format</strong>:
  * <pre>
- * [8 bytes] epoch    - Epoch number (timestamp / 64)
+ * [8 bytes] startEpoch - Start epoch number (inclusive)
+ * [8 bytes] endEpoch   - End epoch number (inclusive)
  * </pre>
  *
  * <p><strong>Fields</strong>:
  * <ul>
- *   <li>{@code epoch}: Epoch number, calculated as timestamp / 64</li>
+ *   <li>{@code startEpoch}: Start epoch number (inclusive)</li>
+ *   <li>{@code endEpoch}: End epoch number (inclusive)</li>
  * </ul>
  *
  * <p><strong>Epoch Definition</strong>:
  * <pre>
- * epoch = timestamp / 64
+ * epoch = timestamp >> 16  (each epoch = 64 seconds)
  * </pre>
  *
  * <p><strong>Typical Data Size</strong>:
  * <ul>
+ *   <li>Batch size: 100 epochs</li>
  *   <li>Average blocks per epoch: 10-50</li>
  *   <li>Each hash: 32 bytes</li>
- *   <li>Total response size: 320-1600 bytes</li>
+ *   <li>Total response size: ~32KB-160KB per batch</li>
  * </ul>
  *
  * <p><strong>Usage</strong>:
  * <pre>{@code
- * // Request all blocks in epoch 5000
- * SyncEpochBlocksRequestMessage request = new SyncEpochBlocksRequestMessage(5000);
+ * // Request all blocks in epoch range [5000, 5099]
+ * SyncEpochBlocksRequestMessage request = new SyncEpochBlocksRequestMessage(5000, 5099);
  * channel.sendMessage(request);
  *
  * // Wait for reply
  * SyncEpochBlocksReplyMessage reply =
  *     channel.waitForResponse(SyncEpochBlocksReplyMessage.class);
- * List<Bytes32> hashes = reply.getHashes();
+ * Map<Long, List<Bytes32>> epochBlocksMap = reply.getEpochBlocksMap();
  *
- * // Filter for missing blocks
- * List<Bytes32> missingHashes = hashes.stream()
- *     .filter(hash -> !blockStore.hasBlock(hash))
- *     .collect(Collectors.toList());
+ * // Process each epoch
+ * for (long epoch = 5000; epoch <= 5099; epoch++) {
+ *     List<Bytes32> hashes = epochBlocksMap.getOrDefault(epoch, Collections.emptyList());
+ *     // Filter for missing blocks...
+ * }
  * }</pre>
  *
  * @see SyncEpochBlocksReplyMessage for the response message
@@ -86,16 +90,22 @@ import lombok.Setter;
 public class SyncEpochBlocksRequestMessage extends Message {
 
     /**
-     * Epoch number (timestamp / 64)
+     * Start epoch number (inclusive)
      */
-    private long epoch;
+    private long startEpoch;
+
+    /**
+     * End epoch number (inclusive)
+     */
+    private long endEpoch;
 
     /**
      * Constructor for receiving message from network
      *
      * <p>Deserializes message body:
      * <ol>
-     *   <li>Read epoch (long, 8 bytes)</li>
+     *   <li>Read startEpoch (long, 8 bytes)</li>
+     *   <li>Read endEpoch (long, 8 bytes)</li>
      * </ol>
      *
      * @param body serialized message body
@@ -106,8 +116,9 @@ public class SyncEpochBlocksRequestMessage extends Message {
 
         SimpleDecoder dec = new SimpleDecoder(body);
 
-        // Deserialize epoch
-        this.epoch = dec.readLong();
+        // Deserialize epoch range
+        this.startEpoch = dec.readLong();
+        this.endEpoch = dec.readLong();
 
         // Set body for reference
         this.body = body;
@@ -118,15 +129,18 @@ public class SyncEpochBlocksRequestMessage extends Message {
      *
      * <p>Serializes message:
      * <ol>
-     *   <li>Write epoch (long, 8 bytes)</li>
+     *   <li>Write startEpoch (long, 8 bytes)</li>
+     *   <li>Write endEpoch (long, 8 bytes)</li>
      * </ol>
      *
-     * @param epoch epoch number
+     * @param startEpoch start epoch number (inclusive)
+     * @param endEpoch end epoch number (inclusive)
      */
-    public SyncEpochBlocksRequestMessage(long epoch) {
+    public SyncEpochBlocksRequestMessage(long startEpoch, long endEpoch) {
         super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REQUEST, SyncEpochBlocksReplyMessage.class);
 
-        this.epoch = epoch;
+        this.startEpoch = startEpoch;
+        this.endEpoch = endEpoch;
 
         // Serialize message body
         SimpleEncoder enc = new SimpleEncoder();
@@ -136,15 +150,18 @@ public class SyncEpochBlocksRequestMessage extends Message {
 
     @Override
     public void encode(SimpleEncoder enc) {
-        // Serialize epoch
-        enc.writeLong(epoch);
+        // Serialize epoch range
+        enc.writeLong(startEpoch);
+        enc.writeLong(endEpoch);
     }
 
     @Override
     public String toString() {
         return String.format(
-            "SyncEpochBlocksRequestMessage[epoch=%d, size=%d bytes]",
-            epoch,
+            "SyncEpochBlocksRequestMessage[startEpoch=%d, endEpoch=%d, range=%d, size=%d bytes]",
+            startEpoch,
+            endEpoch,
+            endEpoch - startEpoch + 1,
             body != null ? body.length : 0
         );
     }

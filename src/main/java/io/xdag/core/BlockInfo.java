@@ -41,7 +41,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  * - hash: 区块哈希（唯一标识）
  * - height: 主链高度（height > 0 = 主块，= 0 = 孤块）
  * - difficulty: PoW难度
- * - timestamp: 时间戳（秒）
+ * - epoch: XDAG epoch number (NOT Unix timestamp!)
  *
  * DRY principle - DO NOT store:
  * - prevMainBlock → query via getBlockByHeight(height - 1)
@@ -75,9 +75,26 @@ public class BlockInfo implements Serializable {
     UInt256 difficulty;
 
     /**
-     * 区块时间戳（秒）
+     * XDAG epoch number (each epoch = 64 seconds)
+     *
+     * <p><strong>IMPORTANT</strong>: This is NOT a Unix timestamp!
+     * <p>XDAG uses a special epoch-based time system:
+     * <ul>
+     *   <li>XDAG timestamp = (Unix milliseconds * 1024) / 1000</li>
+     *   <li>XDAG epoch = XDAG timestamp >> 16 (NOT / 64!)</li>
+     *   <li>Each epoch = 65536 XDAG timestamp units = 64 seconds</li>
+     * </ul>
+     *
+     * <p>To convert epoch to Unix time for display:
+     * <pre>
+     *   long unixMillis = XdagTime.epochToMs(epoch);
+     *   Date date = new Date(unixMillis);
+     * </pre>
+     *
+     * @see io.xdag.utils.XdagTime#getEpoch(long)
+     * @see io.xdag.utils.XdagTime#epochToTimeMillis(long)
      */
-    long timestamp;
+    long epoch;
 
     // ========== 辅助方法 ==========
 
@@ -99,21 +116,23 @@ public class BlockInfo implements Serializable {
 
     /**
      * 获取所属epoch
-     * epoch = timestamp / 64
+     *
+     * <p>Simply returns the epoch field. This method is kept for backward compatibility.
+     *
+     * @return XDAG epoch number
      */
     public long getEpoch() {
-        return timestamp / 64;
+        return epoch;
     }
 
     @Override
     public String toString() {
         return String.format(
-            "BlockInfo{height=%d, hash=%s, timestamp=%d, isMain=%b, epoch=%d}",
+            "BlockInfo{height=%d, hash=%s, epoch=%d, isMain=%b}",
             height,
             hash != null ? hash.toHexString().substring(0, 16) + "..." : "null",
-            timestamp,
-            isMainBlock(),
-            getEpoch()
+            epoch,
+            isMainBlock()
         );
     }
 }

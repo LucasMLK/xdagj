@@ -54,11 +54,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
 
     protected String configName;
 
-    // Admin configuration
-    protected String adminTelnetIp = "127.0.0.1";
-    protected int adminTelnetPort = 7001;
-    protected String adminTelnetPassword;
-
     // Pool websocket configuration 
     protected int websocketServerPort;
     protected int maxShareCountPerChannel = 20;
@@ -239,10 +234,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
 
     public void getSetting() {
         com.typesafe.config.Config config = ConfigFactory.load(getConfigName());
-
-        adminTelnetIp = config.hasPath("admin.telnet.ip") ? config.getString("admin.telnet.ip") : "127.0.0.1";
-        adminTelnetPort = config.hasPath("admin.telnet.port") ? config.getInt("admin.telnet.port") : 6001;
-        adminTelnetPassword = config.getString("admin.telnet.password");
 
         poolWhiteIPList = config.hasPath("pool.whiteIPs") ? config.getStringList("pool.whiteIPs") : Collections.singletonList("127.0.0.1");
         log.info("Pool whitelist {}. Any IP allowed? {}", poolWhiteIPList, poolWhiteIPList.contains("0.0.0.0"));

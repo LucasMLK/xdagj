@@ -286,7 +286,7 @@ public class DagTransactionProcessorTest {
     private Block createTestBlock() {
         BlockInfo info = BlockInfo.builder()
                 .hash(Bytes32.random())
-                .timestamp(System.currentTimeMillis() / 1000)
+                .epoch(System.currentTimeMillis() / 1000)
                 .height(100)
                 .difficulty(UInt256.valueOf(1000))
                 .build();

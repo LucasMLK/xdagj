@@ -28,6 +28,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.xdag.crypto.exception.AddressFormatException;
 import io.xdag.crypto.keys.AddressUtils;
+import io.xdag.utils.XdagTime;
 import lombok.Data;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
@@ -105,11 +106,26 @@ public class GenesisConfig {
     // ========== Timing Parameters ==========
 
     /**
-     * Genesis block timestamp (Unix seconds)
-     * Default: XDAG_ERA (2018-01-20 00:00:00 UTC = 1516406400)
+     * Genesis block epoch number (XDAG epoch)
+     * Default: 23694000 (XDAG_ERA: 2018-01-20 00:00:00 UTC)
+     *
+     * <p>Conversion from Unix timestamp to epoch using XdagTime:
+     * <pre>
+     * long ms = unixSeconds * 1000;
+     * long xdagTimestamp = XdagTime.msToXdagtimestamp(ms);
+     * long epoch = XdagTime.getEpoch(xdagTimestamp);
+     * </pre>
      */
+    @JsonProperty("epoch")
+    private long epoch = 23694000L;  // XDAG_ERA epoch
+
+    /**
+     * Legacy field for backward compatibility
+     * @deprecated Use {@link #epoch} instead
+     */
+    @Deprecated
     @JsonProperty("timestamp")
-    private long timestamp = 1516406400L;  // XDAG_ERA
+    private Long timestamp = null;
 
     /**
      * Epoch length in seconds
@@ -157,6 +173,24 @@ public class GenesisConfig {
      */
     @JsonProperty("genesisCoinbase")
     private String genesisCoinbase = null;
+
+    /**
+     * RandomX initial seed (32-byte hex string)
+     *
+     * <p>IMPORTANT: This seed is used to initialize RandomX from genesis block.
+     * All nodes must use the same randomXSeed to ensure deterministic mining.
+     *
+     * <p>Format: 0x-prefixed 64-character hex string (32 bytes)
+     *
+     * <p>Examples:
+     * <ul>
+     *   <li>Mainnet: "0x0000000000000000000000000000000000000000000000000000000000000001"</li>
+     *   <li>Testnet: "0x0000000000000000000000000000000000000000000000000000000000000002"</li>
+     *   <li>Devnet:  "0x0000000000000000000000000000000000000000000000000000000000000003"</li>
+     * </ul>
+     */
+    @JsonProperty("randomXSeed")
+    private String randomXSeed = null;
 
     // ========== Initial Allocations ==========
 
@@ -227,19 +261,28 @@ public class GenesisConfig {
         switch (networkId.toLowerCase()) {
             case "mainnet":
                 config.setChainId(1);
-                config.setTimestamp(1516406400L);  // XDAG_ERA
+                // XDAG_ERA: 2018-01-20 00:00:00 UTC (Unix: 1516406400)
+                long mainnetMs = 1516406400L * 1000;
+                long mainnetTimestamp = XdagTime.timeMillisToEpoch(mainnetMs);
+                long mainnetEpoch = XdagTime.getEpoch(mainnetTimestamp);
+                config.setEpoch(mainnetEpoch);
                 config.setInitialDifficulty("0x1");
                 break;
 
             case "testnet":
                 config.setChainId(2);
-                config.setTimestamp(System.currentTimeMillis() / 1000);  // Current time
+                // Current time to epoch using XdagTime
+                long testnetTimestamp = XdagTime.getCurrentEpoch();
+                long testnetEpoch = XdagTime.getEpoch(testnetTimestamp);
+                config.setEpoch(testnetEpoch);
                 config.setInitialDifficulty("0x1");
                 break;
 
             case "devnet":
                 config.setChainId(3);
-                config.setTimestamp(System.currentTimeMillis() / 1000);
+                long devnetTimestamp = XdagTime.getCurrentEpoch();
+                long devnetEpoch = XdagTime.getEpoch(devnetTimestamp);
+                config.setEpoch(devnetEpoch);
                 config.setInitialDifficulty("0x1");
                 // Add some test allocations for devnet
                 config.getAlloc().put(
@@ -359,6 +402,39 @@ public class GenesisConfig {
     }
 
     /**
+     * Check if RandomX seed is configured
+     *
+     * @return true if randomXSeed is set
+     */
+    public boolean hasRandomXSeed() {
+        return randomXSeed != null && !randomXSeed.trim().isEmpty();
+    }
+
+    /**
+     * Get RandomX seed as bytes
+     *
+     * @return 32-byte seed, or null if not configured
+     * @throws IllegalArgumentException if seed format is invalid
+     */
+    public byte[] getRandomXSeedBytes() {
+        if (randomXSeed == null || randomXSeed.trim().isEmpty()) {
+            return null;
+        }
+
+        try {
+            String hex = randomXSeed.startsWith("0x") ? randomXSeed.substring(2) : randomXSeed;
+            if (hex.length() != 64) {
+                throw new IllegalArgumentException(
+                    "RandomX seed must be 32 bytes (64 hex characters), got: " + hex.length()
+                );
+            }
+            return Bytes32.fromHexString(hex).toArray();
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid randomXSeed format: " + randomXSeed, e);
+        }
+    }
+
+    /**
      * Check if genesis has any pre-allocations
      *
      * @return true if alloc is not empty
@@ -382,8 +458,8 @@ public class GenesisConfig {
      * @throws IllegalArgumentException if configuration is invalid
      */
     public void validate() {
-        if (timestamp <= 0) {
-            throw new IllegalArgumentException("Invalid timestamp: " + timestamp);
+        if (epoch <= 0) {
+            throw new IllegalArgumentException("Invalid epoch: " + epoch);
         }
 
         if (epochLength <= 0) {

@@ -9,8 +9,9 @@ set -e
 # ==================== Configuration ====================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-NODE1_DIR="$SCRIPT_DIR/node1"
-NODE2_DIR="$SCRIPT_DIR/node2"
+TEST_NODES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+NODE1_DIR="$TEST_NODES_DIR/suite1/node"
+NODE2_DIR="$TEST_NODES_DIR/suite2/node"
 NODE1_LOG="$NODE1_DIR/logs/xdag-info.log"
 NODE2_LOG="$NODE2_DIR/logs/xdag-info.log"
 

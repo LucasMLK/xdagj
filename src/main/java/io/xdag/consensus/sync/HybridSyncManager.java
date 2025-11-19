@@ -35,6 +35,7 @@ import io.xdag.p2p.message.SyncTransactionsReplyMessage;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt256;
 
 import java.util.*;
 import java.util.concurrent.*;
@@ -111,6 +112,13 @@ public class HybridSyncManager {
      * Batch size for transaction requests
      */
     public static final int TRANSACTIONS_BATCH_SIZE = 5000;
+
+    /**
+     * Batch size for epoch blocks requests
+     * Request 100 epochs at a time to reduce network roundtrips
+     * 16384 epochs / 100 = ~164 requests (vs 16384 individual requests)
+     */
+    public static final int EPOCH_BATCH_SIZE = 100;
 
     /**
      * Sync check interval (30 seconds)
@@ -226,9 +234,42 @@ public class HybridSyncManager {
             log.info("Height info: local={}, remote={}, finalized={}",
                     localHeight, remoteHeight, finalizedHeight);
 
-            // Check if we're already synced
+            // BUGFIX: Even when heights are equal, fetch recent blocks from remote
+            // DagChainImpl will automatically switch to higher cumulative difficulty chain
             if (localHeight >= remoteHeight) {
-                log.info("Already synced (local {} >= remote {})", localHeight, remoteHeight);
+                log.info("Heights equal or local ahead (local={}, remote={})", localHeight, remoteHeight);
+                log.info("Fetching recent blocks to check for higher difficulty fork...");
+
+                // Cast to P2P channel
+                Channel p2pChannel = (Channel) remotePeerChannel;
+
+                // Request recent blocks (last 100 blocks should cover any recent fork)
+                // Skip genesis block (height 1) - it's configured locally, not synced via P2P
+                long startHeight = Math.max(2, remoteHeight - 100);
+                List<Block> recentBlocks = requestMainBlocks(p2pChannel, startHeight, remoteHeight);
+
+                if (recentBlocks != null && !recentBlocks.isEmpty()) {
+                    log.info("Received {} recent blocks, importing for fork detection...", recentBlocks.size());
+
+                    // Import blocks - DagChainImpl will automatically:
+                    // 1. Calculate cumulative difficulty for each block
+                    // 2. Compare with current main chain
+                    // 3. Trigger chain reorganization if remote has higher difficulty
+                    int imported = 0;
+                    for (Block block : recentBlocks) {
+                        if (block != null) {
+                            DagImportResult result = dagChain.tryToConnect(block);
+                            if (result != null && result.getStatus() == DagImportResult.ImportStatus.SUCCESS) {
+                                imported++;
+                            }
+                        }
+                    }
+
+                    log.info("Fork detection completed: imported {} new blocks", imported);
+                } else {
+                    log.warn("Failed to fetch recent blocks from remote");
+                }
+
                 currentState = SyncState.COMPLETED;
                 return true;
             }
@@ -415,10 +456,16 @@ public class HybridSyncManager {
             long now = System.currentTimeMillis();
             long timeSinceLastAttempt = now - lastSyncAttemptTime;
 
-            // If last sync failed, wait longer before retrying
-            if (lastSyncAttemptTime > 0 && timeSinceLastAttempt < SYNC_RETRY_INTERVAL_MS) {
-                log.debug("Waiting for retry interval ({} ms remaining)",
-                        SYNC_RETRY_INTERVAL_MS - timeSinceLastAttempt);
+            // BUGFIX: Only apply retry interval if LAST SYNC FAILED
+            // If last sync succeeded, use normal SYNC_CHECK_INTERVAL_MS instead
+            // This prevents the "already synced" case from blocking new syncs for 5 minutes
+            boolean lastSyncFailed = (lastSyncAttemptTime > lastSuccessfulSyncTime);
+            long requiredInterval = lastSyncFailed ? SYNC_RETRY_INTERVAL_MS : SYNC_CHECK_INTERVAL_MS;
+
+            if (lastSyncAttemptTime > 0 && timeSinceLastAttempt < requiredInterval) {
+                log.debug("Waiting for {} interval ({} ms remaining)",
+                        lastSyncFailed ? "retry" : "check",
+                        requiredInterval - timeSinceLastAttempt);
                 return;
             }
 
@@ -531,7 +578,8 @@ public class HybridSyncManager {
     private boolean syncFinalizedChain(Object channel, long fromHeight, long toHeight) {
         log.info("Syncing finalized chain: {} to {}", fromHeight, toHeight);
 
-        long currentHeight = fromHeight;
+        // Skip genesis block (height 1) - it's configured locally, not synced via P2P
+        long currentHeight = Math.max(2, fromHeight);
 
         while (currentHeight < toHeight) {
             // Calculate batch range
@@ -618,10 +666,38 @@ public class HybridSyncManager {
     // ==========  Sync Active DAG Area ==========
 
     /**
+     * Get epoch number for a given height by looking up the block
+     *
+     * @param height block height
+     * @return epoch number, or -1 if block not found
+     */
+    private long getEpochForHeight(long height) {
+        try {
+            Block block = dagChain.getMainBlockByHeight(height);
+            if (block == null) {
+                log.warn("Block at height {} not found", height);
+                return -1;
+            }
+            // IMPORTANT: Block.getEpoch() already returns the correct epoch
+            // XDAG epoch = timestamp >> 16 (not >> 6!)
+            // Each epoch = 65536 XDAG timestamp units = 64 seconds
+            return block.getEpoch();
+        } catch (Exception e) {
+            log.error("Error getting epoch for height {}: {}", height, e.getMessage());
+            return -1;
+        }
+    }
+
+    /**
      * Synchronize active DAG area (recent blocks)
      *
      * <p>This phase syncs the DAG area that's still being built.
-     * Uses epoch-based sync to efficiently handle the DAG structure.
+     * Active DAG area is defined as blocks within FINALITY_EPOCHS of current time (~12 days).
+     * For efficiency:
+     * <ul>
+     *   <li>If height gap is small (<1000): use direct main block sync (fast)</li>
+     *   <li>If height gap is large: use epoch scanning within finality window</li>
+     * </ul>
      *
      * @param channel P2P channel
      * @param fromHeight start height
@@ -631,47 +707,130 @@ public class HybridSyncManager {
     private boolean syncActiveDAG(Object channel, long fromHeight, long toHeight) {
         log.info("Syncing active DAG: {} to {}", fromHeight, toHeight);
 
-        // Convert heights to epochs
-        long startEpoch = fromHeight / 64;  // timestamp / 64
-        long endEpoch = toHeight / 64;
+        long heightGap = toHeight - fromHeight;
 
-        for (long epoch = startEpoch; epoch <= endEpoch; epoch++) {
-            log.debug("Syncing epoch: {}", epoch);
+        // OPTIMIZATION: For small height gaps, use direct main block sync instead of epoch scanning
+        // This avoids scanning potentially millions of empty epochs
+        if (heightGap < 1000) {
+            log.info("Height gap is small ({}), using direct main block sync", heightGap);
+            return syncFinalizedChain(channel, fromHeight, toHeight);
+        }
 
-            // Request all block hashes in this epoch
-            List<Bytes32> epochHashes = requestEpochBlocks(channel, epoch);
+        // For large height gaps, use epoch-based scanning
+        log.info("Height gap is large ({}), using epoch-based sync", heightGap);
 
-            if (epochHashes == null) {
-                log.warn("Failed to fetch epoch {} blocks", epoch);
+        // Get current system epoch (full timestamp) and convert to epoch NUMBER
+        long currentEpochTimestamp = io.xdag.utils.XdagTime.getCurrentEpoch();
+        long currentEpochNumber = io.xdag.utils.XdagTime.getEpochNumber(currentEpochTimestamp);
+
+        // IMPORTANT: Active DAG sync should only scan recent epochs within finality boundary
+        // Finality boundary = FINALITY_EPOCHS (16384 epochs ≈ 12.14 days)
+        // Older blocks should be synced via syncFinalizedChain() instead
+        long finalityBoundaryEpoch = currentEpochNumber - FINALITY_EPOCHS;
+
+        // Get start epoch NUMBER from our last known block
+        long startEpochNumber = getEpochForHeight(fromHeight);
+
+        // Sanity check: start epoch should be reasonable
+        if (startEpochNumber < 0) {
+            log.error("Cannot determine start epoch from height {}", fromHeight);
+            return false;
+        }
+
+        // Limit start epoch to finality boundary
+        // If our last block is older than finality boundary, sync from finality boundary onwards
+        if (startEpochNumber < finalityBoundaryEpoch) {
+            log.info("Start epoch {} is before finality boundary {}, adjusting to finality boundary",
+                    startEpochNumber, finalityBoundaryEpoch);
+            startEpochNumber = finalityBoundaryEpoch;
+        }
+
+        // Sanity check: start epoch should not be in the future
+        if (startEpochNumber > currentEpochNumber + 1000) {  // Allow 1000 epochs (~18 hours) future buffer
+            log.error("Invalid start epoch number: {} is too far in future (current: {})",
+                    startEpochNumber, currentEpochNumber);
+            log.error("This may indicate database corruption or clock skew");
+            return false;
+        }
+
+        // Use current system time to determine end epoch NUMBER
+        // Add a buffer of 100 epochs (~1.7 hours) to account for clock skew and future blocks
+        long endEpochNumber = currentEpochNumber + 100;
+
+        long epochRange = endEpochNumber - startEpochNumber;
+        log.info("Syncing active DAG epochs: {} to {} (range: {}, height: {} to {})",
+                startEpochNumber, endEpochNumber, epochRange, fromHeight, toHeight);
+
+        // With finality boundary, epoch range should be <= FINALITY_EPOCHS + buffer (~16484)
+        // If range exceeds this, something is wrong
+        long maxExpectedRange = FINALITY_EPOCHS + 200;
+        if (epochRange > maxExpectedRange) {
+            log.error("Epoch range {} exceeds finality window + buffer {}", epochRange, maxExpectedRange);
+            log.error("This should not happen - active DAG sync is only for recent blocks");
+            return false;
+        }
+
+        // OPTIMIZATION: Request epochs in batches to reduce network roundtrips
+        // Instead of 16384 individual requests, we use ~164 batch requests (100 epochs per batch)
+        for (long batchStart = startEpochNumber; batchStart <= endEpochNumber; batchStart += EPOCH_BATCH_SIZE) {
+            long batchEnd = Math.min(batchStart + EPOCH_BATCH_SIZE - 1, endEpochNumber);
+            long batchRange = batchEnd - batchStart + 1;
+
+            log.debug("Syncing epoch batch: {} to {} (range: {})", batchStart, batchEnd, batchRange);
+
+            // Request all block hashes in this epoch range
+            Map<Long, List<Bytes32>> epochBlocksMap = requestEpochBlocks(channel, batchStart, batchEnd);
+
+            if (epochBlocksMap == null) {
+                log.warn("Failed to fetch epoch range [{}, {}]", batchStart, batchEnd);
                 continue;
             }
 
-            log.debug("Epoch {} has {} blocks", epoch, epochHashes.size());
+            int totalHashesInBatch = epochBlocksMap.values().stream()
+                    .mapToInt(List::size)
+                    .sum();
+            log.debug("Epoch batch [{}, {}] has {} epochs with blocks, {} total hashes",
+                    batchStart, batchEnd, epochBlocksMap.size(), totalHashesInBatch);
 
-            // Filter out blocks we already have
-            List<Bytes32> missingHashes = new ArrayList<>();
-            for (Bytes32 hash : epochHashes) {
-                if (dagChain.getBlockByHash(hash, false) == null) {  //  use dagChain
-                    missingHashes.add(hash);
+            // CRITICAL: Process epochs in SEQUENTIAL ORDER
+            // DO NOT iterate through HashMap.entrySet() - order is not guaranteed!
+            // We must process epochs sequentially: epoch N before epoch N+1
+            for (long epoch = batchStart; epoch <= batchEnd; epoch++) {
+                // Get hashes for this specific epoch (empty list if epoch not in map)
+                List<Bytes32> epochHashes = epochBlocksMap.getOrDefault(epoch, Collections.emptyList());
+
+                if (epochHashes.isEmpty()) {
+                    log.trace("Epoch {} is empty, skipping", epoch);
+                    continue;
                 }
-            }
 
-            if (missingHashes.isEmpty()) {
-                log.debug("All blocks in epoch {} already present", epoch);
-                continue;
-            }
+                log.debug("Epoch {} has {} blocks", epoch, epochHashes.size());
 
-            log.debug("Requesting {} missing blocks from epoch {}", missingHashes.size(), epoch);
+                // Filter out blocks we already have
+                List<Bytes32> missingHashes = new ArrayList<>();
+                for (Bytes32 hash : epochHashes) {
+                    if (dagChain.getBlockByHash(hash, false) == null) {  //  use dagChain
+                        missingHashes.add(hash);
+                    }
+                }
 
-            // Batch request missing blocks
-            List<Block> blocks = requestBlocks(channel, missingHashes);
+                if (missingHashes.isEmpty()) {
+                    log.debug("All blocks in epoch {} already present", epoch);
+                    continue;
+                }
 
-            if (blocks != null) {
-                // Import fetched blocks
-                for (Block block : blocks) {
-                    if (block != null) {
-                        importBlock(block);
-                        syncedBlocks.incrementAndGet();
+                log.debug("Requesting {} missing blocks from epoch {}", missingHashes.size(), epoch);
+
+                // Batch request missing blocks
+                List<Block> blocks = requestBlocks(channel, missingHashes);
+
+                if (blocks != null) {
+                    // Import fetched blocks
+                    for (Block block : blocks) {
+                        if (block != null) {
+                            importBlock(block);
+                            syncedBlocks.incrementAndGet();
+                        }
                     }
                 }
             }
@@ -682,39 +841,45 @@ public class HybridSyncManager {
     }
 
     /**
-     * Request all block hashes in a specific epoch
+     * Request all block hashes in an epoch range
      *
      * @param channel P2P channel
-     * @param epoch epoch number
-     * @return list of block hashes in this epoch
+     * @param startEpoch start epoch number (inclusive)
+     * @param endEpoch end epoch number (inclusive)
+     * @return map of epoch number to list of block hashes
      */
-    private List<Bytes32> requestEpochBlocks(Object channel, long epoch) {
-        log.debug("Requesting epoch {} blocks", epoch);
+    private Map<Long, List<Bytes32>> requestEpochBlocks(Object channel, long startEpoch, long endEpoch) {
+        log.debug("Requesting epoch blocks: {} to {}", startEpoch, endEpoch);
 
         try {
             // Cast to P2P channel
             Channel p2pChannel = (Channel) channel;
 
             // Send request via adapter
-            var future = p2pAdapter.requestEpochBlocks(p2pChannel, epoch);
+            var future = p2pAdapter.requestEpochBlocks(p2pChannel, startEpoch, endEpoch);
 
             // Wait for reply (with 30 second timeout)
             SyncEpochBlocksReplyMessage reply = future.get(30, TimeUnit.SECONDS);
 
             if (reply == null) {
                 log.error("Received null epoch blocks reply");
-                return Collections.emptyList();
+                return Collections.emptyMap();
             }
 
-            log.debug("Received {} block hashes for epoch {}", reply.getHashes().size(), epoch);
-            return reply.getHashes();
+            int totalBlocks = reply.getEpochBlocksMap().values().stream()
+                    .mapToInt(List::size)
+                    .sum();
+            log.debug("Received epoch blocks map: {} epochs with blocks, {} total hashes",
+                    reply.getEpochBlocksMap().size(), totalBlocks);
+
+            return reply.getEpochBlocksMap();
 
         } catch (TimeoutException e) {
             log.error("Request epoch blocks timed out", e);
-            return Collections.emptyList();
+            return Collections.emptyMap();
         } catch (Exception e) {
             log.error("Failed to request epoch blocks", e);
-            return Collections.emptyList();
+            return Collections.emptyMap();
         }
     }
 

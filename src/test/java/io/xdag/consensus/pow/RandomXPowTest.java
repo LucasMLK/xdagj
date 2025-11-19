@@ -31,7 +31,6 @@ import io.xdag.core.BlockInfo;
 import io.xdag.core.DagChain;
 import io.xdag.core.DagchainListener;
 import io.xdag.utils.XdagTime;
-import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.junit.Before;
 import org.junit.Test;
@@ -97,7 +96,7 @@ public class RandomXPowTest {
         Block mockBlock = mock(Block.class);
         BlockInfo mockInfo = mock(BlockInfo.class);
         when(mockBlock.getInfo()).thenReturn(mockInfo);
-        when(mockBlock.getTimestamp()).thenReturn(XdagTime.getCurrentTimestamp());
+        when(mockBlock.getTimestamp()).thenReturn(XdagTime.getCurrentEpoch());
         when(mockInfo.getHeight()).thenReturn(100L);
 
         // Should not throw exception when calling listener methods
@@ -179,7 +178,7 @@ public class RandomXPowTest {
             blockData[i] = (byte) (i % 256);
         }
 
-        long timestamp = XdagTime.getCurrentTimestamp();
+        long timestamp = XdagTime.getCurrentEpoch();
         HashContext context = HashContext.forMining(timestamp);
 
         // Calculate hash (may return null if RandomX not ready)
@@ -208,7 +207,7 @@ public class RandomXPowTest {
             poolData[i] = (byte) (i % 256);
         }
 
-        long timestamp = XdagTime.getCurrentTimestamp();
+        long timestamp = XdagTime.getCurrentEpoch();
         HashContext context = HashContext.forMining(timestamp);
 
         // Calculate pool hash (may return null if RandomX not ready)
@@ -235,7 +234,7 @@ public class RandomXPowTest {
         Block mockBlock = mock(Block.class);
         BlockInfo mockInfo = mock(BlockInfo.class);
         when(mockBlock.getInfo()).thenReturn(mockInfo);
-        when(mockBlock.getTimestamp()).thenReturn(XdagTime.getCurrentTimestamp());
+        when(mockBlock.getTimestamp()).thenReturn(XdagTime.getCurrentEpoch());
         when(mockInfo.getHeight()).thenReturn(1000L);
 
         // Should not throw exception
@@ -259,7 +258,7 @@ public class RandomXPowTest {
         Block mockBlock = mock(Block.class);
         BlockInfo mockInfo = mock(BlockInfo.class);
         when(mockBlock.getInfo()).thenReturn(mockInfo);
-        when(mockBlock.getTimestamp()).thenReturn(XdagTime.getCurrentTimestamp());
+        when(mockBlock.getTimestamp()).thenReturn(XdagTime.getCurrentEpoch());
         when(mockInfo.getHeight()).thenReturn(999L);
 
         // Should not throw exception
@@ -348,7 +347,7 @@ public class RandomXPowTest {
             Block mockBlock = mock(Block.class);
             BlockInfo mockInfo = mock(BlockInfo.class);
             when(mockBlock.getInfo()).thenReturn(mockInfo);
-            when(mockBlock.getTimestamp()).thenReturn(XdagTime.getCurrentTimestamp() + i * 64);
+            when(mockBlock.getTimestamp()).thenReturn(XdagTime.getCurrentEpoch() + i * 64);
             when(mockInfo.getHeight()).thenReturn(1000L + i);
 
             // Should not throw
@@ -373,7 +372,7 @@ public class RandomXPowTest {
         Block mockBlock = mock(Block.class);
         BlockInfo mockInfo = mock(BlockInfo.class);
         when(mockBlock.getInfo()).thenReturn(mockInfo);
-        when(mockBlock.getTimestamp()).thenReturn(XdagTime.getCurrentTimestamp());
+        when(mockBlock.getTimestamp()).thenReturn(XdagTime.getCurrentEpoch());
         when(mockInfo.getHeight()).thenReturn(500L);
 
         randomXPow.onBlockConnected(mockBlock);
@@ -406,7 +405,7 @@ public class RandomXPowTest {
         randomXPow = new RandomXPow(config, mockDagChain);
         randomXPow.start();
 
-        HashContext context = HashContext.forMining(XdagTime.getCurrentTimestamp());
+        HashContext context = HashContext.forMining(XdagTime.getCurrentEpoch());
 
         // Should handle null gracefully (return null or throw appropriate exception)
         try {

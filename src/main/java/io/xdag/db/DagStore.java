@@ -233,15 +233,6 @@ public interface DagStore extends XdagLifecycle {
      */
     long getWinnerBlockHeight(long epoch);
 
-    /**
-     * Get blocks within time range
-     *
-     * @param startTime Start timestamp (XDAG format, inclusive)
-     * @param endTime End timestamp (XDAG format, exclusive)
-     * @return List of blocks in time range
-     */
-    List<Block> getBlocksByTimeRange(long startTime, long endTime);
-
     // ==================== DAG Structure ====================
 
     /**

@@ -42,7 +42,7 @@ public class XdagMainTimeTest {
      */
     @Test
     public void testGetMainTime() {
-        long currentTime = XdagTime.getCurrentTimestamp();
+        long currentTime = XdagTime.getCurrentEpoch();
         long mainTime = XdagTime.getMainTime();
 
         // Main time should be in the same epoch
@@ -66,7 +66,7 @@ public class XdagMainTimeTest {
     public void testMainBlockTiming() {
         // Epoch 0: time range [0, 65535], main block at 65535
         long epoch0Start = 0L;
-        long epoch0MainTime = XdagTime.getEndOfEpoch(epoch0Start);
+        long epoch0MainTime = XdagTime.getEndTimeMillisOfEpoch(epoch0Start);
 
         assertEquals("Epoch 0 main time should be 65535", 65535L, epoch0MainTime);
         assertTrue("Should be end of epoch", XdagTime.isEndOfEpoch(epoch0MainTime));
@@ -74,7 +74,7 @@ public class XdagMainTimeTest {
 
         // Epoch 1: time range [65536, 131071], main block at 131071
         long epoch1Start = 65536L;
-        long epoch1MainTime = XdagTime.getEndOfEpoch(epoch1Start);
+        long epoch1MainTime = XdagTime.getEndTimeMillisOfEpoch(epoch1Start);
 
         assertEquals("Epoch 1 main time should be 131071", 131071L, epoch1MainTime);
         assertTrue("Should be end of epoch", XdagTime.isEndOfEpoch(epoch1MainTime));
@@ -82,7 +82,7 @@ public class XdagMainTimeTest {
 
         // Epoch 2: time range [131072, 196607], main block at 196607
         long epoch2Start = 131072L;
-        long epoch2MainTime = XdagTime.getEndOfEpoch(epoch2Start);
+        long epoch2MainTime = XdagTime.getEndTimeMillisOfEpoch(epoch2Start);
 
         assertEquals("Epoch 2 main time should be 196607", 196607L, epoch2MainTime);
         assertTrue("Should be end of epoch", XdagTime.isEndOfEpoch(epoch2MainTime));
@@ -101,9 +101,9 @@ public class XdagMainTimeTest {
         long epoch1Middle = 98000L;  // Middle of epoch 1
         long epoch1AlmostEnd = 131070L;  // Almost end of epoch 1
 
-        long mainTime1 = XdagTime.getEndOfEpoch(epoch1Start);
-        long mainTime2 = XdagTime.getEndOfEpoch(epoch1Middle);
-        long mainTime3 = XdagTime.getEndOfEpoch(epoch1AlmostEnd);
+        long mainTime1 = XdagTime.getEndTimeMillisOfEpoch(epoch1Start);
+        long mainTime2 = XdagTime.getEndTimeMillisOfEpoch(epoch1Middle);
+        long mainTime3 = XdagTime.getEndTimeMillisOfEpoch(epoch1AlmostEnd);
 
         // All should return the same end-of-epoch time
         assertEquals("Main time should be same for any point in epoch",
@@ -130,7 +130,7 @@ public class XdagMainTimeTest {
         assertEquals("Epoch duration should be 65536 XDAG units",
                      65536L, epochDurationInXdagUnits);
 
-        long epochDurationInMs = XdagTime.xdagTimestampToMs(epochDurationInXdagUnits);
+        long epochDurationInMs = XdagTime.epochToTimeMillis(epochDurationInXdagUnits);
         long epochDurationInSeconds = epochDurationInMs / 1000;
 
         assertEquals("Epoch duration should be 64 seconds",
@@ -152,7 +152,7 @@ public class XdagMainTimeTest {
 
         for (int i = 0; i < mainBlockTimes.length - 1; i++) {
             long duration = mainBlockTimes[i + 1] - mainBlockTimes[i];
-            long durationInMs = XdagTime.xdagTimestampToMs(duration);
+            long durationInMs = XdagTime.epochToTimeMillis(duration);
             long durationInSeconds = durationInMs / 1000;
 
             assertEquals("Main blocks should be 64 seconds apart",
@@ -170,14 +170,14 @@ public class XdagMainTimeTest {
 
         // WRONG: Passing milliseconds to getEndOfEpoch
         // This treats milliseconds as XDAG timestamp, which is completely wrong
-        long wrongResult = XdagTime.getEndOfEpoch(ms);
+        long wrongResult = XdagTime.getEndTimeMillisOfEpoch(ms);
 
         // Milliseconds are ~10^12 range, XDAG timestamps are ~10^9 range
         // So the result will be completely nonsensical
 
         // CORRECT: Must convert to XDAG timestamp first
-        long xdagTime = XdagTime.msToXdagtimestamp(ms);
-        long correctResult = XdagTime.getEndOfEpoch(xdagTime);
+        long xdagTime = XdagTime.timeMillisToEpoch(ms);
+        long correctResult = XdagTime.getEndTimeMillisOfEpoch(xdagTime);
 
         // The two results should be VERY different
         // (unless by pure coincidence)

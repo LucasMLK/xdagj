@@ -5,6 +5,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_NODES_DIR="$(dirname "$SCRIPT_DIR")"
+NODE_PID_FILE="xdag.pid"
 
 # Colors
 GREEN='\033[0;32m'
@@ -92,7 +93,7 @@ main() {
 
     echo ""
     echo -e "${BLUE}Node1:${NC}"
-    component_status "Process" "$(get_process_status "$TEST_NODES_DIR/suite1/node/xdagj.pid" "Node1")"
+    component_status "Process" "$(get_process_status "$TEST_NODES_DIR/suite1/node/$NODE_PID_FILE" "Node1")"
     component_status "P2P (8001)" "$(get_port_status 8001)"
     component_status "Telnet (6001)" "$(get_port_status 6001)"
     component_status "HTTP (10001)" "$(get_port_status 10001)"
@@ -111,7 +112,7 @@ main() {
 
     echo ""
     echo -e "${BLUE}Node2:${NC}"
-    component_status "Process" "$(get_process_status "$TEST_NODES_DIR/suite2/node/xdagj.pid" "Node2")"
+    component_status "Process" "$(get_process_status "$TEST_NODES_DIR/suite2/node/$NODE_PID_FILE" "Node2")"
     component_status "P2P (8002)" "$(get_port_status 8002)"
     component_status "Telnet (6002)" "$(get_port_status 6002)"
     component_status "HTTP (10002)" "$(get_port_status 10002)"
@@ -167,10 +168,10 @@ main() {
     local total_running=0
     local total_services=6
 
-    [ -f "$TEST_NODES_DIR/suite1/node/xdagj.pid" ] && is_running $(cat "$TEST_NODES_DIR/suite1/node/xdagj.pid") && total_running=$((total_running + 1))
+    [ -f "$TEST_NODES_DIR/suite1/node/$NODE_PID_FILE" ] && is_running $(cat "$TEST_NODES_DIR/suite1/node/$NODE_PID_FILE") && total_running=$((total_running + 1))
     [ -f "$TEST_NODES_DIR/suite1/pool/pool.pid" ] && is_running $(cat "$TEST_NODES_DIR/suite1/pool/pool.pid") && total_running=$((total_running + 1))
     [ -f "$TEST_NODES_DIR/suite1/miner/miner.pid" ] && is_running $(cat "$TEST_NODES_DIR/suite1/miner/miner.pid") && total_running=$((total_running + 1))
-    [ -f "$TEST_NODES_DIR/suite2/node/xdagj.pid" ] && is_running $(cat "$TEST_NODES_DIR/suite2/node/xdagj.pid") && total_running=$((total_running + 1))
+    [ -f "$TEST_NODES_DIR/suite2/node/$NODE_PID_FILE" ] && is_running $(cat "$TEST_NODES_DIR/suite2/node/$NODE_PID_FILE") && total_running=$((total_running + 1))
     [ -f "$TEST_NODES_DIR/suite2/pool/pool.pid" ] && is_running $(cat "$TEST_NODES_DIR/suite2/pool/pool.pid") && total_running=$((total_running + 1))
     [ -f "$TEST_NODES_DIR/suite2/miner/miner.pid" ] && is_running $(cat "$TEST_NODES_DIR/suite2/miner/miner.pid") && total_running=$((total_running + 1))
 

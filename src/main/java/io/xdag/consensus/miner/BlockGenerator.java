@@ -175,7 +175,7 @@ public class BlockGenerator {
         if (powAlgorithm == null) {
             return false;
         }
-        long epoch = XdagTime.getEpoch(timestamp);
+        long epoch = XdagTime.getEpochNumber(timestamp);
         return powAlgorithm.isActive(epoch);
     }
 

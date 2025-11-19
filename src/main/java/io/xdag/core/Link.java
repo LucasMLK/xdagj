@@ -26,30 +26,31 @@ package io.xdag.core;
 
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import lombok.Getter;
 import lombok.Value;
 import org.apache.tuweni.bytes.Bytes32;
 
 /**
  * Lightweight DAG edge (Link) for XDAG
- *
+ * <p>
  * Design principles:
  * 1. Extreme simplicity: only 33 bytes (32 bytes hash + 1 byte type)
  * 2. Type identification: distinguish Transaction (type=0) vs Block (type=1)
  * 3. No amount field: Block only stores references, not transfer amounts
  * 4. Immutable: thread-safe and cacheable
  * 5. Performance: compact structure enables 1,485,000 links in 48MB block
- *
+ * <p>
  * Key difference from BlockLink:
  * - Link is ultra-simple (33 bytes): just hash + type
  * - BlockLink is feature-rich: includes LinkType enum, amount, remark
  * - Link is used in Block structure for maximum performance
  * - BlockLink is used for internal tracking and analysis
- *
+ * <p>
  * Size calculation:
  * - 32 bytes: targetHash (full 32-byte hash)
  * - 1 byte: type (0=Transaction, 1=Block)
  * - Total: 33 bytes per link
- *
+ * <p>
  * TPS calculation (48MB Block):
  * - 48MB / 33 bytes = 1,485,000 links
  * - 1,485,000 txs / 64 seconds = 23,200 TPS (96.7% Visa level)
@@ -69,7 +70,7 @@ public class Link implements Serializable {
      * Type of the target
      * - TRANSACTION (0): link points to a Transaction
      * - BLOCK (1): link points to another Block
-     *
+     * <p>
      * This field avoids database queries to determine target type
      */
     LinkType type;
@@ -82,6 +83,7 @@ public class Link implements Serializable {
     /**
      * Link type enumeration
      */
+    @Getter
     public enum LinkType {
         /**
          * Link points to a Transaction (type = 0)
@@ -101,11 +103,7 @@ public class Link implements Serializable {
             this.value = (byte) value;
         }
 
-        public byte getValue() {
-            return value;
-        }
-
-        /**
+      /**
          * Convert from byte value to LinkType
          *
          * @param value byte value (0 or 1)
@@ -165,7 +163,7 @@ public class Link implements Serializable {
 
     /**
      * Serialize this link to bytes
-     *
+     * <p>
      * Format:
      * - [0-31]: targetHash (32 bytes)
      * - [32]: type (1 byte, 0=TX, 1=Block)
@@ -227,9 +225,8 @@ public class Link implements Serializable {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Link)) return false;
-        Link link = (Link) o;
-        return targetHash.equals(link.targetHash) && type == link.type;
+        if (!(o instanceof Link link)) return false;
+      return targetHash.equals(link.targetHash) && type == link.type;
     }
 
     @Override

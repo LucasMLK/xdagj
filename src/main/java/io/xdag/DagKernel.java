@@ -31,7 +31,6 @@ import io.xdag.consensus.sync.HybridSyncManager;
 import io.xdag.consensus.sync.HybridSyncP2pAdapter;
 import io.xdag.consensus.pow.PowAlgorithm;
 import io.xdag.consensus.pow.RandomXPow;
-import io.xdag.consensus.pow.Sha256Pow;
 import io.xdag.core.*;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.db.AccountStore;
@@ -130,7 +129,7 @@ public class DagKernel {
   private HybridSyncManager hybridSyncManager;
   private HybridSyncP2pAdapter hybridSyncP2pAdapter;
 
-  // PoW Algorithm (RandomX or SHA256)
+  // PoW Algorithm (RandomX only)
   private PowAlgorithm powAlgorithm;
 
   // Mining API service (for pool server integration)
@@ -274,14 +273,9 @@ public class DagKernel {
       this.hybridSyncManager = new HybridSyncManager(this, dagChain, hybridSyncP2pAdapter);
       log.info("   ✓ HybridSyncManager initialized");
 
-      // 9. Create PoW Algorithm (choose one):
-      // Option A: RandomX (default - for blocks after fork)
+      // 9. Create PoW Algorithm: RandomX only
       this.powAlgorithm = new RandomXPow(config, dagChain);
       log.info("   ✓ RandomXPow initialized");
-
-      // Option B: SHA256 (for blocks before fork, uncomment to use)
-      // this.powAlgorithm = new Sha256Pow(config);
-      // log.info("   ✓ Sha256Pow initialized");
 
       // Create Mining API Service (for pool server integration)
       if (wallet != null) {
@@ -356,10 +350,28 @@ public class DagKernel {
               log.info("✓ HybridSyncManager started (auto-sync enabled)");
           }
 
-          // Start PoW Algorithm (RandomX or SHA256)
+          // Start PoW Algorithm (RandomX)
           if (powAlgorithm != null) {
               powAlgorithm.start();
               log.info("✓ PoW Algorithm started: {}", powAlgorithm.getName());
+
+              // Initialize RandomX seed from genesis config if available
+              if (powAlgorithm instanceof io.xdag.consensus.pow.RandomXPow) {
+                  io.xdag.consensus.pow.RandomXPow randomXPow = (io.xdag.consensus.pow.RandomXPow) powAlgorithm;
+                  if (genesisConfig.hasRandomXSeed()) {
+                      try {
+                          byte[] genesisSeed = genesisConfig.getRandomXSeedBytes();
+                          randomXPow.getSeedManager().initializeFromPreseed(genesisSeed, 1);
+                          log.info("✓ RandomX seed initialized from genesis config");
+                          log.info("  - Seed: {}...", org.apache.tuweni.bytes.Bytes.wrap(genesisSeed).toHexString().substring(0, 18));
+                      } catch (Exception e) {
+                          log.error("Failed to initialize RandomX seed from genesis", e);
+                          throw new RuntimeException("Failed to initialize RandomX seed", e);
+                      }
+                  } else {
+                      log.warn("⚠ No randomXSeed in genesis config - mining will not work until epoch boundary");
+                  }
+              }
           }
 
           running = true;
@@ -401,7 +413,7 @@ public class DagKernel {
       log.info("========================================");
 
       try {
-          // Stop PoW Algorithm (RandomX or SHA256)
+          // Stop PoW Algorithm (RandomX)
           if (powAlgorithm != null) {
               powAlgorithm.stop();
               log.info("✓ PoW Algorithm stopped: {}", powAlgorithm.getName());
@@ -593,45 +605,49 @@ public class DagKernel {
   // ========== Genesis Configuration and Bootstrap ==========
 
   /**
-   * Load genesis configuration from genesis.json
+   * Load genesis configuration from genesis-{network}.json
    *
-   * <p>REQUIRED: genesis.json must exist. This follows Ethereum's approach where
+   * <p>REQUIRED: genesis configuration must exist. This follows Ethereum's approach where
    * each network has an explicit genesis configuration.
    *
    * <p>Search order:
    * <ol>
-   *   <li>{rootDir}/genesis.json</li>
-   *   <li>{rootDir}/config/genesis.json</li>
-   *   <li>FAIL: genesis.json is required</li>
+   *   <li>{rootDir}/genesis-{network}.json (e.g., genesis-devnet.json)</li>
+   *   <li>{rootDir}/config/genesis-{network}.json</li>
+   *   <li>FAIL: genesis-{network}.json is required</li>
    * </ol>
    *
-   * @throws RuntimeException if genesis.json not found
+   * @throws RuntimeException if genesis configuration not found
    */
   private void loadGenesisConfig() {
       String rootDir = config.getRootDir();
+      String network = config.getNodeSpec().getNetwork().name().toLowerCase();
 
-      // Try loading from rootDir/genesis.json
-      File genesisFile = new File(rootDir, "genesis.json");
+      // Network-specific filename (required format)
+      String networkSpecificName = "genesis-" + network + ".json";
+      File genesisFile = new File(rootDir, networkSpecificName);
+
       if (!genesisFile.exists()) {
           // Try config subdirectory
-          genesisFile = new File(rootDir, "config/genesis.json");
+          genesisFile = new File(rootDir, "config/" + networkSpecificName);
       }
 
       if (!genesisFile.exists()) {
-          // CRITICAL: genesis.json is REQUIRED (like Ethereum)
+          // CRITICAL: genesis-{network}.json is REQUIRED
           String errorMsg = String.format(
-              "genesis.json not found! Searched:\n" +
-              "  1. %s/genesis.json\n" +
-              "  2. %s/config/genesis.json\n\n" +
+              "genesis-%s.json not found! Searched:\n" +
+              "  1. %s/genesis-%s.json\n" +
+              "  2. %s/config/genesis-%s.json\n\n" +
               "XDAG requires explicit genesis configuration (like Ethereum).\n" +
-              "Please create genesis.json for your network:\n" +
-              "  - Mainnet: cp config/genesis-mainnet.json ./genesis.json\n" +
-              "  - Testnet: cp config/genesis-testnet.json ./genesis.json\n" +
-              "  - Devnet:  cp config/genesis-devnet.json ./genesis.json",
-              rootDir, rootDir
+              "Network-specific filenames are required for clarity.\n\n" +
+              "Please create genesis configuration for your network:\n" +
+              "  - Mainnet: cp ../config/genesis-mainnet.json ./genesis-mainnet.json\n" +
+              "  - Testnet: cp ../config/genesis-testnet.json ./genesis-testnet.json\n" +
+              "  - Devnet:  cp ../config/genesis-devnet.json ./genesis-devnet.json",
+              network, rootDir, network, rootDir, network
           );
           log.error(errorMsg);
-          throw new RuntimeException("genesis.json is required but not found");
+          throw new RuntimeException("genesis-" + network + ".json is required but not found");
       }
 
       try {
@@ -643,9 +659,7 @@ public class DagKernel {
           log.info("  File: {}", genesisFile.getAbsolutePath());
           log.info("  Network: {}", genesisConfig.getNetworkId());
           log.info("  Chain ID: {}", genesisConfig.getChainId());
-          log.info("  Genesis Timestamp: {} ({})",
-                  genesisConfig.getTimestamp(),
-                  new java.util.Date(genesisConfig.getTimestamp() * 1000));
+          log.info("  Genesis Epoch: {}", genesisConfig.getEpoch());
           log.info("  Initial Difficulty: {}", genesisConfig.getInitialDifficulty());
           log.info("  Epoch Length: {} seconds", genesisConfig.getEpochLength());
 
@@ -760,26 +774,24 @@ public class DagKernel {
 
       log.info("Verifying genesis block against genesis.json...");
 
-      // Verify timestamp
-      long expectedTimestamp = genesisConfig.getTimestamp();
-      long actualTimestamp = genesisBlock.getTimestamp();
-      long timeDiff = Math.abs(actualTimestamp - expectedTimestamp);
+      // Verify epoch
+      long expectedEpoch = genesisConfig.getEpoch();
+      long actualEpoch = genesisBlock.getEpoch();
 
-      if (timeDiff > 64) {  // Allow 1 epoch tolerance
+      if (expectedEpoch != actualEpoch) {
           String error = String.format(
-              "Genesis block timestamp mismatch!\n" +
+              "Genesis block epoch mismatch!\n" +
               "  Expected (from genesis.json): %d\n" +
-              "  Actual (from blockchain): %d\n" +
-              "  Difference: %d seconds\n\n" +
+              "  Actual (from blockchain): %d\n\n" +
               "This means you're trying to run a node with a different genesis.json\n" +
               "than the one used to create this chain. This is not allowed.\n\n" +
               "Solutions:\n" +
               "  1. Use the correct genesis.json for this network\n" +
               "  2. Delete the chain data and start fresh with current genesis.json",
-              expectedTimestamp, actualTimestamp, timeDiff
+              expectedEpoch, actualEpoch
           );
           log.error(error);
-          throw new RuntimeException("Genesis block verification failed: timestamp mismatch");
+          throw new RuntimeException("Genesis block verification failed: epoch mismatch");
       }
 
       // Verify difficulty
@@ -799,7 +811,7 @@ public class DagKernel {
       }
 
       log.info("✓ Genesis block verification passed");
-      log.info("  - Timestamp: {} (matches config)", actualTimestamp);
+      log.info("  - Epoch: {} (matches config)", actualEpoch);
       log.info("  - Difficulty: {} (matches config)", actualDifficulty.toHexString());
       log.info("  - Network: {}", genesisConfig.getNetworkId());
   }
@@ -815,9 +827,9 @@ public class DagKernel {
   private void createGenesisBlock() {
       log.info("Creating genesis block...");
 
-      // Use configured timestamp from genesis.json
-      long timestamp = genesisConfig.getTimestamp();
-      log.info("  - Genesis timestamp: {}", timestamp);
+      // Use configured epoch from genesis.json
+      long epoch = genesisConfig.getEpoch();
+      log.info("  - Genesis epoch: {}", epoch);
 
       // 5+: genesisCoinbase is REQUIRED for deterministic genesis (Bitcoin/Ethereum approach)
       if (!genesisConfig.hasGenesisCoinbase()) {
@@ -847,7 +859,7 @@ public class DagKernel {
       log.info("  - This ensures all nodes create IDENTICAL genesis blocks");
 
       // Create genesis block via DagChain using deterministic coinbase
-      Block genesisBlock = dagChain.createGenesisBlock(genesisCoinbase, timestamp);
+      Block genesisBlock = dagChain.createGenesisBlock(genesisCoinbase, epoch);
       log.info("  - Genesis block created: {}", genesisBlock.getHash().toHexString());
 
       // Import genesis block

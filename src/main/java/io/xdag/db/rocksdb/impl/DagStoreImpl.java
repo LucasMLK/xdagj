@@ -33,11 +33,14 @@ import io.xdag.db.DagStore;
 import io.xdag.db.cache.DagCache;
 import io.xdag.db.rocksdb.config.DagStoreRocksDBConfig;
 import io.xdag.utils.CompactSerializer;
+import io.xdag.utils.XdagTime;
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Comparator;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.rocksdb.*;
@@ -193,10 +196,6 @@ public class DagStoreImpl implements DagStore {
         byte[] infoData = serializeBlockInfo(info);
         batch.put(infoKey, infoData);
 
-        // 3. Index by time
-        byte[] timeKey = buildTimeIndexKey(block.getTimestamp(), hash);
-        batch.put(timeKey, EMPTY_VALUE);
-
         // 4. Index by epoch
         byte[] epochKey = buildEpochIndexKey(block.getEpoch(), hash);
         batch.put(epochKey, EMPTY_VALUE);
@@ -268,12 +267,13 @@ public class DagStoreImpl implements DagStore {
 
                 // Create lightweight Block with info only
                 // Note: Block doesn't have hash in builder, only in built instance
+                // BUGFIX: Use 20-byte zero address for coinbase (not 32-byte Bytes32.ZERO)
                 Block block = Block.builder()
                         .header(BlockHeader.builder()
-                                .timestamp(info.getTimestamp())
+                                .epoch(info.getEpoch())
                                 .difficulty(info.getDifficulty())
                                 .nonce(Bytes32.ZERO)
-                                .coinbase(Bytes32.ZERO)
+                                .coinbase(Bytes.wrap(new byte[20]))  // 20-byte zero address
                                 .build())
                         .links(new ArrayList<>())
                         .info(info)
@@ -625,47 +625,6 @@ public class DagStoreImpl implements DagStore {
         return winner.getInfo().getHeight();
     }
 
-    @Override
-    public List<Block> getBlocksByTimeRange(long startTime, long endTime) {
-        List<Block> blocks = new ArrayList<>();
-
-        try {
-            byte[] startKey = buildTimeIndexKey(startTime, Bytes32.ZERO);
-            byte[] endKey = buildTimeIndexKey(endTime, Bytes32.ZERO);
-
-            try (RocksIterator iterator = db.newIterator(scanReadOptions)) {
-                iterator.seek(startKey);
-
-                while (iterator.isValid()) {
-                    byte[] key = iterator.key();
-
-                    if (ByteBuffer.wrap(key).compareTo(ByteBuffer.wrap(endKey)) >= 0) {
-                        break;
-                    }
-
-                    // Extract hash
-                    if (key.length == 41) {
-                        byte[] hashBytes = new byte[32];
-                        System.arraycopy(key, 9, hashBytes, 0, 32);
-                        Bytes32 hash = Bytes32.wrap(hashBytes);
-
-                        Block block = getBlockByHash(hash, false);
-                        if (block != null) {
-                            blocks.add(block);
-                        }
-                    }
-
-                    iterator.next();
-                }
-            }
-
-        } catch (Exception e) {
-            log.error("Failed to get blocks by time range [{}, {})", startTime, endTime, e);
-        }
-
-        return blocks;
-    }
-
     // ==================== BlockInfo Operations ====================
 
     @Override
@@ -855,7 +814,6 @@ public class DagStoreImpl implements DagStore {
           // Add to batch
           batch.put(buildBlockKey(hash), serializeBlock(block));
           batch.put(buildBlockInfoKey(hash), serializeBlockInfo(info));
-          batch.put(buildTimeIndexKey(block.getTimestamp(), hash), EMPTY_VALUE);
           batch.put(buildEpochIndexKey(block.getEpoch(), hash), EMPTY_VALUE);
 
           if (info.getHeight() > 0) {
@@ -986,14 +944,6 @@ public class DagStoreImpl implements DagStore {
         return key;
     }
 
-    private byte[] buildTimeIndexKey(long timestamp, Bytes32 hash) {
-        byte[] key = new byte[41];  // 1 + 8 + 32
-        key[0] = TIME_INDEX;
-        ByteBuffer.wrap(key, 1, 8).putLong(timestamp);
-        System.arraycopy(hash.toArray(), 0, key, 9, 32);
-        return key;
-    }
-
     private byte[] buildEpochIndexKey(long epoch, Bytes32 hash) {
         byte[] key = new byte[41];  // 1 + 8 + 32
         key[0] = EPOCH_INDEX;
@@ -1065,7 +1015,7 @@ public class DagStoreImpl implements DagStore {
      *
      * <p>Fixed-size 84-byte format:
      * - hash: 32 bytes
-     * - timestamp: 8 bytes
+     * - epoch: 8 bytes (XDAG epoch number)
      * - height: 8 bytes
      * - difficulty: 32 bytes
      * - flags: 4 bytes (compatibility - always 0)
@@ -1076,7 +1026,7 @@ public class DagStoreImpl implements DagStore {
     private byte[] serializeBlockInfo(BlockInfo info) {
         ByteBuffer buffer = ByteBuffer.allocate(84);
         buffer.put(info.getHash().toArray());          // 32 bytes
-        buffer.putLong(info.getTimestamp());          // 8 bytes
+        buffer.putLong(info.getEpoch());              // 8 bytes (XDAG epoch number)
         buffer.putLong(info.getHeight());             // 8 bytes
         buffer.put(info.getDifficulty().toBytes().toArray());  // 32 bytes
         buffer.putInt(0);  // flags placeholder for compatibility  // 4 bytes
@@ -1095,7 +1045,7 @@ public class DagStoreImpl implements DagStore {
         buffer.get(hashBytes);
         Bytes32 hash = Bytes32.wrap(hashBytes);
 
-        long timestamp = buffer.getLong();
+        long epoch = buffer.getLong();  // XDAG epoch number
         long height = buffer.getLong();
 
         byte[] diffBytes = new byte[32];
@@ -1106,7 +1056,7 @@ public class DagStoreImpl implements DagStore {
 
         return BlockInfo.builder()
                 .hash(hash)
-                .timestamp(timestamp)
+                .epoch(epoch)
                 .height(height)
                 .difficulty(difficulty)
                 .build();

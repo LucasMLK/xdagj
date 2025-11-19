@@ -54,10 +54,34 @@ import org.apache.tuweni.units.bigints.UInt256;
 public class BlockHeader implements Serializable {
 
     /**
-     * Block timestamp (seconds since Unix epoch)
-     * Used to calculate epoch: epoch = timestamp / 64
+     * XDAG epoch number (each epoch = 64 seconds)
+     *
+     * <p><strong>IMPORTANT</strong>: This is NOT a Unix timestamp!
+     * <p>XDAG uses a special epoch-based time system:
+     * <ul>
+     *   <li>XDAG timestamp = (Unix milliseconds * 1024) / 1000 (1/1024 second precision)</li>
+     *   <li>XDAG epoch = XDAG timestamp >> 16 (NOT / 64!)</li>
+     *   <li>Each epoch = 65536 XDAG timestamp units = 64 seconds</li>
+     * </ul>
+     *
+     * <p>To convert epoch to Unix time for display:
+     * <pre>
+     *   long xdagTimestamp = XdagTime.epochNumberToEpoch(epoch);
+     *   long unixMillis = XdagTime.epochToTimeMillis(xdagTimestamp);
+     *   // Or use: XdagTime.epochNumberToTimeMillis(epoch)
+     * </pre>
+     *
+     *
+     * -- GETTER --
+     *  Get the epoch number
+     *  <p>Simply returns the epoch field. This method is kept for backward compatibility
+     *  and to match the DRY principle (don't store what can be derived).
+     *
+     @see io.xdag.utils.XdagTime#getEpoch(long)
+     * @see io.xdag.utils.XdagTime#getCurrentEpoch()
+     * @return XDAG epoch number
      */
-    long timestamp;
+    long epoch;
 
     /**
      * PoW difficulty target value (32 bytes)
@@ -88,17 +112,7 @@ public class BlockHeader implements Serializable {
      */
     Bytes32 hash;  // null initially, set by Block.getHash()
 
-    /**
-     * Calculate epoch from timestamp
-     * epoch = timestamp / 64
-     *
-     * @return epoch number
-     */
-    public long getEpoch() {
-        return timestamp / 64;
-    }
-
-    /**
+  /**
      * Check if this block satisfies the PoW difficulty requirement
      * Valid if: hash <= difficulty
      * <p>
@@ -117,9 +131,16 @@ public class BlockHeader implements Serializable {
      * Get the size of this header in bytes (for serialization)
      *
      * @return 92 bytes (fixed)
+     * <ul>
+     *   <li>epoch: 8 bytes (long)</li>
+     *   <li>difficulty: 32 bytes (UInt256)</li>
+     *   <li>nonce: 32 bytes (Bytes32)</li>
+     *   <li>coinbase: 20 bytes (Bytes)</li>
+     *   <li>hash: NOT serialized (cached field)</li>
+     * </ul>
      */
     public static int getSerializedSize() {
-        return 8 +   // timestamp
+        return 8 +   // epoch
                32 +  // difficulty
                32 +  // nonce
                20;   // coinbase
@@ -129,9 +150,8 @@ public class BlockHeader implements Serializable {
     @Override
     public String toString() {
         return String.format(
-            "BlockHeader[epoch=%d, timestamp=%d, difficulty=%s, nonce=%s, coinbase=%s]",
-            getEpoch(),
-            timestamp,
+            "BlockHeader[epoch=%d, difficulty=%s, nonce=%s, coinbase=%s]",
+            epoch,
             difficulty.toHexString().substring(0, 16) + "...",
             nonce.toHexString().substring(0, 16) + "...",
             coinbase.toHexString().substring(0, 16) + "..."

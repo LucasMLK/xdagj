@@ -5,6 +5,7 @@
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_NODES_DIR="$(dirname "$SCRIPT_DIR")"
+NODE_PID_FILE="xdag.pid"
 
 # Colors
 GREEN='\033[0;32m'
@@ -30,27 +31,30 @@ stop_nodes() {
     log_info "Stopping nodes..."
 
     local stopped=0
+    local pid
 
     # Stop Node1
-    if [ -f "$TEST_NODES_DIR/suite1/node/xdagj.pid" ]; then
-        local pid=$(cat "$TEST_NODES_DIR/suite1/node/xdagj.pid")
+    local pid_file="$TEST_NODES_DIR/suite1/node/$NODE_PID_FILE"
+    if [ -f "$pid_file" ]; then
+        pid=$(cat "$pid_file")
         if ps -p $pid > /dev/null 2>&1; then
             kill $pid
             log_success "Node1 stopped (PID: $pid)"
             stopped=$((stopped + 1))
         fi
-        rm -f "$TEST_NODES_DIR/suite1/node/xdagj.pid"
+        rm -f "$pid_file"
     fi
 
     # Stop Node2
-    if [ -f "$TEST_NODES_DIR/suite2/node/xdagj.pid" ]; then
-        local pid=$(cat "$TEST_NODES_DIR/suite2/node/xdagj.pid")
+    pid_file="$TEST_NODES_DIR/suite2/node/$NODE_PID_FILE"
+    if [ -f "$pid_file" ]; then
+        pid=$(cat "$pid_file")
         if ps -p $pid > /dev/null 2>&1; then
             kill $pid
             log_success "Node2 stopped (PID: $pid)"
             stopped=$((stopped + 1))
         fi
-        rm -f "$TEST_NODES_DIR/suite2/node/xdagj.pid"
+        rm -f "$pid_file"
     fi
 
     # Fallback: kill by process name

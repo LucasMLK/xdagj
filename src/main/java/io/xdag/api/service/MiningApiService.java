@@ -161,7 +161,7 @@ public class MiningApiService {
       log.info("Provided candidate block to pool '{}': hash={}, epoch={}, cache_size={}",
           poolId,
           candidate.getHash().toHexString().substring(0, 18) + "...",
-          XdagTime.getEpoch(candidate.getTimestamp()),
+          candidate.getEpoch(),
           blockCache.size());
 
       return candidate;
@@ -253,7 +253,7 @@ public class MiningApiService {
    */
   public RandomXInfo getRandomXInfo() {
     try {
-      long currentEpoch = XdagTime.getEpoch(XdagTime.getCurrentTimestamp());
+      long currentEpoch = XdagTime.getCurrentEpochNumber();
 
       // Check if RandomX is enabled
       if (powAlgorithm == null) {
@@ -280,7 +280,7 @@ public class MiningApiService {
     } catch (Exception e) {
       log.error("Error getting RandomX info", e);
       // Return safe default
-      long currentEpoch = XdagTime.getEpoch(XdagTime.getCurrentTimestamp());
+      long currentEpoch = XdagTime.getCurrentEpochNumber();
       return RandomXInfo.disabled(currentEpoch);
     }
   }

@@ -29,6 +29,10 @@ import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.utils.XdagTime;
+import java.util.List;
+import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -140,7 +144,7 @@ public class DagBlockProcessorIntegrationTest {
     @Test
     public void testBlockExistenceCheck() {
         // Random block hash should not exist
-        org.apache.tuweni.bytes.Bytes32 randomHash = org.apache.tuweni.bytes.Bytes32.random();
+        org.apache.tuweni.bytes.Bytes32 randomHash = Bytes32.random();
         assertFalse("Random block should not exist", blockProcessor.hasBlock(randomHash));
     }
 
@@ -151,7 +155,7 @@ public class DagBlockProcessorIntegrationTest {
      */
     @Test
     public void testGetNonExistentBlock() {
-        org.apache.tuweni.bytes.Bytes32 randomHash = org.apache.tuweni.bytes.Bytes32.random();
+        Bytes32 randomHash = Bytes32.random();
         Block block = blockProcessor.getBlock(randomHash, false);
         assertNull("Non-existent block should return null", block);
     }
@@ -181,10 +185,10 @@ public class DagBlockProcessorIntegrationTest {
     public void testProcessBlockWithInvalidHeader() {
         // Create block with invalid timestamp (0)
         BlockHeader invalidHeader = BlockHeader.builder()
-                .timestamp(0)  // Invalid: must be > 0
+                .epoch(0)  // Invalid: must be > 0
                 .difficulty(org.apache.tuweni.units.bigints.UInt256.ONE)
-                .nonce(org.apache.tuweni.bytes.Bytes32.ZERO)
-                .coinbase(org.apache.tuweni.bytes.Bytes.random(20))
+                .nonce(Bytes32.ZERO)
+                .coinbase(Bytes.random(20))
                 .build();
 
         Block block = Block.builder()
@@ -211,10 +215,10 @@ public class DagBlockProcessorIntegrationTest {
     public void testProcessBlockWithNullInfo() {
         // Create valid header
         BlockHeader header = BlockHeader.builder()
-                .timestamp(System.currentTimeMillis())
+                .epoch(System.currentTimeMillis())
                 .difficulty(org.apache.tuweni.units.bigints.UInt256.ONE)
-                .nonce(org.apache.tuweni.bytes.Bytes32.ZERO)
-                .coinbase(org.apache.tuweni.bytes.Bytes.random(20))
+                .nonce(Bytes32.ZERO)
+                .coinbase(Bytes.random(20))
                 .build();
 
         // Create block with null info
@@ -239,18 +243,18 @@ public class DagBlockProcessorIntegrationTest {
     public void testProcessBlockWithInvalidTimestamp() {
         // Create block with invalid timestamp (0)
         BlockHeader header = BlockHeader.builder()
-                .timestamp(0L)  // Invalid timestamp
+                .epoch(0L)  // Invalid timestamp
                 .difficulty(org.apache.tuweni.units.bigints.UInt256.ONE)
-                .nonce(org.apache.tuweni.bytes.Bytes32.ZERO)
-                .coinbase(org.apache.tuweni.bytes.Bytes.random(20))
+                .nonce(Bytes32.ZERO)
+                .coinbase(Bytes.random(20))
                 .build();
 
         // Create block info with valid fields
         BlockInfo info = BlockInfo.builder()
-                .hash(org.apache.tuweni.bytes.Bytes32.random())
+                .hash(Bytes32.random())
                 .height(1L)
-                .difficulty(org.apache.tuweni.units.bigints.UInt256.ONE)
-                .timestamp(System.currentTimeMillis())
+                .difficulty(UInt256.ONE)
+                .epoch(XdagTime.getCurrentEpoch())
                 .build();
 
         Block block = Block.builder()
@@ -280,8 +284,8 @@ public class DagBlockProcessorIntegrationTest {
         Block block = Block.createWithNonce(
                 timestamp,
                 org.apache.tuweni.units.bigints.UInt256.ONE,
-                org.apache.tuweni.bytes.Bytes32.ZERO,
-                org.apache.tuweni.bytes.Bytes.random(20),  // coinbase
+                Bytes32.ZERO,
+                Bytes.random(20),  // coinbase
                 java.util.List.of()  // Empty links
         );
 
@@ -289,8 +293,8 @@ public class DagBlockProcessorIntegrationTest {
         BlockInfo info = BlockInfo.builder()
                 .hash(block.getHash())  // Use actual block hash
                 .height(1L)
-                .difficulty(org.apache.tuweni.units.bigints.UInt256.ONE)
-                .timestamp(timestamp)
+                .difficulty(UInt256.ONE)
+                .epoch(timestamp)
                 .build();
 
         // Attach info to block
@@ -325,9 +329,9 @@ public class DagBlockProcessorIntegrationTest {
             long timestamp = XdagTime.getMainTime() + (i * 0x10000L); // Offset by epochs
             Block block = Block.createWithNonce(
                     timestamp,
-                    org.apache.tuweni.units.bigints.UInt256.ONE,
-                    org.apache.tuweni.bytes.Bytes32.ZERO,
-                    org.apache.tuweni.bytes.Bytes.random(20),
+                    UInt256.ONE,
+                    Bytes32.ZERO,
+                    Bytes.random(20),
                     java.util.List.of()
             );
 
@@ -335,8 +339,8 @@ public class DagBlockProcessorIntegrationTest {
             BlockInfo info = BlockInfo.builder()
                     .hash(block.getHash())
                     .height((long) (i + 1))
-                    .difficulty(org.apache.tuweni.units.bigints.UInt256.ONE)
-                    .timestamp(timestamp)
+                    .difficulty(UInt256.ONE)
+                    .epoch(timestamp)
                     .build();
 
             block = block.withInfo(info);
@@ -364,17 +368,17 @@ public class DagBlockProcessorIntegrationTest {
         long timestamp = XdagTime.getMainTime(); // Use XDAG main block time
         Block block = Block.createWithNonce(
                 timestamp,
-                org.apache.tuweni.units.bigints.UInt256.ONE,
-                org.apache.tuweni.bytes.Bytes32.ZERO,
-                org.apache.tuweni.bytes.Bytes.random(20),
+                UInt256.ONE,
+                Bytes32.ZERO,
+                Bytes.random(20),
                 java.util.List.of()
         );
 
         BlockInfo info = BlockInfo.builder()
                 .hash(block.getHash())
                 .height(1L)
-                .difficulty(org.apache.tuweni.units.bigints.UInt256.ONE)
-                .timestamp(timestamp)
+                .difficulty(UInt256.ONE)
+                .epoch(timestamp)
                 .build();
 
         block = block.withInfo(info);
@@ -383,7 +387,7 @@ public class DagBlockProcessorIntegrationTest {
         DagBlockProcessor.ProcessingResult result = blockProcessor.processBlock(block);
         assertTrue("Block should be processed successfully", result.isSuccess());
 
-        org.apache.tuweni.bytes.Bytes32 blockHash = block.getHash();
+        Bytes32 blockHash = block.getHash();
 
         // Retrieve without links
         Block retrievedWithoutLinks = blockProcessor.getBlock(blockHash, false);
@@ -408,17 +412,17 @@ public class DagBlockProcessorIntegrationTest {
         long timestamp = XdagTime.getMainTime(); // Use XDAG main block time
         Block block = Block.createWithNonce(
                 timestamp,
-                org.apache.tuweni.units.bigints.UInt256.ONE,
-                org.apache.tuweni.bytes.Bytes32.ZERO,
-                org.apache.tuweni.bytes.Bytes.random(20),
-                java.util.List.of()
+                UInt256.ONE,
+                Bytes32.ZERO,
+                Bytes.random(20),
+                List.of()
         );
 
         BlockInfo info = BlockInfo.builder()
                 .hash(block.getHash())
                 .height(1L)
-                .difficulty(org.apache.tuweni.units.bigints.UInt256.ONE)
-                .timestamp(timestamp)
+                .difficulty(UInt256.ONE)
+                .epoch(timestamp)
                 .build();
 
         block = block.withInfo(info);

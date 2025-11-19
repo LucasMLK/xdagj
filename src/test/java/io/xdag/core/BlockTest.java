@@ -31,15 +31,16 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
+import io.xdag.utils.XdagTime;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.Test;
 
 /**
- * Unit tests for Block (v5.1)
- *
- * Tests the v5.1 Block implementation which uses BlockHeader + List<Link> design.
+ * Unit tests for Block
+ * <p>
+ * Tests the Block implementation which uses BlockHeader + List<Link> design.
  * This test suite covers all core functionality including creation, validation,
  * serialization, and Block reference limits.
  */
@@ -47,7 +48,7 @@ public class BlockTest {
 
     @Test
     public void testCreateCandidate() {
-        long timestamp = 128;
+        long epoch = 2;
         UInt256 difficulty = UInt256.ONE;
         Bytes coinbase = Bytes.random(20);
         List<Link> links = List.of(
@@ -55,27 +56,28 @@ public class BlockTest {
             Link.toBlock(Bytes32.random())
         );
 
-        Block block = Block.createCandidate(timestamp, difficulty, coinbase, links);
+        Block block = Block.createCandidate(epoch, difficulty, coinbase, links);
 
         assertNotNull(block);
-        assertEquals(timestamp, block.getTimestamp());
-        assertEquals(2, block.getEpoch());
+        assertEquals(epoch, block.getEpoch());
         assertEquals(2, block.getLinks().size());
+        assertEquals(XdagTime.epochNumberToMainTime(epoch), block.getTimestamp());
     }
 
     @Test
     public void testCreateWithNonce() {
-        long timestamp = 64;
+        long epoch = 1;
         UInt256 difficulty = UInt256.ONE;
         Bytes32 nonce = Bytes32.random();
         Bytes coinbase = Bytes.random(20);
         List<Link> links = List.of(Link.toTransaction(Bytes32.random()));
 
-        Block block = Block.createWithNonce(timestamp, difficulty, nonce, coinbase, links);
+        Block block = Block.createWithNonce(epoch, difficulty, nonce, coinbase, links);
 
         assertNotNull(block);
         assertNotNull(block.getHash());
         assertEquals(nonce, block.getHeader().getNonce());
+        assertEquals(epoch, block.getEpoch());
     }
 
     @Test
@@ -244,7 +246,7 @@ public class BlockTest {
     @Test
     public void testInvalidBlockWithZeroTimestamp() {
         BlockHeader header = BlockHeader.builder()
-                .timestamp(0)
+                .epoch(0L)
                 .difficulty(UInt256.ZERO)
                 .nonce(Bytes32.ZERO)
                 .coinbase(Bytes.wrap(new byte[20]))

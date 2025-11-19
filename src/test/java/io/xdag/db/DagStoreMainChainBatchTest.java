@@ -92,7 +92,7 @@ public class DagStoreMainChainBatchTest {
 
             // Create block header
             BlockHeader header = BlockHeader.builder()
-                    .timestamp(1000000L + i * 64)
+                    .epoch(1000000L + i * 64)
                     .difficulty(UInt256.valueOf(1000))
                     .nonce(Bytes32.random())
                     .coinbase(Bytes.wrap(new byte[20]))
@@ -107,7 +107,7 @@ public class DagStoreMainChainBatchTest {
             // Create BlockInfo (main block)
             BlockInfo info = BlockInfo.builder()
                     .hash(block.getHash())
-                    .timestamp(header.getTimestamp())
+                    .epoch(header.getEpoch())
                     .height(i)  // Main block at height i
                     .difficulty(UInt256.valueOf(i * 1000))
                     .build();

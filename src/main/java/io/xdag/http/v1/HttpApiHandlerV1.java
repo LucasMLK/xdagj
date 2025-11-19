@@ -246,6 +246,11 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
             return handleGetDifficulty();
         }
 
+        // Node status endpoint
+        if (path.equals("/api/v1/node/status") && method == HttpMethod.GET) {
+            return handleGetNodeStatus();
+        }
+
         return null;
     }
 
@@ -320,6 +325,12 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
         }
 
         BlockDetail blockDetail = blockApiService.getBlockDetail(block.getHash());
+        // Check if blockDetail is null (block exists but has no BlockInfo)
+        if (blockDetail == null) {
+            log.warn("Block at height {} exists but has no BlockInfo", height);
+            return null;
+        }
+
         return convertBlockDetailToResponse(blockDetail, fullTransactions);
     }
 
@@ -542,9 +553,11 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
 
             // Convert Block to response format
             Map<String, Object> response = new HashMap<>();
+            long epochNumber = block.getEpoch();
+            long timestamp = io.xdag.utils.XdagTime.epochNumberToMainTime(epochNumber);
             response.put("hash", block.getHash().toHexString());
-            response.put("timestamp", block.getTimestamp());
-            response.put("epoch", io.xdag.utils.XdagTime.getEpoch(block.getTimestamp()));
+            response.put("timestamp", timestamp);
+            response.put("epoch", epochNumber);
 
             // Block header information
             if (block.getHeader() != null) {
@@ -556,6 +569,31 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
             byte[] blockBytes = block.toBytes();
             response.put("blockData", org.apache.tuweni.bytes.Bytes.wrap(blockBytes).toHexString());
             response.put("size", blockBytes.length);
+
+            // Add RandomX flag - always true since we only support RandomX now
+            response.put("isRandomX", true);
+
+            // Add RandomX seed if available
+            try {
+                io.xdag.consensus.pow.PowAlgorithm powAlgorithm = dagKernel.getPowAlgorithm();
+                if (powAlgorithm instanceof io.xdag.consensus.pow.RandomXPow) {
+                    io.xdag.consensus.pow.RandomXPow randomXPow = (io.xdag.consensus.pow.RandomXPow) powAlgorithm;
+                    io.xdag.consensus.pow.RandomXSeedManager seedManager = randomXPow.getSeedManager();
+
+                    // Get active memory for current epoch (use getActiveMemory instead of getPoolMemory)
+                    io.xdag.consensus.pow.RandomXMemory memory = seedManager.getActiveMemory(block.getEpoch());
+                    if (memory != null && memory.getSeed() != null) {
+                        String seedHex = org.apache.tuweni.bytes.Bytes.wrap(memory.getSeed()).toHexString();
+                        response.put("randomXSeed", seedHex);
+                        log.debug("Added RandomX seed to candidate block: {}", seedHex.substring(0, 16) + "...");
+                    } else {
+                        log.warn("RandomX memory or seed not available for epoch {}",
+                                block.getEpoch());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to get RandomX seed: {}", e.getMessage());
+            }
 
             log.info("Provided candidate block to pool '{}': hash={}", poolId,
                     block.getHash().toHexString().substring(0, 18) + "...");
@@ -644,6 +682,39 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
             return response;
         } catch (Exception e) {
             log.error("Error getting difficulty", e);
+            return null;
+        }
+    }
+
+    private Object handleGetNodeStatus() {
+        try {
+            io.xdag.api.dto.NodeStatusInfo nodeStatus = chainApiService.getNodeStatus();
+            if (nodeStatus == null) {
+                log.warn("Node status returned null");
+                return null;
+            }
+
+            // Convert NodeStatusInfo to response format
+            Map<String, Object> response = new HashMap<>();
+            response.put("syncState", nodeStatus.getSyncState());
+            response.put("isBehind", nodeStatus.isBehind());
+            response.put("currentEpoch", nodeStatus.getCurrentEpoch());
+            response.put("localLatestEpoch", nodeStatus.getLocalLatestEpoch());
+            response.put("epochGap", nodeStatus.getEpochGap());
+            response.put("syncLagThreshold", nodeStatus.getSyncLagThreshold());
+            response.put("timeLagMinutes", nodeStatus.getTimeLagMinutes());
+            response.put("miningStatus", nodeStatus.getMiningStatus());
+            response.put("canMine", nodeStatus.isCanMine());
+            response.put("miningMaxReferenceDepth", nodeStatus.getMiningMaxReferenceDepth());
+            response.put("mainChainLength", nodeStatus.getMainChainLength());
+            response.put("latestBlockHash", nodeStatus.getLatestBlockHash());
+            response.put("latestBlockHeight", nodeStatus.getLatestBlockHeight());
+            response.put("message", nodeStatus.getMessage());
+            response.put("warningLevel", nodeStatus.getWarningLevel());
+
+            return response;
+        } catch (Exception e) {
+            log.error("Error getting node status", e);
             return null;
         }
     }

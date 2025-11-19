@@ -38,7 +38,6 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-import org.bouncycastle.util.encoders.Hex;
 
 /**
  * Transaction API Service
@@ -156,7 +155,7 @@ public class TransactionApiService {
 
             Block block = dagKernel.getDagChain().getBlockByHash(blockHash, false);
             if (block != null) {
-                long timestamp = XdagTime.xdagTimestampToMs(block.getTimestamp());
+                long timestamp = XdagTime.epochNumberToTimeMillis(block.getEpoch());
                 builder.timestamp(timestamp);
 
                 BlockInfo blockInfo = block.getInfo();

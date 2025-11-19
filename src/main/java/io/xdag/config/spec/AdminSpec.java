@@ -26,25 +26,8 @@ package io.xdag.config.spec;
 
 /**
  * Interface for admin configuration specifications
- * Defines methods to access telnet server configuration parameters
+ * Reserved for future admin-related configuration
  */
 public interface AdminSpec {
-
-    /**
-     * Get the IP address for the telnet server
-     * @return String containing the telnet server IP address
-     */
-    String getAdminTelnetIp();
-
-    /**
-     * Get the port number for the telnet server
-     * @return Integer containing the telnet server port number
-     */
-    int getAdminTelnetPort();
-
-    /**
-     * Get the password for telnet server authentication
-     * @return String containing the telnet server password
-     */
-    String getAdminTelnetPassword();
+    // Admin configuration methods will be added here as needed
 }

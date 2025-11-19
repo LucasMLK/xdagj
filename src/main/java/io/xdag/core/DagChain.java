@@ -258,12 +258,12 @@ public interface DagChain {
      * <p>This method should only be called once per blockchain instance, when no blocks exist.
      *
      * @param coinbase Coinbase address from genesis.json (20 bytes)
-     * @param timestamp genesis block timestamp (XDAG timestamp format)
+     * @param epoch genesis block epoch number (XDAG epoch)
      * @return genesis block ready for import
      * @see #tryToConnect(Block)
      * @since XDAGJ
      */
-    Block createGenesisBlock(Bytes coinbase, long timestamp);
+    Block createGenesisBlock(Bytes coinbase, long epoch);
 
     // ==================== Main Chain Queries (Height-Based) ====================
 
@@ -541,19 +541,6 @@ public interface DagChain {
      * @see #getWinnerBlockInEpoch(long)
      */
     Block getBlockByHash(Bytes32 hash, boolean isRaw);
-
-    /**
-     * Get blocks within a time range
-     *
-     * <p>Returns all blocks with timestamps in the specified range.
-     * Useful for time-based queries and analysis.
-     *
-     * @param startTime start timestamp (XDAG format, inclusive)
-     * @param endTime end timestamp (XDAG format, exclusive)
-     * @return list of blocks in time range, sorted by timestamp
-     * @see #getCandidateBlocksInEpoch(long)
-     */
-    List<Block> getBlocksByTimeRange(long startTime, long endTime);
 
     /**
      * List blocks mined by this node

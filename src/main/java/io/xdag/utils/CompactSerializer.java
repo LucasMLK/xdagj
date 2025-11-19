@@ -60,8 +60,8 @@ public class CompactSerializer {
         // hash: 32 bytes (full hash format)
         out.write(blockInfo.getHash().toArray());
 
-        // timestamp: 8 bytes (fixed)
-        writeFixed64(out, blockInfo.getTimestamp());
+        // epoch: 8 bytes (fixed - XDAG epoch number)
+        writeFixed64(out, blockInfo.getEpoch());
 
         // height: variable length (typically 3-5 bytes)
         writeVarLong(out, blockInfo.getHeight());
@@ -114,8 +114,8 @@ public class CompactSerializer {
         // hash: 32 bytes (full hash format)
         Bytes32 fullHash = Bytes32.wrap(reader.readBytes(32));
 
-        // timestamp: 8 bytes
-        long timestamp = reader.readFixed64();
+        // epoch: 8 bytes (XDAG epoch number)
+        long epoch = reader.readFixed64();
 
         // height: variable
         long height = reader.readVarLong();
@@ -158,7 +158,7 @@ public class CompactSerializer {
 
         return BlockInfo.builder()
                 .hash(fullHash)  // Use full hash format, not hash
-                .timestamp(timestamp)
+                .epoch(epoch)
                 .height(height)
                 .difficulty(difficulty)
                 .build();

@@ -455,7 +455,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
     }
 
     /**
-     * Handle SYNC_EPOCH_BLOCKS_REQUEST - peer requesting all block hashes in an epoch (6)
+     * Handle SYNC_EPOCH_BLOCKS_REQUEST - peer requesting all block hashes in an epoch range (6)
      *
      * @param body message body (without message code prefix)
      */
@@ -463,21 +463,54 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
         try {
             SyncEpochBlocksRequestMessage request = new SyncEpochBlocksRequestMessage(body.toArray());
 
-            long epoch = request.getEpoch();
+            long startEpoch = request.getStartEpoch();
+            long endEpoch = request.getEndEpoch();
+            long rangeSize = endEpoch - startEpoch + 1;
 
-            log.debug("Received SyncEpochBlocksRequest from {}: epoch={}",
-                    channel.getRemoteAddress(), epoch);
+            log.debug("Received SyncEpochBlocksRequest from {}: epoch range [{}, {}] (size={})",
+                    channel.getRemoteAddress(), startEpoch, endEpoch, rangeSize);
 
-            // Get all block hashes in this epoch
-            // TODO: Implement efficient epoch block hash retrieval from DagStore
-            // For now, return empty list
-            List<Bytes32> hashes = new ArrayList<>();
+            // Build map of epoch -> block hashes
+            // Use LinkedHashMap to preserve insertion order (though client will iterate sequentially)
+            java.util.Map<Long, List<Bytes32>> epochBlocksMap = new java.util.LinkedHashMap<>();
+            int totalBlocks = 0;
 
-            // Create and send reply
-            SyncEpochBlocksReplyMessage reply = new SyncEpochBlocksReplyMessage(epoch, hashes);
+            // Process each epoch in the range
+            for (long epoch = startEpoch; epoch <= endEpoch; epoch++) {
+                try {
+                    // Use DagChain's method to get all blocks in this epoch
+                    List<Block> blocks = dagChain.getCandidateBlocksInEpoch(epoch);
 
-            log.debug("Sending SyncEpochBlocksReply to {}: {} hashes",
-                    channel.getRemoteAddress(), hashes.size());
+                    if (blocks != null && !blocks.isEmpty()) {
+                        // Extract hashes from blocks
+                        List<Bytes32> hashes = new ArrayList<>();
+                        for (Block block : blocks) {
+                            if (block != null && block.getHash() != null) {
+                                hashes.add(block.getHash());
+                            }
+                        }
+
+                        if (!hashes.isEmpty()) {
+                            // Only include epochs that have blocks
+                            epochBlocksMap.put(epoch, hashes);
+                            totalBlocks += hashes.size();
+                            log.trace("Epoch {} has {} blocks", epoch, hashes.size());
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Error retrieving blocks for epoch {}: {}", epoch, e.getMessage());
+                    // Continue with next epoch - better to reply with partial data than to fail
+                }
+            }
+
+            log.debug("Found {} epochs with blocks ({} total blocks) in range [{}, {}]",
+                    epochBlocksMap.size(), totalBlocks, startEpoch, endEpoch);
+
+            // Create and send reply with batch data
+            SyncEpochBlocksReplyMessage reply = new SyncEpochBlocksReplyMessage(epochBlocksMap);
+
+            log.debug("Sending SyncEpochBlocksReply to {}: {} epochs, {} total hashes",
+                    channel.getRemoteAddress(), epochBlocksMap.size(), totalBlocks);
 
             // Send Message object directly - Channel will handle encoding
             channel.send(reply);
@@ -497,8 +530,12 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
         try {
             SyncEpochBlocksReplyMessage reply = new SyncEpochBlocksReplyMessage(body.toArray());
 
-            log.debug("Received SyncEpochBlocksReply from {}: epoch={}, {} hashes",
-                    channel.getRemoteAddress(), reply.getEpoch(), reply.getHashes().size());
+            int totalHashes = reply.getEpochBlocksMap().values().stream()
+                    .mapToInt(List::size)
+                    .sum();
+
+            log.debug("Received SyncEpochBlocksReply from {}: {} epochs, {} total hashes",
+                    channel.getRemoteAddress(), reply.getEpochBlocksMap().size(), totalHashes);
 
             // Notify adapter to complete the Future
             if (hybridSyncAdapter != null) {

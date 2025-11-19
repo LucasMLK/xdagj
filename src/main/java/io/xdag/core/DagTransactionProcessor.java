@@ -299,7 +299,9 @@ public class DagTransactionProcessor {
      *
      * <p>Wrapper for transaction processing outcome with error details.
      */
-    @Value
+    @lombok.Getter
+    @lombok.AllArgsConstructor
+    @lombok.EqualsAndHashCode
     public static class ProcessingResult {
         boolean success;
         String error;

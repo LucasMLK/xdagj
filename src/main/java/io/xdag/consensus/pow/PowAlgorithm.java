@@ -42,8 +42,7 @@ import org.apache.tuweni.bytes.Bytes32;
  *
  * <h2>Implementations</h2>
  * <ul>
- *   <li>{@link RandomXPoW} - RandomX algorithm (post-fork)</li>
- *   <li>Sha256PoW - SHA256 algorithm (pre-fork, legacy)</li>
+ *   <li>{@link RandomXPoW} - RandomX algorithm (XDAG standard)</li>
  * </ul>
  *
  * <h2>Thread Safety</h2>
@@ -83,8 +82,7 @@ public interface PowAlgorithm {
     /**
      * Check if this PoW algorithm is active for the given epoch.
      *
-     * <p>XDAG switches from SHA256 to RandomX at a specific fork epoch.
-     * This method determines which algorithm should be used.
+     * <p>For RandomX-only implementations, this typically returns true always.
      *
      * @param epoch Epoch number to check
      * @return true if this algorithm should be used for the epoch
@@ -126,7 +124,7 @@ public interface PowAlgorithm {
     /**
      * Get the algorithm name for logging and debugging.
      *
-     * @return Algorithm name (e.g., "RandomX", "SHA256")
+     * @return Algorithm name (e.g., "RandomX")
      */
     String getName();
 }

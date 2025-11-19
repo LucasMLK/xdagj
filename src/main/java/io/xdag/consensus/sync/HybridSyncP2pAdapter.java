@@ -249,15 +249,17 @@ public class HybridSyncP2pAdapter {
     }
 
     /**
-     * Request all block hashes in a specific epoch
+     * Request all block hashes in an epoch range
      *
      * @param channel P2P channel
-     * @param epoch epoch number
+     * @param startEpoch start epoch number (inclusive)
+     * @param endEpoch end epoch number (inclusive)
      * @return CompletableFuture with epoch blocks reply
      */
     public CompletableFuture<SyncEpochBlocksReplyMessage> requestEpochBlocks(
             Channel channel,
-            long epoch) {
+            long startEpoch,
+            long endEpoch) {
 
         String requestId = UUID.randomUUID().toString();
         CompletableFuture<SyncEpochBlocksReplyMessage> future = new CompletableFuture<>();
@@ -271,10 +273,11 @@ public class HybridSyncP2pAdapter {
         pendingEpochBlocksRequests.put(requestId, future);
 
         try {
-            SyncEpochBlocksRequestMessage request = new SyncEpochBlocksRequestMessage(epoch);
+            SyncEpochBlocksRequestMessage request = new SyncEpochBlocksRequestMessage(startEpoch, endEpoch);
 
-            log.debug("Sending SyncEpochBlocksRequest epoch={} to {} (requestId={})",
-                    epoch, channel.getRemoteAddress(), requestId);
+            log.debug("Sending SyncEpochBlocksRequest [{}, {}] (range={}) to {} (requestId={})",
+                    startEpoch, endEpoch, endEpoch - startEpoch + 1,
+                    channel.getRemoteAddress(), requestId);
 
             // Send Message object directly - Channel will handle encoding
             channel.send(request);
@@ -433,8 +436,11 @@ public class HybridSyncP2pAdapter {
                     pendingEpochBlocksRequests.remove(requestId);
 
             if (future != null) {
-                log.debug("Completing epoch blocks request {} with {} hashes",
-                        requestId, reply.getHashes().size());
+                int totalBlocks = reply.getEpochBlocksMap().values().stream()
+                        .mapToInt(List::size)
+                        .sum();
+                log.debug("Completing epoch blocks request {} with {} epochs, {} total blocks",
+                        requestId, reply.getEpochBlocksMap().size(), totalBlocks);
                 future.complete(reply);
             }
         }

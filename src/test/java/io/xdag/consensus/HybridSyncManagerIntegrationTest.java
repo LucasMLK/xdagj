@@ -28,6 +28,7 @@ import io.xdag.DagKernel;
 import io.xdag.consensus.sync.HybridSyncManager;
 import io.xdag.consensus.sync.HybridSyncP2pAdapter;
 import io.xdag.core.*;
+import io.xdag.utils.XdagTime;
 import io.xdag.p2p.channel.Channel;
 import io.xdag.p2p.message.SyncBlocksReplyMessage;
 import io.xdag.p2p.message.SyncEpochBlocksReplyMessage;
@@ -231,9 +232,10 @@ public class HybridSyncManagerIntegrationTest {
                 });
 
         // Setup: Mock empty epoch sync (to complete the test quickly)
-        when(mockP2pAdapter.requestEpochBlocks(any(Channel.class), anyLong()))
+        java.util.Map<Long, List<Bytes32>> emptyEpochMap = new java.util.HashMap<>();
+        when(mockP2pAdapter.requestEpochBlocks(any(Channel.class), anyLong(), anyLong()))
                 .thenReturn(CompletableFuture.completedFuture(
-                        new SyncEpochBlocksReplyMessage(1000L, new ArrayList<>())
+                        new SyncEpochBlocksReplyMessage(emptyEpochMap)
                 ));
 
         // Execute: Start sync
@@ -268,14 +270,13 @@ public class HybridSyncManagerIntegrationTest {
                 .thenReturn(CompletableFuture.completedFuture(heightReply));
         when(mockDagChain.getMainChainLength()).thenReturn(localHeight);
 
-        // Setup: Mock epoch blocks request
+        // Setup: Mock epoch blocks request with batch response
         List<Bytes32> epochHashes = createMockHashes(10);
-        SyncEpochBlocksReplyMessage epochReply = new SyncEpochBlocksReplyMessage(
-                9000L,
-                epochHashes
-        );
+        java.util.Map<Long, List<Bytes32>> epochBlocksMap = new java.util.HashMap<>();
+        epochBlocksMap.put(9000L, epochHashes);
+        SyncEpochBlocksReplyMessage epochReply = new SyncEpochBlocksReplyMessage(epochBlocksMap);
 
-        when(mockP2pAdapter.requestEpochBlocks(any(Channel.class), anyLong()))
+        when(mockP2pAdapter.requestEpochBlocks(any(Channel.class), anyLong(), anyLong()))
                 .thenReturn(CompletableFuture.completedFuture(epochReply));
 
         // Setup: Mock that we don't have these blocks
@@ -302,6 +303,7 @@ public class HybridSyncManagerIntegrationTest {
         // Verify: Epoch blocks were requested
         verify(mockP2pAdapter, atLeastOnce()).requestEpochBlocks(
                 eq(mockChannel),
+                anyLong(),
                 anyLong()
         );
 
@@ -382,9 +384,10 @@ public class HybridSyncManagerIntegrationTest {
                 .thenReturn(DagImportResult.mainBlock(1000L, 1001L, UInt256.valueOf(1000), true));
 
         // Setup: Mock epoch sync (empty)
-        when(mockP2pAdapter.requestEpochBlocks(any(Channel.class), anyLong()))
+        java.util.Map<Long, List<Bytes32>> emptyEpochMap2 = new java.util.HashMap<>();
+        when(mockP2pAdapter.requestEpochBlocks(any(Channel.class), anyLong(), anyLong()))
                 .thenReturn(CompletableFuture.completedFuture(
-                        new SyncEpochBlocksReplyMessage(1000L, new ArrayList<>())
+                        new SyncEpochBlocksReplyMessage(emptyEpochMap2)
                 ));
 
         // Execute: Start sync
@@ -413,8 +416,8 @@ public class HybridSyncManagerIntegrationTest {
             Bytes32 hash = Bytes32.random();
 
             when(mockBlock.getHash()).thenReturn(hash);
-            when(mockBlock.getTimestamp()).thenReturn(height * 64L);
             when(mockBlock.getEpoch()).thenReturn(height);
+            when(mockBlock.getTimestamp()).thenReturn(XdagTime.epochNumberToMainTime(height));
             when(mockBlock.getLinks()).thenReturn(new ArrayList<>());
             // Mock toBytes() to return valid data (512 bytes for XDAG block)
             when(mockBlock.toBytes()).thenReturn(new byte[512]);

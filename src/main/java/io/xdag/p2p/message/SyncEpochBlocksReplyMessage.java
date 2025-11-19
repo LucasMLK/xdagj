@@ -1,26 +1,3 @@
-/*
- * The MIT License (MIT)
- *
- * Copyright (c) 2020-2030 The XdagJ Developers
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- */
 package io.xdag.p2p.message;
 
 import io.xdag.p2p.utils.SimpleDecoder;
@@ -30,66 +7,92 @@ import lombok.Setter;
 import org.apache.tuweni.bytes.Bytes32;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
- * SyncEpochBlocksReplyMessage - Reply with block hashes in epoch
+ * SyncEpochBlocksReplyMessage - Reply with block hashes in epoch range
  *
  * <p>Hybrid Sync Protocol - Epoch Blocks Reply (0x22)
  *
  * <p><strong>Purpose</strong>:
- * Returns a list of all block hashes in the specified epoch, in response
- * to a {@link SyncEpochBlocksRequestMessage}.
+ * Returns a map of epoch -> block hashes for the specified epoch range,
+ * in response to a {@link SyncEpochBlocksRequestMessage}.
  *
  * <p><strong>Message Format</strong>:
  * <pre>
- * [8 bytes]  epoch          - Epoch number
- * [4 bytes]  hashCount      - Number of hashes
- * [variable] hashes[0..N-1] - Block hash list (each 32 bytes)
+ * [4 bytes]  epochCount           - Number of epochs with blocks
+ * For each epoch:
+ *   [8 bytes]  epoch              - Epoch number
+ *   [4 bytes]  hashCount          - Number of hashes in this epoch
+ *   [variable] hashes[0..N-1]     - Block hash list (each 32 bytes)
  * </pre>
  *
  * <p><strong>Fields</strong>:
  * <ul>
- *   <li>{@code epoch}: Epoch number</li>
- *   <li>{@code hashes}: List of all block hashes in this epoch</li>
+ *   <li>{@code epochBlocksMap}: Map of epoch number to list of block hashes</li>
  * </ul>
+ *
+ * <p><strong>Optimization</strong>:
+ * Only epochs that contain blocks are included in the map.
+ * Empty epochs are omitted to reduce network traffic.
  *
  * <p><strong>Data Source</strong>:
  * <pre>{@code
- * List<Block> blocks = dagStore.getCandidateBlocksInEpoch(epoch);
- * List<Bytes32> hashes = blocks.stream()
- *     .map(Block::getHash)
- *     .collect(Collectors.toList());
+ * Map<Long, List<Bytes32>> epochBlocksMap = new HashMap<>();
+ * for (long epoch = startEpoch; epoch <= endEpoch; epoch++) {
+ *     List<Block> blocks = dagStore.getCandidateBlocksInEpoch(epoch);
+ *     if (!blocks.isEmpty()) {
+ *         List<Bytes32> hashes = blocks.stream()
+ *             .map(Block::getHash)
+ *             .collect(Collectors.toList());
+ *         epochBlocksMap.put(epoch, hashes);
+ *     }
+ * }
  * }</pre>
  *
  * <p><strong>Typical Size</strong>:
  * <ul>
+ *   <li>Batch size: 100 epochs</li>
+ *   <li>Epochs with blocks: ~50-80 (50-80% occupancy)</li>
  *   <li>Average blocks per epoch: 10-50</li>
  *   <li>Each hash: 32 bytes</li>
- *   <li>Total size: 320-1600 bytes</li>
+ *   <li>Total size: ~16KB-128KB per batch</li>
  * </ul>
  *
  * <p><strong>Usage</strong>:
  * <pre>{@code
  * // Receiving reply
  * SyncEpochBlocksReplyMessage reply = new SyncEpochBlocksReplyMessage(messageBody);
- * List<Bytes32> hashes = reply.getHashes();
+ * Map<Long, List<Bytes32>> epochBlocksMap = reply.getEpochBlocksMap();
  *
- * // Process hashes
- * List<Bytes32> missingHashes = hashes.stream()
- *     .filter(hash -> !blockStore.hasBlock(hash))
- *     .collect(Collectors.toList());
+ * // Process each epoch in the requested range
+ * for (long epoch = startEpoch; epoch <= endEpoch; epoch++) {
+ *     List<Bytes32> hashes = epochBlocksMap.getOrDefault(epoch, Collections.emptyList());
+ *     if (hashes.isEmpty()) {
+ *         continue;  // Empty epoch, skip
+ *     }
  *
- * // Batch request missing blocks
- * SyncBlocksRequestMessage blocksReq = new SyncBlocksRequestMessage(missingHashes, true);
- * channel.sendMessage(blocksReq);
+ *     // Filter for missing blocks
+ *     List<Bytes32> missingHashes = hashes.stream()
+ *         .filter(hash -> !blockStore.hasBlock(hash))
+ *         .collect(Collectors.toList());
+ *     // Batch request missing blocks...
+ * }
  *
  * // Sending reply
- * List<Block> blocks = dagStore.getCandidateBlocksInEpoch(epoch);
- * List<Bytes32> hashes = blocks.stream()
- *     .map(Block::getHash)
- *     .collect(Collectors.toList());
- * SyncEpochBlocksReplyMessage reply = new SyncEpochBlocksReplyMessage(epoch, hashes);
+ * Map<Long, List<Bytes32>> epochBlocksMap = new HashMap<>();
+ * for (long epoch = startEpoch; epoch <= endEpoch; epoch++) {
+ *     List<Block> blocks = dagStore.getCandidateBlocksInEpoch(epoch);
+ *     if (!blocks.isEmpty()) {
+ *         List<Bytes32> hashes = blocks.stream()
+ *             .map(Block::getHash)
+ *             .collect(Collectors.toList());
+ *         epochBlocksMap.put(epoch, hashes);
+ *     }
+ * }
+ * SyncEpochBlocksReplyMessage reply = new SyncEpochBlocksReplyMessage(epochBlocksMap);
  * channel.sendMessage(reply);
  * }</pre>
  *
@@ -102,23 +105,23 @@ import java.util.List;
 public class SyncEpochBlocksReplyMessage extends Message {
 
     /**
-     * Epoch number
+     * Map of epoch number to list of block hashes
+     * Only epochs with blocks are included
      */
-    private long epoch;
-
-    /**
-     * List of block hashes in this epoch
-     */
-    private List<Bytes32> hashes;
+    private Map<Long, List<Bytes32>> epochBlocksMap;
 
     /**
      * Constructor for receiving message from network
      *
      * <p>Deserializes message body:
      * <ol>
-     *   <li>Read epoch (long, 8 bytes)</li>
-     *   <li>Read hashCount (int, 4 bytes)</li>
-     *   <li>For each hash: read 32 bytes</li>
+     *   <li>Read epochCount (int, 4 bytes)</li>
+     *   <li>For each epoch:</li>
+     *   <ol>
+     *     <li>Read epoch (long, 8 bytes)</li>
+     *     <li>Read hashCount (int, 4 bytes)</li>
+     *     <li>For each hash: read 32 bytes</li>
+     *   </ol>
      * </ol>
      *
      * @param body serialized message body
@@ -129,18 +132,27 @@ public class SyncEpochBlocksReplyMessage extends Message {
 
         SimpleDecoder dec = new SimpleDecoder(body);
 
-        // Deserialize epoch
-        this.epoch = dec.readLong();
+        // Deserialize epoch count
+        int epochCount = dec.readInt();
+        this.epochBlocksMap = new HashMap<>(epochCount);
 
-        // Deserialize hash count
-        int hashCount = dec.readInt();
-        this.hashes = new ArrayList<>(hashCount);
+        // Deserialize each epoch's blocks
+        for (int i = 0; i < epochCount; i++) {
+            // Read epoch number
+            long epoch = dec.readLong();
 
-        // Deserialize each hash (32 bytes)
-        for (int i = 0; i < hashCount; i++) {
-            byte[] hashBytes = new byte[32];
-            dec.readBytes(hashBytes);
-            this.hashes.add(Bytes32.wrap(hashBytes));
+            // Read hash count for this epoch
+            int hashCount = dec.readInt();
+            List<Bytes32> hashes = new ArrayList<>(hashCount);
+
+            // Read each hash (32 bytes)
+            for (int j = 0; j < hashCount; j++) {
+                byte[] hashBytes = new byte[32];
+                dec.readBytes(hashBytes);
+                hashes.add(Bytes32.wrap(hashBytes));
+            }
+
+            this.epochBlocksMap.put(epoch, hashes);
         }
 
         // Set body for reference
@@ -152,19 +164,21 @@ public class SyncEpochBlocksReplyMessage extends Message {
      *
      * <p>Serializes message:
      * <ol>
-     *   <li>Write epoch (long, 8 bytes)</li>
-     *   <li>Write hashCount (int, 4 bytes)</li>
-     *   <li>For each hash: write 32 bytes</li>
+     *   <li>Write epochCount (int, 4 bytes)</li>
+     *   <li>For each epoch with blocks:</li>
+     *   <ol>
+     *     <li>Write epoch (long, 8 bytes)</li>
+     *     <li>Write hashCount (int, 4 bytes)</li>
+     *     <li>For each hash: write 32 bytes</li>
+     *   </ol>
      * </ol>
      *
-     * @param epoch epoch number
-     * @param hashes list of block hashes in this epoch
+     * @param epochBlocksMap map of epoch number to list of block hashes
      */
-    public SyncEpochBlocksReplyMessage(long epoch, List<Bytes32> hashes) {
+    public SyncEpochBlocksReplyMessage(Map<Long, List<Bytes32>> epochBlocksMap) {
         super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REPLY, null);
 
-        this.epoch = epoch;
-        this.hashes = hashes;
+        this.epochBlocksMap = epochBlocksMap;
 
         // Serialize message body
         SimpleEncoder enc = new SimpleEncoder();
@@ -174,24 +188,36 @@ public class SyncEpochBlocksReplyMessage extends Message {
 
     @Override
     public void encode(SimpleEncoder enc) {
-        // Serialize epoch
-        enc.writeLong(epoch);
+        // Serialize epoch count
+        enc.writeInt(epochBlocksMap.size());
 
-        // Serialize hash count
-        enc.writeInt(hashes.size());
+        // Serialize each epoch's blocks
+        for (Map.Entry<Long, List<Bytes32>> entry : epochBlocksMap.entrySet()) {
+            long epoch = entry.getKey();
+            List<Bytes32> hashes = entry.getValue();
 
-        // Serialize each hash (32 bytes)
-        for (Bytes32 hash : hashes) {
-            enc.write(hash.toArray());
+            // Write epoch number
+            enc.writeLong(epoch);
+
+            // Write hash count
+            enc.writeInt(hashes.size());
+
+            // Write each hash (32 bytes)
+            for (Bytes32 hash : hashes) {
+                enc.write(hash.toArray());
+            }
         }
     }
 
     @Override
     public String toString() {
+        int totalBlocks = epochBlocksMap.values().stream()
+                .mapToInt(List::size)
+                .sum();
         return String.format(
-            "SyncEpochBlocksReplyMessage[epoch=%d, hashes=%d, size=%d bytes]",
-            epoch,
-            hashes != null ? hashes.size() : 0,
+            "SyncEpochBlocksReplyMessage[epochs=%d, totalBlocks=%d, size=%d bytes]",
+            epochBlocksMap != null ? epochBlocksMap.size() : 0,
+            totalBlocks,
             body != null ? body.length : 0
         );
     }

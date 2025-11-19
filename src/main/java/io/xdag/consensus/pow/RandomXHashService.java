@@ -25,6 +25,7 @@
 package io.xdag.consensus.pow;
 
 import io.xdag.crypto.randomx.RandomXTemplate;
+import io.xdag.utils.XdagTime;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
@@ -127,10 +128,11 @@ public class RandomXHashService {
         }
 
         // Get active memory slot for block validation
-        RandomXMemory memory = seedManager.getActiveMemory(blockTime);
+        long epoch = XdagTime.getEpochNumber(blockTime);
+        RandomXMemory memory = seedManager.getActiveMemory(epoch);
         if (memory == null) {
-            log.debug("No seed available for blockTime: {} (epoch index: {})",
-                    Long.toHexString(blockTime), seedManager.getCurrentEpochIndex());
+            log.debug("No seed available for epoch {} (blockTime: 0x{})",
+                    epoch, Long.toHexString(blockTime));
             return null;
         }
 

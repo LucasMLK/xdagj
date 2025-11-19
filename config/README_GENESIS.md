@@ -48,7 +48,7 @@ cp config/genesis-devnet.json ./genesis.json
 {
   "networkId": "mainnet",          // Network identifier
   "chainId": 1,                    // Chain ID for replay protection
-  "timestamp": 1516406400,         // Genesis block timestamp
+  "epoch": 23694000,               // Genesis block epoch (XDAG epoch number)
   "initialDifficulty": "0x1",      // Initial mining difficulty (hex)
   "epochLength": 64,               // Epoch length in seconds
   "extraData": "XDAG v5.1 Genesis",// Extra data (up to 32 bytes)
@@ -155,7 +155,10 @@ The node will import all blocks and accounts from the snapshot.
 
 ### Timing
 
-- **timestamp**: Unix timestamp for genesis block (default: XDAG_ERA = 1516406400)
+- **epoch**: XDAG epoch number for genesis block (calculated as `XdagTime.getEpoch(timestamp)`)
+  - Default for mainnet: 23694000 (XDAG_ERA: 2018-01-20 00:00:00 UTC)
+  - Each epoch = 64 seconds
+  - Example: Unix timestamp 1516406400 → XDAG epoch 23694000
 - **epochLength**: Epoch duration in seconds (default: 64)
 
 ### Consensus
@@ -324,7 +327,10 @@ Generate genesis.json programmatically:
 GenesisConfig genesis = new GenesisConfig();
 genesis.setNetworkId("testnet");
 genesis.setChainId(2);
-genesis.setTimestamp(System.currentTimeMillis() / 1000);
+// Set epoch using XdagTime utilities
+long currentTimestamp = XdagTime.getCurrentTimestamp();
+long currentEpoch = XdagTime.getEpoch(currentTimestamp);
+genesis.setEpoch(currentEpoch);
 
 // Add allocations
 genesis.getAlloc().put("0x00...01", "1000000000000000000000");

@@ -113,6 +113,35 @@ public class DagChainImpl implements DagChain {
     private static final long ORPHAN_RETENTION_WINDOW = 16384;
 
     /**
+     * Node sync lag threshold (in epochs)
+     * <p>
+     * If local main chain epoch is behind current time epoch by more than this value,
+     * the node is considered "behind" and should sync before mining.
+     * <p>
+     * 100 epochs ≈ 1.78 hours
+     */
+    private static final long SYNC_LAG_THRESHOLD = 100;
+
+    /**
+     * Maximum reference depth for normal mining (in epochs)
+     * <p>
+     * When node is up-to-date (not behind), new blocks can only reference
+     * blocks within the last 16 epochs (≈17 minutes).
+     * <p>
+     * This prevents "ancient reference" attacks where malicious nodes
+     * reference very old blocks to create fake chains.
+     */
+    private static final long MINING_MAX_REFERENCE_DEPTH = 16;
+
+    /**
+     * Maximum reference depth for sync mode (in epochs)
+     * <p>
+     * When node is behind and syncing, blocks can reference up to 1000 epochs back.
+     * This allows importing historical blocks with reasonable parent references.
+     */
+    private static final long SYNC_MAX_REFERENCE_DEPTH = 1000;
+
+    /**
      * Orphan cleanup interval (in epochs)
      * <p>
      * Run cleanup every 100 epochs (~1.78 hours)
@@ -155,7 +184,7 @@ public class DagChainImpl implements DagChain {
 
         this.chainStats = dagStore.getChainStats();
         if (this.chainStats == null) {
-            long currentEpoch = XdagTime.getCurrentTimestamp() / 64;
+            long currentEpoch = XdagTime.getCurrentEpochNumber();
 
             // DEVNET: Use relaxed difficulty target (no PoW required)
             // MAINNET/TESTNET: Use real difficulty target (requires actual mining)
@@ -183,7 +212,7 @@ public class DagChainImpl implements DagChain {
 
         // Initialize new consensus fields for existing chains
         if (this.chainStats.getBaseDifficultyTarget() == null) {
-            long currentEpoch = XdagTime.getCurrentTimestamp() / 64;
+            long currentEpoch = XdagTime.getCurrentEpochNumber();
 
             // DEVNET: Use relaxed difficulty target (no PoW required)
             // MAINNET/TESTNET: Use real difficulty target (requires actual mining)
@@ -336,7 +365,7 @@ public class DagChainImpl implements DagChain {
             // Save block and metadata
             BlockInfo blockInfo = BlockInfo.builder()
                     .hash(block.getHash())
-                    .timestamp(block.getTimestamp())
+                    .epoch(block.getEpoch())  // Store epoch directly (XDAG epoch number)
                     .height(height)
                     .difficulty(cumulativeDifficulty)
                     .build();
@@ -346,10 +375,9 @@ public class DagChainImpl implements DagChain {
             dagStore.saveBlock(blockWithInfo);
 
             // DEBUG: Log saved block details for troubleshooting
-            log.debug("Saved block: hash={}, epoch={}, timestamp={}, height={}",
+            log.debug("Saved block: hash={}, epoch={}, height={}",
                     blockWithInfo.getHash().toHexString().substring(0, 16),
                     blockWithInfo.getEpoch(),
-                    blockWithInfo.getTimestamp(),
                     blockWithInfo.getInfo().getHeight());
 
             // Index transactions (for all blocks)
@@ -404,6 +432,25 @@ public class DagChainImpl implements DagChain {
             if (isBestChain) {
                 return DagImportResult.mainBlock(blockEpoch, height, cumulativeDifficulty, epochWinner);
             } else {
+                // BUGFIX: Add orphan blocks to orphan store
+                // Orphan blocks are valid, complete blocks that lost epoch competition
+                // They should be available for future blocks to reference
+                // See: docs/DESIGN-BLOCK-LINK-ORPHAN-STORE-REFACTOR.md Section 4.2.2
+                try {
+                    orphanBlockStore.addOrphan(
+                            block.getHash(),
+                            block.getEpoch()
+                    );
+                    log.debug("Added orphan block {} to orphan store (epoch {}, cumDiff {})",
+                            block.getHash().toHexString().substring(0, 16),
+                            blockEpoch,
+                            cumulativeDifficulty.toDecimalString());
+                } catch (Exception e) {
+                    log.error("Failed to add orphan block {} to orphan store: {}",
+                            block.getHash().toHexString().substring(0, 16),
+                            e.getMessage());
+                }
+
                 return DagImportResult.orphan(blockEpoch, cumulativeDifficulty, epochWinner);
             }
 
@@ -417,21 +464,47 @@ public class DagChainImpl implements DagChain {
      * Validate basic block rules
      */
     private DagImportResult validateBasicRules(Block block) {
-        // Check timestamp
-        long currentTime = XdagTime.getCurrentTimestamp();
-        if (block.getTimestamp() > (currentTime + MAIN_CHAIN_PERIOD / 4)) {
-            log.debug("Block {} has invalid timestamp: {} (current: {})",
-                     block.getHash().toHexString(), block.getTimestamp(), currentTime);
-            return DagImportResult.invalidBasic("Block timestamp is too far in the future");
+        // IMPORTANT: Check for genesis block FIRST, before timestamp validation
+        // Genesis blocks use configured epoch timestamps that may not match current time
+        // and should be exempt from general timestamp checks
+        if (isGenesisBlock(block)) {
+            // SECURITY: Genesis blocks can only be accepted if the chain is empty
+            if (chainStats.getMainBlockCount() > 0) {
+                log.warn("SECURITY: Rejecting genesis block {} - chain already initialized with {} blocks",
+                        block.getHash().toHexString(), chainStats.getMainBlockCount());
+                return DagImportResult.invalidBasic("Genesis block rejected: chain already has main blocks");
+            }
+
+            // Genesis block validation passed - skip timestamp checks
+            // Genesis epoch comes from genesis.json configuration and is deterministic
+            log.info("Accepting genesis block {} at epoch {} - deterministic from genesis.json",
+                    block.getHash().toHexString(), block.getEpoch());
+
+            // Continue to other validations (structure, coinbase, etc.) but skip timestamp checks
+            // by setting a flag or directly jumping to structure validation
+        } else {
+            // Regular blocks: Apply timestamp validation
+            long currentTimestamp = XdagTime.getCurrentEpoch();
+            long blockTimestamp = XdagTime.epochNumberToMainTime(block.getEpoch());
+            if (blockTimestamp > (currentTimestamp + MAIN_CHAIN_PERIOD)) {
+                log.debug("Block {} has invalid timestamp: {} (current: {})",
+                         block.getHash().toHexString(), blockTimestamp, currentTimestamp);
+                return DagImportResult.invalidBasic("Block timestamp is too far in the future");
+            }
+
+            // BUGFIX: Convert xdagEra from Unix seconds to XDAG timestamp for comparison
+            // Config stores Unix seconds, but Block uses XDAG timestamp (1/1024 second precision)
+            long xdagEra = dagKernel.getConfig().getXdagEra();
+            long xdagEraTimestamp = xdagEra * 1024;
+
+            if (blockTimestamp < xdagEraTimestamp) {
+                log.debug("Block {} timestamp {} is before XDAG era {} (Unix: {})",
+                         block.getHash().toHexString(), blockTimestamp, xdagEraTimestamp, xdagEra);
+                return DagImportResult.invalidBasic("Block timestamp is before XDAG era");
+            }
         }
 
-        if (block.getTimestamp() < dagKernel.getConfig().getXdagEra()) {
-            log.debug("Block {} timestamp {} is before XDAG era {}",
-                     block.getHash().toHexString(), block.getTimestamp(), dagKernel.getConfig().getXdagEra());
-            return DagImportResult.invalidBasic("Block timestamp is before XDAG era");
-        }
-
-        // Check if block already exists
+        // Check if block already exists (applies to all blocks)
         if (dagStore.hasBlock(block.getHash())) {
             Block existingBlock = dagStore.getBlockByHash(block.getHash(), false);
             if (existingBlock != null && existingBlock.getInfo() != null && existingBlock.getInfo().getHeight() == 0) {
@@ -444,28 +517,6 @@ public class DagChainImpl implements DagChain {
                 log.debug("Block {} already exists as non-orphan", block.getHash().toHexString());
                 return DagImportResult.duplicate();
             }
-        }
-
-        // SECURITY: Validate genesis block (防止伪造创世区块攻击)
-        // Genesis blocks can only be accepted if the chain is empty
-        if (isGenesisBlock(block)) {
-            if (chainStats.getMainBlockCount() > 0) {
-                log.warn("SECURITY: Rejecting genesis block {} - chain already initialized with {} blocks",
-                        block.getHash().toHexString(), chainStats.getMainBlockCount());
-                return DagImportResult.invalidBasic("Genesis block rejected: chain already has main blocks");
-            }
-
-            // Genesis block must be created at or very close to XDAG era time
-            long xdagEra = dagKernel.getConfig().getXdagEra();
-            long timeDiff = Math.abs(block.getTimestamp() - xdagEra);
-            if (timeDiff > 64) {  // Allow 1 epoch (64 seconds) tolerance
-                log.warn("SECURITY: Rejecting genesis block {} - invalid timestamp: {} (era: {}, diff: {}s)",
-                        block.getHash().toHexString(), block.getTimestamp(), xdagEra, timeDiff);
-                return DagImportResult.invalidBasic("Genesis block has invalid timestamp (not at XDAG era)");
-            }
-
-            log.info("Accepting genesis block {} at timestamp {} (era: {})",
-                    block.getHash().toHexString(), block.getTimestamp(), xdagEra);
         }
 
         // Validate block structure
@@ -644,45 +695,67 @@ public class DagChainImpl implements DagChain {
 
         // Check for missing references
         if (!resolved.hasAllReferences()) {
-            Bytes32 missing = resolved.getMissingReferences().getFirst();
-            log.debug("Block {} has missing dependency: {}",
-                     block.getHash().toHexString(), missing.toHexString());
+            boolean allowBootstrap = chainStats.getMainBlockCount() <= 1;
+            if (!allowBootstrap) {
+                Bytes32 missing = resolved.getMissingReferences().getFirst();
+                log.debug("Block {} has missing dependency: {}",
+                        block.getHash().toHexString(), missing.toHexString());
 
-            // Save block to DagStore (for later retrieval)
-            // Create temporary BlockInfo with height=0 (orphan)
-            BlockInfo orphanInfo = BlockInfo.builder()
-                    .hash(block.getHash())
-                    .timestamp(block.getTimestamp())
-                    .height(0)  // Orphan status
-                    .difficulty(org.apache.tuweni.units.bigints.UInt256.ZERO)  // Unknown until dependencies satisfied
-                    .build();
-            dagStore.saveBlockInfo(orphanInfo);
-            Block blockWithInfo = block.toBuilder().info(orphanInfo).build();
-            dagStore.saveBlock(blockWithInfo);
+                // IMPORTANT: Blocks with missing dependencies should NOT be saved
+                log.debug("Rejecting block {} with missing dependency: {} (should be re-sent when dependency arrives)",
+                        block.getHash().toHexString().substring(0, 16),
+                        missing.toHexString().substring(0, 16));
 
-            // Add to orphan queue for retry
-            orphanBlockStore.addOrphan(block.getHash(), block.getTimestamp());
-
-            log.debug("Saved orphan block {} to queue (missing dependency: {})",
-                    block.getHash().toHexString().substring(0, 16),
-                    missing.toHexString().substring(0, 16));
-
-            return DagImportResult.missingDependency(
-                    missing,
-                    "Link target not found: " + missing.toHexString()
-            );
+                return DagImportResult.missingDependency(
+                        missing,
+                        "Link target not found: " + missing.toHexString()
+                );
+            } else {
+                log.warn("Bootstrap mode: accepting block {} despite {} missing references (chain height={})",
+                        block.getHash().toHexString().substring(0, 16),
+                        resolved.getMissingReferences().size(),
+                        chainStats.getMainBlockCount());
+                resolved = ResolvedLinks.builder()
+                        .referencedBlocks(new ArrayList<>(resolved.getReferencedBlocks()))
+                        .referencedTransactions(new ArrayList<>(resolved.getReferencedTransactions()))
+                        .missingReferences(List.of())
+                        .build();
+            }
         }
 
         // Validate all referenced Blocks
         for (Block refBlock : resolved.getReferencedBlocks()) {
-            // Validate timestamp order
-            if (refBlock.getTimestamp() >= block.getTimestamp()) {
-                log.debug("Block {} references block {} with invalid timestamp order",
-                         block.getHash().toHexString(), refBlock.getHash().toHexString());
+            // Validate epoch order: blocks can ONLY reference blocks from PREVIOUS epochs
+            // Same epoch references are NOT allowed (prevents circular dependencies within epoch)
+            // Future epoch references are NOT allowed (violates causality)
+            if (refBlock.getEpoch() >= block.getEpoch()) {
+                log.debug("Block {} (epoch {}) references block {} (epoch {}) - invalid: must reference EARLIER epochs only",
+                         block.getHash().toHexString(), block.getEpoch(),
+                         refBlock.getHash().toHexString(), refBlock.getEpoch());
                 return DagImportResult.invalidLink(
-                        "Referenced block timestamp >= current block timestamp",
+                        String.format("Referenced block epoch (%d) >= current block epoch (%d) - must reference earlier epochs only",
+                                refBlock.getEpoch(), block.getEpoch()),
                         refBlock.getHash()
                 );
+            }
+
+            // NEW: Check reference depth for network partition detection
+            // This is a SOFT check - we warn but still accept the block
+            // This allows handling network partition/merge scenarios
+            long referenceDepth = block.getEpoch() - refBlock.getEpoch();
+
+            if (referenceDepth > SYNC_MAX_REFERENCE_DEPTH) {
+                // Possible network partition scenario
+                log.warn("Block {} (epoch {}) references very old block {} (epoch {}) - depth: {} epochs",
+                        block.getHash().toHexString().substring(0, 16),
+                        block.getEpoch(),
+                        refBlock.getHash().toHexString().substring(0, 16),
+                        refBlock.getEpoch(),
+                        referenceDepth);
+                log.warn("This may indicate a network partition merge scenario (partition duration: ~{} hours)",
+                        referenceDepth * 64 / 3600.0);
+                log.warn("Block will be accepted, but node operators should verify chain consistency");
+                // Continue validation - do NOT reject
             }
         }
 
@@ -950,8 +1023,9 @@ public class DagChainImpl implements DagChain {
     public Block createCandidateBlock() {
         log.info("Creating candidate block for mining");
 
-        long timestamp = XdagTime.getCurrentTimestamp();
-        long epoch = timestamp / 64;
+        // BUGFIX: Use epoch number directly; block timestamp is derived at epoch end for display
+        long epoch = XdagTime.getCurrentEpochNumber();
+        long timestamp = XdagTime.epochNumberToMainTime(epoch);
 
         // Use baseDifficultyTarget from chain stats (NEW CONSENSUS)
         UInt256 difficultyTarget = chainStats.getBaseDifficultyTarget();
@@ -965,7 +1039,7 @@ public class DagChainImpl implements DagChain {
         Bytes coinbase = miningCoinbase;
         List<Link> links = collectCandidateLinks();
 
-        Block candidateBlock = Block.createCandidate(timestamp, difficultyTarget, coinbase, links);
+        Block candidateBlock = Block.createCandidate(epoch, difficultyTarget, coinbase, links);
 
         log.info("Created mining candidate block: epoch={}, target={}, links={}, hash={}",
                 epoch,
@@ -977,72 +1051,123 @@ public class DagChainImpl implements DagChain {
     }
 
     /**
-     * Collect links for candidate block creation
+     * Collect links for candidate block creation (REFACTORED)
      *
-     * <p>Collects block references for mining candidate:
+     * <p>NEW STRATEGY: Reference "top 10 candidates from previous height's epoch"
+     * <p>
+     * Algorithm:
      * <ol>
-     *   <li>Previous main block with epoch boundary check (matching C code logic)</li>
-     *   <li>Recent orphan blocks (for network health and connectivity)</li>
+     *   <li>Get previous main block (height N-1)</li>
+     *   <li>Check if node is up-to-date (strict mining reference depth limit)</li>
+     *   <li>Get all candidates in that block's epoch</li>
+     *   <li>Sort by work (descending), take top 10</li>
+     *   <li>Add references to these 10 blocks</li>
      * </ol>
      *
-     * <p>IMPORTANT: This implements XDAG's epoch-based link reference rules
-     * matching C code (block.c:1028-1040). If the new block and current main block
-     * are in the SAME epoch, we must reference the previous epoch's main block instead
-     * to avoid same-epoch difficulty accumulation.
+     * <p>RATIONALE:
+     * <ul>
+     *   <li>Height N-1 is already confirmed (epoch competition finished)</li>
+     *   <li>All candidates are valid and can be referenced</li>
+     *   <li>Top 10 includes the winner (highest work)</li>
+     *   <li>Gives epoch losers a chance to be referenced</li>
+     *   <li>Strict reference limit prevents outdated nodes from mining</li>
+     * </ul>
      *
-     * @return list of links (1-16 block references)
+     * <p>See: docs/DESIGN-BLOCK-LINK-ORPHAN-STORE-REFACTOR.md
+     *
+     * @return list of block links (up to 10), empty list if node is too far behind
      */
     private List<Link> collectCandidateLinks() {
         List<Link> links = new ArrayList<>();
-        long timestamp = XdagTime.getCurrentTimestamp();
-        long sendEpoch = timestamp / 64;
 
+        // Step 1: Get previous main block (height N-1)
+        // IMPORTANT: mainBlockCount is 0-indexed relative to next block height
+        // When Genesis (height=1) exists, mainBlockCount=0
+        // So we need to get block at height (mainBlockCount), NOT (mainBlockCount-1)
         long currentMainHeight = chainStats.getMainBlockCount();
-        log.debug("Collecting candidate links: mainBlockCount={}, sendEpoch={}", currentMainHeight, sendEpoch);
 
-        // Add previous main block reference (with epoch boundary check)
-        if (currentMainHeight > 0) {
-            Block prevMainBlock = dagStore.getMainBlockByHeight(currentMainHeight, false);
+        // Try to get the last main block
+        // If mainBlockCount==0, this will try to get Genesis at height 1
+        // If mainBlockCount>0, this gets the actual last main block
+        long lastBlockHeight = Math.max(1, currentMainHeight);
 
-            if (prevMainBlock != null) {
-                long prevEpoch = prevMainBlock.getEpoch();
+        // DEBUG: Log the values to diagnose the issue
+        log.info("DEBUG collectCandidateLinks: currentMainHeight={}, lastBlockHeight={}",
+                currentMainHeight, lastBlockHeight);
 
-                if (prevEpoch < sendEpoch) {
-                    // Different epoch → Reference directly (C code: pretop = top_main_chain)
-                    links.add(Link.toBlock(prevMainBlock.getHash()));
-                    log.debug("Added main block reference: {} (epoch {}, different from send epoch {})",
-                            prevMainBlock.getHash().toHexString().substring(0, 16), prevEpoch, sendEpoch);
-                } else {
-                    // Same epoch → Find previous epoch's main block (C code: pretop = pretop_main_chain)
-                    Block preEpochMainBlock = findPreviousEpochMainBlock(prevMainBlock, sendEpoch);
-                    if (preEpochMainBlock != null) {
-                        links.add(Link.toBlock(preEpochMainBlock.getHash()));
-                        log.debug("Added pre-epoch main block reference: {} (epoch {}, avoiding same-epoch reference)",
-                                preEpochMainBlock.getHash().toHexString().substring(0, 16),
-                                preEpochMainBlock.getEpoch());
-                    } else {
-                        log.warn("Could not find previous epoch main block, skipping main block reference");
-                    }
-                }
-            }
+        Block prevMainBlock = dagStore.getMainBlockByHeight(lastBlockHeight, false);
+
+        if (prevMainBlock == null) {
+            // No blocks exist yet (not even Genesis) - this should only happen during initialization
+            log.error("ERROR: Cannot find block at height {}! currentMainHeight={}, Genesis might not be imported!",
+                    lastBlockHeight, currentMainHeight);
+            return links;
         }
 
-        // Add recent orphan blocks (as many as possible, up to block field limit)
-        int maxOrphans = Block.MAX_BLOCK_LINKS - links.size() - 2;  // Reserve space for nonce and signatures
-        if (maxOrphans > 0) {
-            long[] sendTime = new long[2];
-            sendTime[0] = timestamp;
+        log.info("DEBUG: Found prevMainBlock at height {}, epoch={}, hash={}",
+                lastBlockHeight, prevMainBlock.getEpoch(),
+                prevMainBlock.getHash().toHexString().substring(0, 16));
 
-            List<Bytes32> orphanHashes = orphanBlockStore.getOrphan(maxOrphans, sendTime);
-            if (orphanHashes != null && !orphanHashes.isEmpty()) {
-                for (Bytes32 orphanHash : orphanHashes) {
-                    links.add(Link.toBlock(orphanHash));
-                }
-                log.debug("Added {} orphan block references", orphanHashes.size());
-            }
+        // Step 2: STRICT mining reference depth check
+        // Prevent outdated nodes from creating blocks with stale references
+        long currentEpoch = XdagTime.getCurrentEpochNumber();
+        long prevEpoch = prevMainBlock.getEpoch();
+        long referenceDepth = currentEpoch - prevEpoch;
+
+        boolean allowBootstrap = currentMainHeight <= 1;
+        if (referenceDepth > MINING_MAX_REFERENCE_DEPTH && !allowBootstrap) {
+            log.error("MINING BLOCKED: Previous main block (epoch {}) is {} epochs behind current epoch {}",
+                    prevEpoch, referenceDepth, currentEpoch);
+            log.error("Maximum allowed reference depth for mining: {} epochs (~{} minutes)",
+                    MINING_MAX_REFERENCE_DEPTH, MINING_MAX_REFERENCE_DEPTH * 64 / 60);
+            log.error("Node must sync to latest epoch before mining can resume");
+            log.error("Current lag: {} epochs (~{} minutes)",
+                    referenceDepth, referenceDepth * 64 / 60);
+            return links;  // Return empty links to prevent mining
+        } else if (referenceDepth > MINING_MAX_REFERENCE_DEPTH) {
+            log.warn("Reference depth {} exceeds limit {} but allowing bootstrap because currentMainHeight={}",
+                    referenceDepth, MINING_MAX_REFERENCE_DEPTH, currentMainHeight);
         }
 
-        log.info("Collected {} links for candidate block (epoch {})", links.size(), sendEpoch);
+        // Step 3: Get all candidates in prev block's epoch
+        log.debug("Collecting links from height {} (epoch {}), reference depth: {} epochs",
+                currentMainHeight, prevEpoch, referenceDepth);
+
+        List<Block> candidates = getCandidateBlocksInEpoch(prevEpoch);
+
+        if (candidates.isEmpty()) {
+            // Fallback: if no candidates found (shouldn't happen), at least reference prev main block
+            log.warn("No candidates found in epoch {}, only referencing prev main block", prevEpoch);
+            links.add(Link.toBlock(prevMainBlock.getHash()));
+            return links;
+        }
+
+        // Step 3: Sort by work (descending), take top 10
+        // Work = MAX_UINT256 / hash → smaller hash = more work
+        List<Block> top10 = candidates.stream()
+                .sorted((b1, b2) -> {
+                    UInt256 work1 = calculateBlockWork(b1.getHash());
+                    UInt256 work2 = calculateBlockWork(b2.getHash());
+                    return work2.compareTo(work1);  // Descending: largest work first
+                })
+                .limit(10)
+                .collect(Collectors.toList());
+
+        // Step 4: Add block references
+        for (Block block : top10) {
+            links.add(Link.toBlock(block.getHash()));
+        }
+
+        log.info("Collected {} block links from height {} epoch {} (top {} of {} candidates)",
+                links.size(), currentMainHeight, prevEpoch,
+                Math.min(10, candidates.size()), candidates.size());
+
+        // Step 5: TODO - Add transaction links from transaction pool
+        // List<Transaction> pendingTxs = transactionPool.getPendingTransactions(MAX_TX_PER_BLOCK);
+        // for (Transaction tx : pendingTxs) {
+        //     links.add(Link.toTransaction(tx.getHash()));
+        // }
+
         return links;
     }
 
@@ -1095,41 +1220,45 @@ public class DagChainImpl implements DagChain {
      * @param coinbase mining reward address (20 bytes)
      */
     public void setMiningCoinbase(Bytes coinbase) {
-        // BUGFIX: Ensure coinbase is exactly 20 bytes
-        // This prevents BufferOverflowException in Block.calculateHash()
+        Bytes normalized;
         if (coinbase == null) {
             log.warn("Null coinbase provided, using zero address (20 bytes)");
-            this.miningCoinbase = Bytes.wrap(new byte[20]);
-            return;
-        }
-
-        if (coinbase.size() > 20) {
-            // Truncate to 20 bytes
+            normalized = Bytes.wrap(new byte[20]);
+        } else if (coinbase.size() > 20) {
             log.warn("Coinbase address too long ({} bytes), truncating to 20 bytes: {} -> {}",
                     coinbase.size(),
                     coinbase.toHexString(),
                     coinbase.slice(0, 20).toHexString());
-            this.miningCoinbase = coinbase.slice(0, 20);
+            normalized = coinbase.slice(0, 20);
         } else if (coinbase.size() < 20) {
-            // Pad with zeros to 20 bytes
             byte[] padded = new byte[20];
             System.arraycopy(coinbase.toArray(), 0, padded, 0, coinbase.size());
             log.warn("Coinbase address too short ({} bytes), padding to 20 bytes: {} -> {}",
                     coinbase.size(),
                     coinbase.toHexString(),
                     Bytes.wrap(padded).toHexString());
-            this.miningCoinbase = Bytes.wrap(padded);
+            normalized = Bytes.wrap(padded);
         } else {
-            // Exactly 20 bytes, use as-is
-            this.miningCoinbase = coinbase;
-            log.info("Mining coinbase address set: {}", coinbase.toHexString().substring(0, 16) + "...");
+            normalized = coinbase;
         }
+
+        if (normalized.equals(this.miningCoinbase)) {
+            return;
+        }
+
+        this.miningCoinbase = normalized;
+        log.info("Mining coinbase address set: {}", normalized.toHexString().substring(0, 16) + "...");
     }
 
     @Override
-    public Block createGenesisBlock(Bytes coinbase, long timestamp) {
-        log.info("Creating deterministic genesis block at timestamp {}", timestamp);
+    public Block createGenesisBlock(Bytes coinbase, long epoch) {
+        log.info("Creating deterministic genesis block at epoch {}", epoch);
         log.info("  - Coinbase: {}", coinbase.toHexString());
+
+        // IMPORTANT: Block.createWithNonce() expects epoch number, not timestamp
+        // Block.getTimestamp() derives display time via XdagTime.epochNumberToMainTime(...)
+        // So we pass the epoch number directly
+        log.info("  - Genesis epoch: {} (timestamp will be main time: {})", epoch, XdagTime.epochNumberToMainTime(epoch));
 
         // BUGFIX: Ensure coinbase is exactly 20 bytes (same as setMiningCoinbase)
         Bytes normalizedCoinbase = coinbase;
@@ -1146,8 +1275,10 @@ public class DagChainImpl implements DagChain {
             normalizedCoinbase = Bytes.wrap(padded);
         }
 
+        // Create genesis block with epoch number (NOT timestamp)
+        // Block.getTimestamp() uses XdagTime helper to derive display timestamp
         Block genesisBlock = Block.createWithNonce(
-                timestamp,
+                epoch,  // Pass epoch number (23693854), Block will convert to timestamp
                 UInt256.ONE,
                 Bytes32.ZERO,
                 normalizedCoinbase,
@@ -1155,7 +1286,8 @@ public class DagChainImpl implements DagChain {
         );
 
         log.info("✓ Deterministic genesis block created: hash={}, epoch={}",
-                genesisBlock.getHash().toHexString(), genesisBlock.getEpoch());
+                genesisBlock.getHash().toHexString(),
+                genesisBlock.getEpoch());
 
         return genesisBlock;
     }
@@ -1234,35 +1366,22 @@ public class DagChainImpl implements DagChain {
 
     @Override
     public long getCurrentEpoch() {
-        return XdagTime.getCurrentTimestamp() / 64;
+        return XdagTime.getCurrentEpochNumber();
     }
 
     @Override
     public long[] getEpochTimeRange(long epoch) {
         // IMPORTANT: Time range must be [startTime, endTime) with EXCLUSIVE end
         // Blocks with timestamp = endTime belong to NEXT epoch!
-        // Example: epoch 23693854 → [1516406656, 1516406720)
-        //   timestamp 1516406656 belongs to epoch 23693854 ✓
-        //   timestamp 1516406719 belongs to epoch 23693854 ✓
-        //   timestamp 1516406720 belongs to epoch 23693855 ✗ (next epoch!)
-        return new long[] { epoch * 64, (epoch + 1) * 64 };
+        // Example: epoch 23693854 → [XdagTime.epochNumberToEpoch(23693854), XdagTime.epochNumberToEpoch(23693855))
+        long start = XdagTime.epochNumberToEpoch(epoch);
+        long end = XdagTime.epochNumberToEpoch(epoch + 1);
+        return new long[] { start, end };
     }
 
     @Override
     public List<Block> getCandidateBlocksInEpoch(long epoch) {
-        long[] timeRange = getEpochTimeRange(epoch);
-        List<Block> allBlocks = dagStore.getBlocksByTimeRange(timeRange[0], timeRange[1]);
-
-        // IMPORTANT: Filter out blocks with timestamp >= endTime (they belong to next epoch)
-        // This ensures we only get blocks that truly belong to this epoch
-        List<Block> filtered = new ArrayList<>();
-        for (Block block : allBlocks) {
-            if (block.getTimestamp() < timeRange[1]) {
-                filtered.add(block);
-            }
-        }
-
-        return filtered;
+        return dagStore.getCandidateBlocksInEpoch(epoch);
     }
 
     @Override
@@ -1374,11 +1493,6 @@ public class DagChainImpl implements DagChain {
     @Override
     public Block getBlockByHash(Bytes32 hash, boolean isRaw) {
         return dagStore.getBlockByHash(hash, isRaw);
-    }
-
-    @Override
-    public List<Block> getBlocksByTimeRange(long startTime, long endTime) {
-        return dagStore.getBlocksByTimeRange(startTime, endTime);
     }
 
     @Override
@@ -2243,6 +2357,23 @@ public class DagChainImpl implements DagChain {
         Block updatedBlock = block.toBuilder().info(updatedInfo).build();
         dagStore.saveBlock(updatedBlock);
 
+        // BUGFIX: Add to orphan store so it can be referenced by future blocks
+        // Demoted blocks are valid epoch competition losers that should remain referenceable
+        // See: docs/DESIGN-BLOCK-LINK-ORPHAN-STORE-REFACTOR.md Section 4.2.1
+        try {
+            orphanBlockStore.addOrphan(
+                    block.getHash(),
+                    block.getEpoch()
+            );
+            log.debug("Added demoted block {} to orphan store (previous height: {})",
+                    block.getHash().toHexString().substring(0, 16),
+                    previousHeight);
+        } catch (Exception e) {
+            log.error("Failed to add demoted block {} to orphan store: {}",
+                    block.getHash().toHexString().substring(0, 16),
+                    e.getMessage());
+        }
+
         // NOTE: We do NOT modify mainBlockCount here!
         // The mainBlockCount should only be updated by updateChainStatsForNewMainBlock()
         // using Math.max(currentCount, newBlockHeight) to ensure correctness during replacements.
@@ -2453,5 +2584,53 @@ public class DagChainImpl implements DagChain {
                 }
             }
         }
+    }
+
+    // ==================== Node Sync State Management ====================
+
+    /**
+     * Check if the node is behind (needs sync before mining)
+     * <p>
+     * A node is considered "behind" when its local main chain epoch lags
+     * behind the current time epoch by more than SYNC_LAG_THRESHOLD.
+     * <p>
+     * Design rationale (per user requirement):
+     * - Nodes that are up-to-date can mine immediately
+     * - Nodes that are behind MUST sync first before mining
+     * - This prevents outdated nodes from creating blocks with stale references
+     *
+     * @return true if node needs to sync before mining, false if node is up-to-date
+     */
+    public boolean isNodeBehind() {
+        long currentEpoch = getCurrentEpoch();
+
+        // Get local chain's latest epoch
+        long localMainHeight = chainStats.getMainBlockCount();
+        if (localMainHeight == 0) {
+            // Empty chain is always "behind"
+            log.debug("Node has no blocks, considered behind");
+            return true;
+        }
+
+        Block latestMainBlock = dagStore.getMainBlockByHeight(localMainHeight, false);
+        if (latestMainBlock == null) {
+            log.warn("Cannot find latest main block at height {}, assuming node is behind", localMainHeight);
+            return true;
+        }
+
+        long localLatestEpoch = latestMainBlock.getEpoch();
+        long epochGap = currentEpoch - localLatestEpoch;
+
+        boolean isBehind = epochGap > SYNC_LAG_THRESHOLD;
+
+        if (isBehind) {
+            log.info("Node is BEHIND: local epoch {} is {} epochs behind current epoch {} (threshold: {})",
+                    localLatestEpoch, epochGap, currentEpoch, SYNC_LAG_THRESHOLD);
+        } else {
+            log.debug("Node is UP-TO-DATE: local epoch {} is only {} epochs behind current epoch {} (threshold: {})",
+                    localLatestEpoch, epochGap, currentEpoch, SYNC_LAG_THRESHOLD);
+        }
+
+        return isBehind;
     }
 }

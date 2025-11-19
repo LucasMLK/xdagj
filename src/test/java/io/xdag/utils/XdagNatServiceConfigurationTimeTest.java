@@ -37,7 +37,7 @@ public class XdagNatServiceConfigurationTimeTest {
     @Test
     public void testGetEndOfEpoch() throws ParseException {
         Date date1 = FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss").parse("2020-09-20 23:00:00");
-        Date date2 = new Date(XdagTime.getEndOfEpoch(date1.getTime()));
+        Date date2 = new Date(XdagTime.getEndTimeMillisOfEpoch(date1.getTime()));
         for (int i = 0; i < 10; i++) {
             long epoch2 = XdagTime.getEpoch(date2.getTime());
             Date date3 = DateUtils.addSeconds(date2, 64);

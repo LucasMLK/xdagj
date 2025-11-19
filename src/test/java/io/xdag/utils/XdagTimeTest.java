@@ -43,7 +43,7 @@ public class XdagTimeTest {
     public void testMsToXdagTimestamp() {
         // 1000ms = 1 second = 1024 XDAG units
         long ms = 1000L;
-        long xdagTime = XdagTime.msToXdagtimestamp(ms);
+        long xdagTime = XdagTime.timeMillisToEpoch(ms);
 
         assertEquals("1 second should be 1024 XDAG units", 1024L, xdagTime);
     }
@@ -52,10 +52,10 @@ public class XdagTimeTest {
      * Test 2: XDAG timestamp to milliseconds conversion
      */
     @Test
-    public void testXdagTimestampToMs() {
+    public void testEpochToTimeMillis() {
         // 1024 XDAG units = 1 second = 1000ms
         long xdagTime = 1024L;
-        long ms = XdagTime.xdagTimestampToMs(xdagTime);
+        long ms = XdagTime.epochToTimeMillis(xdagTime);
 
         assertEquals("1024 XDAG units should be 1000ms", 1000L, ms);
     }
@@ -75,8 +75,8 @@ public class XdagTimeTest {
         };
 
         for (long originalMs : testValues) {
-            long xdagTime = XdagTime.msToXdagtimestamp(originalMs);
-            long convertedMs = XdagTime.xdagTimestampToMs(xdagTime);
+            long xdagTime = XdagTime.timeMillisToEpoch(originalMs);
+            long convertedMs = XdagTime.epochToTimeMillis(xdagTime);
 
             // Allow small rounding error (< 1ms due to precision difference)
             long diff = Math.abs(convertedMs - originalMs);
@@ -92,16 +92,16 @@ public class XdagTimeTest {
     public void testPrecision() {
         // 1024 XDAG units per second
         long oneSecondMs = 1000L;
-        long xdagUnitsPerSecond = XdagTime.msToXdagtimestamp(oneSecondMs);
+        long xdagUnitsPerSecond = XdagTime.timeMillisToEpoch(oneSecondMs);
 
         assertEquals("XDAG should use 1024 units per second", 1024L, xdagUnitsPerSecond);
 
         // 1 XDAG unit = 1000/1024 ms ≈ 0.9765625 ms
-        long oneXdagUnitInMs = XdagTime.xdagTimestampToMs(1L);
+        long oneXdagUnitInMs = XdagTime.epochToTimeMillis(1L);
         assertEquals("1 XDAG unit should be 0ms (rounded down)", 0L, oneXdagUnitInMs);
 
         // 2 XDAG units ≈ 1.953ms → 1ms (rounded down)
-        long twoXdagUnitsInMs = XdagTime.xdagTimestampToMs(2L);
+        long twoXdagUnitsInMs = XdagTime.epochToTimeMillis(2L);
         assertEquals("2 XDAG units should be 1ms", 1L, twoXdagUnitsInMs);
     }
 
@@ -136,7 +136,7 @@ public class XdagTimeTest {
     public void testEpochDuration() {
         // 1 epoch = 2^16 XDAG units = 65536 / 1024 seconds = 64 seconds
         long epochInXdagUnits = 65536L;
-        long epochInMs = XdagTime.xdagTimestampToMs(epochInXdagUnits);
+        long epochInMs = XdagTime.epochToTimeMillis(epochInXdagUnits);
         long epochInSeconds = epochInMs / 1000;
 
         assertEquals("1 epoch should be 64 seconds", 64L, epochInSeconds);
@@ -146,9 +146,9 @@ public class XdagTimeTest {
      * Test 7: End of epoch calculation
      */
     @Test
-    public void testGetEndOfEpoch() {
+    public void testGetEndTimeMillisOfEpoch() {
         long time = 65536L;  // Start of epoch 1
-        long endOfEpoch = XdagTime.getEndOfEpoch(time);
+        long endOfEpoch = XdagTime.getEndTimeMillisOfEpoch(time);
 
         // End of epoch should have all lower 16 bits set (0xffff)
         assertEquals("End of epoch should be time | 0xffff",
@@ -181,12 +181,12 @@ public class XdagTimeTest {
      * Test 9: Current timestamp is valid
      */
     @Test
-    public void testGetCurrentTimestamp() {
-        long currentXdagTime = XdagTime.getCurrentTimestamp();
+    public void testGetCurrentEpoch() {
+        long currentXdagTime = XdagTime.getCurrentEpoch();
         long currentMs = System.currentTimeMillis();
 
         // Convert back to verify
-        long convertedMs = XdagTime.xdagTimestampToMs(currentXdagTime);
+        long convertedMs = XdagTime.epochToTimeMillis(currentXdagTime);
 
         // Should be close to current time (within 2ms)
         long diff = Math.abs(convertedMs - currentMs);
@@ -200,10 +200,10 @@ public class XdagTimeTest {
     @Test
     public void testZeroTimestamp() {
         long ms = 0L;
-        long xdagTime = XdagTime.msToXdagtimestamp(ms);
+        long xdagTime = XdagTime.timeMillisToEpoch(ms);
         assertEquals("Zero ms should be zero XDAG time", 0L, xdagTime);
 
-        long convertedMs = XdagTime.xdagTimestampToMs(0L);
+        long convertedMs = XdagTime.epochToTimeMillis(0L);
         assertEquals("Zero XDAG time should be zero ms", 0L, convertedMs);
     }
 
@@ -214,8 +214,8 @@ public class XdagTimeTest {
     public void testLargeTimestamps() {
         // Year 2024 timestamp
         long ms2024 = 1704067200000L; // 2024-01-01 00:00:00 UTC
-        long xdagTime = XdagTime.msToXdagtimestamp(ms2024);
-        long convertedMs = XdagTime.xdagTimestampToMs(xdagTime);
+        long xdagTime = XdagTime.timeMillisToEpoch(ms2024);
+        long convertedMs = XdagTime.epochToTimeMillis(xdagTime);
 
         // Should round-trip accurately
         long diff = Math.abs(convertedMs - ms2024);
@@ -231,14 +231,14 @@ public class XdagTimeTest {
         long ms = 5000L;  // 5 seconds
 
         long expectedXdagTime = (ms * 1024L) / 1000L;
-        long actualXdagTime = XdagTime.msToXdagtimestamp(ms);
+        long actualXdagTime = XdagTime.timeMillisToEpoch(ms);
 
         assertEquals("XDAG time should follow formula (ms * 1024) / 1000",
                      expectedXdagTime, actualXdagTime);
 
         // Verify reverse: ms = (XDAG_time * 1000) / 1024
         long expectedMs = (actualXdagTime * 1000L) / 1024L;
-        long actualMs = XdagTime.xdagTimestampToMs(actualXdagTime);
+        long actualMs = XdagTime.epochToTimeMillis(actualXdagTime);
 
         assertEquals("Ms should follow formula (XDAG_time * 1000) / 1024",
                      expectedMs, actualMs);

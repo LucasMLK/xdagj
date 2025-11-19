@@ -25,6 +25,7 @@
 package io.xdag.core;
 
 import io.xdag.crypto.hash.HashUtils;
+import io.xdag.utils.XdagTime;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -38,18 +39,18 @@ import org.apache.tuweni.units.bigints.UInt256;
 
 /**
  * Block for XDAG - Candidate Block
- *
+ * <p>
  * NOTE: This is the Block implementation. During Phase 3 migration, it coexists
  * with the legacy Block.java. Once migration is complete, this class will be renamed
  * back to Block.java and the legacy Block will be removed.
- *
+ * <p>
  * Design principles (from CORE_DATA_STRUCTURES.md):
  * 1. Only contains references (Link), not full Transaction/Block data
  * 2. All blocks are candidate blocks (all have nonce and coinbase)
  * 3. Winner block (hash <= difficulty and smallest hash) becomes main block
  * 4. Block only stores hash references, enabling 1,485,000+ links in 48MB
  * 5. Hash is cached (lazy computation)
- *
+ * <p>
  * Structure:
  * ```
  * Block {
@@ -58,7 +59,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  *     info: BlockInfo      (runtime metadata, not serialized)
  * }
  * ```
- *
+ * <p>
  * Capacity (48MB block):
  * - 48MB / 33 bytes per link ≈ 1,485,000 links
  * - TPS: 1,485,000 txs / 64秒 ≈ 23,200 TPS (96.7% Visa level)
@@ -85,13 +86,13 @@ public class Block implements Serializable {
 
     /**
      * Block metadata (runtime only, not serialized)
-     *
+     * <p>
      * Phase 4 Step 2.3: BlockInfo integration
      * - Contains: flags, difficulty, ref, maxDiffLink, amount, fee, etc.
      * - Loaded from BlockStore at runtime
      * - Does NOT participate in serialization (toBytes/fromBytes)
      * - Does NOT participate in equals/hashCode (only hash is used)
-     *
+     * <p>
      * Usage:
      * - getInfo(): Get BlockInfo (may be null if not loaded)
      * - withInfo(info): Create new Block with BlockInfo attached
@@ -104,7 +105,6 @@ public class Block implements Serializable {
      *  - remark, snapshot info
      *  Note: Use withInfo() to attach BlockInfo after loading from BlockStore
      *
-     * @return BlockInfo or null if not loaded
 
      */
     @Builder.Default
@@ -148,13 +148,13 @@ public class Block implements Serializable {
 
     /**
      * Get block hash (with caching)
-     *
+     * <p>
      * Hash calculation:
      * 1. If hash already cached in header, return it
      * 2. Otherwise: hash = Keccak256(serialize(header) + serialize(links))
      * 3. Cache the hash in header
      * 4. Return hash
-     *
+     * <p>
      * Thread-safe: uses immutable header with withHash()
      *
      * @return block hash (32 bytes)
@@ -175,9 +175,9 @@ public class Block implements Serializable {
 
     /**
      * Calculate block hash
-     *
+     * <p>
      * Hash = Keccak256(
-     *     timestamp + difficulty + nonce + coinbase +
+     *     epoch + difficulty + nonce + coinbase +
      *     links.size + links[0] + links[1] + ...
      * )
      *
@@ -191,7 +191,7 @@ public class Block implements Serializable {
         ByteBuffer buffer = ByteBuffer.allocate(headerSize + linksSize);
 
         // Serialize header (ensure fixed sizes for big-endian representation)
-        buffer.putLong(header.getTimestamp());  // 8 bytes
+        buffer.putLong(header.getEpoch());  // 8 bytes (XDAG epoch number)
 
         // Difficulty: ensure exactly 32 bytes (big-endian, pad left with zeros)
         Bytes difficultyBytes = header.getDifficulty().toBytes();
@@ -205,7 +205,7 @@ public class Block implements Serializable {
 
         buffer.put(header.getNonce().toArray());  // 32 bytes
 
-        // Coinbase: ensure exactly 20 bytes (big-endian, pad left with zeros)
+        // Coinbase: must be exactly 20 bytes (Ethereum-style address)
         Bytes coinbaseBytes = header.getCoinbase();
         byte[] coinbaseArray = new byte[20];
         int coinbaseOffset = 20 - coinbaseBytes.size();
@@ -239,10 +239,10 @@ public class Block implements Serializable {
 
     /**
      * Create a new Block with updated nonce (for mining)
-     *
+     * <p>
      *  This method enables updating nonce during POW mining.
      * Since Block is immutable, this creates a new instance with the new nonce.
-     *
+     * <p>
      * Usage during mining:
      * ```java
      * Block template = blockchain.createMainBlock();  // nonce = 0
@@ -263,21 +263,22 @@ public class Block implements Serializable {
 
     /**
      * Get epoch number
-     * epoch = timestamp / 64
      *
-     * @return epoch number
+     * @return XDAG epoch number
      */
     public long getEpoch() {
         return header.getEpoch();
     }
 
     /**
-     * Get timestamp
+     * Get block timestamp for display (computed from epoch number).
      *
-     * @return timestamp in seconds
+     * <p>Consensus only stores epoch number; block time is the end of that epoch.
+     *
+     * @return XDAG timestamp at end of epoch (1/1024s units)
      */
     public long getTimestamp() {
-        return header.getTimestamp();
+        return XdagTime.epochNumberToMainTime(header.getEpoch());
     }
 
     /**
@@ -322,9 +323,9 @@ public class Block implements Serializable {
 
     /**
      * Create new Block with BlockInfo attached
-     *
+     * <p>
      * Phase 4 Step 2.3: This method allows attaching runtime metadata to Block
-     *
+     * <p>
      * Usage:
      * ```java
      * Block blockWithInfo = block.withInfo(newInfo);
@@ -425,7 +426,7 @@ public class Block implements Serializable {
         }
 
         // Check header validity
-        if (header.getTimestamp() <= 0) {
+        if (header.getEpoch() <= 0) {
             return false;
         }
         if (header.getDifficulty() == null || header.getDifficulty().isZero()) {
@@ -449,14 +450,14 @@ public class Block implements Serializable {
     /**
      * Create a candidate block (for mining)
      *
-     * @param timestamp block timestamp
+     * @param epoch XDAG epoch number
      * @param difficulty PoW difficulty target
      * @param coinbase miner address (20 bytes)
      * @param links DAG links (transaction and block references)
      * @return candidate block (nonce not set, needs mining)
      */
     public static Block createCandidate(
-            long timestamp,
+            long epoch,
             UInt256 difficulty,
             Bytes coinbase,
             List<Link> links) {
@@ -475,7 +476,7 @@ public class Block implements Serializable {
         }
 
         BlockHeader header = BlockHeader.builder()
-                .timestamp(timestamp)
+                .epoch(epoch)
                 .difficulty(difficulty)
                 .nonce(Bytes32.ZERO)  // Will be set by mining
                 .coinbase(coinbase)
@@ -491,7 +492,7 @@ public class Block implements Serializable {
     /**
      * Create a block with specified nonce (after mining)
      *
-     * @param timestamp block timestamp
+     * @param epoch XDAG epoch number
      * @param difficulty PoW difficulty target
      * @param nonce PoW nonce (found by mining)
      * @param coinbase miner address (20 bytes)
@@ -499,7 +500,7 @@ public class Block implements Serializable {
      * @return block with nonce set
      */
     public static Block createWithNonce(
-            long timestamp,
+            long epoch,
             UInt256 difficulty,
             Bytes32 nonce,
             Bytes coinbase,
@@ -519,7 +520,7 @@ public class Block implements Serializable {
         }
 
         BlockHeader header = BlockHeader.builder()
-                .timestamp(timestamp)
+                .epoch(epoch)
                 .difficulty(difficulty)
                 .nonce(nonce)
                 .coinbase(coinbase)
@@ -536,62 +537,15 @@ public class Block implements Serializable {
         return block.withHash(hash);
     }
 
-    // ========== Mining & RandomX Support (5) ==========
-
-    /**
-     * Calculate preHash for RandomX mining
-     *
-     *  This method replaces the legacy block.getXdagBlock().getData().slice(0, 480)
-     * approach. For Block, we use the serialized header + links metadata as input.
-     *
-     * PreHash calculation:
-     * 1. Serialize header (timestamp, difficulty, nonce, coinbase) = 92 bytes
-     * 2. Serialize links metadata (count + first few link hashes) to reach ~480 bytes
-     * 3. Calculate SHA256 of the combined data
-     *
-     * This preHash is used by RandomX for POW mining:
-     * - taskData = [preHash(32 bytes) + share(32 bytes)]
-     * - RandomX calculates: hash = randomx(taskData, seed)
-     *
-     * @return preHash (32 bytes) for RandomX input
-     */
-    public Bytes32 getRandomXPreHash() {
-        // Calculate how much data we need for ~480 bytes equivalent
-        // Header: 92 bytes (timestamp 8 + difficulty 32 + nonce 32 + coinbase 20)
-        // Links: 4 bytes (count) + N × 33 bytes (each link)
-        // Target: ~480 bytes to match legacy behavior
-
-        int headerSize = BlockHeader.getSerializedSize();  // 92 bytes
-        int remainingSize = 480 - headerSize;  // 388 bytes
-        int maxLinks = Math.min((remainingSize - 4) / Link.LINK_SIZE, links.size());  // ~11 links
-
-        ByteBuffer buffer = ByteBuffer.allocate(headerSize + 4 + (maxLinks * Link.LINK_SIZE));
-
-        // Serialize header
-        buffer.putLong(header.getTimestamp());
-        buffer.put(header.getDifficulty().toBytes().toArray());
-        buffer.put(header.getNonce().toArray());
-        buffer.put(header.getCoinbase().toArray());
-
-        // Serialize links metadata (count + first N links)
-        buffer.putInt(links.size());  // Total link count
-        for (int i = 0; i < maxLinks; i++) {
-            buffer.put(links.get(i).toBytes());
-        }
-
-        // Calculate SHA256 of the data (equivalent to legacy SHA256(block.getData().slice(0, 480)))
-        return HashUtils.sha256(Bytes.wrap(buffer.array()));
-    }
-
     // ========== Serialization ==========
 
     /**
      * Serialize block to bytes (for network transmission or storage)
-     *
+     * <p>
      * Format:
      * [Header - 92 bytes]
-     *   timestamp (8) + difficulty (32) + nonce (32) + coinbase (20)
-     *
+     *   epoch (8) + difficulty (32) + nonce (32) + coinbase (20)
+     * <p>
      * [Links - variable]
      *   links_count (4) + link[0] (33) + link[1] (33) + ...
      *
@@ -602,8 +556,19 @@ public class Block implements Serializable {
         ByteBuffer buffer = ByteBuffer.allocate(size);
 
         // Serialize header (hash NOT included, it's cached)
-        buffer.putLong(header.getTimestamp());
-        buffer.put(header.getDifficulty().toBytes().toArray());
+        buffer.putLong(header.getEpoch());  // 8 bytes (XDAG epoch number)
+
+        // BUGFIX: Ensure difficulty is exactly 32 bytes (pad left with zeros if needed)
+        // This must match fromBytes() which reads exactly 32 bytes for difficulty
+        Bytes difficultyBytes = header.getDifficulty().toBytes();
+        byte[] diffArray = new byte[32];
+        int diffOffset = 32 - difficultyBytes.size();
+        if (diffOffset < 0) {
+            throw new IllegalStateException("Difficulty bytes exceed 32 bytes: " + difficultyBytes.size());
+        }
+        System.arraycopy(difficultyBytes.toArray(), 0, diffArray, diffOffset, difficultyBytes.size());
+        buffer.put(diffArray);  // Exactly 32 bytes
+
         buffer.put(header.getNonce().toArray());
         buffer.put(header.getCoinbase().toArray());
 
@@ -633,7 +598,7 @@ public class Block implements Serializable {
         ByteBuffer buffer = ByteBuffer.wrap(bytes);
 
         // Deserialize header
-        long timestamp = buffer.getLong();
+        long epoch = buffer.getLong();  // Read XDAG epoch number (8 bytes)
 
         byte[] diffBytes = new byte[32];
         buffer.get(diffBytes);
@@ -663,8 +628,8 @@ public class Block implements Serializable {
             links.add(Link.fromBytes(linkBytes));
         }
 
-        // Create block
-        return createWithNonce(timestamp, difficulty, nonce, coinbase, links);
+        // Create block with epoch
+        return createWithNonce(epoch, difficulty, nonce, coinbase, links);
     }
 
     // ========== Object Methods ==========
@@ -672,9 +637,8 @@ public class Block implements Serializable {
     @Override
     public String toString() {
         return String.format(
-            "Block[epoch=%d, timestamp=%d, hash=%s, links=%d (%d txs, %d blocks), size=%d bytes]",
+            "Block[epoch=%d, hash=%s, links=%d (%d txs, %d blocks), size=%d bytes]",
             getEpoch(),
-            getTimestamp(),
             header.getHash() != null ? header.getHash().toHexString().substring(0, 16) + "..." : "not_calculated",
             links.size(),
             getTransactionCount(),

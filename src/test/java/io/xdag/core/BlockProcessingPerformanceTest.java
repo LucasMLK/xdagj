@@ -440,7 +440,7 @@ public class BlockProcessingPerformanceTest {
                 .hash(block.getHash())
                 .height(1L)
                 .difficulty(UInt256.ONE)
-                .timestamp(timestamp)
+                .epoch(timestamp)
                 .build();
 
         return block.withInfo(blockInfo);

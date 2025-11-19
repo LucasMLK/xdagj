@@ -184,16 +184,19 @@ public class DagBlockProcessor {
             return false;
         }
 
-        if (block.getTimestamp() <= 0) {
-            log.warn("Block has invalid timestamp: {}", block.getTimestamp());
+        // Convert epoch number to XDAG timestamp (end of epoch) using XdagTime utility
+        long timestamp = io.xdag.utils.XdagTime.epochNumberToMainTime(block.getEpoch());
+
+        if (timestamp <= 0) {
+            log.warn("Block has invalid timestamp: {}", timestamp);
             return false;
         }
 
         // IMPORTANT: Main blocks must have timestamp at epoch end (lower 16 bits = 0xffff)
         // This matches C code validation: (time & 0xffff) == 0xffff (block.c:677)
-        if ((block.getTimestamp() & 0xffff) != 0xffff) {
+        if ((timestamp & 0xffff) != 0xffff) {
             log.warn("Block timestamp {} is not at epoch end (must be 0xffff)",
-                    Long.toHexString(block.getTimestamp()));
+                    Long.toHexString(timestamp));
             return false;
         }
 

@@ -48,7 +48,7 @@ public class BlockHeaderTest {
     @Test
     public void testEpochCalculation() {
         BlockHeader header1 = BlockHeader.builder()
-                .timestamp(0)
+                .epoch(0)
                 .difficulty(UInt256.ONE)
                 .nonce(Bytes32.ZERO)
                 .coinbase(Bytes.wrap(new byte[20]))
@@ -56,7 +56,7 @@ public class BlockHeaderTest {
         assertEquals(0, header1.getEpoch());
 
         BlockHeader header2 = BlockHeader.builder()
-                .timestamp(63)
+                .epoch(63)
                 .difficulty(UInt256.ONE)
                 .nonce(Bytes32.ZERO)
                 .coinbase(Bytes.wrap(new byte[20]))
@@ -64,7 +64,7 @@ public class BlockHeaderTest {
         assertEquals(0, header2.getEpoch());
 
         BlockHeader header3 = BlockHeader.builder()
-                .timestamp(64)
+                .epoch(64)
                 .difficulty(UInt256.ONE)
                 .nonce(Bytes32.ZERO)
                 .coinbase(Bytes.wrap(new byte[20]))
@@ -72,7 +72,7 @@ public class BlockHeaderTest {
         assertEquals(1, header3.getEpoch());
 
         BlockHeader header4 = BlockHeader.builder()
-                .timestamp(128)
+                .epoch(128)
                 .difficulty(UInt256.ONE)
                 .nonce(Bytes32.ZERO)
                 .coinbase(Bytes.wrap(new byte[20]))
@@ -86,7 +86,7 @@ public class BlockHeaderTest {
         UInt256 difficulty = UInt256.fromHexString("0x00000000FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF");
 
         BlockHeader header = BlockHeader.builder()
-                .timestamp(100)
+                .epoch(100)
                 .difficulty(difficulty)
                 .nonce(Bytes32.ZERO)
                 .coinbase(Bytes.wrap(new byte[20]))
@@ -106,7 +106,7 @@ public class BlockHeaderTest {
     @Test
     public void testDifficultyValidationThrowsWhenHashNotSet() {
         BlockHeader header = BlockHeader.builder()
-                .timestamp(100)
+                .epoch(100)
                 .difficulty(UInt256.ONE)
                 .nonce(Bytes32.ZERO)
                 .coinbase(Bytes.wrap(new byte[20]))
@@ -122,7 +122,7 @@ public class BlockHeaderTest {
         Bytes coinbase1 = Bytes.random(20);
 
         BlockHeader header1 = BlockHeader.builder()
-                .timestamp(100)
+                .epoch(100)
                 .difficulty(UInt256.ONE)
                 .nonce(nonce1)
                 .coinbase(coinbase1)
@@ -143,7 +143,7 @@ public class BlockHeaderTest {
     @Test
     public void testToString() {
         BlockHeader header = BlockHeader.builder()
-                .timestamp(128)
+                .epoch(128)
                 .difficulty(UInt256.ONE)
                 .nonce(Bytes32.ZERO)
                 .coinbase(Bytes.wrap(new byte[20]))
@@ -159,7 +159,7 @@ public class BlockHeaderTest {
         Bytes32 hash1 = Bytes32.random();
 
         BlockHeader header = BlockHeader.builder()
-                .timestamp(100)
+                .epoch(100)
                 .difficulty(UInt256.ONE)
                 .nonce(Bytes32.ZERO)
                 .coinbase(Bytes.wrap(new byte[20]))

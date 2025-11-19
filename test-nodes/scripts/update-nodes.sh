@@ -9,9 +9,10 @@ set -e
 # ==================== Configuration ====================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-NODE1_DIR="$SCRIPT_DIR/node1"
-NODE2_DIR="$SCRIPT_DIR/node2"
+TEST_NODES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROJECT_ROOT="$(cd "$TEST_NODES_DIR/.." && pwd)"
+NODE1_DIR="$TEST_NODES_DIR/suite1/node"
+NODE2_DIR="$TEST_NODES_DIR/suite2/node"
 
 # Colors
 RED='\033[0;31m'
@@ -121,23 +122,30 @@ check_node_ready() {
     fi
 
     # Try to execute a simple command
-    local output=$(expect -c "
+    expect -c "
         set timeout $timeout
         spawn telnet localhost $port
         expect {
-            \"login:\" {
+            -re {(?i)login[:>]} {
                 send \"$password\r\"
-                expect \"XDAG>\"
-                send \"stats\r\"
-                expect \"XDAG>\"
-                send \"exit\r\"
-                exit 0
             }
-            timeout {
-                exit 1
+            -re {(?i)password[:>]} {
+                send \"$password\r\"
             }
+            timeout { exit 1 }
         }
-    " 2>/dev/null)
+        expect {
+            -re {(?i)xdag> } {}
+            timeout { exit 1 }
+        }
+        send \"stats\r\"
+        expect {
+            -re {(?i)xdag> } {}
+            timeout { exit 1 }
+        }
+        send \"exit\r\"
+        expect eof
+    " 2>/dev/null
 
     return $?
 }
@@ -296,7 +304,7 @@ update_nodes() {
     if [ "$restart_nodes" == "yes" ]; then
         echo ""
         log_info "Next steps:"
-        echo "  1. Check node logs: tail -f node1/logs/xdag-info.log"
+        echo "  1. Check node logs: tail -f suite1/node/logs/xdag-info.log"
         echo "  2. Run tests: ./test-framework.sh run-tests"
         echo "  3. Check status: ./test-framework.sh (option 4)"
         if [ "$wait_ready" == "yes" ]; then
@@ -306,7 +314,7 @@ update_nodes() {
         echo ""
         log_info "Next steps:"
         echo "  1. Restart nodes: ./test-framework.sh (option 3)"
-        echo "  2. Check node logs: tail -f node1/logs/xdag-info.log"
+        echo "  2. Check node logs: tail -f suite1/node/logs/xdag-info.log"
         echo "  3. Run tests: ./test-framework.sh run-tests"
     fi
 }
@@ -361,8 +369,8 @@ TYPICAL WORKFLOW:
     4. Compare: ./compare-nodes.sh
 
 FILES UPDATED:
-    - node1/xdagj.jar
-    - node2/xdagj.jar
+    - suite1/node/xdagj.jar
+    - suite2/node/xdagj.jar
 
 READINESS CHECK:
     When --wait-ready is used, the script will:

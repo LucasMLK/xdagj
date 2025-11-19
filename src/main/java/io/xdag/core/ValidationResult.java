@@ -24,7 +24,9 @@
 
 package io.xdag.core;
 
-import lombok.Value;
+import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
+import lombok.Getter;
 
 /**
  * Result of transaction validation.
@@ -48,7 +50,9 @@ import lombok.Value;
  *
  * @since Phase 1 - Task 1.3
  */
-@Value
+@Getter
+@AllArgsConstructor
+@EqualsAndHashCode
 public class ValidationResult {
 
     /**

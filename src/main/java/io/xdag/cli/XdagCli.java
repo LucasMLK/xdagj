@@ -252,13 +252,6 @@ public class XdagCli extends Launcher {
                 startRpcServer(dagKernel);
             }
 
-            // Start telnet server for remote administration
-            TelnetServer telnetServer = new TelnetServer(dagKernel);
-            telnetServer.start();
-            Launcher.registerShutdownHook("telnet", telnetServer::stop);
-            System.out.println("Telnet server started on " + getConfig().getAdminSpec().getAdminTelnetIp() +
-                             ":" + getConfig().getAdminSpec().getAdminTelnetPort());
-
             // Keep main thread alive to prevent JVM from exiting
             // The background threads (HybridSyncManager, PoW Algorithm) will keep running
             System.out.println("XDAG node is running. Press Ctrl+C to stop.");
@@ -283,12 +276,16 @@ public class XdagCli extends Launcher {
 
             Launcher.registerShutdownHook("api", apiServer::stop);
 
-            System.out.println("HTTP API server started on " +
-                             getConfig().getHttpSpec().getRpcHttpHost() +
-                             ":" + getConfig().getHttpSpec().getRpcHttpPort());
-            System.out.println("  - RESTful API:  http://localhost:10001/api/v1/");
-            System.out.println("  - OpenAPI Spec: http://localhost:10001/openapi.json");
-            System.out.println("  - API Docs:     http://localhost:10001/docs");
+            String host = getConfig().getHttpSpec().getRpcHttpHost();
+            int port = getConfig().getHttpSpec().getRpcHttpPort();
+            String displayHost =
+                ("0.0.0.0".equals(host) || "::".equals(host)) ? "127.0.0.1" : host;
+            String baseUrl = "http://" + displayHost + ":" + port;
+
+            System.out.println("HTTP API server started on " + host + ":" + port);
+            System.out.println("  - RESTful API:  " + baseUrl + "/api/v1/");
+            System.out.println("  - OpenAPI Spec: " + baseUrl + "/openapi.json");
+            System.out.println("  - API Docs:     " + baseUrl + "/docs");
 
         } catch (Exception e) {
             System.err.println("Failed to start API server: " + e.getMessage());

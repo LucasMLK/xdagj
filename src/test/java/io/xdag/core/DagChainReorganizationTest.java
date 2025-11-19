@@ -236,7 +236,7 @@ public class DagChainReorganizationTest {
         // Create block info
         BlockInfo info = BlockInfo.builder()
                 .hash(block.getHash())
-                .timestamp(timestamp)
+                .epoch(timestamp)
                 .height(0)  // Will be set during import
                 .difficulty(cumulativeDiff)
                 .build();

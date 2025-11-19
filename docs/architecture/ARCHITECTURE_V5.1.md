@@ -160,7 +160,7 @@ dagStore.saveBlockInfo(blockInfo);
 Block block = dagStore.getMainBlockByHeight(height, isRaw);
 
 // Query by epoch
-List<Block> blocks = dagStore.getBlocksByTimeRange(startTime, endTime);
+	List<Block> blocks = dagStore.getCandidateBlocksInEpoch(epoch);
 
 // Query by hash
 Block block = dagStore.getBlockByHash(hash, isRaw);

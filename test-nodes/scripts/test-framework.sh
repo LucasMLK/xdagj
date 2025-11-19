@@ -8,8 +8,9 @@ set -e
 # ==================== Configuration ====================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-NODE1_DIR="$SCRIPT_DIR/node1"
-NODE2_DIR="$SCRIPT_DIR/node2"
+TEST_NODES_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+NODE1_DIR="$TEST_NODES_DIR/suite1/node"
+NODE2_DIR="$TEST_NODES_DIR/suite2/node"
 
 # Node Configuration
 NODE1_HOST="127.0.0.1"
@@ -23,7 +24,7 @@ NODE2_TELNET_PORT="6002"
 NODE2_PASSWORD="root"
 
 # Test Configuration
-TEST_RESULTS_DIR="$SCRIPT_DIR/test-results"
+TEST_RESULTS_DIR="$TEST_NODES_DIR/test-results"
 TEST_TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 TEST_REPORT="$TEST_RESULTS_DIR/test_report_${TEST_TIMESTAMP}.md"
 
@@ -73,8 +74,8 @@ check_telnet() {
 # Check if expect is available
 check_expect() {
     if ! command_exists expect; then
-        log_warning "expect command not found. Some tests may fail."
-        log_warning "Install expect: brew install expect (macOS) or apt-get install expect (Linux)"
+        log_error "expect command not found. Install it via 'brew install expect' or your package manager."
+        exit 1
     fi
 }
 
@@ -173,20 +174,30 @@ telnet_command() {
     local password="$3"
     local command="$4"
 
-    if ! command_exists expect; then
-        log_error "expect command required for telnet_command"
-        return 1
-    fi
-
     expect <<EOF 2>/dev/null
 set timeout 5
 spawn telnet $host $port
-expect "password:"
-send "$password\r"
-expect "xdag>"
-send "$command\r"
-expect "xdag>"
-send "exit\r"
+expect {
+    -re "(?i)login[:>]" {
+        send -- "$password\r"
+    }
+    -re "(?i)password[:>]" {
+        send -- "$password\r"
+    }
+    timeout {
+        exit 1
+    }
+}
+expect {
+    -re "xdag> " {}
+    timeout { exit 1 }
+}
+send -- "$command\r"
+expect {
+    -re "xdag> " {}
+    timeout { exit 1 }
+}
+send -- "exit\r"
 expect eof
 EOF
 }

@@ -210,6 +210,7 @@ public class RandomXSeedManager {
      */
     public void updateSeedForBlock(Block block) {
         long height = block.getInfo().getHeight();
+        long blockEpoch = block.getEpoch();
 
         if (height < forkSeedHeight) {
             return;
@@ -217,9 +218,9 @@ public class RandomXSeedManager {
 
         // Set fork time at fork height
         if (height == forkSeedHeight) {
-            forkTime = XdagTime.getEpoch(block.getTimestamp()) + forkLag;
-            log.info("RandomX fork activated: height={}, time={}, forkTime={}",
-                    height, block.getTimestamp(), forkTime);
+            forkTime = blockEpoch + forkLag;
+            log.info("RandomX fork activated: height={}, epoch={}, forkTime={}",
+                    height, blockEpoch, forkTime);
         }
 
         // Check if this is an epoch boundary
@@ -257,13 +258,13 @@ public class RandomXSeedManager {
     // ========== Memory Slot Management ==========
 
     /**
-     * Get the active memory slot for a given timestamp.
-     * Handles automatic slot switching based on switchTime.
+     * Get the active memory slot for a given epoch.
+     * Handles automatic slot switching based on switchTime (epoch index).
      *
-     * @param timestamp Timestamp to query
-     * @return Active memory slot for the timestamp
+     * @param epoch epoch number to query
+     * @return Active memory slot for the epoch
      */
-    public RandomXMemory getActiveMemory(long timestamp) {
+    public RandomXMemory getActiveMemory(long epoch) {
         if (currentEpochIndex == 0) {
             return null;  // No seed initialized yet
         }
@@ -272,7 +273,7 @@ public class RandomXSeedManager {
         RandomXMemory memory = memorySlots[currentSlot];
 
         // Check if we need to use previous slot
-        if (timestamp < memory.getSwitchTime() && currentEpochIndex > 1) {
+        if (epoch < memory.getSwitchTime() && currentEpochIndex > 1) {
             int previousSlot = (int) ((currentEpochIndex - 1) & 1);
             return memorySlots[previousSlot];
         }
@@ -313,14 +314,15 @@ public class RandomXSeedManager {
      */
     private void updateSeedAtEpochBoundary(Block block) {
         long height = block.getInfo().getHeight();
+        long blockEpoch = block.getEpoch();
         long nextEpochIndex = currentEpochIndex + 1;
         int nextSlot = (int) (nextEpochIndex & 1);
 
         RandomXMemory nextMemory = memorySlots[nextSlot];
 
         // Calculate switch time
-        nextMemory.setSwitchTime(XdagTime.getEpoch(block.getTimestamp()) + forkLag + 1);
-        nextMemory.setSeedTime(block.getTimestamp());
+        nextMemory.setSwitchTime(blockEpoch + forkLag + 1);
+        nextMemory.setSeedTime(XdagTime.epochNumberToMainTime(blockEpoch));
         nextMemory.setSeedHeight(height);
 
         log.debug("Epoch boundary: height={}, nextSlot={}, switchTime={}",

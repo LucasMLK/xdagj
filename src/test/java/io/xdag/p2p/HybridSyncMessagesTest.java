@@ -226,21 +226,23 @@ public class HybridSyncMessagesTest {
 
     @Test
     public void testSyncEpochBlocksRequestMessage_Serialization() {
-        // Create message with test data
-        long epoch = 50000L;
+        // Create message with epoch range
+        long startEpoch = 50000L;
+        long endEpoch = 50099L;
 
-        SyncEpochBlocksRequestMessage request = new SyncEpochBlocksRequestMessage(epoch);
+        SyncEpochBlocksRequestMessage request = new SyncEpochBlocksRequestMessage(startEpoch, endEpoch);
 
         // Serialize
         byte[] body = request.getBody();
         assertNotNull("Body should not be null", body);
-        assertEquals("Should be 8 bytes", 8, body.length);
+        assertEquals("Should be 16 bytes (8+8)", 16, body.length);
 
         // Deserialize
         SyncEpochBlocksRequestMessage decoded = new SyncEpochBlocksRequestMessage(body);
 
         // Verify fields
-        assertEquals("Epoch mismatch", epoch, decoded.getEpoch());
+        assertEquals("Start epoch mismatch", startEpoch, decoded.getStartEpoch());
+        assertEquals("End epoch mismatch", endEpoch, decoded.getEndEpoch());
 
         // Verify response class
         assertEquals("Should expect SyncEpochBlocksReplyMessage as response",
@@ -249,51 +251,59 @@ public class HybridSyncMessagesTest {
 
     @Test
     public void testSyncEpochBlocksReplyMessage_WithHashes() {
-        // Create message with test hashes
-        long epoch = 50000L;
-        List<Bytes32> hashes = new ArrayList<>();
-        hashes.add(Bytes32.random());
-        hashes.add(Bytes32.random());
-        hashes.add(Bytes32.random());
+        // Create message with test hashes in multiple epochs
+        java.util.Map<Long, List<Bytes32>> epochBlocksMap = new java.util.HashMap<>();
 
-        SyncEpochBlocksReplyMessage reply = new SyncEpochBlocksReplyMessage(epoch, hashes);
+        // Epoch 50000 with 2 blocks
+        List<Bytes32> hashes1 = new ArrayList<>();
+        hashes1.add(Bytes32.random());
+        hashes1.add(Bytes32.random());
+        epochBlocksMap.put(50000L, hashes1);
+
+        // Epoch 50005 with 1 block
+        List<Bytes32> hashes2 = new ArrayList<>();
+        hashes2.add(Bytes32.random());
+        epochBlocksMap.put(50005L, hashes2);
+
+        SyncEpochBlocksReplyMessage reply = new SyncEpochBlocksReplyMessage(epochBlocksMap);
 
         // Serialize
         byte[] body = reply.getBody();
         assertNotNull("Body should not be null", body);
-        assertEquals("Should be 108 bytes (8+4+32*3)", 8 + 4 + 32 * 3, body.length);
+        // Expected: 4 bytes (epoch count) + 2 epochs * (8 + 4 + N*32)
+        // Epoch 50000: 8 (epoch) + 4 (count) + 2*32 (hashes) = 76
+        // Epoch 50005: 8 (epoch) + 4 (count) + 1*32 (hashes) = 44
+        // Total: 4 + 76 + 44 = 124
+        assertEquals("Should be 124 bytes", 124, body.length);
 
         // Deserialize
         SyncEpochBlocksReplyMessage decoded = new SyncEpochBlocksReplyMessage(body);
 
         // Verify fields
-        assertEquals("Epoch mismatch", epoch, decoded.getEpoch());
-        assertEquals("Hash count mismatch", 3, decoded.getHashes().size());
-
-        // Verify hashes
-        for (int i = 0; i < 3; i++) {
-            assertEquals("Hash " + i + " mismatch",
-                hashes.get(i), decoded.getHashes().get(i));
-        }
+        assertEquals("Should have 2 epochs", 2, decoded.getEpochBlocksMap().size());
+        assertTrue("Should contain epoch 50000", decoded.getEpochBlocksMap().containsKey(50000L));
+        assertTrue("Should contain epoch 50005", decoded.getEpochBlocksMap().containsKey(50005L));
+        assertEquals("Epoch 50000 should have 2 hashes", 2, decoded.getEpochBlocksMap().get(50000L).size());
+        assertEquals("Epoch 50005 should have 1 hash", 1, decoded.getEpochBlocksMap().get(50005L).size());
     }
 
     @Test
     public void testSyncEpochBlocksReplyMessage_EmptyHashes() {
-        // Create message with empty hash list
-        long epoch = 50000L;
-        List<Bytes32> hashes = new ArrayList<>();
+        // Create message with empty map
+        java.util.Map<Long, List<Bytes32>> epochBlocksMap = new java.util.HashMap<>();
 
-        SyncEpochBlocksReplyMessage reply = new SyncEpochBlocksReplyMessage(epoch, hashes);
+        SyncEpochBlocksReplyMessage reply = new SyncEpochBlocksReplyMessage(epochBlocksMap);
 
         // Serialize
         byte[] body = reply.getBody();
         assertNotNull("Body should not be null", body);
+        assertEquals("Should be 4 bytes (epoch count=0)", 4, body.length);
 
         // Deserialize
         SyncEpochBlocksReplyMessage decoded = new SyncEpochBlocksReplyMessage(body);
 
-        // Verify empty list
-        assertEquals("Should have empty hash list", 0, decoded.getHashes().size());
+        // Verify empty map
+        assertEquals("Should have empty epoch map", 0, decoded.getEpochBlocksMap().size());
     }
 
     // ========== Blocks Batch Messages Tests ==========

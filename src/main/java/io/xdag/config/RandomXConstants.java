@@ -40,9 +40,10 @@ public class RandomXConstants {
     public static final long SEEDHASH_EPOCH_LAG = 128;
 
     /**
-     * Block height at which RandomX fork activates on mainnet
+     * Block height at which RandomX activates on mainnet
+     * Set to 0 because xdagj only supports RandomX from genesis (no fork needed)
      */
-    public static final long RANDOMX_FORK_HEIGHT = 1540096;
+    public static final long RANDOMX_FORK_HEIGHT = 0;
 
     /**
      * Identifier for RandomX algorithm
@@ -50,19 +51,21 @@ public class RandomXConstants {
     public static final int XDAG_RANDOMX = 2;
 
     /**
-     * Number of blocks in one epoch for testnet
+     * Number of blocks in one epoch for testnet/devnet
+     * Set to 2 for fast devnet testing (seed updates every 2 blocks)
      */
-    public static long SEEDHASH_EPOCH_TESTNET_BLOCKS = 2048;
+    public static long SEEDHASH_EPOCH_TESTNET_BLOCKS = 2;
 
     /**
-     * Lag in blocks for seed hash calculation in testnet
+     * Lag in blocks for seed hash calculation in testnet/devnet
+     * Set to 1 for devnet (minimal lag)
      */
-    public static long SEEDHASH_EPOCH_TESTNET_LAG = 64;
+    public static long SEEDHASH_EPOCH_TESTNET_LAG = 1;
 
     /**
-     * Block height at which RandomX fork activates on testnet
-     * Note: Previous value was 196288
+     * Block height at which RandomX activates on testnet/devnet
+     * Set to 0 because xdagj only supports RandomX from genesis (no fork needed)
      */
-    public static long RANDOMX_TESTNET_FORK_HEIGHT = 4096;
+    public static long RANDOMX_TESTNET_FORK_HEIGHT = 0;
 
 }

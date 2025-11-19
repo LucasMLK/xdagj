@@ -234,7 +234,7 @@ public class DagChainIntegrationTest {
                 .hash(block.getHash())
                 .height(1L)
                 .difficulty(UInt256.ONE)
-                .timestamp(mainTime)
+                .epoch(mainTime)
                 .build();
 
         block = block.withInfo(blockInfo);
@@ -343,7 +343,7 @@ public class DagChainIntegrationTest {
                 .hash(block.getHash())
                 .height(1L)
                 .difficulty(UInt256.ONE)
-                .timestamp(mainTime)
+                .epoch(mainTime)
                 .build();
 
         block = block.withInfo(blockInfo);

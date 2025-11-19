@@ -61,14 +61,23 @@ telnet_command() {
     expect -c "
         set timeout $timeout
         spawn telnet localhost $port
-        expect \"login:\"
-        send \"$TELNET_PASSWORD\r\"
-        expect \"XDAG>\"
+        expect {
+            -re {(?i)login[:>]} { send \"$TELNET_PASSWORD\r\" }
+            -re {(?i)password[:>]} { send \"$TELNET_PASSWORD\r\" }
+            timeout { exit 1 }
+        }
+        expect {
+            -re {(?i)xdag> } {}
+            timeout { exit 1 }
+        }
         send \"$command\r\"
-        expect \"XDAG>\"
+        expect {
+            -re {(?i)xdag> } {}
+            timeout { exit 1 }
+        }
         send \"exit\r\"
         expect eof
-    " 2>/dev/null | grep -v "spawn\|login:\|XDAG>\|exit" | grep -v "^$" | sed 's/\r//g'
+    " 2>/dev/null | grep -v "spawn\|login:\|XDAG>\|xdag>\|exit" | grep -v "^$" | sed 's/\r//g'
 }
 
 # Extract specific value from telnet output
