@@ -32,6 +32,7 @@ import io.netty.handler.codec.http.*;
 import io.netty.util.CharsetUtil;
 import io.xdag.DagKernel;
 import io.xdag.Network;
+import io.xdag.api.service.MiningApiService;
 import io.xdag.api.service.dto.AccountInfo;
 import io.xdag.api.service.dto.BlockDetail;
 import io.xdag.api.service.dto.BlockSummary;
@@ -46,6 +47,11 @@ import io.xdag.api.service.ChainApiService;
 import io.xdag.api.service.NetworkApiService;
 import io.xdag.api.service.TransactionApiService;
 import io.xdag.api.service.dto.RandomXInfo;
+import io.xdag.consensus.pow.PowAlgorithm;
+import io.xdag.consensus.pow.RandomXMemory;
+import io.xdag.consensus.pow.RandomXPow;
+import io.xdag.consensus.pow.RandomXSeedManager;
+import io.xdag.core.Block;
 import io.xdag.core.XUnit;
 import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.api.http.auth.ApiKeyStore;
@@ -55,6 +61,7 @@ import io.xdag.api.http.pagination.PaginationInfo;
 import io.xdag.api.http.response.*;
 import io.xdag.utils.BasicUtils;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 
 import java.nio.charset.StandardCharsets;
@@ -654,13 +661,13 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
 
     private Object handleGetCandidateBlock(String poolId) {
         try {
-            io.xdag.api.service.MiningApiService miningApi = dagKernel.getMiningApiService();
+            MiningApiService miningApi = dagKernel.getMiningApiService();
             if (miningApi == null) {
                 log.warn("Mining API service not available");
                 return null;
             }
 
-            io.xdag.core.Block block = miningApi.getCandidateBlock(poolId);
+            Block block = miningApi.getCandidateBlock(poolId);
             if (block == null) {
                 log.warn("Failed to generate candidate block for pool '{}'", poolId);
                 return null;
@@ -682,7 +689,7 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
 
             // Serialize full block data as hex
             byte[] blockBytes = block.toBytes();
-            response.put("blockData", org.apache.tuweni.bytes.Bytes.wrap(blockBytes).toHexString());
+            response.put("blockData", Bytes.wrap(blockBytes).toHexString());
             response.put("size", blockBytes.length);
 
             // Add RandomX flag - always true since we only support RandomX now
@@ -690,15 +697,14 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
 
             // Add RandomX seed if available
             try {
-                io.xdag.consensus.pow.PowAlgorithm powAlgorithm = dagKernel.getPowAlgorithm();
-                if (powAlgorithm instanceof io.xdag.consensus.pow.RandomXPow) {
-                    io.xdag.consensus.pow.RandomXPow randomXPow = (io.xdag.consensus.pow.RandomXPow) powAlgorithm;
-                    io.xdag.consensus.pow.RandomXSeedManager seedManager = randomXPow.getSeedManager();
+                PowAlgorithm powAlgorithm = dagKernel.getPowAlgorithm();
+                if (powAlgorithm instanceof RandomXPow randomXPow) {
+                    RandomXSeedManager seedManager = randomXPow.getSeedManager();
 
                     // Get active memory for current epoch (use getActiveMemory instead of getPoolMemory)
-                    io.xdag.consensus.pow.RandomXMemory memory = seedManager.getActiveMemory(block.getEpoch());
+                    RandomXMemory memory = seedManager.getActiveMemory(block.getEpoch());
                     if (memory != null && memory.getSeed() != null) {
-                        String seedHex = org.apache.tuweni.bytes.Bytes.wrap(memory.getSeed()).toHexString();
+                        String seedHex = Bytes.wrap(memory.getSeed()).toHexString();
                         response.put("randomXSeed", seedHex);
                         log.debug("Added RandomX seed to candidate block: {}", seedHex.substring(0, 16) + "...");
                     } else {

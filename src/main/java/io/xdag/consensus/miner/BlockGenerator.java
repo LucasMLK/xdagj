@@ -28,6 +28,7 @@ import io.xdag.Wallet;
 import io.xdag.consensus.pow.PowAlgorithm;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
+import io.xdag.core.DagChainImpl;
 import io.xdag.crypto.core.CryptoProvider;
 import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.keys.ECKeyPair;
@@ -35,6 +36,7 @@ import io.xdag.utils.BytesUtils;
 import io.xdag.utils.XdagTime;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 
 /**
@@ -122,8 +124,7 @@ public class BlockGenerator {
     // BUGFIX: Generate coinbase address (20 bytes, NOT 32 bytes)
     // AddressUtils.toBytesAddress() returns exactly 20 bytes (Ethereum-style address)
     // BlockHeader expects coinbase to be exactly 20 bytes (see BlockHeader.getSerializedSize())
-    org.apache.tuweni.bytes.Bytes coinbase =
-        io.xdag.crypto.keys.AddressUtils.toBytesAddress(coinbaseKey.getPublicKey());
+    Bytes coinbase = AddressUtils.toBytesAddress(coinbaseKey.getPublicKey());
 
     // Validation: Ensure coinbase is exactly 20 bytes
     if (coinbase.size() != 20) {
@@ -133,8 +134,8 @@ public class BlockGenerator {
     }
 
     // Set mining coinbase address for DagChain
-    if (dagChain instanceof io.xdag.core.DagChainImpl) {
-      ((io.xdag.core.DagChainImpl) dagChain).setMiningCoinbase(coinbase);
+    if (dagChain instanceof DagChainImpl) {
+      ((DagChainImpl) dagChain).setMiningCoinbase(coinbase);
     }
 
     // Create candidate block via DagChain (API)

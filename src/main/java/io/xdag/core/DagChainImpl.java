@@ -925,24 +925,6 @@ public class DagChainImpl implements DagChain {
   }
 
   /**
-   * Index transactions to block mapping
-   */
-  private void indexTransactions(Block block) {
-    for (Link link : block.getLinks()) {
-      if (link.isTransaction()) {
-        try {
-          transactionStore.indexTransactionToBlock(block.getHash(), link.getTargetHash());
-          log.debug("Indexed transaction {} to block {}",
-              link.getTargetHash().toHexString(), block.getHash().toHexString());
-        } catch (Exception e) {
-          log.warn("Failed to index transaction {}: {}",
-              link.getTargetHash().toHexString(), e.getMessage());
-        }
-      }
-    }
-  }
-
-  /**
    * Update chain statistics for new main block
    *
    * <p>IMPORTANT: When a block replaces another via epoch competition, its height may be
@@ -1157,7 +1139,6 @@ public class DagChainImpl implements DagChain {
 
     // BUGFIX: Use epoch number directly; block timestamp is derived at epoch end for display
     long epoch = XdagTime.getCurrentEpochNumber();
-    long timestamp = XdagTime.epochNumberToMainTime(epoch);
 
     // Use baseDifficultyTarget from chain stats (NEW CONSENSUS)
     UInt256 difficultyTarget = chainStats.getBaseDifficultyTarget();
@@ -1302,7 +1283,7 @@ public class DagChainImpl implements DagChain {
           return work2.compareTo(work1);  // Descending: largest work first
         })
         .limit(10)
-        .collect(Collectors.toList());
+        .toList();
 
     // Step 4: Add block references
     for (Block block : top10) {
@@ -1313,57 +1294,32 @@ public class DagChainImpl implements DagChain {
         links.size(), currentMainHeight, prevEpoch,
         Math.min(10, candidates.size()), candidates.size());
 
-    // Step 5: TODO - Add transaction links from transaction pool
-    // List<Transaction> pendingTxs = transactionPool.getPendingTransactions(MAX_TX_PER_BLOCK);
-    // for (Transaction tx : pendingTxs) {
-    //     links.add(Link.toTransaction(tx.getHash()));
-    // }
+    // Step 5: Add transaction links from transaction pool
+    TransactionPool txPool = dagKernel.getTransactionPool();
+    if (txPool != null && txPool.size() > 0) {
+      // Calculate remaining slots for transaction links
+      // Block has Block.MAX_BLOCK_LINKS (16) block references, we added up to 10
+      // So we can add up to 6 more transaction references (conservative estimate)
+      int remainingSlots = Block.MAX_BLOCK_LINKS - links.size();
+
+      if (remainingSlots > 0) {
+        List<Transaction> selectedTxs = txPool.selectTransactions(remainingSlots);
+
+        for (Transaction tx : selectedTxs) {
+          links.add(Link.toTransaction(tx.getHash()));
+        }
+
+        log.info("Added {} transaction links from pool ({} pending transactions)",
+            selectedTxs.size(), txPool.size());
+      } else {
+        log.debug("No remaining slots for transaction links (already have {} block links)",
+            links.size());
+      }
+    } else {
+      log.debug("Transaction pool is empty or not available, no transaction links added");
+    }
 
     return links;
-  }
-
-  /**
-   * Find the closest main block from a previous epoch
-   *
-   * <p>Traverses the main chain backwards until finding a block in a different epoch.
-   * This matches C code's pretop_main_chain logic (block.c:952).
-   *
-   * <p>Purpose: Prevent same-epoch difficulty accumulation by ensuring cross-epoch
-   * references when building candidate blocks.
-   *
-   * @param currentBlock starting block (current main block)
-   * @param currentEpoch current epoch to avoid
-   * @return main block from previous epoch, or null if not found
-   */
-  private Block findPreviousEpochMainBlock(Block currentBlock, long currentEpoch) {
-    if (currentBlock == null || currentBlock.getInfo() == null) {
-      return null;
-    }
-
-    long currentHeight = currentBlock.getInfo().getHeight();
-    int maxIterations = 100;  // Safety limit to prevent infinite loops
-
-    // Traverse back through main chain by height
-    for (int i = 1; i <= maxIterations && (currentHeight - i) > 0; i++) {
-      long checkHeight = currentHeight - i;
-      Block block = dagStore.getMainBlockByHeight(checkHeight, false);
-
-      if (block != null) {
-        long blockEpoch = block.getEpoch();
-
-        if (blockEpoch < currentEpoch) {
-          // Found a block in previous epoch
-          log.debug("Found previous epoch main block: {} (height {}, epoch {}) after {} iterations",
-              block.getHash().toHexString().substring(0, 16), checkHeight, blockEpoch, i);
-          return block;
-        }
-      }
-    }
-
-    log.warn(
-        "Could not find previous epoch main block after {} iterations (starting from height {})",
-        maxIterations, currentHeight);
-    return null;
   }
 
   /**
