@@ -73,6 +73,14 @@ echo
 test_api "Get blocks by epoch ($test_epoch)" \
     "$BASE_URL/api/v1/blocks/epoch/$test_epoch"
 
+# Test 2a: Get blocks by epoch with pagination (page 1, size 10)
+test_api "Get blocks by epoch with pagination ($test_epoch, page 1, size 10)" \
+    "$BASE_URL/api/v1/blocks/epoch/$test_epoch?page=1&size=10"
+
+# Test 2b: Get blocks by epoch with pagination (page 2, size 5)
+test_api "Get blocks by epoch with pagination ($test_epoch, page 2, size 5)" \
+    "$BASE_URL/api/v1/blocks/epoch/$test_epoch?page=2&size=5"
+
 # Test 3: Get blocks by epoch range (small range)
 from_epoch=$((test_epoch - 5))
 to_epoch=$test_epoch
@@ -99,8 +107,15 @@ echo "1. Consensus verification - check which blocks competed in each epoch"
 echo "2. Fork analysis - identify orphan blocks and epoch winners"
 echo "3. Mining statistics - analyze block distribution across epochs"
 echo "4. Debug epoch competition - verify smallest hash wins logic"
+echo "5. Pagination support - handle epochs with many blocks (network partitions)"
 echo
 echo "Example queries:"
+echo "  # Get all blocks in epoch 12345"
 echo "  curl $BASE_URL/api/v1/blocks/epoch/12345"
+echo
+echo "  # Get blocks with pagination (page 2, size 20)"
+echo "  curl $BASE_URL/api/v1/blocks/epoch/12345?page=2&size=20"
+echo
+echo "  # Get blocks in epoch range 100-200"
 echo "  curl $BASE_URL/api/v1/blocks/epoch/range?fromEpoch=100&toEpoch=200"
 echo

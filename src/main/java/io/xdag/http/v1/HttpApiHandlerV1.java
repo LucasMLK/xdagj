@@ -196,7 +196,8 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
 
         if (path.matches("/api/v1/blocks/epoch/[^/]+") && method == HttpMethod.GET) {
             String epochStr = extractPathParam(path, 5);
-            return handleGetBlocksByEpoch(epochStr);
+            PageRequest pageRequest = PageRequest.parse(params.get("page"), params.get("size"));
+            return handleGetBlocksByEpoch(epochStr, pageRequest);
         }
 
         if (path.equals("/api/v1/blocks/epoch/range") && method == HttpMethod.GET) {
@@ -389,20 +390,31 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
         return convertBlockDetailToResponse(blockDetail, fullTransactions);
     }
 
-    private Object handleGetBlocksByEpoch(String epochStr) {
+    private Object handleGetBlocksByEpoch(String epochStr, PageRequest pageRequest) {
         try {
             long epoch = Long.parseLong(epochStr);
 
-            List<BlockSummary> blocks = blockApiService.getBlocksByEpoch(epoch);
+            PagedResult<BlockSummary> pagedBlocks =
+                    blockApiService.getBlocksByEpochPage(epoch, pageRequest.getPage(), pageRequest.getSize());
+
+            List<BlockSummaryResponse> blockResponses = new ArrayList<>();
+            for (BlockSummary summary : pagedBlocks.getItems()) {
+                blockResponses.add(convertBlockSummary(summary));
+            }
 
             Map<String, Object> response = new HashMap<>();
             response.put("epoch", epoch);
-            response.put("blockCount", blocks.size());
+            response.put("blockCount", pagedBlocks.getTotal());
 
-            List<BlockSummaryResponse> blockResponses = new ArrayList<>();
-            for (BlockSummary summary : blocks) {
-                blockResponses.add(convertBlockSummary(summary));
-            }
+            // Add pagination info
+            PaginationInfo pagination = PaginationInfo.of(pageRequest, pagedBlocks.getTotal());
+            response.put("pagination", Map.of(
+                    "page", pagination.getPage(),
+                    "size", pagination.getSize(),
+                    "total", pagination.getTotal(),
+                    "totalPages", pagination.getTotalPages()
+            ));
+
             response.put("blocks", blockResponses);
 
             return response;

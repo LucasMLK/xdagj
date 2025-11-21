@@ -237,11 +237,13 @@ paths:
     get:
       tags:
         - Blocks
-      summary: Get all blocks in a specific epoch
+      summary: Get all blocks in a specific epoch (with pagination)
       description: |
         Returns all blocks (main block and orphan blocks) in the specified epoch.
         This is useful for consensus verification and debugging epoch competition.
         Blocks are sorted by hash (smallest hash wins the epoch).
+
+        Supports pagination for epochs with many blocks (e.g., during network partition recovery).
       parameters:
         - name: epoch
           in: path
@@ -251,13 +253,15 @@ paths:
             type: integer
             format: int64
           example: 12345
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
       responses:
         '200':
-          description: All blocks in the epoch
+          description: Paginated blocks in the epoch
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EpochBlocksResponse'
+                $ref: '#/components/schemas/PagedEpochBlocksResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
 
@@ -727,6 +731,49 @@ components:
             $ref: '#/components/schemas/BlockSummary'
         pagination:
           $ref: '#/components/schemas/PaginationInfo'
+
+    PagedEpochBlocksResponse:
+      type: object
+      properties:
+        epoch:
+          type: integer
+          format: int64
+          description: The queried epoch number
+        blockCount:
+          type: integer
+          description: Total number of blocks in this epoch (across all pages)
+        pagination:
+          $ref: '#/components/schemas/PaginationInfo'
+        blocks:
+          type: array
+          description: Blocks in the current page, sorted by hash (winner first)
+          items:
+            $ref: '#/components/schemas/BlockSummary'
+      example:
+        epoch: 12345
+        blockCount: 150
+        pagination:
+          page: 1
+          size: 20
+          total: 150
+          totalPages: 8
+        blocks:
+          - hash: "0x00001234..."
+            height: "0x3039"
+            epoch: 12345
+            timestamp: 1700000000
+            difficulty: "1000000"
+            transactionCount: 2
+            state: "Main"
+            coinbase: "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi"
+          - hash: "0x00005678..."
+            height: "0x0"
+            epoch: 12345
+            timestamp: 1700000000
+            difficulty: "1000000"
+            transactionCount: 1
+            state: "Orphan"
+            coinbase: "5dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi"
 
     EpochBlocksResponse:
       type: object

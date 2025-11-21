@@ -239,6 +239,57 @@ public class BlockApiService {
     }
 
     /**
+     * Get blocks in a specific epoch with pagination support.
+     * This is useful for epochs with many blocks (e.g., during network partition recovery).
+     *
+     * @param epoch Epoch number to query
+     * @param page Page number (1-based)
+     * @param size Page size
+     * @return Paginated blocks in the epoch, sorted by hash (winner first)
+     */
+    public PagedResult<BlockSummary> getBlocksByEpochPage(long epoch, int page, int size) {
+        try {
+            List<Block> blocks = dagKernel.getDagStore().getCandidateBlocksInEpoch(epoch);
+
+            if (CollectionUtils.isEmpty(blocks)) {
+                return PagedResult.empty();
+            }
+
+            // Sort by hash to show winner first (smallest hash wins)
+            blocks.sort((b1, b2) -> b1.getHash().compareTo(b2.getHash()));
+
+            // Convert to summaries
+            List<BlockSummary> allSummaries = new ArrayList<>();
+            for (Block block : blocks) {
+                BlockSummary summary = buildBlockSummary(block);
+                if (summary != null) {
+                    allSummaries.add(summary);
+                }
+            }
+
+            long total = allSummaries.size();
+
+            // Apply pagination
+            int safePage = Math.max(page, 1);
+            int safeSize = Math.max(1, Math.min(size, 100)); // Max 100 per page
+            int offset = (safePage - 1) * safeSize;
+
+            if (offset >= total) {
+                return PagedResult.of(new ArrayList<>(), total);
+            }
+
+            int endIndex = Math.min(offset + safeSize, (int) total);
+            List<BlockSummary> pagedSummaries = allSummaries.subList(offset, endIndex);
+
+            return PagedResult.of(pagedSummaries, total);
+
+        } catch (Exception e) {
+            log.error("Failed to get blocks by epoch (paginated): {}", epoch, e);
+            return PagedResult.empty();
+        }
+    }
+
+    /**
      * Get all blocks in an epoch range (including main blocks and orphan blocks).
      * This is useful for analyzing consensus behavior across multiple epochs.
      *
