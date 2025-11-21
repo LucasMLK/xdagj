@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed - Obsolete Code Cleanup (2025-11-21)
+
+#### Deleted Classes
+- **RandomXSnapshotLoader** and **SnapshotStrategy** - Complex snapshot loading strategies replaced by simplified seed management in RandomXSeedManager
+- **AbstractXdagLifecycle** and **BlockFinalizationService** - Unused lifecycle abstractions (BlockFinalizationService was WIP/Phase 2 feature)
+- **Utility Classes**: DruidUtils, FileUtils, NettyUtils - Unused helper methods
+- **Exception Classes**: DeserializationException, SerializationException, SimpleCodecException, UnreachableException - Unused custom exceptions
+- **Data Structures**: ResolvedEntity, PretopMessage - Unused domain objects
+- **Test Artifacts**: SnapshotStrategyTest, druid.properties - Obsolete test files
+
+#### Code Statistics
+- **16 Java classes deleted** (3,000+ lines removed)
+- **48 Java classes cleaned up** (redundant code removed, formatting improved)
+- **Net code reduction**: -4,060 lines (-5,865 insertions, +1,805 deletions)
+
+#### Code Quality Improvements
+- Applied modern Java syntax (text blocks, pattern matching, enhanced switch)
+- Removed unused methods and redundant getters
+- Simplified imports and optimized class structures
+- Improved code organization and consistency
+
 ### Added - Epoch-Based Block Query APIs (2025-11-21)
 
 #### New REST Endpoints
@@ -109,7 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - ✅ `PowAlgorithm` (115 行) - 统一的 PoW 算法接口，支持可插拔算法
     - ✅ `DagchainListener` (94 行) - 区块链事件监听器接口
     - ✅ `HashContext` (173 行) - 类型安全的哈希计算上下文
-    - ✅ `SnapshotStrategy` (210 行) - 统一快照加载策略枚举
+    - ~~`SnapshotStrategy` (210 行) - 统一快照加载策略枚举~~ *(removed 2025-11-21)*
   - **新实现**:
     - ✅ `RandomXPow` (307 行) - 事件驱动的 RandomX 实现
       - 实现 `PowAlgorithm` 和 `DagchainListener`
@@ -134,7 +155,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **更新的文件**:
   - `DagKernel.java` - RandomXPow 创建和生命周期管理
   - `DagChain.java` / `DagChainImpl.java` - 监听器机制实现
-  - `RandomXSnapshotLoader.java` - 统一快照加载 API
+  - ~~`RandomXSnapshotLoader.java` - 统一快照加载 API~~ *(removed 2025-11-21)*
   - `MiningManager.java` - 使用 PowAlgorithm 接口
   - `BlockGenerator.java` - 使用 PowAlgorithm 接口
   - `ShareValidator.java` - 使用 PowAlgorithm 接口
