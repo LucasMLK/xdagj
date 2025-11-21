@@ -33,13 +33,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.xdag.DagKernel;
-import io.xdag.db.TransactionStore;
+import io.xdag.store.TransactionStore;
 import java.util.ArrayList;
 import java.util.List;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
-import org.apache.tuweni.units.bigints.UInt64;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;

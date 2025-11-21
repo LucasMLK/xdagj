@@ -28,7 +28,7 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.RemovalCause;
 import io.xdag.config.spec.TransactionPoolSpec;
-import io.xdag.db.TransactionStore;
+import io.xdag.store.TransactionStore;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;

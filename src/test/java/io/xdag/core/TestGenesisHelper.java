@@ -42,27 +42,28 @@ public class TestGenesisHelper {
      * @throws IOException if file creation fails
      */
     public static void createTestGenesisFile(Path directory) throws IOException {
-        String genesisJson = "{\n" +
-                "  \"networkId\": \"test\",\n" +
-                "  \"chainId\": 999,\n" +
-                "  \"timestamp\": 1516406400,\n" +
-                "  \"initialDifficulty\": \"0x1000\",\n" +
-                "  \"genesisCoinbase\": \"0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\",\n" +
-                "  \"epochLength\": 64,\n" +
-                "  \"extraData\": \"XDAGJ 1.0 Test Genesis\",\n" +
-                "  \"alloc\": {},\n" +
-                "  \"snapshot\": {\n" +
-                "    \"enabled\": false,\n" +
-                "    \"height\": 0,\n" +
-                "    \"hash\": \"0x0000000000000000000000000000000000000000000000000000000000000000\",\n" +
-                "    \"timestamp\": 0,\n" +
-                "    \"dataFile\": \"\",\n" +
-                "    \"verify\": false,\n" +
-                "    \"format\": \"v1\",\n" +
-                "    \"expectedAccounts\": 0,\n" +
-                "    \"expectedBlocks\": 0\n" +
-                "  }\n" +
-                "}";
+        String genesisJson = """
+            {
+              "networkId": "test",
+              "chainId": 999,
+              "timestamp": 1516406400,
+              "initialDifficulty": "0x1000",
+              "genesisCoinbase": "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+              "epochLength": 64,
+              "extraData": "XDAGJ 1.0 Test Genesis",
+              "alloc": {},
+              "snapshot": {
+                "enabled": false,
+                "height": 0,
+                "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+                "timestamp": 0,
+                "dataFile": "",
+                "verify": false,
+                "format": "v1",
+                "expectedAccounts": 0,
+                "expectedBlocks": 0
+              }
+            }""";
 
         Path genesisFile = directory.resolve("genesis-devnet.json");
         Files.writeString(genesisFile, genesisJson);

@@ -25,7 +25,7 @@
 package io.xdag.core;
 
 import io.xdag.core.ValidationResult.ValidationLevel;
-import io.xdag.db.TransactionStore;
+import io.xdag.store.TransactionStore;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;

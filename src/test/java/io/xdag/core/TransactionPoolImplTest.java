@@ -34,7 +34,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.xdag.config.spec.TransactionPoolSpec;
-import io.xdag.db.TransactionStore;
+import io.xdag.store.TransactionStore;
 import java.util.List;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;

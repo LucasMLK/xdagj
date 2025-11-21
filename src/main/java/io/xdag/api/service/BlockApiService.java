@@ -28,10 +28,10 @@ import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 import static io.xdag.utils.BasicUtils.address2PubAddress;
 
 import io.xdag.DagKernel;
-import io.xdag.api.dto.BlockDetail;
-import io.xdag.api.dto.BlockSummary;
-import io.xdag.api.dto.PagedResult;
-import io.xdag.api.dto.TransactionInfo;
+import io.xdag.api.service.dto.BlockDetail;
+import io.xdag.api.service.dto.BlockSummary;
+import io.xdag.api.service.dto.PagedResult;
+import io.xdag.api.service.dto.TransactionInfo;
 import io.xdag.core.Block;
 import io.xdag.core.BlockInfo;
 import io.xdag.core.Link;

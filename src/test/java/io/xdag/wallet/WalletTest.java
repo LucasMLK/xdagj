@@ -32,7 +32,7 @@ import com.google.common.collect.Lists;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
-import io.xdag.crypto.SampleKeys;
+import io.xdag.SampleKeys;
 import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.utils.WalletUtils;

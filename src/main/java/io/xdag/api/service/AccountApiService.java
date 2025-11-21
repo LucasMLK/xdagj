@@ -29,7 +29,7 @@ import static io.xdag.utils.WalletUtils.checkAddress;
 import static io.xdag.utils.WalletUtils.fromBase58;
 
 import io.xdag.DagKernel;
-import io.xdag.api.dto.AccountInfo;
+import io.xdag.api.service.dto.AccountInfo;
 import io.xdag.core.XAmount;
 import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.keys.ECKeyPair;

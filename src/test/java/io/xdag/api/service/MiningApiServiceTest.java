@@ -26,8 +26,8 @@ package io.xdag.api.service;
 
 import io.xdag.DagKernel;
 import io.xdag.Wallet;
-import io.xdag.api.dto.BlockSubmitResult;
-import io.xdag.api.dto.RandomXInfo;
+import io.xdag.api.service.dto.BlockSubmitResult;
+import io.xdag.api.service.dto.RandomXInfo;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.core.Block;

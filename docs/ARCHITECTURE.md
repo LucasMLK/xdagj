@@ -131,7 +131,7 @@ On failure at any step:
 
 #### 2.4.3 Key Components
 
-**RocksDBTransactionManager** (`io.xdag.db.rocksdb.transaction.RocksDBTransactionManager`):
+**RocksDBTransactionManager** (`io.xdag.store.rocksdb.transaction.RocksDBTransactionManager`):
 - Manages transaction lifecycle (BEGIN, COMMIT, ROLLBACK)
 - Buffers operations in RocksDB WriteBatch (in-memory)
 - Atomic commit writes all operations to disk in single batch

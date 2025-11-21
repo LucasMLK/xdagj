@@ -8,14 +8,14 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.xdag.DagKernel;
-import io.xdag.api.dto.BlockSummary;
-import io.xdag.api.dto.PagedResult;
+import io.xdag.api.service.dto.BlockSummary;
+import io.xdag.api.service.dto.PagedResult;
 import io.xdag.core.Block;
 import io.xdag.core.BlockHeader;
 import io.xdag.core.BlockInfo;
 import io.xdag.core.DagChain;
-import io.xdag.db.DagStore;
-import io.xdag.db.TransactionStore;
+import io.xdag.store.DagStore;
+import io.xdag.store.TransactionStore;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;

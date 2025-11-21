@@ -29,13 +29,13 @@ import static io.xdag.config.Constants.MIN_GAS;
 
 import io.xdag.DagKernel;
 import io.xdag.config.Constants.MessageType;
-import io.xdag.db.DagStore;
-import io.xdag.db.OrphanBlockStore;
-import io.xdag.db.TransactionStore;
-import io.xdag.db.cache.DagEntityResolver;
-import io.xdag.db.cache.ResolvedLinks;
-import io.xdag.listener.BlockMessage;
-import io.xdag.listener.Listener;
+import io.xdag.store.DagStore;
+import io.xdag.store.OrphanBlockStore;
+import io.xdag.store.TransactionStore;
+import io.xdag.store.cache.DagEntityResolver;
+import io.xdag.store.cache.ResolvedLinks;
+import io.xdag.core.listener.BlockMessage;
+import io.xdag.core.listener.Listener;
 import io.xdag.utils.XdagTime;
 import java.math.BigInteger;
 import java.util.ArrayList;
@@ -449,7 +449,7 @@ public class DagChainImpl implements DagChain {
             String txId = null;
             try {
                 // Get transaction manager from DagKernel
-                io.xdag.db.rocksdb.transaction.RocksDBTransactionManager transactionManager =
+                io.xdag.store.rocksdb.transaction.RocksDBTransactionManager transactionManager =
                     dagKernel.getTransactionManager();
 
                 log.debug("Transaction execution check: block={}, height={}, isBestChain={}, hasTransactionManager={}",

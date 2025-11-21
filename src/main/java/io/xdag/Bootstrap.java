@@ -24,7 +24,7 @@
 
 package io.xdag;
 
-import io.xdag.cli.XdagCli;
+import io.xdag.config.cli.XdagCli;
 
 /**
  * Bootstrap class that serves as the entry point for the XDAG application

@@ -33,21 +33,21 @@ import io.xdag.consensus.pow.PowAlgorithm;
 import io.xdag.consensus.pow.RandomXPow;
 import io.xdag.core.*;
 import io.xdag.crypto.keys.ECKeyPair;
-import io.xdag.db.AccountStore;
-import io.xdag.db.DagStore;
-import io.xdag.db.OrphanBlockStore;
-import io.xdag.db.TransactionStore;
-import io.xdag.db.rocksdb.impl.AccountStoreImpl;
-import io.xdag.db.rocksdb.impl.DagStoreImpl;
-import io.xdag.db.rocksdb.config.DatabaseFactory;
-import io.xdag.db.rocksdb.config.DatabaseName;
-import io.xdag.db.rocksdb.impl.OrphanBlockStoreImpl;
-import io.xdag.db.rocksdb.config.RocksdbFactory;
-import io.xdag.db.rocksdb.impl.TransactionStoreImpl;
-import io.xdag.db.rocksdb.transaction.RocksDBTransactionManager;
-import io.xdag.db.rocksdb.base.KVSource;
-import io.xdag.db.cache.DagCache;
-import io.xdag.db.cache.DagEntityResolver;
+import io.xdag.store.AccountStore;
+import io.xdag.store.DagStore;
+import io.xdag.store.OrphanBlockStore;
+import io.xdag.store.TransactionStore;
+import io.xdag.store.rocksdb.impl.AccountStoreImpl;
+import io.xdag.store.rocksdb.impl.DagStoreImpl;
+import io.xdag.store.rocksdb.config.DatabaseFactory;
+import io.xdag.store.rocksdb.config.DatabaseName;
+import io.xdag.store.rocksdb.impl.OrphanBlockStoreImpl;
+import io.xdag.store.rocksdb.config.RocksdbFactory;
+import io.xdag.store.rocksdb.impl.TransactionStoreImpl;
+import io.xdag.store.rocksdb.transaction.RocksDBTransactionManager;
+import io.xdag.store.rocksdb.base.KVSource;
+import io.xdag.store.cache.DagCache;
+import io.xdag.store.cache.DagEntityResolver;
 import io.xdag.p2p.P2pConfigFactory;
 import io.xdag.p2p.P2pService;
 import io.xdag.p2p.config.P2pConfig;
@@ -192,7 +192,7 @@ public class DagKernel {
 
       // Initialize transaction manager (NEW - for atomic block processing)
       KVSource<byte[], byte[]> indexDb = dbFactory.getDB(DatabaseName.INDEX);
-      if (!(indexDb instanceof io.xdag.db.rocksdb.base.RocksdbKVSource)) {
+      if (!(indexDb instanceof io.xdag.store.rocksdb.base.RocksdbKVSource)) {
           throw new RuntimeException("INDEX database is not a RocksdbKVSource");
       }
 
@@ -200,7 +200,7 @@ public class DagKernel {
       // RocksDB instance is null until init() is called
       indexDb.init();
 
-      RocksDB mainDb = ((io.xdag.db.rocksdb.base.RocksdbKVSource) indexDb).getDb();
+      RocksDB mainDb = ((io.xdag.store.rocksdb.base.RocksdbKVSource) indexDb).getDb();
       this.transactionManager = new RocksDBTransactionManager(mainDb);
       log.info("   ✓ RocksDBTransactionManager initialized (atomic operations ready)");
 

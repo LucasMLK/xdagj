@@ -24,7 +24,7 @@
 
 package io.xdag;
 
-import io.xdag.cli.XdagOption;
+import io.xdag.config.cli.XdagOption;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.config.MainnetConfig;

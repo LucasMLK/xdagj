@@ -25,7 +25,7 @@
 package io.xdag.api.service;
 
 import io.xdag.DagKernel;
-import io.xdag.api.dto.ConnectionInfo;
+import io.xdag.api.service.dto.ConnectionInfo;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;

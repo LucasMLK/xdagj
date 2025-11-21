@@ -24,8 +24,8 @@
 
 package io.xdag.core;
 
-import io.xdag.db.DagStore;
-import io.xdag.db.TransactionStore;
+import io.xdag.store.DagStore;
+import io.xdag.store.TransactionStore;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
@@ -178,10 +178,10 @@ public class DagBlockProcessor {
      * @param txId transaction ID from RocksDBTransactionManager
      * @param block block to process
      * @return processing result
-     * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails
+     * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
      */
     public ProcessingResult processBlockInTransaction(String txId, Block block)
-            throws io.xdag.db.rocksdb.transaction.TransactionException {
+            throws io.xdag.store.rocksdb.transaction.TransactionException {
 
         // 1. Validate basic block structure
         if (!validateBasicStructure(block)) {
@@ -199,7 +199,7 @@ public class DagBlockProcessor {
                     block.getHash().toHexString().substring(0, 16), txId);
         } catch (Exception e) {
             log.error("Failed to save block in transaction {}: {}", txId, e.getMessage());
-            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+            throw new io.xdag.store.rocksdb.transaction.TransactionException(
                     "Failed to save block: " + e.getMessage(), e);
         }
 
@@ -228,7 +228,7 @@ public class DagBlockProcessor {
                             tx.getHash().toHexString().substring(0, 16),
                             block.getHash().toHexString().substring(0, 16),
                             txId, e.getMessage());
-                    throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    throw new io.xdag.store.rocksdb.transaction.TransactionException(
                             "Failed to index transaction: " + e.getMessage(), e);
                 }
             }

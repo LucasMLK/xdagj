@@ -32,7 +32,6 @@ import io.xdag.utils.XdagTime;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
-import org.apache.tuweni.units.bigints.UInt64;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -275,7 +274,7 @@ public class AtomicBlockProcessingTest {
      */
     @Test
     public void testTransactionManager_Availability() {
-        io.xdag.db.rocksdb.transaction.RocksDBTransactionManager txManager =
+        io.xdag.store.rocksdb.transaction.RocksDBTransactionManager txManager =
                 dagKernel.getTransactionManager();
 
         assertNotNull("TransactionManager should be initialized", txManager);
@@ -534,7 +533,7 @@ public class AtomicBlockProcessingTest {
      */
     @Test
     public void testTransactionManager_Statistics() {
-        io.xdag.db.rocksdb.transaction.RocksDBTransactionManager txManager =
+        io.xdag.store.rocksdb.transaction.RocksDBTransactionManager txManager =
                 dagKernel.getTransactionManager();
 
         // Initially no active transactions

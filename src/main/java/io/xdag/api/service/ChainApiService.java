@@ -27,9 +27,9 @@ package io.xdag.api.service;
 import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 
 import io.xdag.DagKernel;
-import io.xdag.api.dto.ChainStatsInfo;
-import io.xdag.api.dto.EpochInfo;
-import io.xdag.api.dto.NodeStatusInfo;
+import io.xdag.api.service.dto.ChainStatsInfo;
+import io.xdag.api.service.dto.EpochInfo;
+import io.xdag.api.service.dto.NodeStatusInfo;
 import io.xdag.core.Block;
 import io.xdag.core.ChainStats;
 import io.xdag.core.DagChainImpl;

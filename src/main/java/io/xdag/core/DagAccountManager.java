@@ -25,7 +25,7 @@
 package io.xdag.core;
 
 import io.xdag.config.Config;
-import io.xdag.db.AccountStore;
+import io.xdag.store.AccountStore;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -212,10 +212,10 @@ public class DagAccountManager {
      * @param txId transaction ID from RocksDBTransactionManager
      * @param address account address
      * @param amount amount to add
-     * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails
+     * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
      */
     public void addBalanceInTransaction(String txId, Bytes address, UInt256 amount)
-            throws io.xdag.db.rocksdb.transaction.TransactionException {
+            throws io.xdag.store.rocksdb.transaction.TransactionException {
         UInt256 currentBalance = getBalance(address);
         UInt256 newBalance = currentBalance.add(amount);
         accountStore.setBalanceInTransaction(txId, address, newBalance);
@@ -233,11 +233,11 @@ public class DagAccountManager {
      * @param txId transaction ID from RocksDBTransactionManager
      * @param address account address
      * @param amount amount to subtract
-     * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails
+     * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
      * @throws IllegalArgumentException if insufficient balance
      */
     public void subtractBalanceInTransaction(String txId, Bytes address, UInt256 amount)
-            throws io.xdag.db.rocksdb.transaction.TransactionException {
+            throws io.xdag.store.rocksdb.transaction.TransactionException {
         UInt256 currentBalance = getBalance(address);
         if (currentBalance.compareTo(amount) < 0) {
             throw new IllegalArgumentException(String.format(
@@ -260,10 +260,10 @@ public class DagAccountManager {
      *
      * @param txId transaction ID from RocksDBTransactionManager
      * @param address account address
-     * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails
+     * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
      */
     public void incrementNonceInTransaction(String txId, Bytes address)
-            throws io.xdag.db.rocksdb.transaction.TransactionException {
+            throws io.xdag.store.rocksdb.transaction.TransactionException {
         // Get current nonce
         UInt64 currentNonce = getNonce(address);
         UInt64 newNonce = currentNonce.add(UInt64.ONE);

@@ -24,7 +24,7 @@
 
 package io.xdag.core;
 
-import io.xdag.db.TransactionStore;
+import io.xdag.store.TransactionStore;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
@@ -220,13 +220,13 @@ public class DagTransactionProcessor {
    * @param block        block being processed
    * @param transactions transactions to process
    * @return processing result
-   * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails
+   * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
    */
   public ProcessingResult processBlockTransactionsInTransaction(
       String txId,
       Block block,
       List<Transaction> transactions
-  ) throws io.xdag.db.rocksdb.transaction.TransactionException {
+  ) throws io.xdag.store.rocksdb.transaction.TransactionException {
 
     // Step 1: Validate all transactions FIRST (fail-fast before any modifications)
     for (Transaction tx : transactions) {
@@ -263,7 +263,7 @@ public class DagTransactionProcessor {
       } catch (Exception e) {
         log.error("Failed to process transaction {} in transaction {}: {}",
             tx.getHash().toHexString().substring(0, 16), txId, e.getMessage());
-        throw new io.xdag.db.rocksdb.transaction.TransactionException(
+        throw new io.xdag.store.rocksdb.transaction.TransactionException(
             "Failed to process transaction: " + e.getMessage(), e);
       }
     }
@@ -374,10 +374,10 @@ public class DagTransactionProcessor {
    *
    * @param txId transaction ID from RocksDBTransactionManager
    * @param tx   transaction to process
-   * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails
+   * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
    */
   private void updateAccountStatesInTransaction(String txId, Transaction tx)
-      throws io.xdag.db.rocksdb.transaction.TransactionException {
+      throws io.xdag.store.rocksdb.transaction.TransactionException {
     // Convert XAmount to UInt256 (nano units)
     UInt256 txAmount = UInt256.valueOf(tx.getAmount().toDecimal(0, NANO_XDAG).longValue());
     UInt256 txFee = UInt256.valueOf(tx.getFee().toDecimal(0, NANO_XDAG).longValue());

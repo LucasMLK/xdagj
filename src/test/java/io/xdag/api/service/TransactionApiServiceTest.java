@@ -8,15 +8,15 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 import io.xdag.DagKernel;
-import io.xdag.api.dto.PagedResult;
-import io.xdag.api.dto.TransactionInfo;
+import io.xdag.api.service.dto.PagedResult;
+import io.xdag.api.service.dto.TransactionInfo;
 import io.xdag.core.Block;
 import io.xdag.core.BlockHeader;
 import io.xdag.core.BlockInfo;
 import io.xdag.core.DagChain;
 import io.xdag.core.Transaction;
 import io.xdag.core.XAmount;
-import io.xdag.db.TransactionStore;
+import io.xdag.store.TransactionStore;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
