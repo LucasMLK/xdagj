@@ -1,10 +1,10 @@
 # Genesis Configuration Guide
 
-XDAG v5.1 follows Ethereum's approach: **genesis.json is REQUIRED** to define your network.
+XDAG XDAGJ 1.0 follows Ethereum's approach: **genesis.json is REQUIRED** to define your network.
 
 ## ⚠️ IMPORTANT: genesis.json is Required
 
-Unlike older XDAG versions, **v5.1 requires an explicit genesis.json file**. This ensures:
+Unlike older XDAG versions, **XDAGJ 1.0 requires an explicit genesis.json file**. This ensures:
 - Clear network identity (mainnet vs testnet vs devnet)
 - Reproducible genesis blocks across all nodes
 - Prevention of accidental network mismatches
@@ -51,7 +51,7 @@ cp config/genesis-devnet.json ./genesis.json
   "epoch": 23694000,               // Genesis block epoch (XDAG epoch number)
   "initialDifficulty": "0x1",      // Initial mining difficulty (hex)
   "epochLength": 64,               // Epoch length in seconds
-  "extraData": "XDAG v5.1 Genesis",// Extra data (up to 32 bytes)
+  "extraData": "XDAG XDAGJ 1.0 Genesis",// Extra data (up to 32 bytes)
 
   "alloc": {                       // Initial balance allocations
     "0x0000...0001": "1000000000000000000000",  // Address -> amount in nanoxdag
@@ -139,7 +139,7 @@ Use `genesis-snapshot-example.json` as template:
 
 3. Configure genesis.json with snapshot settings
 
-4. Start new v5.1 node:
+4. Start new XDAGJ 1.0 node:
    ```bash
    ./xdag.sh
    ```
@@ -200,7 +200,7 @@ This allocates 1000 XDAG to address `0x00...01`.
 
 **format**: Snapshot format version
 - "v1": Old XDAG binary format
-- "v2": v5.1 optimized format (future)
+- "v2": XDAGJ 1.0 optimized format (future)
 
 **expectedAccounts/expectedBlocks**: For progress reporting (optional)
 
@@ -208,7 +208,7 @@ This allocates 1000 XDAG to address `0x00...01`.
 
 ### Genesis Block Protection
 
-v5.1 includes security measures to prevent genesis block forgery:
+XDAGJ 1.0 includes security measures to prevent genesis block forgery:
 
 1. **Chain State Check**: Genesis only accepted when chain is empty
 2. **Timestamp Validation**: Must be at configured timestamp ±64 seconds
@@ -274,7 +274,7 @@ All example configurations are in the `config/` directory:
 
 ## Migration from Old XDAG
 
-To migrate from old XDAG (v4.x) to v5.1:
+To migrate from old XDAG (v4.x) to XDAGJ 1.0:
 
 ### Option 1: Fresh Start (Recommended for Testnets)
 
@@ -342,12 +342,12 @@ genesis.save(new File("./genesis.json"));
 
 ## Further Reading
 
-- [XDAG v5.1 Architecture](../docs/ARCHITECTURE_V5.1.md)
+- [XDAGJ 1.0 Architecture](../docs/ARCHITECTURE.md)
 - [Phase 12 Implementation](../docs/refactor-history/phases/PHASE_12_GENESIS_CONFIG.md)
 - [Genesis Security](../docs/refactor-history/dagchain/DAGCHAIN_PHASE11_COMPLETE.md#security-enhancements)
 
 ---
 
-**Version**: v5.1 Phase 12
+**Version**: XDAGJ 1.0 Phase 12
 **Last Updated**: 2025-11-07
 **Maintained By**: XDAG Development Team

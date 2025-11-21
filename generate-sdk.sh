@@ -12,7 +12,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Configuration
-OPENAPI_SPEC_URL="http://localhost:10001/openapi.json"
+OPENAPI_SPEC_URL="http://localhost:10001/openapi.yaml"
 OPENAPI_SPEC_FILE="../docs/api/openapi.yaml"
 SDK_OUTPUT_DIR="./sdk"
 

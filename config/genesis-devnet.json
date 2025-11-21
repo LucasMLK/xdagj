@@ -4,7 +4,7 @@
   "epoch": 27555273,
   "initialDifficulty": "0x1",
   "epochLength": 64,
-  "extraData": "XDAG v5.1 Devnet Genesis",
+  "extraData": "XDAGJ 1.0 Devnet Genesis",
   "genesisCoinbase": "0x1111111111111111111111111111111111111111",
   "randomXSeed": "0x0000000000000000000000000000000000000000000000000000000000000001",
   "alloc": {

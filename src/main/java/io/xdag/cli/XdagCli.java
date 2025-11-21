@@ -284,7 +284,8 @@ public class XdagCli extends Launcher {
 
             System.out.println("HTTP API server started on " + host + ":" + port);
             System.out.println("  - RESTful API:  " + baseUrl + "/api/v1/");
-            System.out.println("  - OpenAPI Spec: " + baseUrl + "/openapi.json");
+            System.out.println("  - OpenAPI Spec: " + baseUrl + "/openapi.yaml");
+            System.out.println("    (JSON mirror: " + baseUrl + "/openapi.json)");
             System.out.println("  - API Docs:     " + baseUrl + "/docs");
 
         } catch (Exception e) {

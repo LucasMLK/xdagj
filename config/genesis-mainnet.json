@@ -4,7 +4,7 @@
   "timestamp": 1516406400,
   "initialDifficulty": "0x1",
   "epochLength": 64,
-  "extraData": "XDAG v5.1 Mainnet Genesis",
+  "extraData": "XDAGJ 1.0 Mainnet Genesis",
   "genesisCoinbase": "0x0000000000000000000000000000000000000000",
   "randomXSeed": "0x0000000000000000000000000000000000000000000000000000000000000001",
   "alloc": {},

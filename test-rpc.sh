@@ -78,6 +78,11 @@ echo "--- Block Queries ---"
 test_rest "/blocks/number" "Get current block number"
 test_rest "/blocks/latest?fullTransactions=false" "Get latest block"
 test_rest "/blocks/0?fullTransactions=false" "Get genesis block"
+test_rest "/blocks?page=1&size=5" "List latest blocks (paged)"
+
+echo ""
+echo "--- Transaction Queries ---"
+test_rest "/transactions?page=1&size=5" "List recent transactions (paged)"
 
 echo ""
 echo "--- Account Queries ---"
@@ -86,7 +91,7 @@ test_rest "/accounts" "Get wallet accounts"
 echo ""
 echo "--- Documentation Endpoints ---"
 echo -ne "${BLUE}Test $((TOTAL_TESTS + 1)):${NC} OpenAPI spec availability... "
-OPENAPI_RESPONSE=$(curl -s "$BASE_URL/openapi.json" -o /dev/null -w "%{http_code}")
+OPENAPI_RESPONSE=$(curl -s "$BASE_URL/openapi.yaml" -o /dev/null -w "%{http_code}")
 TOTAL_TESTS=$((TOTAL_TESTS + 1))
 if [ "$OPENAPI_RESPONSE" = "200" ]; then
     echo -e "${GREEN}PASSED${NC}"
@@ -109,7 +114,7 @@ if [ $PASSED_TESTS -eq $TOTAL_TESTS ]; then
     echo ""
     echo "Available endpoints:"
     echo "  - RESTful API:  $REST_URL/"
-    echo "  - OpenAPI Spec: $BASE_URL/openapi.json"
+    echo "  - OpenAPI Spec: $BASE_URL/openapi.yaml"
     echo "  - API Docs:     $BASE_URL/docs"
     exit 0
 else

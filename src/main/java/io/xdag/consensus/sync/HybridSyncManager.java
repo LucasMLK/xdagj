@@ -995,16 +995,89 @@ public class HybridSyncManager {
     /**
      * Identify missing block references
      *
-     * @return set of missing block hashes
+     * <p>Scans OrphanBlockStore for blocks awaiting dependencies, resolves their links,
+     * and returns the set of missing dependency hashes that need to be downloaded.
+     *
+     * <p>Algorithm:
+     * <ol>
+     *   <li>Get all orphan blocks from OrphanBlockStore (max 1000)</li>
+     *   <li>For each orphan, load the full block from DagStore</li>
+     *   <li>Resolve block links using DagEntityResolver</li>
+     *   <li>Collect all missing reference hashes</li>
+     * </ol>
+     *
+     * @return set of missing block hashes to download
      */
     private Set<Bytes32> identifyMissingBlocks() {
         log.debug("Identifying missing block references...");
 
-        // TODO: Implement block reference scanning
-        // Scan all blocks and check if referenced blocks exist
-        // For now, return empty set (will be implemented later)
+        Set<Bytes32> missingHashes = new HashSet<>();
 
-        return Collections.emptySet();
+        try {
+            // Get orphan blocks from OrphanBlockStore (up to 1000)
+            long[] sendTime = new long[2];
+            sendTime[0] = Long.MAX_VALUE;  // No timestamp filtering
+            List<Bytes32> orphanHashes = dagKernel.getOrphanBlockStore().getOrphan(1000, sendTime);
+
+            if (orphanHashes == null || orphanHashes.isEmpty()) {
+                log.debug("No orphan blocks found in OrphanBlockStore");
+                return missingHashes;
+            }
+
+            log.info("Found {} orphan blocks awaiting dependencies", orphanHashes.size());
+
+            // For each orphan block, identify its missing dependencies
+            int orphansProcessed = 0;
+            for (Bytes32 orphanHash : orphanHashes) {
+                try {
+                    // Load the orphan block from DagStore
+                    Block orphanBlock = dagKernel.getDagStore().getBlockByHash(orphanHash, true);
+                    if (orphanBlock == null) {
+                        log.warn("Orphan block {} not found in DagStore, removing from orphan store",
+                                orphanHash.toHexString().substring(0, 16));
+                        dagKernel.getOrphanBlockStore().deleteByHash(orphanHash.toArray());
+                        continue;
+                    }
+
+                    // Resolve the block's links to find missing dependencies
+                    var resolved = dagKernel.getEntityResolver().resolveAllLinks(orphanBlock);
+
+                    log.info("DEBUG: Orphan {} resolution: hasAll={}, missingCount={}", 
+                            orphanHash.toHexString().substring(0, 16),
+                            resolved.hasAllReferences(),
+                            resolved.getMissingReferences().size());
+
+                    // Add all missing reference hashes to our collection
+                    if (!resolved.hasAllReferences()) {
+                        List<Bytes32> missing = resolved.getMissingReferences();
+                        missingHashes.addAll(missing);
+
+                        if (log.isDebugEnabled()) {
+                            log.debug("Orphan block {} has {} missing dependencies",
+                                    orphanHash.toHexString().substring(0, 16),
+                                    missing.size());
+                        }
+                        for (Bytes32 m : missing) {
+                            log.info("DEBUG: Missing dependency: {}", m.toHexString());
+                        }
+                    }
+
+                    orphansProcessed++;
+
+                } catch (Exception e) {
+                    log.error("Error processing orphan block {}: {}",
+                            orphanHash.toHexString().substring(0, 16), e.getMessage());
+                }
+            }
+
+            log.info("Processed {} orphan blocks, identified {} unique missing dependencies",
+                    orphansProcessed, missingHashes.size());
+
+        } catch (Exception e) {
+            log.error("Error identifying missing blocks", e);
+        }
+
+        return missingHashes;
     }
 
     /**
@@ -1072,11 +1145,28 @@ public class HybridSyncManager {
             //  Use DagChain.tryToConnect() which returns DagImportResult
             DagImportResult result = dagChain.tryToConnect(block);
 
-            return result != null &&
-                   (result.getStatus() == DagImportResult.ImportStatus.SUCCESS);
+            if (result == null) {
+                log.warn("Import block {} returned null result", block.getHash().toHexString());
+                return false;
+            }
+
+            if (result.getStatus() != DagImportResult.ImportStatus.SUCCESS) {
+                log.warn("❌ Import block {} failed: status={}, blockState={}, reason={}",
+                        block.getHash().toHexString(),
+                        result.getStatus(),
+                        result.getBlockState(),
+                        result.getErrorMessage() != null ? result.getErrorMessage() : "unknown");
+                return false;
+            }
+
+            log.debug("✓ Import block {} succeeded: blockState={}, height={}",
+                    block.getHash().toHexString(),
+                    result.getBlockState(),
+                    result.getHeight());
+            return true;
 
         } catch (Exception e) {
-            log.error("Failed to import block: {}", block.getHash(), e);
+            log.error("Failed to import block: {}", block.getHash().toHexString(), e);
             return false;
         }
     }
