@@ -73,32 +73,49 @@ public class ChainApiService {
         }
       }
 
+      // Get orphan block count from OrphanBlockStore
+      long orphanCount = 0;
+      try {
+        orphanCount = dagKernel.getOrphanBlockStore().getOrphanSize();
+      } catch (Exception e) {
+        log.warn("Failed to get orphan count: {}", e.getMessage());
+      }
+
+      // Total block count = main blocks + orphan blocks
+      long totalBlockCount = chainStats.getMainBlockCount() + orphanCount;
+
+      // Sync progress: 100% if orphan count is low, otherwise estimate
+      double syncProgress = 100.0;
+      long waitingSyncCount = orphanCount;  // Orphan blocks are waiting for parent blocks
+      if (orphanCount > 100) {
+        // If many orphans, likely still syncing
+        syncProgress = Math.max(0, 100.0 - (orphanCount / 10.0));
+      }
+
       // Get wallet statistics
       XAmount totalWalletBalance = accountApiService.getTotalBalance();
       int accountCount = dagKernel.getWallet().getAccounts().size();
 
-      // Get P2P statistics (placeholder)
+      // Get P2P statistics
       int connectedPeers = 0;
       if (dagKernel.getP2pService() != null) {
         // TODO: Implement P2pService.getActiveChannelCount()
         connectedPeers = 0;
       }
 
-      // Note: Some fields removed from ChainStats (totalBlockCount, orphanCount, waitingSyncCount, etc.)
-      // These should be queried from OrphanBlockStore if needed
       return ChainStatsInfo.builder()
           .mainBlockCount(chainStats.getMainBlockCount())
-          .totalBlockCount(chainStats.getMainBlockCount())  // Use mainBlockCount as approximation
+          .totalBlockCount(totalBlockCount)
           .topBlockHeight(topBlockHeight)
           .topBlockHash(topBlockHash)
           .currentEpoch(dagKernel.getDagChain().getCurrentEpoch())
           .currentDifficulty(chainStats.getDifficulty())
           .maxDifficulty(chainStats.getDifficulty())  // Same as current difficulty (heaviest chain)
-          .orphanCount(0L)  // Removed from ChainStats, query OrphanBlockStore if needed
-          .waitingSyncCount(0L)  // Removed from ChainStats
-          .syncProgress(0.0)  // Removed from ChainStats, calculate separately if needed
+          .orphanCount(orphanCount)
+          .waitingSyncCount(waitingSyncCount)
+          .syncProgress(syncProgress)
           .connectedPeers(connectedPeers)
-          .totalHosts(0)  // Removed from ChainStats
+          .totalHosts(0)  // Network-wide stat, not maintained in XDAG 1.0
           .totalWalletBalance(totalWalletBalance)
           .accountCount(accountCount)
           .build();

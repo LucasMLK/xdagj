@@ -24,6 +24,7 @@
 
 package io.xdag;
 
+import io.xdag.api.service.MiningApiService;
 import io.xdag.config.Config;
 import io.xdag.config.GenesisConfig;
 import io.xdag.config.spec.TransactionPoolSpec;
@@ -128,11 +129,7 @@ public class DagKernel {
   private final TransactionStore transactionStore;
   private final AccountStore accountStore;
   private final OrphanBlockStore orphanBlockStore;
-  /**
-   * -- GETTER -- Get transaction manager for atomic operations
-   *
-   * @return RocksDBTransactionManager instance
-   */
+
   private final RocksDBTransactionManager transactionManager;
 
   private final DagCache dagCache;
@@ -316,8 +313,7 @@ public class DagKernel {
 
     // Create Mining API Service (for pool server integration)
     if (wallet != null) {
-      this.miningApiService = new io.xdag.api.service.MiningApiService(
-          dagChain, wallet, powAlgorithm);
+      this.miningApiService = new MiningApiService(dagChain, wallet, powAlgorithm);
       log.info("   ✓ MiningApiService initialized (pool server interface ready)");
     } else {
       log.warn("   ⚠ MiningApiService not initialized (wallet required)");
