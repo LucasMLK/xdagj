@@ -109,45 +109,15 @@ start_node() {
     return 1
 }
 
-# Check if node is ready to accept commands
+# Check if node HTTP API is ready
 check_node_ready() {
     local port="$1"
-    local password="${2:-root}"
-    local timeout=3
-
-    # Check if expect is installed
-    if ! command -v expect &> /dev/null; then
-        log_warning "expect not installed, skipping readiness check"
+    local status_code
+    status_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "http://127.0.0.1:${port}/api/v1/node/status" || true)
+    if [ "$status_code" = "200" ]; then
         return 0
     fi
-
-    # Try to execute a simple command
-    expect -c "
-        set timeout $timeout
-        spawn telnet localhost $port
-        expect {
-            -re {(?i)login[:>]} {
-                send \"$password\r\"
-            }
-            -re {(?i)password[:>]} {
-                send \"$password\r\"
-            }
-            timeout { exit 1 }
-        }
-        expect {
-            -re {(?i)xdag> } {}
-            timeout { exit 1 }
-        }
-        send \"stats\r\"
-        expect {
-            -re {(?i)xdag> } {}
-            timeout { exit 1 }
-        }
-        send \"exit\r\"
-        expect eof
-    " 2>/dev/null
-
-    return $?
+    return 1
 }
 
 wait_for_node_ready() {
@@ -155,7 +125,7 @@ wait_for_node_ready() {
     local port="$2"
     local max_wait="${3:-60}"  # Default 60 seconds
 
-    log_info "Waiting for $node_name to be ready (port $port)..."
+    log_info "Waiting for $node_name HTTP API (port $port)..."
 
     local elapsed=0
     while [ $elapsed -lt $max_wait ]; do
@@ -285,8 +255,8 @@ update_nodes() {
         # Wait for nodes to initialize
         if [ "$wait_ready" == "yes" ]; then
             log_info "Step 6: Waiting for nodes to be ready..."
-            wait_for_node_ready "Node1" 6001 60
-            wait_for_node_ready "Node2" 6002 60
+            wait_for_node_ready "Node1" 10001 60
+            wait_for_node_ready "Node2" 10002 60
         else
             log_info "Waiting for nodes to initialize..."
             sleep 5
@@ -375,12 +345,12 @@ FILES UPDATED:
 READINESS CHECK:
     When --wait-ready is used, the script will:
     - Wait up to 60 seconds per node
-    - Check if telnet admin service responds
-    - Verify node accepts commands
+    - Poll the HTTP API (/api/v1/node/status)
+    - Confirm the API responds with HTTP 200
     - Show progress every 5 seconds
 
 REQUIREMENTS:
-    - expect (for --wait-ready): brew install expect
+    - curl
 
 EOF
 }

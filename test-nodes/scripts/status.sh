@@ -6,6 +6,9 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_NODES_DIR="$(dirname "$SCRIPT_DIR")"
 NODE_PID_FILE="xdag.pid"
+NODE1_HTTP_PORT=10001
+NODE2_HTTP_PORT=10002
+HTTP_TIMEOUT=3
 
 # Colors
 GREEN='\033[0;32m'
@@ -83,6 +86,60 @@ component_status() {
     printf "  %-15s %b\n" "$name:" "$status"
 }
 
+# Fetch node status via HTTP API
+fetch_node_status() {
+    local port=$1
+    curl -s --max-time "$HTTP_TIMEOUT" "http://127.0.0.1:${port}/api/v1/node/status"
+}
+
+# Print HTTP API metrics (sync state, heights, latest hash, mining)
+print_http_metrics() {
+    local name=$1
+    local port=$2
+    local response
+    response=$(fetch_node_status "$port")
+
+    if [ -z "$response" ]; then
+        component_status "HTTP API" "${RED}✗ Unreachable${NC}"
+        return 1
+    fi
+
+    local parsed
+    parsed=$(python3 - "$response" <<'PY'
+import json, sys
+try:
+    data = json.loads(sys.argv[1])
+except Exception:
+    sys.exit(1)
+sync_state = data.get("syncState", "unknown")
+latest_height = data.get("latestBlockHeight", data.get("mainChainLength", "n/a"))
+main_chain = data.get("mainChainLength", "n/a")
+latest_hash = data.get("latestBlockHash", "n/a")
+mining_status = data.get("miningStatus", data.get("message", "n/a"))
+print(f"{sync_state}|{latest_height}|{main_chain}|{latest_hash}|{mining_status}")
+PY
+)
+
+    if [ -z "$parsed" ]; then
+        component_status "HTTP API" "${RED}✗ Invalid response${NC}"
+        return 1
+    fi
+
+    IFS='|' read -r sync_state latest_height main_chain latest_hash mining_status <<< "$parsed"
+
+    local short_hash="-"
+    if [ -n "$latest_hash" ] && [ "$latest_hash" != "n/a" ]; then
+        short_hash="${latest_hash:0:18}..."
+    fi
+
+    component_status "HTTP API" "${GREEN}✓ Responding${NC}"
+    component_status "Sync State" "$sync_state"
+    component_status "Main Height" "$main_chain"
+    component_status "Latest Hash" "$short_hash"
+    component_status "Mining" "$mining_status"
+    return 0
+}
+
 main() {
     echo "========================================="
     echo "   XDAG Test Environment - Status"
@@ -95,8 +152,8 @@ main() {
     echo -e "${BLUE}Node1:${NC}"
     component_status "Process" "$(get_process_status "$TEST_NODES_DIR/suite1/node/$NODE_PID_FILE" "Node1")"
     component_status "P2P (8001)" "$(get_port_status 8001)"
-    component_status "Telnet (6001)" "$(get_port_status 6001)"
     component_status "HTTP (10001)" "$(get_port_status 10001)"
+    print_http_metrics "Node1" "$NODE1_HTTP_PORT"
 
     echo ""
     echo -e "${BLUE}Pool1:${NC}"
@@ -114,8 +171,8 @@ main() {
     echo -e "${BLUE}Node2:${NC}"
     component_status "Process" "$(get_process_status "$TEST_NODES_DIR/suite2/node/$NODE_PID_FILE" "Node2")"
     component_status "P2P (8002)" "$(get_port_status 8002)"
-    component_status "Telnet (6002)" "$(get_port_status 6002)"
     component_status "HTTP (10002)" "$(get_port_status 10002)"
+    print_http_metrics "Node2" "$NODE2_HTTP_PORT"
 
     echo ""
     echo -e "${BLUE}Pool2:${NC}"

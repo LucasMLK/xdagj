@@ -1096,7 +1096,7 @@ private void demoteBlockToOrphan(Block block) {
 
 **文档版本**: 2.0
 **创建日期**: 2025-11-16
-**适用版本**: xdagj v5.1 (refactor/core-v5.1 branch)
+**适用版本**: xdagj 1.0 (refactor/core-xdagj1.0 branch)
 **作者**: 根据代码分析和用户反馈编写
 
 **更新**:

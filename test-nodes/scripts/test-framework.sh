@@ -15,12 +15,12 @@ NODE2_DIR="$TEST_NODES_DIR/suite2/node"
 # Node Configuration
 NODE1_HOST="127.0.0.1"
 NODE1_P2P_PORT="8001"
-NODE1_TELNET_PORT="6001"
+NODE1_HTTP_PORT="10001"
 NODE1_PASSWORD="root"
 
 NODE2_HOST="127.0.0.1"
 NODE2_P2P_PORT="8002"
-NODE2_TELNET_PORT="6002"
+NODE2_HTTP_PORT="10002"
 NODE2_PASSWORD="root"
 
 # Test Configuration
@@ -63,18 +63,18 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Check if telnet is available
-check_telnet() {
-    if ! command_exists telnet; then
-        log_error "telnet command not found. Please install telnet."
+# Ensure curl is available
+check_curl() {
+    if ! command_exists curl; then
+        log_error "curl command not found. Please install curl."
         exit 1
     fi
 }
 
-# Check if expect is available
-check_expect() {
-    if ! command_exists expect; then
-        log_error "expect command not found. Install it via 'brew install expect' or your package manager."
+# Ensure python3 is available
+check_python() {
+    if ! command_exists python3; then
+        log_error "python3 command not found. Please install Python 3."
         exit 1
     fi
 }
@@ -165,88 +165,146 @@ restart_node() {
     start_node "$node_name" "$node_dir"
 }
 
-# ==================== Telnet Commands ====================
+# ==================== HTTP Helper Commands ====================
 
-# Execute telnet command and return output
-telnet_command() {
-    local host="$1"
-    local port="$2"
-    local password="$3"
-    local command="$4"
-
-    expect <<EOF 2>/dev/null
-set timeout 5
-spawn telnet $host $port
-expect {
-    -re "(?i)login[:>]" {
-        send -- "$password\r"
-    }
-    -re "(?i)password[:>]" {
-        send -- "$password\r"
-    }
-    timeout {
-        exit 1
-    }
-}
-expect {
-    -re "xdag> " {}
-    timeout { exit 1 }
-}
-send -- "$command\r"
-expect {
-    -re "xdag> " {}
-    timeout { exit 1 }
-}
-send -- "exit\r"
-expect eof
-EOF
+http_get_json() {
+    local port="$1"
+    local path="$2"
+    curl -s --max-time 5 "http://127.0.0.1:${port}${path}"
 }
 
-# Get node state (blocks, main blocks, sync status)
+# Get node state (blocks, sync status)
 get_node_state() {
-    local host="$1"
+    local _host="$1"
     local port="$2"
-    local password="$3"
+    local response
+    response=$(http_get_json "$port" "/api/v1/node/status")
+    if [ -z "$response" ]; then
+        return 1
+    fi
 
-    telnet_command "$host" "$port" "$password" "state" | grep -A 10 "blocks:"
+    python3 - "$response" <<'PY'
+import json, sys
+try:
+    data = json.loads(sys.argv[1])
+except Exception:
+    sys.exit(1)
+print(f"main blocks: {data.get('mainChainLength', 0)}")
+print(f"total blocks: {data.get('latestBlockHeight', 0)}")
+print(f"sync state: {data.get('syncState', 'unknown')}")
+print(f"message: {data.get('message', '')}")
+PY
 }
 
-# Get node statistics
+# Get node statistics (main blocks, total blocks, difficulty, timestamp)
 get_node_stats() {
-    local host="$1"
+    local _host="$1"
     local port="$2"
-    local password="$3"
+    local status_response blocks_response
+    status_response=$(http_get_json "$port" "/api/v1/node/status")
+    blocks_response=$(http_get_json "$port" "/api/v1/blocks?size=1")
 
-    telnet_command "$host" "$port" "$password" "stats"
+    if [ -z "$status_response" ] || [ -z "$blocks_response" ]; then
+        return 1
+    fi
+
+    python3 - "$status_response" "$blocks_response" <<'PY'
+import json, sys
+try:
+    status = json.loads(sys.argv[1])
+    blocks = json.loads(sys.argv[2])
+except Exception:
+    sys.exit(1)
+tip = (blocks.get("data") or [{}])[0]
+print(f"main blocks: {status.get('mainChainLength', 0)}")
+print(f"total blocks: {status.get('latestBlockHeight', 0)}")
+print(f"difficulty: {tip.get('difficulty', 'n/a')}")
+print(f"timestamp: {tip.get('timestamp', 'n/a')}")
+print(f"sync state: {status.get('syncState', 'unknown')}")
+PY
 }
 
-# Get main blocks
+# Get latest blocks list
 get_main_blocks() {
-    local host="$1"
+    local _host="$1"
     local port="$2"
-    local password="$3"
+    local _password="$3"
     local count="$4"
+    local response
 
-    telnet_command "$host" "$port" "$password" "chain $count"
+    response=$(http_get_json "$port" "/api/v1/blocks?size=${count}")
+    if [ -z "$response" ]; then
+        return 1
+    fi
+
+    python3 - "$response" <<'PY'
+import json, sys
+try:
+    data = json.loads(sys.argv[1])
+except Exception:
+    sys.exit(1)
+for block in data.get("data") or []:
+    print(f"height: {block.get('height')} hash: {block.get('hash')} difficulty: {block.get('difficulty')}")
+PY
 }
 
 # Get block info by height
 get_block_by_height() {
-    local host="$1"
+    local _host="$1"
     local port="$2"
-    local password="$3"
+    local _password="$3"
     local height="$4"
+    local number="$height"
 
-    telnet_command "$host" "$port" "$password" "block $height"
+    if [[ "$number" != 0x* && "$number" != "latest" && "$number" != "earliest" ]]; then
+        if [[ "$number" =~ ^[0-9]+$ ]]; then
+            printf -v number "0x%x" "$number"
+        fi
+    fi
+
+    local response
+    response=$(http_get_json "$port" "/api/v1/blocks/${number}")
+    if [ -z "$response" ]; then
+        return 1
+    fi
+
+    python3 - "$response" <<'PY'
+import json, sys
+try:
+    data = json.loads(sys.argv[1])
+except Exception:
+    sys.exit(1)
+if "hash" not in data:
+    sys.exit(1)
+print(f"hash: {data.get('hash')}")
+print(f"number: {data.get('number')}")
+print(f"timestamp: {data.get('timestamp')}")
+print(f"difficulty: {data.get('difficulty')}")
+print(f"state: {data.get('state')}")
+print(f"links: {len(data.get('transactions') or [])}")
+PY
 }
 
-# Get account info
+# Get account info from wallet
 get_account_info() {
-    local host="$1"
+    local _host="$1"
     local port="$2"
-    local password="$3"
+    local response
+    response=$(http_get_json "$port" "/api/v1/accounts?size=5")
+    if [ -z "$response" ]; then
+        return 1
+    fi
 
-    telnet_command "$host" "$port" "$password" "account"
+    python3 - "$response" <<'PY'
+import json, sys
+try:
+    data = json.loads(sys.argv[1])
+except Exception:
+    sys.exit(1)
+accounts = data.get("data") or []
+for account in accounts:
+    print(f"account: {account.get('address')} balance: {account.get('balance')} nonce: {account.get('nonce')}")
+PY
 }
 
 # ==================== Verification Functions ====================
@@ -257,8 +315,8 @@ wait_for_sync() {
 
     local wait_count=0
     while [ $wait_count -lt $SYNC_TIMEOUT ]; do
-        local node1_state=$(get_node_state "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 2>/dev/null || echo "")
-        local node2_state=$(get_node_state "$NODE2_HOST" "$NODE2_TELNET_PORT" "$NODE2_PASSWORD" 2>/dev/null || echo "")
+        local node1_state=$(get_node_state "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 2>/dev/null || echo "")
+        local node2_state=$(get_node_state "$NODE2_HOST" "$NODE2_HTTP_PORT" "$NODE2_PASSWORD" 2>/dev/null || echo "")
 
         if [ -n "$node1_state" ] && [ -n "$node2_state" ]; then
             log_success "Nodes are responding"
@@ -278,8 +336,8 @@ verify_genesis() {
     log_info "Verifying genesis consistency..."
 
     # Get genesis block from both nodes
-    local node1_genesis=$(get_block_by_height "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 0 2>/dev/null)
-    local node2_genesis=$(get_block_by_height "$NODE2_HOST" "$NODE2_TELNET_PORT" "$NODE2_PASSWORD" 0 2>/dev/null)
+    local node1_genesis=$(get_block_by_height "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 0 2>/dev/null)
+    local node2_genesis=$(get_block_by_height "$NODE2_HOST" "$NODE2_HTTP_PORT" "$NODE2_PASSWORD" 0 2>/dev/null)
 
     if [ -z "$node1_genesis" ] || [ -z "$node2_genesis" ]; then
         log_warning "Failed to retrieve genesis blocks"
@@ -311,8 +369,8 @@ verify_genesis() {
 verify_block_sync() {
     log_info "Verifying block synchronization..."
 
-    local node1_blocks=$(get_main_blocks "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 10 2>/dev/null || echo "")
-    local node2_blocks=$(get_main_blocks "$NODE2_HOST" "$NODE2_TELNET_PORT" "$NODE2_PASSWORD" 10 2>/dev/null || echo "")
+    local node1_blocks=$(get_main_blocks "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 10 2>/dev/null || echo "")
+    local node2_blocks=$(get_main_blocks "$NODE2_HOST" "$NODE2_HTTP_PORT" "$NODE2_PASSWORD" 10 2>/dev/null || echo "")
 
     if [ -z "$node1_blocks" ] || [ -z "$node2_blocks" ]; then
         log_warning "Failed to retrieve blocks from nodes"
@@ -334,8 +392,8 @@ test_p2p_connection() {
     log_info "Running test: P2P Connection"
 
     # Check if nodes are connected
-    local node1_state=$(get_node_state "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 2>/dev/null)
-    local node2_state=$(get_node_state "$NODE2_HOST" "$NODE2_TELNET_PORT" "$NODE2_PASSWORD" 2>/dev/null)
+    local node1_state=$(get_node_state "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 2>/dev/null)
+    local node2_state=$(get_node_state "$NODE2_HOST" "$NODE2_HTTP_PORT" "$NODE2_PASSWORD" 2>/dev/null)
 
     if [ -n "$node1_state" ] && [ -n "$node2_state" ]; then
         echo "**Result**: ✅ PASS" >> "$TEST_REPORT"
@@ -409,11 +467,11 @@ test_block_structure() {
     log_info "Running test: Block Structure Validation"
 
     # Get a block from Node1 (block 1 if available, otherwise genesis)
-    local block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 1 2>/dev/null)
+    local block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 1 2>/dev/null)
 
     if [ -z "$block_info" ]; then
         # Try genesis block (block 0)
-        block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 0 2>/dev/null)
+        block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 0 2>/dev/null)
     fi
 
     if [ -z "$block_info" ]; then
@@ -485,7 +543,7 @@ test_epoch_calculation() {
     log_info "Running test: Epoch Calculation"
 
     # Get stats from Node1
-    local stats_info=$(get_node_stats "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 2>/dev/null)
+    local stats_info=$(get_node_stats "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 2>/dev/null)
 
     if [ -z "$stats_info" ]; then
         echo "**Result**: ⚠️ WARNING" >> "$TEST_REPORT"
@@ -524,7 +582,7 @@ test_account_balance() {
     log_info "Running test: Account Balance Management"
 
     # Get account info from Node1
-    local account_info=$(get_account_info "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 2>/dev/null)
+    local account_info=$(get_account_info "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 2>/dev/null)
 
     if [ -z "$account_info" ]; then
         echo "**Result**: ⚠️ WARNING" >> "$TEST_REPORT"
@@ -580,8 +638,8 @@ test_cumulative_difficulty() {
     log_info "Running test: Cumulative Difficulty Consistency"
 
     # Get stats from both nodes
-    local node1_stats=$(get_node_stats "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 2>/dev/null)
-    local node2_stats=$(get_node_stats "$NODE2_HOST" "$NODE2_TELNET_PORT" "$NODE2_PASSWORD" 2>/dev/null)
+    local node1_stats=$(get_node_stats "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 2>/dev/null)
+    local node2_stats=$(get_node_stats "$NODE2_HOST" "$NODE2_HTTP_PORT" "$NODE2_PASSWORD" 2>/dev/null)
 
     if [ -z "$node1_stats" ] || [ -z "$node2_stats" ]; then
         echo "**Result**: ⚠️ WARNING" >> "$TEST_REPORT"
@@ -631,8 +689,8 @@ test_main_chain_height() {
     log_info "Running test: Main Chain Height Consistency"
 
     # Get stats from both nodes
-    local node1_stats=$(get_node_stats "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 2>/dev/null)
-    local node2_stats=$(get_node_stats "$NODE2_HOST" "$NODE2_TELNET_PORT" "$NODE2_PASSWORD" 2>/dev/null)
+    local node1_stats=$(get_node_stats "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 2>/dev/null)
+    local node2_stats=$(get_node_stats "$NODE2_HOST" "$NODE2_HTTP_PORT" "$NODE2_PASSWORD" 2>/dev/null)
 
     if [ -z "$node1_stats" ] || [ -z "$node2_stats" ]; then
         echo "**Result**: ⚠️ WARNING" >> "$TEST_REPORT"
@@ -688,10 +746,10 @@ test_pow_difficulty() {
     log_info "Running test: PoW Difficulty Validation"
 
     # Get a recent block
-    local block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 1 2>/dev/null)
+    local block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 1 2>/dev/null)
 
     if [ -z "$block_info" ]; then
-        block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 0 2>/dev/null)
+        block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 0 2>/dev/null)
     fi
 
     if [ -z "$block_info" ]; then
@@ -737,8 +795,8 @@ test_block_hash_consistency() {
     log_info "Running test: Block Hash Consistency"
 
     # Get genesis block from both nodes
-    local node1_block=$(get_block_by_height "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 0 2>/dev/null)
-    local node2_block=$(get_block_by_height "$NODE2_HOST" "$NODE2_TELNET_PORT" "$NODE2_PASSWORD" 0 2>/dev/null)
+    local node1_block=$(get_block_by_height "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 0 2>/dev/null)
+    local node2_block=$(get_block_by_height "$NODE2_HOST" "$NODE2_HTTP_PORT" "$NODE2_PASSWORD" 0 2>/dev/null)
 
     if [ -z "$node1_block" ] || [ -z "$node2_block" ]; then
         echo "**Result**: ⚠️ WARNING" >> "$TEST_REPORT"
@@ -788,7 +846,7 @@ test_time_window_validation() {
     log_info "Running test: Time Window Validation"
 
     # Get recent blocks from Node1
-    local blocks_info=$(get_main_blocks "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 5 2>/dev/null)
+    local blocks_info=$(get_main_blocks "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 5 2>/dev/null)
 
     if [ -z "$blocks_info" ]; then
         echo "**Result**: ⚠️ WARNING" >> "$TEST_REPORT"
@@ -833,8 +891,8 @@ test_duplicate_block_rejection() {
     log_info "Running test: Duplicate Block Rejection"
 
     # Get total block count from both nodes
-    local node1_stats=$(get_node_stats "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 2>/dev/null)
-    local node2_stats=$(get_node_stats "$NODE2_HOST" "$NODE2_TELNET_PORT" "$NODE2_PASSWORD" 2>/dev/null)
+    local node1_stats=$(get_node_stats "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 2>/dev/null)
+    local node2_stats=$(get_node_stats "$NODE2_HOST" "$NODE2_HTTP_PORT" "$NODE2_PASSWORD" 2>/dev/null)
 
     if [ -z "$node1_stats" ] || [ -z "$node2_stats" ]; then
         echo "**Result**: ⚠️ WARNING" >> "$TEST_REPORT"
@@ -882,10 +940,10 @@ test_invalid_block_rejection() {
     log_info "Running test: Invalid Block Rejection"
 
     # Check if nodes are validating blocks properly by examining block structure
-    local block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 1 2>/dev/null)
+    local block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 1 2>/dev/null)
 
     if [ -z "$block_info" ]; then
-        block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 0 2>/dev/null)
+        block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 0 2>/dev/null)
     fi
 
     if [ -z "$block_info" ]; then
@@ -933,10 +991,10 @@ test_links_count_limit() {
     log_info "Running test: Links Count Limit"
 
     # Get block information to check links
-    local block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 1 2>/dev/null)
+    local block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 1 2>/dev/null)
 
     if [ -z "$block_info" ]; then
-        block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" 0 2>/dev/null)
+        block_info=$(get_block_by_height "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" 0 2>/dev/null)
     fi
 
     if [ -z "$block_info" ]; then
@@ -982,8 +1040,8 @@ init_test_env() {
     mkdir -p "$TEST_RESULTS_DIR"
 
     # Check prerequisites
-    check_telnet
-    check_expect
+    check_curl
+    check_python
 
     log_success "Test environment initialized"
 }
@@ -1001,8 +1059,8 @@ generate_report_header() {
 
 ## Test Configuration
 
-- **Node1**: $NODE1_HOST:$NODE1_P2P_PORT (Telnet: $NODE1_TELNET_PORT)
-- **Node2**: $NODE2_HOST:$NODE2_P2P_PORT (Telnet: $NODE2_TELNET_PORT)
+- **Node1**: $NODE1_HOST:$NODE1_P2P_PORT (HTTP API: $NODE1_HTTP_PORT)
+- **Node2**: $NODE2_HOST:$NODE2_P2P_PORT (HTTP API: $NODE2_HTTP_PORT)
 - **Test Timeout**: ${TEST_TIMEOUT}s
 - **Sync Timeout**: ${SYNC_TIMEOUT}s
 
@@ -1154,10 +1212,10 @@ main() {
                 ;;
             4)
                 echo "Node1 State:"
-                get_node_state "$NODE1_HOST" "$NODE1_TELNET_PORT" "$NODE1_PASSWORD" || echo "Failed to get Node1 state"
+                get_node_state "$NODE1_HOST" "$NODE1_HTTP_PORT" "$NODE1_PASSWORD" || echo "Failed to get Node1 state"
                 echo ""
                 echo "Node2 State:"
-                get_node_state "$NODE2_HOST" "$NODE2_TELNET_PORT" "$NODE2_PASSWORD" || echo "Failed to get Node2 state"
+                get_node_state "$NODE2_HOST" "$NODE2_HTTP_PORT" "$NODE2_PASSWORD" || echo "Failed to get Node2 state"
                 ;;
             5)
                 run_all_tests

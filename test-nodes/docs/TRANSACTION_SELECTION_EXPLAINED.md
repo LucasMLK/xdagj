@@ -499,4 +499,4 @@ grep -n "toTransaction" src/main/java/io/xdag/core/Link.java
 
 **文档版本**: 1.0
 **创建日期**: 2025-11-16
-**适用版本**: xdagj v5.1 (refactor/core-v5.1 branch)
+**适用版本**: xdagj 1.0 (refactor/core-xdagj1.0 branch)
