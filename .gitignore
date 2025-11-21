@@ -31,6 +31,18 @@ test-nodes/node*/*.log
 test-nodes/node*/*.pid
 test-nodes/node*/rocksdb/
 
+# Test nodes suite1/suite2 runtime files
+test-nodes/suite*/node/devnet/rocksdb/
+test-nodes/suite*/node/devnet/wallet/wallet.data
+test-nodes/suite*/node/devnet/reputation/
+test-nodes/suite*/node/logs/
+test-nodes/suite*/node/*.log
+test-nodes/suite*/miner/logs/
+test-nodes/suite*/miner/*.log
+test-nodes/suite*/pool/logs/
+test-nodes/suite*/pool/*.log
+test-nodes/suite*/*/*.jar
+
 # OS
 .DS_Store
 Thumbs.db
