@@ -30,6 +30,7 @@ import static io.xdag.utils.BasicUtils.address2PubAddress;
 import io.xdag.DagKernel;
 import io.xdag.api.dto.BlockDetail;
 import io.xdag.api.dto.BlockSummary;
+import io.xdag.api.dto.PagedResult;
 import io.xdag.api.dto.TransactionInfo;
 import io.xdag.core.Block;
 import io.xdag.core.BlockInfo;
@@ -38,6 +39,7 @@ import io.xdag.core.XAmount;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.utils.XdagTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
@@ -106,6 +108,45 @@ public class BlockApiService {
             log.error("Failed to get main blocks", e);
             return new ArrayList<>();
         }
+    }
+
+    /**
+     * Get paginated main blocks (newest first).
+     *
+     * @param page page number (1-based)
+     * @param size page size
+     * @return paged block summaries with total count
+     */
+    public PagedResult<BlockSummary> getMainBlocksPage(int page, int size) {
+        long totalBlocks = dagKernel.getDagChain().getMainChainLength();
+        if (totalBlocks <= 0) {
+            return PagedResult.empty();
+        }
+
+        long safePage = Math.max(page, 1);
+        int safeSize = Math.max(size, 1);
+        long offset = (safePage - 1L) * safeSize;
+
+        if (offset >= totalBlocks) {
+            return PagedResult.of(Collections.emptyList(), totalBlocks);
+        }
+
+        long startHeight = totalBlocks - offset;
+        long endHeight = Math.max(1, startHeight - safeSize + 1);
+
+        List<BlockSummary> summaries = new ArrayList<>();
+        for (long height = startHeight; height >= endHeight; height--) {
+            Block block = dagKernel.getDagChain().getMainBlockByHeight(height);
+            if (block == null) {
+                continue;
+            }
+            BlockSummary summary = buildBlockSummary(block);
+            if (summary != null) {
+                summaries.add(summary);
+            }
+        }
+
+        return PagedResult.of(summaries, totalBlocks);
     }
 
     /**
@@ -227,13 +268,13 @@ public class BlockApiService {
                 Block linkedBlock = dagKernel.getDagChain().getBlockByHash(link.getTargetHash(), false);
                 if (linkedBlock != null && linkedBlock.getInfo() != null) {
                     blockLinks.add(BlockDetail.LinkInfo.builder()
-                            .hash(Hex.toHexString(link.getTargetHash().toArray()).substring(0, 16) + "...")
+                            .hash(Hex.toHexString(link.getTargetHash().toArray()))
                             .height(linkedBlock.getInfo().getHeight())
                             .epoch(linkedBlock.getInfo().getEpoch())
                             .build());
                 } else {
                     blockLinks.add(BlockDetail.LinkInfo.builder()
-                            .hash(Hex.toHexString(link.getTargetHash().toArray()).substring(0, 16) + "...")
+                            .hash(Hex.toHexString(link.getTargetHash().toArray()))
                             .build());
                 }
             } else if (link.isTransaction()) {

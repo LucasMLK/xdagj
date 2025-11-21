@@ -76,7 +76,7 @@ public class TransactionInfo {
     private String remark;
 
     /**
-     * Transaction signature (hex string, truncated for display)
+     * Transaction signature (full hex string: v, r, s combined)
      */
     private String signature;
 

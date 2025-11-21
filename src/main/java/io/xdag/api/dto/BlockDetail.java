@@ -111,7 +111,7 @@ public class BlockDetail {
     @AllArgsConstructor
     public static class LinkInfo {
         /**
-         * Linked block hash (hex string, truncated)
+         * Linked block hash (full hex string)
          */
         private String hash;
 

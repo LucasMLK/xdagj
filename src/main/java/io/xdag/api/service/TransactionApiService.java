@@ -27,6 +27,7 @@ package io.xdag.api.service;
 import static io.xdag.utils.BasicUtils.address2PubAddress;
 
 import io.xdag.DagKernel;
+import io.xdag.api.dto.PagedResult;
 import io.xdag.api.dto.TransactionInfo;
 import io.xdag.core.Block;
 import io.xdag.core.BlockInfo;
@@ -34,6 +35,7 @@ import io.xdag.core.Transaction;
 import io.xdag.utils.XdagTime;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
@@ -120,6 +122,61 @@ public class TransactionApiService {
     }
 
     /**
+     * Get recent transactions ordered by block height (newest first).
+     *
+     * @param page page number (1-based)
+     * @param size page size
+     * @return paged transaction info list
+     */
+    public PagedResult<TransactionInfo> getRecentTransactionsPage(int page, int size) {
+        long total = dagKernel.getTransactionStore().getTransactionCount();
+        if (total <= 0) {
+            return PagedResult.empty();
+        }
+
+        long safePage = Math.max(page, 1);
+        int safeSize = Math.max(size, 1);
+        long offset = (safePage - 1L) * safeSize;
+        if (offset >= total) {
+            return PagedResult.of(Collections.emptyList(), total);
+        }
+
+        List<TransactionInfo> items = new ArrayList<>(safeSize);
+        long skip = offset;
+        long currentHeight = dagKernel.getDagChain().getMainChainLength();
+
+        outer:
+        for (long height = currentHeight; height >= 1; height--) {
+            Block block = dagKernel.getDagChain().getMainBlockByHeight(height);
+            if (block == null) {
+                continue;
+            }
+
+            List<TransactionInfo> blockTransactions = getTransactionsByBlock(block.getHash());
+            int blockCount = blockTransactions.size();
+            if (blockCount == 0) {
+                continue;
+            }
+
+            if (skip >= blockCount) {
+                skip -= blockCount;
+                continue;
+            }
+
+            int startIndex = blockCount - 1 - (int) skip;
+            skip = 0;
+            for (int idx = startIndex; idx >= 0; idx--) {
+                items.add(blockTransactions.get(idx));
+                if (items.size() >= safeSize) {
+                    break outer;
+                }
+            }
+        }
+
+        return PagedResult.of(items, total);
+    }
+
+    /**
      * Build TransactionInfo from Transaction object
      */
     private TransactionInfo buildTransactionInfo(Transaction tx) {
@@ -139,12 +196,12 @@ public class TransactionApiService {
             builder.remark(remark);
         }
 
-        // Add signature (v, r, s combined and truncated)
+        // Add signature (v, r, s combined - full values)
         if (tx.getR() != null && tx.getS() != null) {
-            String sig = String.format("v:%02x r:%s... s:%s...",
+            String sig = String.format("v:%02x r:%s s:%s",
                     tx.getV(),
-                    tx.getR().toHexString().substring(0, Math.min(16, tx.getR().toHexString().length())),
-                    tx.getS().toHexString().substring(0, Math.min(16, tx.getS().toHexString().length())));
+                    tx.getR().toHexString(),
+                    tx.getS().toHexString());
             builder.signature(sig);
         }
 

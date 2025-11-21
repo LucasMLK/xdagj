@@ -35,7 +35,7 @@ import lombok.NoArgsConstructor;
  * Provides detailed information about node sync state, epoch gaps, and mining status.
  * Used for monitoring node health and partition detection.
  *
- * @since XDAGJ v5.1
+ * @since XDAGJ 1.0
  */
 @Data
 @Builder
@@ -112,7 +112,7 @@ public class NodeStatusInfo {
     private long mainChainLength;
 
     /**
-     * Latest main block hash (hex string, truncated)
+     * Latest main block hash (full hex string)
      */
     private String latestBlockHash;
 

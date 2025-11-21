@@ -126,8 +126,9 @@ public class HttpApiServer {
             log.info("HTTP API server started successfully");
             log.info("  - RESTful API:  {}://{}:{}/api/v1/",
                 protocol, httpSpec.getRpcHttpHost(), httpSpec.getRpcHttpPort());
-            log.info("  - OpenAPI Spec: {}://{}:{}/openapi.json",
+            log.info("  - OpenAPI Spec: {}://{}:{}/openapi.yaml",
                 protocol, httpSpec.getRpcHttpHost(), httpSpec.getRpcHttpPort());
+            log.info("    (JSON mirror available at /openapi.json)");
             log.info("  - API Docs:     {}://{}:{}/docs",
                 protocol, httpSpec.getRpcHttpHost(), httpSpec.getRpcHttpPort());
 

@@ -86,7 +86,7 @@ public class EpochInfo {
     private int candidateCount;
 
     /**
-     * Winner block hash (hex string, truncated)
+     * Winner block hash (full hex string)
      */
     private String winnerHash;
 

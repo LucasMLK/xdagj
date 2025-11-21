@@ -49,7 +49,7 @@ import org.apache.tuweni.bytes.Bytes32;
  *   <li>"Duplicate block" - Block already imported</li>
  * </ul>
  *
- * @since XDAGJ v5.1
+ * @since XDAGJ 1.0
  */
 @Data
 @Builder

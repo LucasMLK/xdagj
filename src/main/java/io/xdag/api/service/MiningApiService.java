@@ -84,7 +84,7 @@ import java.time.Duration;
  * BlockSubmitResult result = apiService.submitMinedBlock(minedBlock, "pool1");
  * </pre>
  *
- * @since XDAGJ v5.1
+ * @since XDAGJ 1.0
  */
 @Slf4j
 public class MiningApiService {
@@ -355,7 +355,7 @@ public class MiningApiService {
    *   <li>Beyond 3 epochs, candidate is definitely stale</li>
    * </ul>
    *
-   * @since XDAGJ v5.1
+   * @since XDAGJ 1.0
    */
   private static class CandidateBlockCache {
 

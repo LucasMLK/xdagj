@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: XDAG v5.1 Blockchain API
+  title: XDAGJ 1.0 Blockchain API
   version: 5.1.0
   description: |
     XDAG blockchain API supporting both JSON-RPC 2.0 and RESTful interfaces.
@@ -98,13 +98,16 @@ paths:
         - Accounts
       summary: Get local wallet accounts
       description: Returns list of accounts in the local wallet
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
       responses:
         '200':
           description: List of accounts
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AccountsResponse'
+                $ref: '#/components/schemas/PagedAccountsResponse'
 
   /api/v1/accounts/{address}/balance:
     get:
@@ -154,6 +157,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/BlockNumberResponse'
+
+  /api/v1/blocks:
+    get:
+      tags:
+        - Blocks
+      summary: List latest blocks
+      description: Returns paginated list of main chain blocks (newest first)
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+      responses:
+        '200':
+          description: Paginated block list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedBlockSummaryResponse'
 
   /api/v1/blocks/{blockNumber}:
     get:
@@ -238,6 +258,21 @@ paths:
           $ref: '#/components/responses/NotFound'
 
   /api/v1/transactions:
+    get:
+      tags:
+        - Transactions
+      summary: List recent transactions
+      description: Returns paginated list of confirmed transactions ordered from newest to oldest
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+      responses:
+        '200':
+          description: Paginated transaction list
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedTransactionsResponse'
     post:
       tags:
         - Transactions
@@ -337,12 +372,26 @@ paths:
                 $ref: '#/components/schemas/CoinbaseResponse'
 
   # ========== OpenAPI Spec Endpoint ==========
+  /openapi.yaml:
+    get:
+      tags:
+        - Documentation
+      summary: Get OpenAPI specification (YAML)
+      description: Returns the OpenAPI spec in YAML format
+      responses:
+        '200':
+          description: OpenAPI YAML
+          content:
+            application/x-yaml:
+              schema:
+                type: object
+
   /openapi.json:
     get:
       tags:
         - Documentation
-      summary: Get OpenAPI specification
-      description: Returns this OpenAPI spec in JSON format
+      summary: Get OpenAPI specification (JSON mirror)
+      description: Returns the OpenAPI spec in JSON format (generated from YAML)
       responses:
         '200':
           description: OpenAPI JSON
@@ -372,6 +421,25 @@ components:
         type: string
         default: "latest"
       example: "latest"
+
+    PageParam:
+      name: page
+      in: query
+      description: Page number (1-based)
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    SizeParam:
+      name: size
+      in: query
+      description: Page size (max 100)
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
 
   responses:
     BadRequest:
@@ -444,26 +512,44 @@ components:
           type: object
 
     # ========== Account Schemas ==========
-    AccountsResponse:
+    PaginationInfo:
       type: object
       properties:
-        accounts:
+        page:
+          type: integer
+        size:
+          type: integer
+        total:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+
+    AccountListItem:
+      type: object
+      properties:
+        address:
+          type: string
+          description: Base58 address
+        balance:
+          type: string
+          description: Balance in XDAG (decimal string)
+        nonce:
+          type: integer
+          format: int64
+        type:
+          type: string
+          enum: [hd, imported]
+
+    PagedAccountsResponse:
+      type: object
+      properties:
+        data:
           type: array
           items:
-            type: object
-            properties:
-              address:
-                type: string
-                description: Base58 address
-              balance:
-                type: string
-                description: Balance in XDAG (decimal string)
-              nonce:
-                type: integer
-                format: int64
-              type:
-                type: string
-                enum: [hd, imported]
+            $ref: '#/components/schemas/AccountListItem'
+        pagination:
+          $ref: '#/components/schemas/PaginationInfo'
 
     AccountBalanceResponse:
       type: object
@@ -543,6 +629,41 @@ components:
                 type: string
                 enum: [parent, child]
 
+    BlockSummary:
+      type: object
+      properties:
+        hash:
+          type: string
+        height:
+          type: string
+          description: Block height in hex format
+        epoch:
+          type: integer
+          format: int64
+        timestamp:
+          type: integer
+          format: int64
+        difficulty:
+          type: string
+        transactionCount:
+          type: integer
+        state:
+          type: string
+          enum: [Main, Orphan]
+        coinbase:
+          type: string
+          description: Base58 address
+
+    PagedBlockSummaryResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/BlockSummary'
+        pagination:
+          $ref: '#/components/schemas/PaginationInfo'
+
     # ========== Transaction Schemas ==========
     TransactionDetailResponse:
       type: object
@@ -584,6 +705,16 @@ components:
           type: boolean
         signatureValid:
           type: boolean
+
+    PagedTransactionsResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionDetailResponse'
+        pagination:
+          $ref: '#/components/schemas/PaginationInfo'
 
     SendTransactionResponse:
       type: object

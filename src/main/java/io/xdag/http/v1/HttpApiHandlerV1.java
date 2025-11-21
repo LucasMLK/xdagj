@@ -24,6 +24,7 @@
 package io.xdag.http.v1;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -34,7 +35,9 @@ import io.xdag.DagKernel;
 import io.xdag.Network;
 import io.xdag.api.dto.AccountInfo;
 import io.xdag.api.dto.BlockDetail;
+import io.xdag.api.dto.BlockSummary;
 import io.xdag.api.dto.ChainStatsInfo;
+import io.xdag.api.dto.PagedResult;
 import io.xdag.api.dto.TransactionInfo;
 import io.xdag.api.service.AccountApiService;
 import io.xdag.api.service.BlockApiService;
@@ -94,8 +97,10 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
 
         if (uri.startsWith("/api/v1/")) {
             handleApiRequest(ctx, request, uri, method);
+        } else if (uri.equals("/openapi.yaml") || uri.equals("/openapi.yml")) {
+            serveOpenApiSpec(ctx, false);
         } else if (uri.equals("/openapi.json") || uri.equals("/api-docs") || uri.startsWith("/openapi")) {
-            serveOpenApiSpec(ctx);
+            serveOpenApiSpec(ctx, true);
         } else if (uri.startsWith("/swagger-ui") || uri.equals("/docs")) {
             serveSwaggerUI(ctx);
         } else {
@@ -154,6 +159,11 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
             return handleGetAccounts(pageRequest);
         }
 
+        if (path.equals("/api/v1/blocks") && method == HttpMethod.GET) {
+            PageRequest pageRequest = PageRequest.parse(params.get("page"), params.get("size"));
+            return handleGetBlocks(pageRequest);
+        }
+
         if (path.matches("/api/v1/accounts/[^/]+/balance") && method == HttpMethod.GET) {
             checkPermission(apiKey, Permission.READ);
             String address = extractPathParam(path, 3);
@@ -182,6 +192,11 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
             String blockHash = extractPathParam(path, 5);
             boolean fullTx = Boolean.parseBoolean(params.getOrDefault("fullTransactions", "false"));
             return handleGetBlockByHash(blockHash, fullTx);
+        }
+
+        if (path.equals("/api/v1/transactions") && method == HttpMethod.GET) {
+            PageRequest pageRequest = PageRequest.parse(params.get("page"), params.get("size"));
+            return handleGetTransactions(pageRequest);
         }
 
         if (path.matches("/api/v1/transactions/[^/]+") && method == HttpMethod.GET) {
@@ -255,12 +270,17 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
     }
 
     private PagedResponse<AccountsResponse.AccountInfo> handleGetAccounts(PageRequest pageRequest) {
-        int totalCount = accountApiService.getAccounts(Integer.MAX_VALUE).size();
-        List<AccountInfo> accounts = accountApiService.getAccounts(pageRequest.getSize());
+        List<AccountInfo> accounts = accountApiService.getAccounts(0);
+        int totalCount = accounts.size();
+
+        if (totalCount == 0 || pageRequest.getOffset() >= totalCount) {
+            PaginationInfo pagination = PaginationInfo.of(pageRequest, totalCount);
+            return PagedResponse.of(List.of(), pagination);
+        }
 
         List<AccountsResponse.AccountInfo> accountInfos = new ArrayList<>();
         int start = pageRequest.getOffset();
-        int end = Math.min(start + pageRequest.getSize(), accounts.size());
+        int end = Math.min(start + pageRequest.getSize(), totalCount);
 
         for (int i = start; i < end; i++) {
             if (i < accounts.size()) {
@@ -276,6 +296,19 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
 
         PaginationInfo pagination = PaginationInfo.of(pageRequest, totalCount);
         return PagedResponse.of(accountInfos, pagination);
+    }
+
+    private PagedResponse<BlockSummaryResponse> handleGetBlocks(PageRequest pageRequest) {
+        PagedResult<BlockSummary> pagedBlocks =
+                blockApiService.getMainBlocksPage(pageRequest.getPage(), pageRequest.getSize());
+
+        List<BlockSummaryResponse> summaries = new ArrayList<>();
+        for (BlockSummary summary : pagedBlocks.getItems()) {
+            summaries.add(convertBlockSummary(summary));
+        }
+
+        PaginationInfo pagination = PaginationInfo.of(pageRequest, pagedBlocks.getTotal());
+        return PagedResponse.of(summaries, pagination);
     }
 
     private AccountBalanceResponse handleGetBalance(String address, String blockNumber) {
@@ -354,6 +387,19 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
         }
 
         return convertTransactionInfoToResponse(tx);
+    }
+
+    private PagedResponse<TransactionDetailResponse> handleGetTransactions(PageRequest pageRequest) {
+        PagedResult<TransactionInfo> pagedTransactions =
+                transactionApiService.getRecentTransactionsPage(pageRequest.getPage(), pageRequest.getSize());
+
+        List<TransactionDetailResponse> responses = new ArrayList<>();
+        for (TransactionInfo tx : pagedTransactions.getItems()) {
+            responses.add(convertTransactionInfoToResponse(tx));
+        }
+
+        PaginationInfo pagination = PaginationInfo.of(pageRequest, pagedTransactions.getTotal());
+        return PagedResponse.of(responses, pagination);
     }
 
     private SendTransactionResponse handleSendRawTransaction(String signedTransactionData) {
@@ -827,13 +873,20 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
         return builder.build();
     }
 
-    private void serveOpenApiSpec(ChannelHandlerContext ctx) {
+    private void serveOpenApiSpec(ChannelHandlerContext ctx, boolean asJson) {
         try {
             InputStream is = getClass().getClassLoader().getResourceAsStream("api/openapi.yaml");
 
             if (is != null) {
                 byte[] yamlContent = is.readAllBytes();
-                sendResponse(ctx, OK, "application/x-yaml", yamlContent);
+                if (asJson) {
+                    Object yamlTree = new ObjectMapper(new YAMLFactory()).readTree(yamlContent);
+                    byte[] jsonContent = objectMapper.writerWithDefaultPrettyPrinter()
+                            .writeValueAsBytes(yamlTree);
+                    sendResponse(ctx, OK, "application/json", jsonContent);
+                } else {
+                    sendResponse(ctx, OK, "application/x-yaml", yamlContent);
+                }
             } else {
                 sendJsonResponse(ctx, NOT_FOUND, createError("OpenAPI spec not found", 404));
             }
@@ -844,7 +897,7 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
     }
 
     private void serveSwaggerUI(ChannelHandlerContext ctx) {
-        String redirectUrl = "https://petstore.swagger.io/?url=http://localhost:10001/openapi.json";
+        String redirectUrl = "https://petstore.swagger.io/?url=http://localhost:10001/openapi.yaml";
         FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, FOUND);
         response.headers().set(HttpHeaderNames.LOCATION, redirectUrl);
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
@@ -880,6 +933,21 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
         error.put("error", message);
         error.put("code", code);
         return error;
+    }
+
+    private BlockSummaryResponse convertBlockSummary(BlockSummary summary) {
+        return BlockSummaryResponse.builder()
+                .hash(summary.getHash())
+                .height(String.format("0x%x", summary.getHeight()))
+                .epoch(summary.getEpoch())
+                .timestamp(summary.getTimestamp())
+                .difficulty(summary.getDifficulty() != null
+                        ? summary.getDifficulty().toDecimalString()
+                        : "0")
+                .transactionCount(summary.getTransactionCount())
+                .state(summary.getState())
+                .coinbase(summary.getCoinbase())
+                .build();
     }
 
     @Override

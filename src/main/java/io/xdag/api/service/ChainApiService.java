@@ -73,7 +73,7 @@ public class ChainApiService {
                 if (topBlock != null && topBlock.getInfo() != null) {
                     topBlockHeight = topBlock.getInfo().getHeight();
                 }
-                topBlockHash = chainStats.getTopBlock().toHexString().substring(0, 16) + "...";
+                topBlockHash = chainStats.getTopBlock().toHexString();
             }
 
             // Get wallet statistics
@@ -195,7 +195,7 @@ public class ChainApiService {
                     .totalDifficulty(totalDifficulty);
 
             if (winner != null) {
-                builder.winnerHash(Hex.toHexString(winner.getHash().toArray()).substring(0, 16) + "...");
+                builder.winnerHash(Hex.toHexString(winner.getHash().toArray()));
                 builder.winnerHeight(winner.getInfo().getHeight());
             }
 
@@ -214,7 +214,7 @@ public class ChainApiService {
      * Used for monitoring node health and detecting network partition scenarios.
      *
      * @return Node status information or null if failed
-     * @since XDAGJ v5.1
+     * @since XDAGJ 1.0
      */
     public NodeStatusInfo getNodeStatus() {
         try {
@@ -247,7 +247,7 @@ public class ChainApiService {
                 Block latestBlock = dagChain.getMainBlockByHeight(mainChainLength);
                 if (latestBlock != null) {
                     localLatestEpoch = latestBlock.getEpoch();
-                    latestBlockHash = latestBlock.getHash().toHexString().substring(0, 16) + "...";
+                    latestBlockHash = latestBlock.getHash().toHexString();
                     latestBlockHeight = latestBlock.getInfo() != null ?
                             latestBlock.getInfo().getHeight() : null;
                 }

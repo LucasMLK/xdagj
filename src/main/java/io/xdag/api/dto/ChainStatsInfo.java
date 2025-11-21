@@ -57,7 +57,7 @@ public class ChainStatsInfo {
     private Long topBlockHeight;
 
     /**
-     * Top block hash (hex string, truncated)
+     * Top block hash (full hex string)
      */
     private String topBlockHash;
 
