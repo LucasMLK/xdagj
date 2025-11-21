@@ -1166,29 +1166,34 @@ public class DagChainImpl implements DagChain {
   /**
    * Collect links for candidate block creation (REFACTORED)
    *
-   * <p>NEW STRATEGY: Reference "top 10 candidates from previous height's epoch"
-   * <p>
-   * Algorithm:
+   * <p>NEW STRATEGY: Reference "top 16 candidates from previous height's epoch" + up to 1024
+   * transactions from pool
+   *
+   * <p>Algorithm:
    * <ol>
    *   <li>Get previous main block (height N-1)</li>
    *   <li>Check if node is up-to-date (strict mining reference depth limit)</li>
    *   <li>Get all candidates in that block's epoch</li>
-   *   <li>Sort by work (descending), take top 10</li>
-   *   <li>Add references to these 10 blocks</li>
+   *   <li>Sort by work (descending), take top 16 (MAX_BLOCK_LINKS)</li>
+   *   <li>Add references to these 16 blocks</li>
+   *   <li>Add up to 1024 transaction references from transaction pool</li>
    * </ol>
    *
    * <p>RATIONALE:
    * <ul>
    *   <li>Height N-1 is already confirmed (epoch competition finished)</li>
    *   <li>All candidates are valid and can be referenced</li>
-   *   <li>Top 10 includes the winner (highest work)</li>
+   *   <li>Top 16 includes the winner (highest work) and top candidates</li>
    *   <li>Gives epoch losers a chance to be referenced</li>
    *   <li>Strict reference limit prevents outdated nodes from mining</li>
+   *   <li>MAX_LINKS_PER_BLOCK (1,485,000) allows massive transaction throughput</li>
+   *   <li>Initial limit of 1024 txs is conservative for stability</li>
    * </ul>
    *
    * <p>See: docs/DESIGN-BLOCK-LINK-ORPHAN-STORE-REFACTOR.md
    *
-   * @return list of block links (up to 10), empty list if node is too far behind
+   * @return list of links (16 block links + up to 1024 tx links), empty list if node is too far
+   *     behind
    */
   private List<Link> collectCandidateLinks() {
     List<Link> links = new ArrayList<>();
@@ -1274,47 +1279,42 @@ public class DagChainImpl implements DagChain {
       return links;
     }
 
-    // Step 3: Sort by work (descending), take top 10
+    // Step 3: Sort by work (descending), take top 16 (MAX_BLOCK_LINKS)
     // Work = MAX_UINT256 / hash → smaller hash = more work
-    List<Block> top10 = candidates.stream()
+    List<Block> top16 = candidates.stream()
         .sorted((b1, b2) -> {
           UInt256 work1 = calculateBlockWork(b1.getHash());
           UInt256 work2 = calculateBlockWork(b2.getHash());
           return work2.compareTo(work1);  // Descending: largest work first
         })
-        .limit(10)
+        .limit(Block.MAX_BLOCK_LINKS)
         .toList();
 
     // Step 4: Add block references
-    for (Block block : top10) {
+    for (Block block : top16) {
       links.add(Link.toBlock(block.getHash()));
     }
 
     log.info("Collected {} block links from height {} epoch {} (top {} of {} candidates)",
         links.size(), currentMainHeight, prevEpoch,
-        Math.min(10, candidates.size()), candidates.size());
+        Math.min(Block.MAX_BLOCK_LINKS, candidates.size()), candidates.size());
 
     // Step 5: Add transaction links from transaction pool
+    // MAX_LINKS_PER_BLOCK (1,485,000) - MAX_BLOCK_LINKS (16) = 1,484,984 available for transactions
+    // Initial conservative limit: 1024 transactions per block for stability
+    final int MAX_TX_LINKS_PER_BLOCK = 1024;
+
     TransactionPool txPool = dagKernel.getTransactionPool();
     if (txPool != null && txPool.size() > 0) {
-      // Calculate remaining slots for transaction links
-      // Block has Block.MAX_BLOCK_LINKS (16) block references, we added up to 10
-      // So we can add up to 6 more transaction references (conservative estimate)
-      int remainingSlots = Block.MAX_BLOCK_LINKS - links.size();
+      // Select transactions from pool (ordered by fee, highest first)
+      List<Transaction> selectedTxs = txPool.selectTransactions(MAX_TX_LINKS_PER_BLOCK);
 
-      if (remainingSlots > 0) {
-        List<Transaction> selectedTxs = txPool.selectTransactions(remainingSlots);
-
-        for (Transaction tx : selectedTxs) {
-          links.add(Link.toTransaction(tx.getHash()));
-        }
-
-        log.info("Added {} transaction links from pool ({} pending transactions)",
-            selectedTxs.size(), txPool.size());
-      } else {
-        log.debug("No remaining slots for transaction links (already have {} block links)",
-            links.size());
+      for (Transaction tx : selectedTxs) {
+        links.add(Link.toTransaction(tx.getHash()));
       }
+
+      log.info("Added {} transaction links from pool ({} total pending, limit {})",
+          selectedTxs.size(), txPool.size(), MAX_TX_LINKS_PER_BLOCK);
     } else {
       log.debug("Transaction pool is empty or not available, no transaction links added");
     }
