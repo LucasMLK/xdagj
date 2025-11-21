@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - Epoch-Based Block Query APIs (2025-11-21)
+
+#### New REST Endpoints
+- **Epoch Block Queries**: New APIs for consensus verification and debugging
+  - `GET /api/v1/blocks/epoch/{epoch}` - Query all blocks (main + orphans) in a specific epoch
+  - `GET /api/v1/blocks/epoch/range` - Query blocks across an epoch range (max 1000 epochs)
+  - Pagination support: `?page=1&size=20` for handling large epochs (e.g., network partition recovery)
+  - Blocks sorted by hash (smallest hash = consensus winner)
+
+#### Use Cases
+- **Consensus Verification**: Inspect all competing blocks in each epoch to verify "smallest hash wins" protocol
+- **Fork Analysis**: Identify orphan blocks and debug epoch competition
+- **Mining Statistics**: Analyze block distribution across epochs
+- **Network Partition Recovery**: Handle epochs with many blocks using pagination
+
+#### API Response Format
+- `EpochBlocksResponse`: Type-safe response wrapper with pagination metadata
+  - `epoch`: The queried epoch number
+  - `blockCount`: Total blocks in the epoch (across all pages)
+  - `pagination`: Standard pagination info (page, size, total, totalPages)
+  - `blocks`: Array of block summaries with state (Main/Orphan)
+
+#### Test Coverage
+- **9 unit tests** in `BlockApiServiceTest` covering all epoch query methods
+  - Normal queries, empty epochs, pagination boundaries, invalid ranges
+  - Range size limiting (max 1000 epochs)
+  - Block sorting verification (smallest hash first)
+  - Main/orphan block classification
+
+#### Documentation
+- ✅ OpenAPI specification updated with new endpoint schemas
+- ✅ Test script: `test-epoch-api.sh` for API validation
+- ✅ Comprehensive unit tests with 100% pass rate
+
 ### Changed - Consensus Mechanism Refactoring: Epoch-First Design (2025-11-20)
 
 #### Architecture Clarification

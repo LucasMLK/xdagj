@@ -28,7 +28,7 @@ mvn -Dtest=BlockApiServiceTest,TransactionApiServiceTest test
 
 - OpenAPI spec: `http://<host>:<port>/openapi.yaml` (JSON mirror at `/openapi.json`).
 - Local copy: [docs/api/openapi.yaml](docs/api/openapi.yaml)
-- Test script: `bash test-rpc.sh`
+- Test scripts: `bash test-rpc.sh`, `bash test-epoch-api.sh`
 - Generate SDKs: `./generate-sdk.sh`
 
 Key REST endpoints:
@@ -36,7 +36,7 @@ Key REST endpoints:
 | Area | Endpoint |
 |------|----------|
 | Accounts | `GET /api/v1/accounts?page&size`, `GET /api/v1/accounts/{addr}/balance`, `GET /api/v1/accounts/{addr}/nonce` |
-| Blocks | `GET /api/v1/blocks`, `GET /api/v1/blocks/number`, `GET /api/v1/blocks/{number}`, `GET /api/v1/blocks/hash/{hash}` |
+| Blocks | `GET /api/v1/blocks`, `GET /api/v1/blocks/number`, `GET /api/v1/blocks/{number}`, `GET /api/v1/blocks/hash/{hash}`, `GET /api/v1/blocks/epoch/{epoch}`, `GET /api/v1/blocks/epoch/range` |
 | Transactions | `GET /api/v1/transactions`, `GET /api/v1/transactions/{hash}`, `POST /api/v1/transactions` |
 | Network | `GET /api/v1/network/{chainId,protocol,coinbase,peers/count,syncing}` |
 | Mining | `GET /api/v1/mining/{randomx,candidate}`, `POST /api/v1/mining/submit` |
