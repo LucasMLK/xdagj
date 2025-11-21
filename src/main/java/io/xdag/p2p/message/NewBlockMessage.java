@@ -32,8 +32,8 @@ import lombok.Setter;
  * NewBlockMessage - new block broadcast message with TTL hop limit
  *
  * <p>This message is used for real-time block propagation through the P2P network.
- * When a node mines or receives a new block, it broadcasts this message to all
- * connected peers to spread the block quickly across the network.
+ * When a node mines or receives a new block, it broadcasts this message to all connected peers to
+ * spread the block quickly across the network.
  *
  * <p><strong>Message Format</strong>:
  * <pre>
@@ -65,119 +65,119 @@ import lombok.Setter;
 @Setter
 public class NewBlockMessage extends Message {
 
-    /**
-     * Maximum TTL value (default: 5 hops)
-     * <p>
-     * This limits block propagation to 5 network hops, which is sufficient
-     * for most P2P networks while preventing excessive propagation.
-     */
-    public static final int DEFAULT_TTL = 5;
+  /**
+   * Maximum TTL value (default: 5 hops)
+   * <p>
+   * This limits block propagation to 5 network hops, which is sufficient for most P2P networks
+   * while preventing excessive propagation.
+   */
+  public static final int DEFAULT_TTL = 5;
 
-    /**
-     * Block instance (block structure)
-     */
-    private final Block block;
+  /**
+   * Block instance (block structure)
+   */
+  private final Block block;
 
-    /**
-     * Time-To-Live (hop count remaining)
-     * <p>
-     * Decrements by 1 with each forward. When TTL reaches 0, message is dropped.
-     */
-    private final int ttl;
+  /**
+   * Time-To-Live (hop count remaining)
+   * <p>
+   * Decrements by 1 with each forward. When TTL reaches 0, message is dropped.
+   */
+  private final int ttl;
 
-    /**
-     * Constructor for receiving message from network
-     *
-     * <p>Deserializes the block from message body.
-     *
-     * @param body serialized message body containing TTL + block
-     * @throws IllegalArgumentException if deserialization fails
-     */
-    public NewBlockMessage(byte[] body) {
-        super(XdagMessageCode.NEW_BLOCK, null);
+  /**
+   * Constructor for receiving message from network
+   *
+   * <p>Deserializes the block from message body.
+   *
+   * @param body serialized message body containing TTL + block
+   * @throws IllegalArgumentException if deserialization fails
+   */
+  public NewBlockMessage(byte[] body) {
+    super(XdagMessageCode.NEW_BLOCK, null);
 
-        // Deserialize: [1 byte TTL] + [Block bytes]
-        if (body == null || body.length < 2) {
-            throw new IllegalArgumentException("Message body too short");
-        }
-
-        // Read TTL (first byte)
-        this.ttl = body[0] & 0xFF;
-
-        // Read block (remaining bytes)
-        byte[] blockBytes = new byte[body.length - 1];
-        System.arraycopy(body, 1, blockBytes, 0, blockBytes.length);
-        this.block = Block.fromBytes(blockBytes);
-
-        this.body = body;
+    // Deserialize: [1 byte TTL] + [Block bytes]
+    if (body == null || body.length < 2) {
+      throw new IllegalArgumentException("Message body too short");
     }
 
-    /**
-     * Constructor for sending message to network (initial broadcast)
-     *
-     * <p>Creates message with default TTL.
-     *
-     * @param block the block to broadcast
-     */
-    public NewBlockMessage(Block block) {
-        this(block, DEFAULT_TTL);
-    }
+    // Read TTL (first byte)
+    this.ttl = body[0] & 0xFF;
 
-    /**
-     * Constructor for sending message with custom TTL
-     *
-     * <p>Used when forwarding received blocks with decremented TTL.
-     *
-     * @param block the block to broadcast
-     * @param ttl Time-To-Live (hop count)
-     */
-    public NewBlockMessage(Block block, int ttl) {
-        super(XdagMessageCode.NEW_BLOCK, null);
+    // Read block (remaining bytes)
+    byte[] blockBytes = new byte[body.length - 1];
+    System.arraycopy(body, 1, blockBytes, 0, blockBytes.length);
+    this.block = Block.fromBytes(blockBytes);
 
-        this.block = block;
-        this.ttl = Math.max(0, Math.min(ttl, DEFAULT_TTL));  // Clamp to [0, DEFAULT_TTL]
+    this.body = body;
+  }
 
-        // Serialize block
-        SimpleEncoder enc = new SimpleEncoder();
-        encode(enc);
-        this.body = enc.toBytes();
-    }
+  /**
+   * Constructor for sending message to network (initial broadcast)
+   *
+   * <p>Creates message with default TTL.
+   *
+   * @param block the block to broadcast
+   */
+  public NewBlockMessage(Block block) {
+    this(block, DEFAULT_TTL);
+  }
 
-    @Override
-    public void encode(SimpleEncoder enc) {
-        // Serialize: [1 byte TTL] + [Block bytes]
-        enc.writeByte((byte) ttl);
+  /**
+   * Constructor for sending message with custom TTL
+   *
+   * <p>Used when forwarding received blocks with decremented TTL.
+   *
+   * @param block the block to broadcast
+   * @param ttl   Time-To-Live (hop count)
+   */
+  public NewBlockMessage(Block block, int ttl) {
+    super(XdagMessageCode.NEW_BLOCK, null);
 
-        byte[] blockBytes = block.toBytes();
-        enc.write(blockBytes);
-    }
+    this.block = block;
+    this.ttl = Math.max(0, Math.min(ttl, DEFAULT_TTL));  // Clamp to [0, DEFAULT_TTL]
 
-    /**
-     * Check if this message should be forwarded
-     *
-     * @return true if TTL > 0, false otherwise
-     */
-    public boolean shouldForward() {
-        return ttl > 0;
-    }
+    // Serialize block
+    SimpleEncoder enc = new SimpleEncoder();
+    encode(enc);
+    this.body = enc.toBytes();
+  }
 
-    /**
-     * Create a new message for forwarding with decremented TTL
-     *
-     * @return new message with TTL - 1
-     */
-    public NewBlockMessage decrementTTL() {
-        return new NewBlockMessage(block, ttl - 1);
-    }
+  @Override
+  public void encode(SimpleEncoder enc) {
+    // Serialize: [1 byte TTL] + [Block bytes]
+    enc.writeByte((byte) ttl);
 
-    @Override
-    public String toString() {
-        return String.format(
-            "NewBlockMessage[hash=%s, height=%s, ttl=%d, size=%d bytes]",
-            block != null ? block.getHash().toHexString().substring(0, 16) + "..." : "null",
-            block != null && block.getInfo() != null ? block.getInfo().getHeight() : "unknown",
-            ttl,
-            body != null ? body.length : 0
-        );
-    }
+    byte[] blockBytes = block.toBytes();
+    enc.write(blockBytes);
+  }
+
+  /**
+   * Check if this message should be forwarded
+   *
+   * @return true if TTL > 0, false otherwise
+   */
+  public boolean shouldForward() {
+    return ttl > 0;
+  }
+
+  /**
+   * Create a new message for forwarding with decremented TTL
+   *
+   * @return new message with TTL - 1
+   */
+  public NewBlockMessage decrementTTL() {
+    return new NewBlockMessage(block, ttl - 1);
+  }
+
+  @Override
+  public String toString() {
+    return String.format(
+        "NewBlockMessage[hash=%s, height=%s, ttl=%d, size=%d bytes]",
+        block != null ? block.getHash().toHexString().substring(0, 16) + "..." : "null",
+        block != null && block.getInfo() != null ? block.getInfo().getHeight() : "unknown",
+        ttl,
+        body != null ? body.length : 0
+    );
+  }
 }

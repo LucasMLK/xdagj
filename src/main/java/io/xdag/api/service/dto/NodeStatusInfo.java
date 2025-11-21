@@ -32,8 +32,8 @@ import lombok.NoArgsConstructor;
 /**
  * Node synchronization status information DTO
  * <p>
- * Provides detailed information about node sync state, epoch gaps, and mining status.
- * Used for monitoring node health and partition detection.
+ * Provides detailed information about node sync state, epoch gaps, and mining status. Used for
+ * monitoring node health and partition detection.
  *
  * @since XDAGJ 1.0
  */
@@ -43,102 +43,95 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class NodeStatusInfo {
 
-    /**
-     * Node synchronization state
-     * <p>
-     * Possible values:
-     * - "up-to-date": Node is synced and can mine (epoch gap <= 100)
-     * - "behind": Node needs to sync before mining (epoch gap > 100)
-     * - "unknown": Node status cannot be determined
-     */
-    private String syncState;
+  /**
+   * Node synchronization state
+   * <p>
+   * Possible values: - "up-to-date": Node is synced and can mine (epoch gap <= 100) - "behind":
+   * Node needs to sync before mining (epoch gap > 100) - "unknown": Node status cannot be
+   * determined
+   */
+  private String syncState;
 
-    /**
-     * Whether node is behind and needs sync
-     */
-    private boolean isBehind;
+  /**
+   * Whether node is behind and needs sync
+   */
+  private boolean isBehind;
 
-    /**
-     * Current epoch number (network time)
-     */
-    private long currentEpoch;
+  /**
+   * Current epoch number (network time)
+   */
+  private long currentEpoch;
 
-    /**
-     * Local latest main block epoch
-     */
-    private long localLatestEpoch;
+  /**
+   * Local latest main block epoch
+   */
+  private long localLatestEpoch;
 
-    /**
-     * Epoch gap between current time and local chain
-     * <p>
-     * Positive value: node is behind
-     * Zero/Negative: node is up-to-date or ahead (should not happen normally)
-     */
-    private long epochGap;
+  /**
+   * Epoch gap between current time and local chain
+   * <p>
+   * Positive value: node is behind Zero/Negative: node is up-to-date or ahead (should not happen
+   * normally)
+   */
+  private long epochGap;
 
-    /**
-     * Epoch gap threshold for "behind" detection (default: 100 epochs)
-     */
-    private long syncLagThreshold;
+  /**
+   * Epoch gap threshold for "behind" detection (default: 100 epochs)
+   */
+  private long syncLagThreshold;
 
-    /**
-     * Time lag in minutes (epoch gap * 64 seconds / 60)
-     */
-    private long timeLagMinutes;
+  /**
+   * Time lag in minutes (epoch gap * 64 seconds / 60)
+   */
+  private long timeLagMinutes;
 
-    /**
-     * Mining status
-     * <p>
-     * Possible values:
-     * - "allowed": Node can mine (epoch gap <= 16)
-     * - "blocked": Mining blocked until sync (epoch gap > 16)
-     * - "unknown": Mining status cannot be determined
-     */
-    private String miningStatus;
+  /**
+   * Mining status
+   * <p>
+   * Possible values: - "allowed": Node can mine (epoch gap <= 16) - "blocked": Mining blocked until
+   * sync (epoch gap > 16) - "unknown": Mining status cannot be determined
+   */
+  private String miningStatus;
 
-    /**
-     * Whether mining is currently allowed
-     */
-    private boolean canMine;
+  /**
+   * Whether mining is currently allowed
+   */
+  private boolean canMine;
 
-    /**
-     * Mining reference depth limit (default: 16 epochs)
-     */
-    private long miningMaxReferenceDepth;
+  /**
+   * Mining reference depth limit (default: 16 epochs)
+   */
+  private long miningMaxReferenceDepth;
 
-    /**
-     * Main chain length (total main blocks)
-     */
-    private long mainChainLength;
+  /**
+   * Main chain length (total main blocks)
+   */
+  private long mainChainLength;
 
-    /**
-     * Latest main block hash (full hex string)
-     */
-    private String latestBlockHash;
+  /**
+   * Latest main block hash (full hex string)
+   */
+  private String latestBlockHash;
 
-    /**
-     * Latest main block height
-     */
-    private Long latestBlockHeight;
+  /**
+   * Latest main block height
+   */
+  private Long latestBlockHeight;
 
-    /**
-     * Additional information/warnings
-     * <p>
-     * Examples:
-     * - "Node is behind, sync required before mining"
-     * - "Node is up-to-date and can mine"
-     * - "WARNING: Large epoch gap may indicate network partition"
-     */
-    private String message;
+  /**
+   * Additional information/warnings
+   * <p>
+   * Examples: - "Node is behind, sync required before mining" - "Node is up-to-date and can mine" -
+   * "WARNING: Large epoch gap may indicate network partition"
+   */
+  private String message;
 
-    /**
-     * Warning level
-     * <p>
-     * Possible values:
-     * - "none": No warnings
-     * - "info": Informational (behind but within normal range)
-     * - "warning": Warning (epoch gap > 1000, possible partition)
-     * - "critical": Critical (epoch gap > 16384, outside XDAG window)
-     */
-    private String warningLevel;
+  /**
+   * Warning level
+   * <p>
+   * Possible values: - "none": No warnings - "info": Informational (behind but within normal range)
+   * - "warning": Warning (epoch gap > 1000, possible partition) - "critical": Critical (epoch gap >
+   * 16384, outside XDAG window)
+   */
+  private String warningLevel;
 }

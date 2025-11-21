@@ -41,41 +41,47 @@ import org.apache.tuweni.bytes.Bytes32;
  * <p>Used by {@link DagEntityResolver} to provide complete link information
  * for Block validation and processing.
  *
- * @since XDAGJ
  * @see DagEntityResolver
+ * @since XDAGJ
  */
 @Data
 @Builder
 public class ResolvedLinks {
 
-    /** All referenced blocks that were successfully resolved */
-    @Builder.Default
-    private final List<Block> referencedBlocks = new ArrayList<>();
-
-    /** All referenced transactions that were successfully resolved */
-    @Builder.Default
-    private final List<Transaction> referencedTransactions = new ArrayList<>();
-
-    /** Hashes of links that could not be resolved (missing dependencies) */
-    @Builder.Default
-    private final List<Bytes32> missingReferences = new ArrayList<>();
-
-    /**
-     * Check if all links were successfully resolved
-     *
-     * @return true if no missing references
-     */
-    public boolean hasAllReferences() {
-        return missingReferences.isEmpty();
-    }
+  /**
+   * All referenced blocks that were successfully resolved
+   */
+  @Builder.Default
+  private final List<Block> referencedBlocks = new ArrayList<>();
 
   /**
-     * Get total number of missing references
-     *
-     * @return Count of missing links
-     */
-    public int getMissingCount() {
-        return missingReferences.size();
-    }
+   * All referenced transactions that were successfully resolved
+   */
+  @Builder.Default
+  private final List<Transaction> referencedTransactions = new ArrayList<>();
+
+  /**
+   * Hashes of links that could not be resolved (missing dependencies)
+   */
+  @Builder.Default
+  private final List<Bytes32> missingReferences = new ArrayList<>();
+
+  /**
+   * Check if all links were successfully resolved
+   *
+   * @return true if no missing references
+   */
+  public boolean hasAllReferences() {
+    return missingReferences.isEmpty();
+  }
+
+  /**
+   * Get total number of missing references
+   *
+   * @return Count of missing links
+   */
+  public int getMissingCount() {
+    return missingReferences.size();
+  }
 
 }

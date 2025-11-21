@@ -29,33 +29,26 @@ import io.xdag.core.XAmount;
 import org.apache.tuweni.units.bigints.UInt64;
 
 /**
- * Configuration class for the development network (devnet)
- * Extends AbstractConfig to provide devnet-specific settings
+ * Configuration class for the development network (devnet) Extends AbstractConfig to provide
+ * devnet-specific settings
  */
 public class DevnetConfig extends AbstractConfig {
 
-    /**
-     * Constructor initializes devnet configuration with specific parameters:
-     * - Network type: DEVNET
-     * - Version: DEVNET_VERSION
-     * - Empty whitelist URL
-     * - Wait epoch: 1
-     * - XDAG era: 0x16900000000L
-     * - Main start amount: 2^42 XDAG
-     * - Apollo fork height: 1000
-     * - Apollo fork amount: 2^39 XDAG
-     * - Field header type: XDAG_FIELD_HEAD_TEST
-     * - Wallet file paths for testnet
-     */
-    public DevnetConfig() {
-        super("devnet", "xdag-devnet", Network.DEVNET, Constants.DEVNET_VERSION);
-        this.waitEpoch = 1;
-        this.xdagEra = 1516437503L;  // 2018-01-20 08:38:23 UTC (epoch-end timestamp, 0x5a62ffff)
-        this.mainStartAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 42).toLong());
-        this.apolloForkHeight = 1000;
-        this.apolloForkAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 39).toLong());
-        this.walletKeyFile = this.rootDir + "/wallet-devnet.dat";
-        this.walletFilePath = this.rootDir + "/wallet/" + Constants.WALLET_FILE_NAME;
-    }
+  /**
+   * Constructor initializes devnet configuration with specific parameters: - Network type: DEVNET -
+   * Version: DEVNET_VERSION - Empty whitelist URL - Wait epoch: 1 - XDAG era: 0x16900000000L - Main
+   * start amount: 2^42 XDAG - Apollo fork height: 1000 - Apollo fork amount: 2^39 XDAG - Field
+   * header type: XDAG_FIELD_HEAD_TEST - Wallet file paths for testnet
+   */
+  public DevnetConfig() {
+    super("devnet", "xdag-devnet", Network.DEVNET, Constants.DEVNET_VERSION);
+    this.waitEpoch = 1;
+    this.xdagEra = 1516437503L;  // 2018-01-20 08:38:23 UTC (epoch-end timestamp, 0x5a62ffff)
+    this.mainStartAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 42).toLong());
+    this.apolloForkHeight = 1000;
+    this.apolloForkAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 39).toLong());
+    this.walletKeyFile = this.rootDir + "/wallet-devnet.dat";
+    this.walletFilePath = this.rootDir + "/wallet/" + Constants.WALLET_FILE_NAME;
+  }
 
 }

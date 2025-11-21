@@ -34,18 +34,18 @@ import lombok.Data;
 @Builder
 public class SendTransactionResponse {
 
-    /**
-     * Transaction hash (hex with 0x prefix)
-     */
-    private String transactionHash;
+  /**
+   * Transaction hash (hex with 0x prefix)
+   */
+  private String transactionHash;
 
-    /**
-     * Transaction status: "success", "rejected", "error", or "failed"
-     */
-    private String status;
+  /**
+   * Transaction status: "success", "rejected", "error", or "failed"
+   */
+  private String status;
 
-    /**
-     * Optional message providing details about the result
-     */
-    private String message;
+  /**
+   * Optional message providing details about the result
+   */
+  private String message;
 }

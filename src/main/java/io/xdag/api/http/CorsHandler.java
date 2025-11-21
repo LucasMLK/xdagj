@@ -41,102 +41,104 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class CorsHandler extends ChannelInboundHandlerAdapter {
-    public static final AttributeKey<String> CORS_ORIGIN = AttributeKey.valueOf("CorsOrigin");
-    private final Set<String> allowedOrigins;
-    private static final String ALLOWED_HEADERS = "content-type, authorization";
-    private static final String ALLOWED_METHODS = "GET, POST, OPTIONS";
 
-    public CorsHandler(String corsDomainsString) {
-        if (corsDomainsString != null && !corsDomainsString.isEmpty()) {
-            allowedOrigins = new HashSet<>(Arrays.asList(corsDomainsString.split(",")));
-        } else {
-            allowedOrigins = new HashSet<>();
+  public static final AttributeKey<String> CORS_ORIGIN = AttributeKey.valueOf("CorsOrigin");
+  private final Set<String> allowedOrigins;
+  private static final String ALLOWED_HEADERS = "content-type, authorization";
+  private static final String ALLOWED_METHODS = "GET, POST, OPTIONS";
+
+  public CorsHandler(String corsDomainsString) {
+    if (corsDomainsString != null && !corsDomainsString.isEmpty()) {
+      allowedOrigins = new HashSet<>(Arrays.asList(corsDomainsString.split(",")));
+    } else {
+      allowedOrigins = new HashSet<>();
+    }
+  }
+
+  @Override
+  public void channelRead(ChannelHandlerContext ctx, Object msg) {
+    if (!(msg instanceof HttpRequest request)) {
+      ctx.fireChannelRead(msg);
+      return;
+    }
+
+    String origin = request.headers().get(HttpHeaderNames.ORIGIN);
+
+    if (request.method() == HttpMethod.OPTIONS) {
+      handlePreflightRequest(ctx, request);
+      if (request instanceof FullHttpRequest) {
+        ((FullHttpRequest) request).release();
+      }
+      return;
+    }
+
+    if (origin != null) {
+      if (isOriginAllowed(origin)) {
+        setCorsHeaders(ctx, origin);
+        ctx.fireChannelRead(msg);
+      } else {
+        log.warn("Blocked request from unauthorized origin: {}", origin);
+        sendError(ctx, origin);
+        if (request instanceof FullHttpRequest) {
+          ((FullHttpRequest) request).release();
         }
+      }
+    } else {
+      ctx.fireChannelRead(msg);
+    }
+  }
+
+  private void handlePreflightRequest(ChannelHandlerContext ctx, HttpRequest request) {
+    String origin = request.headers().get(HttpHeaderNames.ORIGIN);
+    if (origin == null || !isOriginAllowed(origin)) {
+      sendError(ctx, origin);
+      return;
     }
 
-    @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) {
-        if (!(msg instanceof HttpRequest request)) {
-            ctx.fireChannelRead(msg);
-            return;
-        }
+    FullHttpResponse response = new DefaultFullHttpResponse(
+        HttpVersion.HTTP_1_1,
+        HttpResponseStatus.OK);
 
-      String origin = request.headers().get(HttpHeaderNames.ORIGIN);
+    response.headers()
+        .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin)
+        .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, ALLOWED_METHODS)
+        .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, ALLOWED_HEADERS)
+        .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true")
+        .set(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE, "3600")
+        .set(HttpHeaderNames.VARY, "Origin")
+        .set(HttpHeaderNames.CONTENT_LENGTH, 0);
 
-        if (request.method() == HttpMethod.OPTIONS) {
-            handlePreflightRequest(ctx, request);
-            if (request instanceof FullHttpRequest) {
-                ((FullHttpRequest) request).release();
-            }
-            return;
-        }
+    ctx.writeAndFlush(response);
+  }
 
-        if (origin != null) {
-            if (isOriginAllowed(origin)) {
-                setCorsHeaders(ctx, origin);
-                ctx.fireChannelRead(msg);
-            } else {
-                log.warn("Blocked request from unauthorized origin: {}", origin);
-                sendError(ctx, origin);
-                if (request instanceof FullHttpRequest) {
-                    ((FullHttpRequest) request).release();
-                }
-            }
-        } else {
-            ctx.fireChannelRead(msg);
-        }
+  private boolean isOriginAllowed(String origin) {
+    return allowedOrigins.isEmpty() || allowedOrigins.contains("*") || allowedOrigins.contains(
+        origin);
+  }
+
+  private void setCorsHeaders(ChannelHandlerContext ctx, String origin) {
+    ctx.channel().attr(CORS_ORIGIN).set(origin);
+  }
+
+  private void sendError(ChannelHandlerContext ctx, String origin) {
+    FullHttpResponse response = new DefaultFullHttpResponse(
+        HttpVersion.HTTP_1_1,
+        HttpResponseStatus.FORBIDDEN);
+
+    if (origin != null && isOriginAllowed(origin)) {
+      response.headers()
+          .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin)
+          .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true")
+          .set(HttpHeaderNames.VARY, "Origin");
     }
 
-    private void handlePreflightRequest(ChannelHandlerContext ctx, HttpRequest request) {
-        String origin = request.headers().get(HttpHeaderNames.ORIGIN);
-        if (origin == null || !isOriginAllowed(origin)) {
-            sendError(ctx, origin);
-            return;
-        }
+    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
+    ctx.writeAndFlush(response);
+  }
 
-        FullHttpResponse response = new DefaultFullHttpResponse(
-                HttpVersion.HTTP_1_1, 
-                HttpResponseStatus.OK);
-
-        response.headers()
-                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin)
-                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, ALLOWED_METHODS)
-                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, ALLOWED_HEADERS)
-                .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true")
-                .set(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE, "3600")
-                .set(HttpHeaderNames.VARY, "Origin")
-                .set(HttpHeaderNames.CONTENT_LENGTH, 0);
-
-        ctx.writeAndFlush(response);
-    }
-
-    private boolean isOriginAllowed(String origin) {
-        return allowedOrigins.isEmpty() || allowedOrigins.contains("*") || allowedOrigins.contains(origin);
-    }
-
-    private void setCorsHeaders(ChannelHandlerContext ctx, String origin) {
-        ctx.channel().attr(CORS_ORIGIN).set(origin);
-    }
-
-    private void sendError(ChannelHandlerContext ctx, String origin) {
-        FullHttpResponse response = new DefaultFullHttpResponse(
-                HttpVersion.HTTP_1_1,
-                HttpResponseStatus.FORBIDDEN);
-        
-        if (origin != null && isOriginAllowed(origin)) {
-            response.headers()
-                    .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, origin)
-                    .set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true")
-                    .set(HttpHeaderNames.VARY, "Origin");
-        }
-        
-        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
-        ctx.writeAndFlush(response);
-    }
-
-    @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        log.error("Error in CORS handler", cause);
-        ctx.close();
-    }
+  @Override
+  public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+    log.error("Error in CORS handler", cause);
+    ctx.close();
+  }
 }

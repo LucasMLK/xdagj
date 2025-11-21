@@ -31,38 +31,38 @@ import org.bouncycastle.util.encoders.Hex;
 /**
  * OrphanBlockStore interface
  * <p>
- * Manages orphan blocks (blocks without parent reference yet).
- * Uses Bytes32 hash for block identification instead of Address.
+ * Manages orphan blocks (blocks without parent reference yet). Uses Bytes32 hash for block
+ * identification instead of Address.
  */
 public interface OrphanBlockStore extends XdagLifecycle {
 
-    byte ORPHAN_PREFEX = 0x00;
-    /**
-     * size key
-     */
-    byte[] ORPHAN_SIZE = Hex.decode("FFFFFFFFFFFFFFFF");
+  byte ORPHAN_PREFEX = 0x00;
+  /**
+   * size key
+   */
+  byte[] ORPHAN_SIZE = Hex.decode("FFFFFFFFFFFFFFFF");
 
-    void reset();
+  void reset();
 
-    /**
-     * Get orphan block hashes
-     *
-     * @param num maximum number of orphans to retrieve
-     * @param sendTime time filter [minTime, maxTime]
-     * @return list of orphan block hashes (Bytes32)
-     */
-    List<Bytes32> getOrphan(long num, long[] sendTime);
+  /**
+   * Get orphan block hashes
+   *
+   * @param num      maximum number of orphans to retrieve
+   * @param sendTime time filter [minTime, maxTime]
+   * @return list of orphan block hashes (Bytes32)
+   */
+  List<Bytes32> getOrphan(long num, long[] sendTime);
 
-    void deleteByHash(byte[] hash);
+  void deleteByHash(byte[] hash);
 
-    long getOrphanSize();
+  long getOrphanSize();
 
-    /**
-     * Add a block to orphan queue (has missing dependencies)
-     *
-     * @param hash orphan block hash
-     * @param timestamp block timestamp
-     */
-    void addOrphan(Bytes32 hash, long timestamp);
+  /**
+   * Add a block to orphan queue (has missing dependencies)
+   *
+   * @param hash      orphan block hash
+   * @param timestamp block timestamp
+   */
+  void addOrphan(Bytes32 hash, long timestamp);
 
 }

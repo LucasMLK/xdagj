@@ -53,154 +53,155 @@ import org.apache.tuweni.bytes.Bytes32;
  */
 public interface TransactionPool {
 
-    /**
-     * Add a transaction to the pool.
-     *
-     * <p>The transaction will be validated before being added:
-     * <ul>
-     *   <li>Signature verification</li>
-     *   <li>Sufficient balance check</li>
-     *   <li>Nonce continuity check</li>
-     *   <li>Minimum fee requirement</li>
-     * </ul>
-     *
-     * @param tx transaction to add
-     * @return true if successfully added, false if rejected (invalid, duplicate, or pool full)
-     */
-    boolean addTransaction(Transaction tx);
-
-    /**
-     * Remove a transaction from the pool.
-     *
-     * <p>This is typically called when:
-     * <ul>
-     *   <li>Transaction is included in a main block</li>
-     *   <li>Transaction execution fails</li>
-     *   <li>Transaction is manually rejected by user</li>
-     * </ul>
-     *
-     * @param txHash transaction hash
-     * @return true if removed, false if not found
-     */
-    boolean removeTransaction(Bytes32 txHash);
-
-    /**
-     * Remove multiple transactions from the pool.
-     *
-     * <p>Batch removal for efficiency.
-     *
-     * @param txHashes list of transaction hashes
-     * @return number of transactions removed
-     */
-    int removeTransactions(List<Bytes32> txHashes);
-
-    /**
-     * Remove all transactions from a specific account.
-     *
-     * <p>Used when an account becomes frozen or invalid.
-     *
-     * @param address account address
-     * @return number of transactions removed
-     */
-    int removeTransactionsByAccount(Bytes address);
-
-    /**
-     * Check if a transaction exists in the pool.
-     *
-     * @param txHash transaction hash
-     * @return true if in pool
-     */
-    boolean contains(Bytes32 txHash);
-
-    /**
-     * Get a transaction from the pool.
-     *
-     * @param txHash transaction hash
-     * @return transaction, or null if not found
-     */
-    Transaction getTransaction(Bytes32 txHash);
-
-    /**
-     * Select transactions for block creation.
-     *
-     * <p>Returns transactions ordered by:
-     * <ol>
-     *   <li>Fee (highest first)</li>
-     *   <li>Nonce (sequential per account)</li>
-     *   <li>Timestamp (oldest first as tiebreaker)</li>
-     * </ol>
-     *
-     * <p>Only transactions with valid nonce sequences are selected.
-     *
-     * @param maxCount maximum number of transactions to select
-     * @return list of selected transactions (maybe less than maxCount)
-     */
-    List<Transaction> selectTransactions(int maxCount);
-
-    /**
-     * Get all transactions from a specific account.
-     *
-     * @param address account address
-     * @return list of transactions from this account, ordered by nonce
-     */
-    List<Transaction> getTransactionsByAccount(Bytes address);
+  /**
+   * Add a transaction to the pool.
+   *
+   * <p>The transaction will be validated before being added:
+   * <ul>
+   *   <li>Signature verification</li>
+   *   <li>Sufficient balance check</li>
+   *   <li>Nonce continuity check</li>
+   *   <li>Minimum fee requirement</li>
+   * </ul>
+   *
+   * @param tx transaction to add
+   * @return true if successfully added, false if rejected (invalid, duplicate, or pool full)
+   */
+  boolean addTransaction(Transaction tx);
 
   /**
-     * Get the number of pending transactions in the pool.
-     *
-     * @return transaction count
-     */
-    int size();
+   * Remove a transaction from the pool.
+   *
+   * <p>This is typically called when:
+   * <ul>
+   *   <li>Transaction is included in a main block</li>
+   *   <li>Transaction execution fails</li>
+   *   <li>Transaction is manually rejected by user</li>
+   * </ul>
+   *
+   * @param txHash transaction hash
+   * @return true if removed, false if not found
+   */
+  boolean removeTransaction(Bytes32 txHash);
 
-    /**
-     * Clear all transactions from the pool.
-     *
-     * <p>Warning: This is destructive and should only be used for testing or emergency cleanup.
-     */
-    void clear();
+  /**
+   * Remove multiple transactions from the pool.
+   *
+   * <p>Batch removal for efficiency.
+   *
+   * @param txHashes list of transaction hashes
+   * @return number of transactions removed
+   */
+  int removeTransactions(List<Bytes32> txHashes);
 
-    /**
-     * Get pool statistics.
-     *
-     * @return statistics object
-     */
-    PoolStatistics getStatistics();
+  /**
+   * Remove all transactions from a specific account.
+   *
+   * <p>Used when an account becomes frozen or invalid.
+   *
+   * @param address account address
+   * @return number of transactions removed
+   */
+  int removeTransactionsByAccount(Bytes address);
 
-    /**
-     * Pool statistics for monitoring.
-     */
-    @Getter
-    class PoolStatistics {
-        private final int currentSize;
-        private final long totalAdded;
-        private final long totalRemoved;
-        private final long totalRejected;
-        private final long cacheHits;
-        private final long cacheMisses;
-        private final double hitRate;
+  /**
+   * Check if a transaction exists in the pool.
+   *
+   * @param txHash transaction hash
+   * @return true if in pool
+   */
+  boolean contains(Bytes32 txHash);
 
-        public PoolStatistics(
-                int currentSize,
-                long totalAdded,
-                long totalRemoved,
-                long totalRejected,
-                long cacheHits,
-                long cacheMisses,
-                double hitRate) {
-            this.currentSize = currentSize;
-            this.totalAdded = totalAdded;
-            this.totalRemoved = totalRemoved;
-            this.totalRejected = totalRejected;
-            this.cacheHits = cacheHits;
-            this.cacheMisses = cacheMisses;
-            this.hitRate = hitRate;
-        }
+  /**
+   * Get a transaction from the pool.
+   *
+   * @param txHash transaction hash
+   * @return transaction, or null if not found
+   */
+  Transaction getTransaction(Bytes32 txHash);
 
-      @Override
-        public String toString() {
-            return String.format(
-                    "PoolStatistics{size=%d, added=%d, removed=%d, rejected=%d, hitRate=%.2f%%}",
-                    currentSize, totalAdded, totalRemoved, totalRejected, hitRate * 100);
-        }
+  /**
+   * Select transactions for block creation.
+   *
+   * <p>Returns transactions ordered by:
+   * <ol>
+   *   <li>Fee (highest first)</li>
+   *   <li>Nonce (sequential per account)</li>
+   *   <li>Timestamp (oldest first as tiebreaker)</li>
+   * </ol>
+   *
+   * <p>Only transactions with valid nonce sequences are selected.
+   *
+   * @param maxCount maximum number of transactions to select
+   * @return list of selected transactions (maybe less than maxCount)
+   */
+  List<Transaction> selectTransactions(int maxCount);
+
+  /**
+   * Get all transactions from a specific account.
+   *
+   * @param address account address
+   * @return list of transactions from this account, ordered by nonce
+   */
+  List<Transaction> getTransactionsByAccount(Bytes address);
+
+  /**
+   * Get the number of pending transactions in the pool.
+   *
+   * @return transaction count
+   */
+  int size();
+
+  /**
+   * Clear all transactions from the pool.
+   *
+   * <p>Warning: This is destructive and should only be used for testing or emergency cleanup.
+   */
+  void clear();
+
+  /**
+   * Get pool statistics.
+   *
+   * @return statistics object
+   */
+  PoolStatistics getStatistics();
+
+  /**
+   * Pool statistics for monitoring.
+   */
+  @Getter
+  class PoolStatistics {
+
+    private final int currentSize;
+    private final long totalAdded;
+    private final long totalRemoved;
+    private final long totalRejected;
+    private final long cacheHits;
+    private final long cacheMisses;
+    private final double hitRate;
+
+    public PoolStatistics(
+        int currentSize,
+        long totalAdded,
+        long totalRemoved,
+        long totalRejected,
+        long cacheHits,
+        long cacheMisses,
+        double hitRate) {
+      this.currentSize = currentSize;
+      this.totalAdded = totalAdded;
+      this.totalRemoved = totalRemoved;
+      this.totalRejected = totalRejected;
+      this.cacheHits = cacheHits;
+      this.cacheMisses = cacheMisses;
+      this.hitRate = hitRate;
     }
+
+    @Override
+    public String toString() {
+      return String.format(
+          "PoolStatistics{size=%d, added=%d, removed=%d, rejected=%d, hitRate=%.2f%%}",
+          currentSize, totalAdded, totalRemoved, totalRejected, hitRate * 100);
+    }
+  }
 }

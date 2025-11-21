@@ -27,38 +27,39 @@ import lombok.Data;
 
 @Data
 public class PageRequest {
-    private static final int DEFAULT_PAGE = 1;
-    private static final int DEFAULT_SIZE = 20;
-    private static final int MAX_SIZE = 100;
 
-    private int page;
-    private int size;
-    private int offset;
+  private static final int DEFAULT_PAGE = 1;
+  private static final int DEFAULT_SIZE = 20;
+  private static final int MAX_SIZE = 100;
 
-    public PageRequest(int page, int size) {
-        this.page = Math.max(page, DEFAULT_PAGE);
-        this.size = Math.min(Math.max(size, 1), MAX_SIZE);
-        this.offset = (this.page - 1) * this.size;
-    }
+  private int page;
+  private int size;
+  private int offset;
 
-    public static PageRequest of(int page, int size) {
-        return new PageRequest(page, size);
-    }
+  public PageRequest(int page, int size) {
+    this.page = Math.max(page, DEFAULT_PAGE);
+    this.size = Math.min(Math.max(size, 1), MAX_SIZE);
+    this.offset = (this.page - 1) * this.size;
+  }
+
+  public static PageRequest of(int page, int size) {
+    return new PageRequest(page, size);
+  }
 
   public static PageRequest parse(String pageStr, String sizeStr) {
-        int page = parseIntOrDefault(pageStr, DEFAULT_PAGE);
-        int size = parseIntOrDefault(sizeStr, DEFAULT_SIZE);
-        return new PageRequest(page, size);
-    }
+    int page = parseIntOrDefault(pageStr, DEFAULT_PAGE);
+    int size = parseIntOrDefault(sizeStr, DEFAULT_SIZE);
+    return new PageRequest(page, size);
+  }
 
-    private static int parseIntOrDefault(String str, int defaultValue) {
-        if (str == null || str.isEmpty()) {
-            return defaultValue;
-        }
-        try {
-            return Integer.parseInt(str);
-        } catch (NumberFormatException e) {
-            return defaultValue;
-        }
+  private static int parseIntOrDefault(String str, int defaultValue) {
+    if (str == null || str.isEmpty()) {
+      return defaultValue;
     }
+    try {
+      return Integer.parseInt(str);
+    } catch (NumberFormatException e) {
+      return defaultValue;
+    }
+  }
 }

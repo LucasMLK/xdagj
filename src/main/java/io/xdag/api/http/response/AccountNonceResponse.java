@@ -34,18 +34,18 @@ import lombok.Data;
 @Builder
 public class AccountNonceResponse {
 
-    /**
-     * Base58 address
-     */
-    private String address;
+  /**
+   * Base58 address
+   */
+  private String address;
 
-    /**
-     * Account nonce (hex with 0x prefix)
-     */
-    private String nonce;
+  /**
+   * Account nonce (hex with 0x prefix)
+   */
+  private String nonce;
 
-    /**
-     * Block number (hex with 0x prefix)
-     */
-    private String blockNumber;
+  /**
+   * Block number (hex with 0x prefix)
+   */
+  private String blockNumber;
 }

@@ -44,130 +44,142 @@ import org.apache.tuweni.units.bigints.UInt64;
 public class BasicUtils {
 
   /**
-     * Convert hex string address to Bytes32 hash
-     * @param address Hex string address
-     * @return Bytes32 hash or null if address is null
-     */
-    public static Bytes32 getHash(String address) {
-        Bytes32 hash = null;
-        if (address != null) {
-            hash = Bytes32.fromHexString(address);
-        }
-        return hash;
+   * Convert hex string address to Bytes32 hash
+   *
+   * @param address Hex string address
+   * @return Bytes32 hash or null if address is null
+   */
+  public static Bytes32 getHash(String address) {
+    Bytes32 hash = null;
+    if (address != null) {
+      hash = Bytes32.fromHexString(address);
     }
+    return hash;
+  }
 
   /**
-     * Convert 20-byte address to public address string
-     * @param address 20-byte address (hash160)
-     * @return Base58 encoded public address
-     */
-    public static String address2PubAddress(Bytes address) {
-        if (address.size() != 20) {
-            throw new IllegalArgumentException("Address must be exactly 20 bytes, got: " + address.size());
-        }
-        return Base58.encodeCheck(address.toArray());
+   * Convert 20-byte address to public address string
+   *
+   * @param address 20-byte address (hash160)
+   * @return Base58 encoded public address
+   */
+  public static String address2PubAddress(Bytes address) {
+    if (address.size() != 20) {
+      throw new IllegalArgumentException(
+          "Address must be exactly 20 bytes, got: " + address.size());
     }
-
-    /**
-     * Convert hex public address to legacy 24-byte truncated hash format
-     * @param hexPubAddress Hex string public address
-     * @return Legacy hash format as MutableBytes32
-     */
-    public static MutableBytes32 hexPubAddress2Hash(String hexPubAddress){
-        Bytes hash = Bytes.fromHexString(hexPubAddress);
-        MutableBytes32 legacyHash = MutableBytes32.create();
-        legacyHash.set(8, hash);
-        return legacyHash;
-    }
-
-    /**
-     * Convert base64 address to hash
-     * @param address Base64 encoded address
-     * @return Hash as Bytes32
-     */
-    public static Bytes32 address2Hash(String address) {
-        Bytes ret = Bytes.fromBase64String(address);
-        MutableBytes32 res = MutableBytes32.create();
-        res.set(8, ret.reverse().slice(0, 24));
-        return res;
-    }
-
-    /**
-     * Convert XDAG amount to internal representation
-     * @param input XDAG amount as double
-     * @return Internal amount as UInt64
-     * @throws XdagOverFlowException if input is negative
-     */
-    public static UInt64 xdag2amount(double input) {
-        if (input < 0) {
-            throw new XdagOverFlowException();
-        }
-        long amount = (long) Math.floor(input);
-
-        UInt64 res = UInt64.valueOf(amount).shiftLeft(32);
-        input -= amount; // Decimal part
-        input = input * Math.pow(2, 32);
-        long tmp = (long) Math.ceil(input);
-        return res.add(tmp);
-    }
-
-    /**
-     * Convert internal amount to XDAG
-     * @param xdag Internal amount as long
-     * @return XDAG amount as double
-     * @throws XdagOverFlowException if input is negative
-     */
-    public static double amount2xdag(long xdag) {
-        if (xdag < 0) {
-            throw new XdagOverFlowException();
-        }
-        long first = xdag >>> 32;
-        long temp = xdag - (first << 32);
-        double tem = temp / Math.pow(2, 32);
-        BigDecimal bigDecimal = new BigDecimal(first + tem);
-        return bigDecimal.setScale(12, RoundingMode.HALF_UP).doubleValue();
-    }
+    return Base58.encodeCheck(address.toArray());
+  }
 
   /**
-     * Verify CRC32 checksum
-     * @param src Source data
-     * @param crc Expected CRC value
-     * @return true if checksum matches
-     */
-    public static boolean crc32Verify(byte[] src, int crc) {
-        CRC32 crc32 = new CRC32();
-        crc32.update(src, 0, 512);
-        return equalBytes(
-                BytesUtils.intToBytes((int) crc32.getValue(), true), BytesUtils.intToBytes(crc, true));
-    }
+   * Convert hex public address to legacy 24-byte truncated hash format
+   *
+   * @param hexPubAddress Hex string public address
+   * @return Legacy hash format as MutableBytes32
+   */
+  public static MutableBytes32 hexPubAddress2Hash(String hexPubAddress) {
+    Bytes hash = Bytes.fromHexString(hexPubAddress);
+    MutableBytes32 legacyHash = MutableBytes32.create();
+    legacyHash.set(8, hash);
+    return legacyHash;
+  }
 
   /**
-     * Convert internal amount to XDAG with BigDecimal precision
-     * @param xdag Internal amount
-     * @return XDAG amount as BigDecimal
-     * @throws XdagOverFlowException if input is negative
-     */
-    public static BigDecimal amount2xdagNew(long xdag) {
-        if(xdag < 0) throw new XdagOverFlowException();
-        long first = xdag >> 32;
-        long temp = xdag - (first << 32);
-        double tem = temp / Math.pow(2, 32);
-        return new BigDecimal(first + tem);
-    }
+   * Convert base64 address to hash
+   *
+   * @param address Base64 encoded address
+   * @return Hash as Bytes32
+   */
+  public static Bytes32 address2Hash(String address) {
+    Bytes ret = Bytes.fromBase64String(address);
+    MutableBytes32 res = MutableBytes32.create();
+    res.set(8, ret.reverse().slice(0, 24));
+    return res;
+  }
 
   /**
-     * Extract IP address from address:port string
-     * @param ipAddressAndPort String in format "/ip:port"
-     * @return Extracted IP address or null if not found
-     */
-    public static String extractIpAddress(String ipAddressAndPort) {
-        String pattern = "/(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}):\\d+";
-        Pattern r = Pattern.compile(pattern);
-        Matcher m = r.matcher(ipAddressAndPort);
-        if (m.find()) {
-            return m.group(1);
-        } else {
-            return null;
-        }
+   * Convert XDAG amount to internal representation
+   *
+   * @param input XDAG amount as double
+   * @return Internal amount as UInt64
+   * @throws XdagOverFlowException if input is negative
+   */
+  public static UInt64 xdag2amount(double input) {
+    if (input < 0) {
+      throw new XdagOverFlowException();
     }
+    long amount = (long) Math.floor(input);
+
+    UInt64 res = UInt64.valueOf(amount).shiftLeft(32);
+    input -= amount; // Decimal part
+    input = input * Math.pow(2, 32);
+    long tmp = (long) Math.ceil(input);
+    return res.add(tmp);
+  }
+
+  /**
+   * Convert internal amount to XDAG
+   *
+   * @param xdag Internal amount as long
+   * @return XDAG amount as double
+   * @throws XdagOverFlowException if input is negative
+   */
+  public static double amount2xdag(long xdag) {
+    if (xdag < 0) {
+      throw new XdagOverFlowException();
+    }
+    long first = xdag >>> 32;
+    long temp = xdag - (first << 32);
+    double tem = temp / Math.pow(2, 32);
+    BigDecimal bigDecimal = new BigDecimal(first + tem);
+    return bigDecimal.setScale(12, RoundingMode.HALF_UP).doubleValue();
+  }
+
+  /**
+   * Verify CRC32 checksum
+   *
+   * @param src Source data
+   * @param crc Expected CRC value
+   * @return true if checksum matches
+   */
+  public static boolean crc32Verify(byte[] src, int crc) {
+    CRC32 crc32 = new CRC32();
+    crc32.update(src, 0, 512);
+    return equalBytes(
+        BytesUtils.intToBytes((int) crc32.getValue(), true), BytesUtils.intToBytes(crc, true));
+  }
+
+  /**
+   * Convert internal amount to XDAG with BigDecimal precision
+   *
+   * @param xdag Internal amount
+   * @return XDAG amount as BigDecimal
+   * @throws XdagOverFlowException if input is negative
+   */
+  public static BigDecimal amount2xdagNew(long xdag) {
+    if (xdag < 0) {
+      throw new XdagOverFlowException();
+    }
+    long first = xdag >> 32;
+    long temp = xdag - (first << 32);
+    double tem = temp / Math.pow(2, 32);
+    return new BigDecimal(first + tem);
+  }
+
+  /**
+   * Extract IP address from address:port string
+   *
+   * @param ipAddressAndPort String in format "/ip:port"
+   * @return Extracted IP address or null if not found
+   */
+  public static String extractIpAddress(String ipAddressAndPort) {
+    String pattern = "/(\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}):\\d+";
+    Pattern r = Pattern.compile(pattern);
+    Matcher m = r.matcher(ipAddressAndPort);
+    if (m.find()) {
+      return m.group(1);
+    } else {
+      return null;
+    }
+  }
 }

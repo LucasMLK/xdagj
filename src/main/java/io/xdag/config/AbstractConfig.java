@@ -29,8 +29,8 @@ import com.typesafe.config.ConfigFactory;
 import io.xdag.Network;
 import io.xdag.config.spec.AdminSpec;
 import io.xdag.config.spec.FundSpec;
-import io.xdag.config.spec.NodeSpec;
 import io.xdag.config.spec.HttpSpec;
+import io.xdag.config.spec.NodeSpec;
 import io.xdag.config.spec.RandomxSpec;
 import io.xdag.config.spec.SnapshotSpec;
 import io.xdag.config.spec.WalletSpec;
@@ -50,402 +50,433 @@ import org.apache.commons.lang3.SystemUtils;
 @Slf4j
 @Getter
 @Setter
-public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, HttpSpec, SnapshotSpec, RandomxSpec, FundSpec {
+public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, HttpSpec,
+    SnapshotSpec, RandomxSpec, FundSpec {
 
-    protected String configName;
+  protected String configName;
 
-    // Pool websocket configuration 
-    protected int websocketServerPort;
-    protected int maxShareCountPerChannel = 20;
-    protected int awardEpoch = 0xf;
-    protected int waitEpoch = 32;
+  // Pool websocket configuration
+  protected int websocketServerPort;
+  protected int maxShareCountPerChannel = 20;
+  protected int awardEpoch = 0xf;
+  protected int waitEpoch = 32;
 
-    // Foundation configuration
-    protected String fundAddress;
-    protected double fundRation;
-    protected double nodeRation;
+  // Foundation configuration
+  protected String fundAddress;
+  protected double fundRation;
+  protected double nodeRation;
 
-    // Network configuration
-    protected Network network;
-    protected short networkVersion;
-    protected int netMaxOutboundConnections = 128;
-    protected int netMaxInboundConnections = 512;
-    protected int netMaxInboundConnectionsPerIp = 5;
-    protected int netMaxFrameBodySize = 128 * 1024;
-    protected int netMaxPacketSize = 16 * 1024 * 1024;
-    protected int netRelayRedundancy = 8;
-    protected int netHandshakeExpiry = 5 * 60 * 1000;
-    protected int netChannelIdleTimeout = 2 * 60 * 1000;
+  // Network configuration
+  protected Network network;
+  protected short networkVersion;
+  protected int netMaxOutboundConnections = 128;
+  protected int netMaxInboundConnections = 512;
+  protected int netMaxInboundConnectionsPerIp = 5;
+  protected int netMaxFrameBodySize = 128 * 1024;
+  protected int netMaxPacketSize = 16 * 1024 * 1024;
+  protected int netRelayRedundancy = 8;
+  protected int netHandshakeExpiry = 5 * 60 * 1000;
+  protected int netChannelIdleTimeout = 2 * 60 * 1000;
 
-    // Prioritized network messages ( Updated to Block messages)
-    protected Set<XdagMessageCode> netPrioritizedMessages = new HashSet<>(Arrays.asList(
-            XdagMessageCode.NEW_BLOCK,  //  Changed from NEW_BLOCK
-            XdagMessageCode.BLOCK_REQUEST));
+  // Prioritized network messages ( Updated to Block messages)
+  protected Set<XdagMessageCode> netPrioritizedMessages = new HashSet<>(Arrays.asList(
+      XdagMessageCode.NEW_BLOCK,  //  Changed from NEW_BLOCK
+      XdagMessageCode.BLOCK_REQUEST));
 
-    // Node configuration
-    protected String nodeIp;
-    protected int nodePort;
-    protected String nodeTag;
-    protected int maxConnections = 1024;
-    protected int maxInboundConnectionsPerIp = 8;
-    protected int connectionTimeout = 10000;
-    protected int connectionReadTimeout = 10000;
-    protected boolean enableTxHistory = false;
-    protected long txPageSizeLimit = 500;
-    protected boolean enableGenerateBlock = false;
+  // Node configuration
+  protected String nodeIp;
+  protected int nodePort;
+  protected String nodeTag;
+  protected int maxConnections = 1024;
+  protected int maxInboundConnectionsPerIp = 8;
+  protected int connectionTimeout = 10000;
+  protected int connectionReadTimeout = 10000;
+  protected boolean enableTxHistory = false;
+  protected long txPageSizeLimit = 500;
+  protected boolean enableGenerateBlock = false;
 
-    // Storage configuration
-    protected String rootDir;
-    protected String storeDir;
-    protected String storeBackupDir;
-    protected String whiteListDir;
-    protected String rejectAddress;
-    protected String netDBDir;
+  // Storage configuration
+  protected String rootDir;
+  protected String storeDir;
+  protected String storeBackupDir;
+  protected String whiteListDir;
+  protected String rejectAddress;
+  protected String netDBDir;
 
-    protected int storeMaxOpenFiles = 1024;
-    protected int storeMaxThreads = 1;
-    protected boolean storeFromBackup = false;
-    protected String originStoreDir = "./testdate";
+  protected int storeMaxOpenFiles = 1024;
+  protected int storeMaxThreads = 1;
+  protected boolean storeFromBackup = false;
+  protected String originStoreDir = "./testdate";
 
-    // Whitelist configuration
-    protected String walletKeyFile;
+  // Whitelist configuration
+  protected String walletKeyFile;
 
-    protected int TTL = 5;
-    protected List<InetSocketAddress> whiteIPList = Lists.newArrayList();
-    protected List<String> poolWhiteIPList = Lists.newArrayList();
+  protected int TTL = 5;
+  protected List<InetSocketAddress> whiteIPList = Lists.newArrayList();
+  protected List<String> poolWhiteIPList = Lists.newArrayList();
 
-    // Wallet configuration
-    protected String walletFilePath;
+  // Wallet configuration
+  protected String walletFilePath;
 
-    // XDAG configuration
-    protected long xdagEra;
-    protected XAmount mainStartAmount;
-    protected long apolloForkHeight;
-    protected XAmount apolloForkAmount;
+  // XDAG configuration
+  protected long xdagEra;
+  protected XAmount mainStartAmount;
+  protected long apolloForkHeight;
+  protected XAmount apolloForkAmount;
 
+  // RPC configuration
+  protected boolean rpcHttpEnabled = false;
+  protected String rpcHttpHost = "127.0.0.1";
+  protected int rpcHttpPort = 10001;
+  protected boolean rpcEnableHttps = false;
+  protected String rpcHttpCorsOrigins = "*";
+  protected String rpcHttpsCertFile;
+  protected String rpcHttpsKeyFile;
+  protected int rpcHttpMaxContentLength = 1024 * 1024; // 1MB
+  protected boolean rpcHttpAuthEnabled = false;
+  protected String[] rpcHttpApiKeys = new String[0];
+
+  // RPC netty configuration
+  protected int rpcHttpBossThreads = 1;
+  protected int rpcHttpWorkerThreads = 4; // 0 means use Netty default (2 * CPU cores)
+
+
+  // Snapshot configuration
+  protected boolean snapshotEnabled = false;
+  protected long snapshotHeight;
+  protected long snapshotTime;
+  protected boolean isSnapshotJ;
+
+  // RandomX configuration
+  protected boolean flag;
+
+  protected AbstractConfig(String rootDir, String configName, Network network,
+      short networkVersion) {
+    this.rootDir = rootDir;
+    this.configName = configName;
+    this.network = network;
+    this.networkVersion = networkVersion;
+    getSetting();
+    setDir();
+  }
+
+  public void setDir() {
+    storeDir = getRootDir() + "/rocksdb/xdagdb";
+    storeBackupDir = getRootDir() + "/rocksdb/xdagdb/backupdata";
+  }
+
+  @Override
+  public HttpSpec getHttpSpec() {
+    return this;
+  }
+
+  @Override
+  public SnapshotSpec getSnapshotSpec() {
+    return this;
+  }
+
+  @Override
+  public RandomxSpec getRandomxSpec() {
+    return this;
+  }
+
+  @Override
+  public FundSpec getFundSpec() {
+    return this;
+  }
+
+  @Override
+  public Network getNetwork() {
+    return this.network;
+  }
+
+  @Override
+  public short getNetworkVersion() {
+    return this.networkVersion;
+  }
+
+  @Override
+  public String getNodeTag() {
+    return this.nodeTag;
+  }
+
+  @Override
+  public Set<XdagMessageCode> getNetPrioritizedMessages() {
+    return this.netPrioritizedMessages;
+  }
+
+  @Override
+  public String getClientId() {
+    return String.format("%s/v%s-%s/%s",
+        Constants.CLIENT_NAME,
+        Constants.CLIENT_VERSION,
+        SystemUtils.OS_NAME,
+        SystemUtils.OS_ARCH);
+  }
+
+  @Override
+  public CapabilityTreeSet getClientCapabilities() {
+    return CapabilityTreeSet.of(Capability.FULL_NODE, Capability.LIGHT_NODE);
+  }
+
+  @Override
+  public NodeSpec getNodeSpec() {
+    return this;
+  }
+
+  @Override
+  public AdminSpec getAdminSpec() {
+    return this;
+  }
+
+  @Override
+  public WalletSpec getWalletSpec() {
+    return this;
+  }
+
+  public void getSetting() {
+    com.typesafe.config.Config config = ConfigFactory.load(getConfigName());
+
+    poolWhiteIPList = config.hasPath("pool.whiteIPs") ? config.getStringList("pool.whiteIPs")
+        : Collections.singletonList("127.0.0.1");
+    log.info("Pool whitelist {}. Any IP allowed? {}", poolWhiteIPList,
+        poolWhiteIPList.contains("0.0.0.0"));
+    websocketServerPort = config.hasPath("pool.ws.port") ? config.getInt("pool.ws.port") : 7001;
+    nodeIp = config.hasPath("node.ip") ? config.getString("node.ip") : "127.0.0.1";
+    nodePort = config.hasPath("node.port") ? config.getInt("node.port") : 8001;
+    nodeTag = config.hasPath("node.tag") ? config.getString("node.tag") : "xdagj";
+    rejectAddress = config.hasPath("node.reject.transaction.address") ? config.getString(
+        "node.reject.transaction.address") : "";
+    maxInboundConnectionsPerIp = config.getInt("node.maxInboundConnectionsPerIp");
+    enableTxHistory = config.hasPath("node.transaction.history.enable") && config.getBoolean(
+        "node.transaction.history.enable");
+    enableGenerateBlock = config.hasPath("node.generate.block.enable") && config.getBoolean(
+        "node.generate.block.enable");
+    txPageSizeLimit = config.hasPath("node.transaction.history.pageSizeLimit") ? config.getInt(
+        "node.transaction.history.pageSizeLimit") : 500;
+    fundAddress = config.hasPath("fund.address") ? config.getString("fund.address")
+        : "4duPWMbYUgAifVYkKDCWxLvRRkSByf5gb";
+    fundRation = config.hasPath("fund.ration") ? config.getDouble("fund.ration") : 5;
+    nodeRation = config.hasPath("node.ration") ? config.getDouble("node.ration") : 5;
+    List<String> whiteIpList = config.getStringList("node.whiteIPs");
+    log.debug("{} IP access", whiteIpList.size());
+    for (String addr : whiteIpList) {
+      String ip = addr.split(":")[0];
+      int port = Integer.parseInt(addr.split(":")[1]);
+      whiteIPList.add(new InetSocketAddress(ip, port));
+    }
     // RPC configuration
-    protected boolean rpcHttpEnabled = false;
-    protected String rpcHttpHost = "127.0.0.1";
-    protected int rpcHttpPort = 10001;
-    protected boolean rpcEnableHttps = false;
-    protected String rpcHttpCorsOrigins = "*";
-    protected String  rpcHttpsCertFile;
-    protected String rpcHttpsKeyFile;
-    protected int rpcHttpMaxContentLength = 1024 * 1024; // 1MB
-    protected boolean rpcHttpAuthEnabled = false;
-    protected String[] rpcHttpApiKeys = new String[0];
+    rpcHttpEnabled = config.hasPath("rpc.http.enabled") && config.getBoolean("rpc.http.enabled");
+    if (rpcHttpEnabled) {
+      rpcHttpHost =
+          config.hasPath("rpc.http.host") ? config.getString("rpc.http.host") : "127.0.0.1";
+      rpcHttpPort = config.hasPath("rpc.http.port") ? config.getInt("rpc.http.port") : 10001;
+      rpcHttpAuthEnabled =
+          config.hasPath("rpc.http.auth.enabled") && config.getBoolean("rpc.http.auth.enabled");
+      if (rpcHttpAuthEnabled && config.hasPath("rpc.http.auth.apiKeys")) {
+        List<String> keyList = config.getStringList("rpc.http.auth.apiKeys");
+        rpcHttpApiKeys = keyList.toArray(new String[0]);
+      }
+    }
+    flag = config.hasPath("randomx.flags.fullmem") && config.getBoolean("randomx.flags.fullmem");
 
-    // RPC netty configuration
-    protected int rpcHttpBossThreads = 1;
-    protected int rpcHttpWorkerThreads = 4; // 0 means use Netty default (2 * CPU cores)
+  }
 
-
-    // Snapshot configuration
-    protected boolean snapshotEnabled = false;
-    protected long snapshotHeight;
-    protected long snapshotTime;
-    protected boolean isSnapshotJ;
-
-    // RandomX configuration
-    protected boolean flag;
-
-    protected AbstractConfig(String rootDir, String configName, Network network, short networkVersion) {
-        this.rootDir = rootDir;
-        this.configName = configName;
-        this.network = network;
-        this.networkVersion = networkVersion;
-        getSetting();
-        setDir();
+  @Override
+  public void changePara(String[] args) {
+    if (args == null || args.length == 0) {
+      System.out.println("Use default configuration");
+      return;
     }
 
-    public void setDir() {
-        storeDir = getRootDir() + "/rocksdb/xdagdb";
-        storeBackupDir = getRootDir() + "/rocksdb/xdagdb/backupdata";
+    for (int i = 0; i < args.length; i++) {
+      switch (args[i]) {
+        case "-a":
+        case "-c":
+        case "-m":
+        case "-s":
+          i++;
+          // TODO: Set mining thread count
+          break;
+        case "-f":
+          i++;
+          this.rootDir = args[i];
+          break;
+        case "-p":
+          i++;
+          this.changeNode(args[i]);
+          break;
+        case "-r":
+          // TODO: Only load block but no run
+          break;
+        case "-d":
+        case "-t":
+          // Only devnet or testnet
+          break;
+        default:
+          // log.error("Illegal instruction");
+      }
     }
+  }
 
-    @Override
-    public HttpSpec getHttpSpec() {
-        return this;
-    }
+  public void changeNode(String host) {
+    String[] args = host.split(":");
+    this.nodeIp = args[0];
+    this.nodePort = Integer.parseInt(args[1]);
+  }
 
-    @Override
-    public SnapshotSpec getSnapshotSpec() {
-        return this;
-    }
+  @Override
+  public int getNetMaxFrameBodySize() {
+    return this.netMaxFrameBodySize;
+  }
 
-    @Override
-    public RandomxSpec getRandomxSpec() {
-        return this;
-    }
+  @Override
+  public int getNetMaxPacketSize() {
+    return this.netMaxPacketSize;
+  }
 
-    @Override
-    public FundSpec getFundSpec() {
-        return this;
-    }
+  @Override
+  public int getMaxInboundConnectionsPerIp() {
+    return this.maxInboundConnectionsPerIp;
+  }
 
-    @Override
-    public Network getNetwork() {
-        return this.network;
-    }
+  @Override
+  public List<String> getPoolWhiteIPList() {
+    return poolWhiteIPList;
+  }
 
-    @Override
-    public short getNetworkVersion() {
-        return this.networkVersion;
-    }
+  @Override
+  public int getWebsocketServerPort() {
+    return websocketServerPort;
+  }
 
-    @Override
-    public String getNodeTag() {
-        return this.nodeTag;
-    }
+  @Override
+  public boolean isRpcHttpEnabled() {
+    return rpcHttpEnabled;
+  }
 
-    @Override
-    public Set<XdagMessageCode> getNetPrioritizedMessages() {
-        return this.netPrioritizedMessages;
-    }
+  @Override
+  public String getRpcHttpHost() {
+    return rpcHttpHost;
+  }
 
-    @Override
-    public String getClientId() {
-        return String.format("%s/v%s-%s/%s",
-                Constants.CLIENT_NAME,
-                Constants.CLIENT_VERSION,
-                SystemUtils.OS_NAME,
-                SystemUtils.OS_ARCH);
-    }
+  @Override
+  public int getRpcHttpPort() {
+    return rpcHttpPort;
+  }
 
-    @Override
-    public CapabilityTreeSet getClientCapabilities() {
-        return CapabilityTreeSet.of(Capability.FULL_NODE, Capability.LIGHT_NODE);
-    }
+  @Override
+  public boolean isRpcEnableHttps() {
+    return rpcEnableHttps;
+  }
 
-    @Override
-    public NodeSpec getNodeSpec() {
-        return this;
-    }
+  @Override
+  public String getRpcHttpCorsOrigins() {
+    return rpcHttpCorsOrigins;
+  }
 
-    @Override
-    public AdminSpec getAdminSpec() {
-        return this;
-    }
+  @Override
+  public int getRpcHttpMaxContentLength() {
+    return rpcHttpMaxContentLength;
+  }
 
-    @Override
-    public WalletSpec getWalletSpec() {
-        return this;
-    }
+  @Override
+  public int getRpcHttpBossThreads() {
+    return rpcHttpBossThreads;
+  }
 
-    public void getSetting() {
-        com.typesafe.config.Config config = ConfigFactory.load(getConfigName());
+  @Override
+  public int getRpcHttpWorkerThreads() {
+    return rpcHttpWorkerThreads;
+  }
 
-        poolWhiteIPList = config.hasPath("pool.whiteIPs") ? config.getStringList("pool.whiteIPs") : Collections.singletonList("127.0.0.1");
-        log.info("Pool whitelist {}. Any IP allowed? {}", poolWhiteIPList, poolWhiteIPList.contains("0.0.0.0"));
-        websocketServerPort = config.hasPath("pool.ws.port") ? config.getInt("pool.ws.port") : 7001;
-        nodeIp = config.hasPath("node.ip") ? config.getString("node.ip") : "127.0.0.1";
-        nodePort = config.hasPath("node.port") ? config.getInt("node.port") : 8001;
-        nodeTag = config.hasPath("node.tag") ? config.getString("node.tag") : "xdagj";
-        rejectAddress = config.hasPath("node.reject.transaction.address") ? config.getString("node.reject.transaction.address") : "";
-        maxInboundConnectionsPerIp = config.getInt("node.maxInboundConnectionsPerIp");
-        enableTxHistory = config.hasPath("node.transaction.history.enable") && config.getBoolean("node.transaction.history.enable");
-        enableGenerateBlock = config.hasPath("node.generate.block.enable") && config.getBoolean("node.generate.block.enable");
-        txPageSizeLimit = config.hasPath("node.transaction.history.pageSizeLimit") ? config.getInt("node.transaction.history.pageSizeLimit") : 500;
-        fundAddress = config.hasPath("fund.address") ? config.getString("fund.address") : "4duPWMbYUgAifVYkKDCWxLvRRkSByf5gb";
-        fundRation = config.hasPath("fund.ration") ? config.getDouble("fund.ration") : 5;
-        nodeRation = config.hasPath("node.ration") ? config.getDouble("node.ration") : 5;
-        List<String> whiteIpList = config.getStringList("node.whiteIPs");
-        log.debug("{} IP access", whiteIpList.size());
-        for (String addr : whiteIpList) {
-            String ip = addr.split(":")[0];
-            int port = Integer.parseInt(addr.split(":")[1]);
-            whiteIPList.add(new InetSocketAddress(ip, port));
-        }
-        // RPC configuration
-        rpcHttpEnabled = config.hasPath("rpc.http.enabled") && config.getBoolean("rpc.http.enabled");
-        if (rpcHttpEnabled) {
-            rpcHttpHost = config.hasPath("rpc.http.host") ? config.getString("rpc.http.host") : "127.0.0.1";
-            rpcHttpPort = config.hasPath("rpc.http.port") ? config.getInt("rpc.http.port") : 10001;
-            rpcHttpAuthEnabled = config.hasPath("rpc.http.auth.enabled") && config.getBoolean("rpc.http.auth.enabled");
-            if (rpcHttpAuthEnabled && config.hasPath("rpc.http.auth.apiKeys")) {
-                List<String> keyList = config.getStringList("rpc.http.auth.apiKeys");
-                rpcHttpApiKeys = keyList.toArray(new String[0]);
-            }
-        }
-        flag = config.hasPath("randomx.flags.fullmem") && config.getBoolean("randomx.flags.fullmem");
+  @Override
+  public String getRpcHttpsCertFile() {
+    return rpcHttpsCertFile;
+  }
 
-    }
+  @Override
+  public String getRpcHttpsKeyFile() {
+    return rpcHttpsKeyFile;
+  }
 
-    @Override
-    public void changePara(String[] args) {
-        if (args == null || args.length == 0) {
-            System.out.println("Use default configuration");
-            return;
-        }
+  @Override
+  public boolean isRpcHttpAuthEnabled() {
+    return rpcHttpAuthEnabled;
+  }
 
-        for (int i = 0; i < args.length; i++) {
-            switch (args[i]) {
-                case "-a":
-                case "-c":
-                case "-m":
-                case "-s":
-                    i++;
-                    // TODO: Set mining thread count
-                    break;
-                case "-f":
-                    i++;
-                    this.rootDir = args[i];
-                    break;
-                case "-p":
-                    i++;
-                    this.changeNode(args[i]);
-                    break;
-                case "-r":
-                    // TODO: Only load block but no run
-                    break;
-                case "-d":
-                case "-t":
-                    // Only devnet or testnet
-                    break;
-                default:
-                    // log.error("Illegal instruction");
-            }
-        }
-    }
+  @Override
+  public String[] getRpcHttpApiKeys() {
+    return rpcHttpApiKeys;
+  }
 
-    public void changeNode(String host) {
-        String[] args = host.split(":");
-        this.nodeIp = args[0];
-        this.nodePort = Integer.parseInt(args[1]);
-    }
+  @Override
+  public boolean isSnapshotEnabled() {
+    return snapshotEnabled;
+  }
 
-    @Override
-    public int getNetMaxFrameBodySize() {
-        return this.netMaxFrameBodySize;
-    }
+  @Override
+  public boolean isSnapshotJ() {
+    return isSnapshotJ;
+  }
 
-    @Override
-    public int getNetMaxPacketSize() {
-        return this.netMaxPacketSize;
-    }
+  @Override
+  public long getSnapshotHeight() {
+    return snapshotHeight;
+  }
 
-    @Override
-    public int getMaxInboundConnectionsPerIp() {
-        return this.maxInboundConnectionsPerIp;
-    }
+  @Override
+  public boolean getRandomxFlag() {
+    return flag;
+  }
 
-    @Override
-    public List<String> getPoolWhiteIPList() {
-        return poolWhiteIPList;
-    }
+  @Override
+  public boolean getEnableTxHistory() {
+    return enableTxHistory;
+  }
 
-    @Override
-    public int getWebsocketServerPort() {
-        return websocketServerPort;
-    }
+  @Override
+  public long getTxPageSizeLimit() {
+    return txPageSizeLimit;
+  }
 
-    @Override
-    public boolean isRpcHttpEnabled() {
-        return rpcHttpEnabled;
-    }
+  @Override
+  public boolean getEnableGenerateBlock() {
+    return enableGenerateBlock;
+  }
 
-    @Override
-    public String getRpcHttpHost() {
-        return rpcHttpHost;
-    }
+  @Override
+  public long getXdagEra() {
+    return xdagEra;
+  }
 
-    @Override
-    public int getRpcHttpPort() { return rpcHttpPort;}
+  @Override
+  public XAmount getMainStartAmount() {
+    return mainStartAmount;
+  }
 
-    @Override
-    public boolean isRpcEnableHttps() {return rpcEnableHttps;}
+  @Override
+  public long getApolloForkHeight() {
+    return apolloForkHeight;
+  }
 
-    @Override
-    public String getRpcHttpCorsOrigins() {return rpcHttpCorsOrigins;}
+  @Override
+  public XAmount getApolloForkAmount() {
+    return apolloForkAmount;
+  }
 
-    @Override
-    public int getRpcHttpMaxContentLength() {return rpcHttpMaxContentLength;}
+  @Override
+  public void setSnapshotJ(boolean isSnapshot) {
+    this.isSnapshotJ = isSnapshot;
+  }
 
-    @Override
-    public int getRpcHttpBossThreads() {return rpcHttpBossThreads;}
+  @Override
+  public void snapshotEnable() {
+    snapshotEnabled = true;
+  }
 
-    @Override
-    public int getRpcHttpWorkerThreads() {return rpcHttpWorkerThreads;}
-
-    @Override
-    public String getRpcHttpsCertFile() {return rpcHttpsCertFile;}
-
-    @Override
-    public String getRpcHttpsKeyFile() {return rpcHttpsKeyFile;}
-
-    @Override
-    public boolean isRpcHttpAuthEnabled() {return rpcHttpAuthEnabled;}
-
-    @Override
-    public String[] getRpcHttpApiKeys() {return rpcHttpApiKeys;}
-
-    @Override
-    public boolean isSnapshotEnabled() {
-        return snapshotEnabled;
-    }
-
-    @Override
-    public boolean isSnapshotJ() {
-        return isSnapshotJ;
-    }
-
-    @Override
-    public long getSnapshotHeight() {
-        return snapshotHeight;
-    }
-
-    @Override
-    public boolean getRandomxFlag() {
-        return flag;
-    }
-
-    @Override
-    public boolean getEnableTxHistory() {
-        return enableTxHistory;
-    }
-
-    @Override
-    public long getTxPageSizeLimit() {
-        return txPageSizeLimit;
-    }
-
-    @Override
-    public boolean getEnableGenerateBlock() {
-        return enableGenerateBlock;
-    }
-
-    @Override
-    public long getXdagEra() {
-        return xdagEra;
-    }
-
-    @Override
-    public XAmount getMainStartAmount() {
-        return mainStartAmount;
-    }
-
-    @Override
-    public long getApolloForkHeight() {
-        return apolloForkHeight;
-    }
-
-    @Override
-    public XAmount getApolloForkAmount() {
-        return apolloForkAmount;
-    }
-
-    @Override
-    public void setSnapshotJ(boolean isSnapshot) {
-        this.isSnapshotJ = isSnapshot;
-    }
-
-    @Override
-    public void snapshotEnable() {
-        snapshotEnabled = true;
-    }
-
-    @Override
-    public long getSnapshotTime() {
-        return snapshotTime;
-    }
+  @Override
+  public long getSnapshotTime() {
+    return snapshotTime;
+  }
 }

@@ -27,28 +27,28 @@ package io.xdag.config;
  * Enum representing node capabilities in the XDAG network
  */
 public enum Capability {
-    /**
-     * Full node capability - stores complete blockchain data
-     */
-    FULL_NODE("full"),
+  /**
+   * Full node capability - stores complete blockchain data
+   */
+  FULL_NODE("full"),
 
-    /**
-     * Light node capability - stores minimal blockchain data
-     */
-    LIGHT_NODE("light");
+  /**
+   * Light node capability - stores minimal blockchain data
+   */
+  LIGHT_NODE("light");
 
-    private final String name;
+  private final String name;
 
-    Capability(String name) {
-        this.name = name;
-    }
+  Capability(String name) {
+    this.name = name;
+  }
 
-    public String getName() {
-        return name;
-    }
+  public String getName() {
+    return name;
+  }
 
-    @Override
-    public String toString() {
-        return name;
-    }
+  @Override
+  public String toString() {
+    return name;
+  }
 }

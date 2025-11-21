@@ -32,12 +32,13 @@ import lombok.Value;
 @Value
 @Builder
 public class BlockSummaryResponse {
-    String hash;
-    String height;
-    long epoch;
-    long timestamp;
-    String difficulty;
-    int transactionCount;
-    String state;
-    String coinbase;
+
+  String hash;
+  String height;
+  long epoch;
+  long timestamp;
+  String difficulty;
+  int transactionCount;
+  String state;
+  String coinbase;
 }

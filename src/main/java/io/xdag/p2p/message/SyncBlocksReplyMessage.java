@@ -26,13 +26,12 @@ package io.xdag.p2p.message;
 import io.xdag.core.Block;
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.tuweni.bytes.Bytes32;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * SyncBlocksReplyMessage - Reply with requested blocks
@@ -40,8 +39,8 @@ import java.util.List;
  * <p>Hybrid Sync Protocol - Blocks Batch Reply (0x24)
  *
  * <p><strong>Purpose</strong>:
- * Returns a batch of blocks matching the requested hash list, in response
- * to a {@link SyncBlocksRequestMessage}.
+ * Returns a batch of blocks matching the requested hash list, in response to a
+ * {@link SyncBlocksRequestMessage}.
  *
  * <p><strong>Message Format</strong>:
  * <pre>
@@ -106,135 +105,134 @@ import java.util.List;
 @Setter
 public class SyncBlocksReplyMessage extends Message {
 
-    /**
-     * List of blocks (may contain nulls for missing blocks)
-     * Order corresponds to request hash list
-     */
-    private List<Block> blocks;
+  /**
+   * List of blocks (may contain nulls for missing blocks) Order corresponds to request hash list
+   */
+  private List<Block> blocks;
 
-    /**
-     * Constructor for receiving message from network
-     *
-     * <p>Deserializes message body:
-     * <ol>
-     *   <li>Read blockCount (int, 4 bytes)</li>
-     *   <li>For each block:
-     *     <ul>
-     *       <li>Read blockHash (32 bytes)</li>
-     *       <li>Read hasBlock (boolean, 1 byte)</li>
-     *       <li>If hasBlock: read blockSize (int, 4 bytes) and blockData</li>
-     *       <li>If !hasBlock: add null to list</li>
-     *     </ul>
-     *   </li>
-     * </ol>
-     *
-     * @param body serialized message body
-     * @throws IllegalArgumentException if deserialization fails
-     */
-    public SyncBlocksReplyMessage(byte[] body) {
-        super(XdagMessageCode.SYNC_BLOCKS_REPLY, null);
+  /**
+   * Constructor for receiving message from network
+   *
+   * <p>Deserializes message body:
+   * <ol>
+   *   <li>Read blockCount (int, 4 bytes)</li>
+   *   <li>For each block:
+   *     <ul>
+   *       <li>Read blockHash (32 bytes)</li>
+   *       <li>Read hasBlock (boolean, 1 byte)</li>
+   *       <li>If hasBlock: read blockSize (int, 4 bytes) and blockData</li>
+   *       <li>If !hasBlock: add null to list</li>
+   *     </ul>
+   *   </li>
+   * </ol>
+   *
+   * @param body serialized message body
+   * @throws IllegalArgumentException if deserialization fails
+   */
+  public SyncBlocksReplyMessage(byte[] body) {
+    super(XdagMessageCode.SYNC_BLOCKS_REPLY, null);
 
-        SimpleDecoder dec = new SimpleDecoder(body);
+    SimpleDecoder dec = new SimpleDecoder(body);
 
-        // Read block count
-        int blockCount = dec.readInt();
-        this.blocks = new ArrayList<>(blockCount);
+    // Read block count
+    int blockCount = dec.readInt();
+    this.blocks = new ArrayList<>(blockCount);
 
-        // Read each block
-        for (int i = 0; i < blockCount; i++) {
-            // Read block hash (32 bytes) - for reference/verification
-            byte[] hashBytes = new byte[32];
-            dec.readBytes(hashBytes);
-            @SuppressWarnings("unused")
-            Bytes32 blockHash = Bytes32.wrap(hashBytes);
+    // Read each block
+    for (int i = 0; i < blockCount; i++) {
+      // Read block hash (32 bytes) - for reference/verification
+      byte[] hashBytes = new byte[32];
+      dec.readBytes(hashBytes);
+      @SuppressWarnings("unused")
+      Bytes32 blockHash = Bytes32.wrap(hashBytes);
 
-            // Check if block exists
-            boolean hasBlock = dec.readBoolean();
+      // Check if block exists
+      boolean hasBlock = dec.readBoolean();
 
-            if (hasBlock) {
-                // Read block size and data
-                int blockSize = dec.readInt();
-                byte[] blockBytes = new byte[blockSize];
-                dec.readBytes(blockBytes);
+      if (hasBlock) {
+        // Read block size and data
+        int blockSize = dec.readInt();
+        byte[] blockBytes = new byte[blockSize];
+        dec.readBytes(blockBytes);
 
-                // Deserialize block
-                Block block = Block.fromBytes(blockBytes);
-                this.blocks.add(block);
-            } else {
-                // Missing block
-                this.blocks.add(null);
-            }
-        }
-
-        // Set body for reference
-        this.body = body;
+        // Deserialize block
+        Block block = Block.fromBytes(blockBytes);
+        this.blocks.add(block);
+      } else {
+        // Missing block
+        this.blocks.add(null);
+      }
     }
 
-    /**
-     * Constructor for sending message to network
-     *
-     * <p>Serializes message:
-     * <ol>
-     *   <li>Write blockCount (int, 4 bytes)</li>
-     *   <li>For each block:
-     *     <ul>
-     *       <li>Write blockHash (32 bytes)</li>
-     *       <li>Write hasBlock (boolean, 1 byte)</li>
-     *       <li>If block != null: write blockSize and blockData</li>
-     *       <li>If block == null: write hasBlock=false only</li>
-     *     </ul>
-     *   </li>
-     * </ol>
-     *
-     * @param blocks list of blocks (may contain nulls)
-     */
-    public SyncBlocksReplyMessage(List<Block> blocks) {
-        super(XdagMessageCode.SYNC_BLOCKS_REPLY, null);
+    // Set body for reference
+    this.body = body;
+  }
 
-        this.blocks = blocks;
+  /**
+   * Constructor for sending message to network
+   *
+   * <p>Serializes message:
+   * <ol>
+   *   <li>Write blockCount (int, 4 bytes)</li>
+   *   <li>For each block:
+   *     <ul>
+   *       <li>Write blockHash (32 bytes)</li>
+   *       <li>Write hasBlock (boolean, 1 byte)</li>
+   *       <li>If block != null: write blockSize and blockData</li>
+   *       <li>If block == null: write hasBlock=false only</li>
+   *     </ul>
+   *   </li>
+   * </ol>
+   *
+   * @param blocks list of blocks (may contain nulls)
+   */
+  public SyncBlocksReplyMessage(List<Block> blocks) {
+    super(XdagMessageCode.SYNC_BLOCKS_REPLY, null);
 
-        // Serialize message body
-        SimpleEncoder enc = new SimpleEncoder();
-        encode(enc);
-        this.body = enc.toBytes();
+    this.blocks = blocks;
+
+    // Serialize message body
+    SimpleEncoder enc = new SimpleEncoder();
+    encode(enc);
+    this.body = enc.toBytes();
+  }
+
+  @Override
+  public void encode(SimpleEncoder enc) {
+    // Write block count
+    enc.writeInt(blocks.size());
+
+    // Write each block
+    for (Block block : blocks) {
+      if (block != null) {
+        // Write block hash (32 bytes)
+        enc.write(block.getHash().toArray());
+
+        // Block exists
+        enc.writeBoolean(true);
+
+        // Serialize block
+        byte[] blockBytes = block.toBytes();
+        enc.writeInt(blockBytes.length);
+        enc.write(blockBytes);
+      } else {
+        // Write placeholder hash (all zeros)
+        enc.write(new byte[32]);
+
+        // Block missing
+        enc.writeBoolean(false);
+      }
     }
+  }
 
-    @Override
-    public void encode(SimpleEncoder enc) {
-        // Write block count
-        enc.writeInt(blocks.size());
-
-        // Write each block
-        for (Block block : blocks) {
-            if (block != null) {
-                // Write block hash (32 bytes)
-                enc.write(block.getHash().toArray());
-
-                // Block exists
-                enc.writeBoolean(true);
-
-                // Serialize block
-                byte[] blockBytes = block.toBytes();
-                enc.writeInt(blockBytes.length);
-                enc.write(blockBytes);
-            } else {
-                // Write placeholder hash (all zeros)
-                enc.write(new byte[32]);
-
-                // Block missing
-                enc.writeBoolean(false);
-            }
-        }
-    }
-
-    @Override
-    public String toString() {
-        long nonNullCount = blocks != null ? blocks.stream().filter(Objects::nonNull).count() : 0;
-        return String.format(
-            "SyncBlocksReplyMessage[total=%d, nonNull=%d, size=%d bytes]",
-            blocks != null ? blocks.size() : 0,
-            nonNullCount,
-            body != null ? body.length : 0
-        );
-    }
+  @Override
+  public String toString() {
+    long nonNullCount = blocks != null ? blocks.stream().filter(Objects::nonNull).count() : 0;
+    return String.format(
+        "SyncBlocksReplyMessage[total=%d, nonNull=%d, size=%d bytes]",
+        blocks != null ? blocks.size() : 0,
+        nonNullCount,
+        body != null ? body.length : 0
+    );
+  }
 }

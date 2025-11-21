@@ -61,60 +61,60 @@ package io.xdag.core;
  */
 public interface TransactionValidator {
 
-    /**
-     * Perform full validation (all levels).
-     *
-     * <p>Executes validation in order: SYNTAX -> STATE -> ECONOMIC.
-     * Stops at first failure.
-     *
-     * @param tx transaction to validate
-     * @return validation result
-     */
-    ValidationResult validate(Transaction tx);
+  /**
+   * Perform full validation (all levels).
+   *
+   * <p>Executes validation in order: SYNTAX -> STATE -> ECONOMIC.
+   * Stops at first failure.
+   *
+   * @param tx transaction to validate
+   * @return validation result
+   */
+  ValidationResult validate(Transaction tx);
 
-    /**
-     * Validate transaction syntax (level 1).
-     *
-     * <p>Checks:
-     * <ul>
-     *   <li>Signature validity (v, r, s format)</li>
-     *   <li>Field constraints (non-null, positive amounts)</li>
-     *   <li>Signature verification (cryptographic check)</li>
-     * </ul>
-     *
-     * @param tx transaction to validate
-     * @return validation result
-     */
-    ValidationResult validateSyntax(Transaction tx);
+  /**
+   * Validate transaction syntax (level 1).
+   *
+   * <p>Checks:
+   * <ul>
+   *   <li>Signature validity (v, r, s format)</li>
+   *   <li>Field constraints (non-null, positive amounts)</li>
+   *   <li>Signature verification (cryptographic check)</li>
+   * </ul>
+   *
+   * @param tx transaction to validate
+   * @return validation result
+   */
+  ValidationResult validateSyntax(Transaction tx);
 
-    /**
-     * Validate transaction state (level 2).
-     *
-     * <p>Checks:
-     * <ul>
-     *   <li>Nonce continuity (expected next nonce)</li>
-     *   <li>Replay protection (not already executed)</li>
-     *   <li>Account existence</li>
-     * </ul>
-     *
-     * @param tx transaction to validate
-     * @return validation result
-     */
-    ValidationResult validateState(Transaction tx);
+  /**
+   * Validate transaction state (level 2).
+   *
+   * <p>Checks:
+   * <ul>
+   *   <li>Nonce continuity (expected next nonce)</li>
+   *   <li>Replay protection (not already executed)</li>
+   *   <li>Account existence</li>
+   * </ul>
+   *
+   * @param tx transaction to validate
+   * @return validation result
+   */
+  ValidationResult validateState(Transaction tx);
 
-    /**
-     * Validate transaction economics (level 3).
-     *
-     * <p>Checks:
-     * <ul>
-     *   <li>Sufficient balance (amount + fee)</li>
-     *   <li>Minimum fee requirement</li>
-     *   <li>Maximum fee limit (anti-DoS)</li>
-     * </ul>
-     *
-     * @param tx transaction to validate
-     * @return validation result
-     */
-    ValidationResult validateEconomic(Transaction tx);
+  /**
+   * Validate transaction economics (level 3).
+   *
+   * <p>Checks:
+   * <ul>
+   *   <li>Sufficient balance (amount + fee)</li>
+   *   <li>Minimum fee requirement</li>
+   *   <li>Maximum fee limit (anti-DoS)</li>
+   * </ul>
+   *
+   * @param tx transaction to validate
+   * @return validation result
+   */
+  ValidationResult validateEconomic(Transaction tx);
 
 }

@@ -28,15 +28,15 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.p2p.P2pService;
 import io.xdag.p2p.channel.Channel;
 import io.xdag.p2p.message.NewTransactionMessage;
-import lombok.extern.slf4j.Slf4j;
-import org.apache.tuweni.bytes.Bytes32;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes32;
 
 /**
- * TransactionBroadcastManager - Manages transaction broadcasting with anti-loop protection (Phase 3)
+ * TransactionBroadcastManager - Manages transaction broadcasting with anti-loop protection (Phase
+ * 3)
  *
  * <p>This manager prevents transaction broadcast loops in the P2P network by tracking:
  * <ul>
@@ -107,256 +107,256 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class TransactionBroadcastManager {
 
-    /**
-     * Cache of recently seen transaction hashes
-     * <p>
-     * Purpose: Prevent re-processing transactions that loop back to us
-     * <p>
-     * Size: 100,000 transactions (~4 MB)
-     * <p>
-     * Retention: 1 hour (matches TransactionPool expiration)
-     */
-    private final Cache<Bytes32, Long> recentlySeenTxs;
+  /**
+   * Cache of recently seen transaction hashes
+   * <p>
+   * Purpose: Prevent re-processing transactions that loop back to us
+   * <p>
+   * Size: 100,000 transactions (~4 MB)
+   * <p>
+   * Retention: 1 hour (matches TransactionPool expiration)
+   */
+  private final Cache<Bytes32, Long> recentlySeenTxs;
 
-    /**
-     * Cache of recently broadcasted transaction hashes
-     * <p>
-     * Purpose: Prevent re-broadcasting the same transaction multiple times
-     * <p>
-     * Size: 10,000 transactions (~0.4 MB)
-     * <p>
-     * Retention: 10 minutes (shorter than seen cache)
-     */
-    private final Cache<Bytes32, Long> recentlyBroadcastedTxs;
+  /**
+   * Cache of recently broadcasted transaction hashes
+   * <p>
+   * Purpose: Prevent re-broadcasting the same transaction multiple times
+   * <p>
+   * Size: 10,000 transactions (~0.4 MB)
+   * <p>
+   * Retention: 10 minutes (shorter than seen cache)
+   */
+  private final Cache<Bytes32, Long> recentlyBroadcastedTxs;
 
-    /**
-     * P2P service for broadcasting messages to peers
-     */
-    private P2pService p2pService;
+  /**
+   * P2P service for broadcasting messages to peers
+   */
+  private P2pService p2pService;
 
-    /**
-     * Create a new TransactionBroadcastManager
-     */
-    public TransactionBroadcastManager() {
-        // Recently seen cache: 100,000 transactions, 1 hour expiration
-        this.recentlySeenTxs = Caffeine.newBuilder()
-                .maximumSize(100_000)
-                .expireAfterWrite(1, TimeUnit.HOURS)
-                .build();
+  /**
+   * Create a new TransactionBroadcastManager
+   */
+  public TransactionBroadcastManager() {
+    // Recently seen cache: 100,000 transactions, 1 hour expiration
+    this.recentlySeenTxs = Caffeine.newBuilder()
+        .maximumSize(100_000)
+        .expireAfterWrite(1, TimeUnit.HOURS)
+        .build();
 
-        // Recently broadcasted cache: 10,000 transactions, 10 minutes expiration
-        this.recentlyBroadcastedTxs = Caffeine.newBuilder()
-                .maximumSize(10_000)
-                .expireAfterWrite(10, TimeUnit.MINUTES)
-                .build();
+    // Recently broadcasted cache: 10,000 transactions, 10 minutes expiration
+    this.recentlyBroadcastedTxs = Caffeine.newBuilder()
+        .maximumSize(10_000)
+        .expireAfterWrite(10, TimeUnit.MINUTES)
+        .build();
 
-        log.info("TransactionBroadcastManager initialized");
-        log.info("  - Recently seen cache: 100,000 max, 1 hour retention (~4 MB)");
-        log.info("  - Recently broadcast cache: 10,000 max, 10 min retention (~0.4 MB)");
+    log.info("TransactionBroadcastManager initialized");
+    log.info("  - Recently seen cache: 100,000 max, 1 hour retention (~4 MB)");
+    log.info("  - Recently broadcast cache: 10,000 max, 10 min retention (~0.4 MB)");
+  }
+
+  /**
+   * Set the P2P service for broadcasting
+   *
+   * @param p2pService P2P service instance
+   */
+  public void setP2pService(P2pService p2pService) {
+    this.p2pService = p2pService;
+    log.info("P2P service connected to TransactionBroadcastManager");
+  }
+
+  /**
+   * Check if a transaction should be processed
+   *
+   * <p>This method checks if we've seen this transaction recently.
+   * If yes, we skip processing to prevent broadcast loops.
+   *
+   * <p>This is the <b>first line of defense</b> against loops:
+   * <ul>
+   *   <li>Fast O(1) cache lookup</li>
+   *   <li>Prevents unnecessary deserialization</li>
+   *   <li>Saves CPU and memory</li>
+   * </ul>
+   *
+   * @param txHash transaction hash
+   * @return true if should process, false if already seen
+   */
+  public boolean shouldProcess(Bytes32 txHash) {
+    // Check if we've seen this transaction recently
+    if (recentlySeenTxs.getIfPresent(txHash) != null) {
+      log.trace("Transaction {} already seen, skipping",
+          txHash.toHexString().substring(0, 16) + "...");
+      return false;
     }
 
-    /**
-     * Set the P2P service for broadcasting
-     *
-     * @param p2pService P2P service instance
-     */
-    public void setP2pService(P2pService p2pService) {
-        this.p2pService = p2pService;
-        log.info("P2P service connected to TransactionBroadcastManager");
+    // Mark as seen
+    recentlySeenTxs.put(txHash, System.currentTimeMillis());
+    return true;
+  }
+
+  /**
+   * Check if a transaction should be broadcasted
+   *
+   * <p>This method checks if we've already broadcasted this transaction recently.
+   * If yes, we skip to prevent spamming the network.
+   *
+   * @param txHash transaction hash
+   * @return true if should broadcast, false if already broadcasted
+   */
+  public boolean shouldBroadcast(Bytes32 txHash) {
+    // Check if we've broadcasted this transaction recently
+    if (recentlyBroadcastedTxs.getIfPresent(txHash) != null) {
+      log.trace("Transaction {} already broadcasted, skipping",
+          txHash.toHexString().substring(0, 16) + "...");
+      return false;
     }
 
-    /**
-     * Check if a transaction should be processed
-     *
-     * <p>This method checks if we've seen this transaction recently.
-     * If yes, we skip processing to prevent broadcast loops.
-     *
-     * <p>This is the <b>first line of defense</b> against loops:
-     * <ul>
-     *   <li>Fast O(1) cache lookup</li>
-     *   <li>Prevents unnecessary deserialization</li>
-     *   <li>Saves CPU and memory</li>
-     * </ul>
-     *
-     * @param txHash transaction hash
-     * @return true if should process, false if already seen
-     */
-    public boolean shouldProcess(Bytes32 txHash) {
-        // Check if we've seen this transaction recently
-        if (recentlySeenTxs.getIfPresent(txHash) != null) {
-            log.trace("Transaction {} already seen, skipping",
-                    txHash.toHexString().substring(0, 16) + "...");
-            return false;
-        }
+    // Mark as broadcasted
+    recentlyBroadcastedTxs.put(txHash, System.currentTimeMillis());
+    return true;
+  }
 
-        // Mark as seen
-        recentlySeenTxs.put(txHash, System.currentTimeMillis());
-        return true;
+  /**
+   * Broadcast a transaction to all peers (excluding sender)
+   *
+   * <p>This is the main broadcast method used by the transaction pool.
+   * It implements the <b>sender exclusion</b> logic to prevent immediate loops.
+   *
+   * <h3>Broadcast Flow</h3>
+   * <pre>
+   * 1. Check if already broadcasted recently → skip if yes
+   * 2. Create NEW_TRANSACTION message (with default TTL=5)
+   * 3. Send to all active peers (except sender)
+   * 4. Log statistics
+   * </pre>
+   *
+   * @param tx             transaction to broadcast
+   * @param excludeChannel channel to exclude (sender), or null to broadcast to all
+   */
+  public void broadcastTransaction(Transaction tx, Channel excludeChannel) {
+    Bytes32 txHash = tx.getHash();
+
+    // Check if we should broadcast (prevents re-broadcast)
+    if (!shouldBroadcast(txHash)) {
+      return;
     }
 
-    /**
-     * Check if a transaction should be broadcasted
-     *
-     * <p>This method checks if we've already broadcasted this transaction recently.
-     * If yes, we skip to prevent spamming the network.
-     *
-     * @param txHash transaction hash
-     * @return true if should broadcast, false if already broadcasted
-     */
-    public boolean shouldBroadcast(Bytes32 txHash) {
-        // Check if we've broadcasted this transaction recently
-        if (recentlyBroadcastedTxs.getIfPresent(txHash) != null) {
-            log.trace("Transaction {} already broadcasted, skipping",
-                    txHash.toHexString().substring(0, 16) + "...");
-            return false;
-        }
+    // Create broadcast message with default TTL
+    NewTransactionMessage message = new NewTransactionMessage(tx);
 
-        // Mark as broadcasted
-        recentlyBroadcastedTxs.put(txHash, System.currentTimeMillis());
-        return true;
+    // Broadcast using the message object
+    broadcastTransactionMessage(message, excludeChannel);
+  }
+
+  /**
+   * Broadcast a transaction message to all peers (excluding sender)
+   *
+   * <p>This method is used for forwarding received transactions with custom TTL.
+   * It bypasses the broadcast cache check since the message may have been received from another
+   * peer and needs to be forwarded.
+   *
+   * @param message        transaction message with custom TTL
+   * @param excludeChannel channel to exclude (sender), or null to broadcast to all
+   */
+  public void broadcastTransactionMessage(NewTransactionMessage message, Channel excludeChannel) {
+    if (p2pService == null) {
+      log.trace("P2P service not available, cannot broadcast transaction");
+      return;
     }
 
-    /**
-     * Broadcast a transaction to all peers (excluding sender)
-     *
-     * <p>This is the main broadcast method used by the transaction pool.
-     * It implements the <b>sender exclusion</b> logic to prevent immediate loops.
-     *
-     * <h3>Broadcast Flow</h3>
-     * <pre>
-     * 1. Check if already broadcasted recently → skip if yes
-     * 2. Create NEW_TRANSACTION message (with default TTL=5)
-     * 3. Send to all active peers (except sender)
-     * 4. Log statistics
-     * </pre>
-     *
-     * @param tx transaction to broadcast
-     * @param excludeChannel channel to exclude (sender), or null to broadcast to all
-     */
-    public void broadcastTransaction(Transaction tx, Channel excludeChannel) {
-        Bytes32 txHash = tx.getHash();
+    Transaction tx = message.getTransaction();
+    Bytes32 txHash = tx.getHash();
+    int ttl = message.getTtl();
 
-        // Check if we should broadcast (prevents re-broadcast)
-        if (!shouldBroadcast(txHash)) {
-            return;
-        }
-
-        // Create broadcast message with default TTL
-        NewTransactionMessage message = new NewTransactionMessage(tx);
-
-        // Broadcast using the message object
-        broadcastTransactionMessage(message, excludeChannel);
+    // Get all active channels
+    List<Channel> channels = getActiveChannels();
+    if (channels.isEmpty()) {
+      log.trace("No active peers to broadcast transaction {} (TTL={})",
+          txHash.toHexString().substring(0, 16) + "...",
+          ttl);
+      return;
     }
 
-    /**
-     * Broadcast a transaction message to all peers (excluding sender)
-     *
-     * <p>This method is used for forwarding received transactions with custom TTL.
-     * It bypasses the broadcast cache check since the message may have been received
-     * from another peer and needs to be forwarded.
-     *
-     * @param message transaction message with custom TTL
-     * @param excludeChannel channel to exclude (sender), or null to broadcast to all
-     */
-    public void broadcastTransactionMessage(NewTransactionMessage message, Channel excludeChannel) {
-        if (p2pService == null) {
-            log.trace("P2P service not available, cannot broadcast transaction");
-            return;
-        }
-
-        Transaction tx = message.getTransaction();
-        Bytes32 txHash = tx.getHash();
-        int ttl = message.getTtl();
-
-        // Get all active channels
-        List<Channel> channels = getActiveChannels();
-        if (channels.isEmpty()) {
-            log.trace("No active peers to broadcast transaction {} (TTL={})",
-                    txHash.toHexString().substring(0, 16) + "...",
-                    ttl);
-            return;
-        }
-
-        // Broadcast to all peers (excluding sender)
-        int broadcastCount = 0;
-        for (Channel channel : channels) {
-            if (channel != excludeChannel) {
-                try {
-                    channel.send(message);
-                    broadcastCount++;
-                } catch (Exception e) {
-                    log.warn("Failed to broadcast transaction {} to peer {}: {}",
-                            txHash.toHexString().substring(0, 16) + "...",
-                            channel.getRemoteAddress(),
-                            e.getMessage());
-                }
-            }
-        }
-
-        if (broadcastCount > 0) {
-            log.debug("Broadcasted transaction {} to {} peers (TTL={})",
-                    txHash.toHexString().substring(0, 16) + "...",
-                    broadcastCount,
-                    ttl);
-        } else {
-            log.trace("No active peers to broadcast transaction {} (TTL={})",
-                    txHash.toHexString().substring(0, 16) + "...",
-                    ttl);
-        }
-    }
-
-    /**
-     * Get list of active channels from P2P service
-     *
-     * @return list of active channels
-     */
-    private List<Channel> getActiveChannels() {
-        if (p2pService == null) {
-            return new ArrayList<>();
-        }
-
+    // Broadcast to all peers (excluding sender)
+    int broadcastCount = 0;
+    for (Channel channel : channels) {
+      if (channel != excludeChannel) {
         try {
-            io.xdag.p2p.channel.ChannelManager channelManager = p2pService.getChannelManager();
-            if (channelManager == null) {
-                return new ArrayList<>();
-            }
-
-            java.util.Map<java.net.InetSocketAddress, Channel> channels =
-                    channelManager.getChannels();
-
-            if (channels == null || channels.isEmpty()) {
-                return new ArrayList<>();
-            }
-
-            return new ArrayList<>(channels.values());
-
+          channel.send(message);
+          broadcastCount++;
         } catch (Exception e) {
-            log.error("Error getting active channels", e);
-            return new ArrayList<>();
+          log.warn("Failed to broadcast transaction {} to peer {}: {}",
+              txHash.toHexString().substring(0, 16) + "...",
+              channel.getRemoteAddress(),
+              e.getMessage());
         }
+      }
     }
 
-    /**
-     * Get cache statistics
-     *
-     * @return human-readable statistics string
-     */
-    public String getStatistics() {
-        long seenSize = recentlySeenTxs.estimatedSize();
-        long broadcastSize = recentlyBroadcastedTxs.estimatedSize();
+    if (broadcastCount > 0) {
+      log.debug("Broadcasted transaction {} to {} peers (TTL={})",
+          txHash.toHexString().substring(0, 16) + "...",
+          broadcastCount,
+          ttl);
+    } else {
+      log.trace("No active peers to broadcast transaction {} (TTL={})",
+          txHash.toHexString().substring(0, 16) + "...",
+          ttl);
+    }
+  }
 
-        return String.format(
-                "TransactionBroadcastManager Stats: seen=%d, broadcasted=%d",
-                seenSize, broadcastSize
-        );
+  /**
+   * Get list of active channels from P2P service
+   *
+   * @return list of active channels
+   */
+  private List<Channel> getActiveChannels() {
+    if (p2pService == null) {
+      return new ArrayList<>();
     }
 
-    /**
-     * Clear all caches (for testing)
-     */
-    public void clear() {
-        recentlySeenTxs.invalidateAll();
-        recentlyBroadcastedTxs.invalidateAll();
-        log.info("TransactionBroadcastManager caches cleared");
+    try {
+      io.xdag.p2p.channel.ChannelManager channelManager = p2pService.getChannelManager();
+      if (channelManager == null) {
+        return new ArrayList<>();
+      }
+
+      java.util.Map<java.net.InetSocketAddress, Channel> channels =
+          channelManager.getChannels();
+
+      if (channels == null || channels.isEmpty()) {
+        return new ArrayList<>();
+      }
+
+      return new ArrayList<>(channels.values());
+
+    } catch (Exception e) {
+      log.error("Error getting active channels", e);
+      return new ArrayList<>();
     }
+  }
+
+  /**
+   * Get cache statistics
+   *
+   * @return human-readable statistics string
+   */
+  public String getStatistics() {
+    long seenSize = recentlySeenTxs.estimatedSize();
+    long broadcastSize = recentlyBroadcastedTxs.estimatedSize();
+
+    return String.format(
+        "TransactionBroadcastManager Stats: seen=%d, broadcasted=%d",
+        seenSize, broadcastSize
+    );
+  }
+
+  /**
+   * Clear all caches (for testing)
+   */
+  public void clear() {
+    recentlySeenTxs.invalidateAll();
+    recentlyBroadcastedTxs.invalidateAll();
+    log.info("TransactionBroadcastManager caches cleared");
+  }
 }

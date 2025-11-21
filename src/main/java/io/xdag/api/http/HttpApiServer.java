@@ -40,147 +40,148 @@ import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.xdag.DagKernel;
-import io.xdag.config.spec.HttpSpec;
 import io.xdag.api.http.auth.ApiKeyStore;
 import io.xdag.api.http.auth.Permission;
+import io.xdag.config.spec.HttpSpec;
 import java.io.File;
 import java.net.InetAddress;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class HttpApiServer {
-    private final HttpSpec httpSpec;
-    private final DagKernel dagKernel;
-    private final ApiKeyStore apiKeyStore;
-    private Channel channel;
-    private EventLoopGroup bossGroup;
-    private EventLoopGroup workerGroup;
 
-    public HttpApiServer(final HttpSpec httpSpec, final DagKernel dagKernel) {
-        this.httpSpec = httpSpec;
-        this.dagKernel = dagKernel;
-        this.apiKeyStore = initApiKeyStore();
+  private final HttpSpec httpSpec;
+  private final DagKernel dagKernel;
+  private final ApiKeyStore apiKeyStore;
+  private Channel channel;
+  private EventLoopGroup bossGroup;
+  private EventLoopGroup workerGroup;
+
+  public HttpApiServer(final HttpSpec httpSpec, final DagKernel dagKernel) {
+    this.httpSpec = httpSpec;
+    this.dagKernel = dagKernel;
+    this.apiKeyStore = initApiKeyStore();
+  }
+
+  private ApiKeyStore initApiKeyStore() {
+    boolean authEnabled = httpSpec.isRpcHttpAuthEnabled();
+    ApiKeyStore store = new ApiKeyStore(authEnabled);
+
+    if (authEnabled) {
+      String[] apiKeys = httpSpec.getRpcHttpApiKeys();
+      if (apiKeys != null && apiKeys.length > 0) {
+        for (String keyConfig : apiKeys) {
+          String[] parts = keyConfig.split(":");
+          if (parts.length == 2) {
+            String key = parts[0];
+            Permission permission = Permission.valueOf(parts[1].toUpperCase());
+            store.addApiKey(key, permission);
+          }
+        }
+      }
+      log.info("API authentication enabled");
+    } else {
+      log.info("API authentication disabled");
     }
 
-    private ApiKeyStore initApiKeyStore() {
-        boolean authEnabled = httpSpec.isRpcHttpAuthEnabled();
-        ApiKeyStore store = new ApiKeyStore(authEnabled);
+    return store;
+  }
 
-        if (authEnabled) {
-            String[] apiKeys = httpSpec.getRpcHttpApiKeys();
-            if (apiKeys != null && apiKeys.length > 0) {
-                for (String keyConfig : apiKeys) {
-                    String[] parts = keyConfig.split(":");
-                    if (parts.length == 2) {
-                        String key = parts[0];
-                        Permission permission = Permission.valueOf(parts[1].toUpperCase());
-                        store.addApiKey(key, permission);
-                    }
-                }
+  public void start() {
+    try {
+      bossGroup = new MultiThreadIoEventLoopGroup(httpSpec.getRpcHttpBossThreads(),
+          NioIoHandler.newFactory());
+      workerGroup = new MultiThreadIoEventLoopGroup(httpSpec.getRpcHttpWorkerThreads(),
+          NioIoHandler.newFactory());
+
+      final SslContext sslCtx = initSslContext();
+
+      ServerBootstrap b = new ServerBootstrap();
+      b.group(bossGroup, workerGroup)
+          .channel(NioServerSocketChannel.class)
+          .handler(new LoggingHandler(LogLevel.INFO))
+          .childOption(ChannelOption.SO_KEEPALIVE, true)
+          .childHandler(new ChannelInitializer<SocketChannel>() {
+            @Override
+            protected void initChannel(SocketChannel ch) {
+              ChannelPipeline p = ch.pipeline();
+
+              if (sslCtx != null) {
+                p.addLast(sslCtx.newHandler(ch.alloc()));
+              }
+
+              p.addLast(new HttpServerCodec());
+              p.addLast(new HttpObjectAggregator(httpSpec.getRpcHttpMaxContentLength()));
+              p.addLast(new CorsHandler(httpSpec.getRpcHttpCorsOrigins()));
+              p.addLast(new HttpApiHandler(dagKernel, apiKeyStore));
             }
-            log.info("API authentication enabled");
-        } else {
-            log.info("API authentication disabled");
-        }
+          });
 
-        return store;
+      String protocol = sslCtx != null ? "https" : "http";
+      log.info("Starting HTTP API server on {}://{}:{}",
+          protocol, httpSpec.getRpcHttpHost(), httpSpec.getRpcHttpPort());
+
+      channel = b.bind(InetAddress.getByName(httpSpec.getRpcHttpHost()),
+          httpSpec.getRpcHttpPort()).sync().channel();
+
+      log.info("HTTP API server started successfully");
+      log.info("  - RESTful API:  {}://{}:{}/api/v1/",
+          protocol, httpSpec.getRpcHttpHost(), httpSpec.getRpcHttpPort());
+
+    } catch (Exception e) {
+      stop();
+      throw new RuntimeException("Failed to start HTTP API server", e);
+    }
+  }
+
+  private SslContext initSslContext() {
+    if (!httpSpec.isRpcEnableHttps()) {
+      return null;
     }
 
-    public void start() {
-        try {
-            bossGroup = new MultiThreadIoEventLoopGroup(httpSpec.getRpcHttpBossThreads(),
-                NioIoHandler.newFactory());
-            workerGroup = new MultiThreadIoEventLoopGroup(httpSpec.getRpcHttpWorkerThreads(),
-                NioIoHandler.newFactory());
+    try {
+      String certFile = httpSpec.getRpcHttpsCertFile();
+      String keyFile = httpSpec.getRpcHttpsKeyFile();
 
-            final SslContext sslCtx = initSslContext();
+      if (certFile == null || keyFile == null) {
+        log.warn("HTTPS enabled but cert/key files not configured, falling back to HTTP");
+        return null;
+      }
 
-            ServerBootstrap b = new ServerBootstrap();
-            b.group(bossGroup, workerGroup)
-                    .channel(NioServerSocketChannel.class)
-                    .handler(new LoggingHandler(LogLevel.INFO))
-                    .childOption(ChannelOption.SO_KEEPALIVE, true)
-                    .childHandler(new ChannelInitializer<SocketChannel>() {
-                        @Override
-                        protected void initChannel(SocketChannel ch) {
-                            ChannelPipeline p = ch.pipeline();
+      File cert = new File(certFile);
+      File key = new File(keyFile);
 
-                            if (sslCtx != null) {
-                                p.addLast(sslCtx.newHandler(ch.alloc()));
-                            }
+      if (!cert.exists() || !key.exists()) {
+        log.warn("HTTPS cert/key files not found, falling back to HTTP");
+        return null;
+      }
 
-                            p.addLast(new HttpServerCodec());
-                            p.addLast(new HttpObjectAggregator(httpSpec.getRpcHttpMaxContentLength()));
-                            p.addLast(new CorsHandler(httpSpec.getRpcHttpCorsOrigins()));
-                            p.addLast(new HttpApiHandler(dagKernel, apiKeyStore));
-                        }
-                    });
+      log.info("Initializing HTTPS with cert: {}", certFile);
+      return SslContextBuilder.forServer(cert, key).build();
+    } catch (Exception e) {
+      log.error("Failed to initialize SSL context, falling back to HTTP", e);
+      return null;
+    }
+  }
 
-            String protocol = sslCtx != null ? "https" : "http";
-            log.info("Starting HTTP API server on {}://{}:{}",
-                protocol, httpSpec.getRpcHttpHost(), httpSpec.getRpcHttpPort());
+  public void stop() {
+    log.info("Stopping HTTP API server...");
 
-            channel = b.bind(InetAddress.getByName(httpSpec.getRpcHttpHost()),
-                httpSpec.getRpcHttpPort()).sync().channel();
-
-            log.info("HTTP API server started successfully");
-            log.info("  - RESTful API:  {}://{}:{}/api/v1/",
-                protocol, httpSpec.getRpcHttpHost(), httpSpec.getRpcHttpPort());
-
-        } catch (Exception e) {
-            stop();
-            throw new RuntimeException("Failed to start HTTP API server", e);
-        }
+    if (channel != null) {
+      channel.close();
+      channel = null;
     }
 
-    private SslContext initSslContext() {
-        if (!httpSpec.isRpcEnableHttps()) {
-            return null;
-        }
-
-        try {
-            String certFile = httpSpec.getRpcHttpsCertFile();
-            String keyFile = httpSpec.getRpcHttpsKeyFile();
-
-            if (certFile == null || keyFile == null) {
-                log.warn("HTTPS enabled but cert/key files not configured, falling back to HTTP");
-                return null;
-            }
-
-            File cert = new File(certFile);
-            File key = new File(keyFile);
-
-            if (!cert.exists() || !key.exists()) {
-                log.warn("HTTPS cert/key files not found, falling back to HTTP");
-                return null;
-            }
-
-            log.info("Initializing HTTPS with cert: {}", certFile);
-            return SslContextBuilder.forServer(cert, key).build();
-        } catch (Exception e) {
-            log.error("Failed to initialize SSL context, falling back to HTTP", e);
-            return null;
-        }
+    if (bossGroup != null) {
+      bossGroup.shutdownGracefully();
+      bossGroup = null;
     }
 
-    public void stop() {
-        log.info("Stopping HTTP API server...");
-
-        if (channel != null) {
-            channel.close();
-            channel = null;
-        }
-
-        if (bossGroup != null) {
-            bossGroup.shutdownGracefully();
-            bossGroup = null;
-        }
-
-        if (workerGroup != null) {
-            workerGroup.shutdownGracefully();
-            workerGroup = null;
-        }
-
-        log.info("HTTP API server stopped");
+    if (workerGroup != null) {
+      workerGroup.shutdownGracefully();
+      workerGroup = null;
     }
+
+    log.info("HTTP API server stopped");
+  }
 }

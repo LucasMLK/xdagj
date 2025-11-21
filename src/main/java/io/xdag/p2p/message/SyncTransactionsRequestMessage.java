@@ -25,12 +25,11 @@ package io.xdag.p2p.message;
 
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.tuweni.bytes.Bytes32;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * SyncTransactionsRequestMessage - Batch request transactions by hash list
@@ -38,8 +37,8 @@ import java.util.List;
  * <p>Hybrid Sync Protocol - Transactions Batch Request (0x25)
  *
  * <p><strong>Purpose</strong>:
- * Request a batch of transactions by their hash list. Used during the
- * Solidification phase to fill missing transactions after block sync.
+ * Request a batch of transactions by their hash list. Used during the Solidification phase to fill
+ * missing transactions after block sync.
  *
  * <p><strong>Message Format</strong>:
  * <pre>
@@ -114,82 +113,82 @@ import java.util.List;
 @Setter
 public class SyncTransactionsRequestMessage extends Message {
 
-    /**
-     * List of transaction hashes to request
-     */
-    private List<Bytes32> hashes;
+  /**
+   * List of transaction hashes to request
+   */
+  private List<Bytes32> hashes;
 
-    /**
-     * Constructor for receiving message from network
-     *
-     * <p>Deserializes message body:
-     * <ol>
-     *   <li>Read hashCount (int, 4 bytes)</li>
-     *   <li>For each hash: read 32 bytes</li>
-     * </ol>
-     *
-     * @param body serialized message body
-     * @throws IllegalArgumentException if deserialization fails
-     */
-    public SyncTransactionsRequestMessage(byte[] body) {
-        super(XdagMessageCode.SYNC_TRANSACTIONS_REQUEST, SyncTransactionsReplyMessage.class);
+  /**
+   * Constructor for receiving message from network
+   *
+   * <p>Deserializes message body:
+   * <ol>
+   *   <li>Read hashCount (int, 4 bytes)</li>
+   *   <li>For each hash: read 32 bytes</li>
+   * </ol>
+   *
+   * @param body serialized message body
+   * @throws IllegalArgumentException if deserialization fails
+   */
+  public SyncTransactionsRequestMessage(byte[] body) {
+    super(XdagMessageCode.SYNC_TRANSACTIONS_REQUEST, SyncTransactionsReplyMessage.class);
 
-        SimpleDecoder dec = new SimpleDecoder(body);
+    SimpleDecoder dec = new SimpleDecoder(body);
 
-        // Deserialize hash count
-        int hashCount = dec.readInt();
-        this.hashes = new ArrayList<>(hashCount);
+    // Deserialize hash count
+    int hashCount = dec.readInt();
+    this.hashes = new ArrayList<>(hashCount);
 
-        // Deserialize each hash (32 bytes)
-        for (int i = 0; i < hashCount; i++) {
-            byte[] hashBytes = new byte[32];
-            dec.readBytes(hashBytes);
-            this.hashes.add(Bytes32.wrap(hashBytes));
-        }
-
-        // Set body for reference
-        this.body = body;
+    // Deserialize each hash (32 bytes)
+    for (int i = 0; i < hashCount; i++) {
+      byte[] hashBytes = new byte[32];
+      dec.readBytes(hashBytes);
+      this.hashes.add(Bytes32.wrap(hashBytes));
     }
 
-    /**
-     * Constructor for sending message to network
-     *
-     * <p>Serializes message:
-     * <ol>
-     *   <li>Write hashCount (int, 4 bytes)</li>
-     *   <li>For each hash: write 32 bytes</li>
-     * </ol>
-     *
-     * @param hashes list of transaction hashes to request
-     */
-    public SyncTransactionsRequestMessage(List<Bytes32> hashes) {
-        super(XdagMessageCode.SYNC_TRANSACTIONS_REQUEST, SyncTransactionsReplyMessage.class);
+    // Set body for reference
+    this.body = body;
+  }
 
-        this.hashes = hashes;
+  /**
+   * Constructor for sending message to network
+   *
+   * <p>Serializes message:
+   * <ol>
+   *   <li>Write hashCount (int, 4 bytes)</li>
+   *   <li>For each hash: write 32 bytes</li>
+   * </ol>
+   *
+   * @param hashes list of transaction hashes to request
+   */
+  public SyncTransactionsRequestMessage(List<Bytes32> hashes) {
+    super(XdagMessageCode.SYNC_TRANSACTIONS_REQUEST, SyncTransactionsReplyMessage.class);
 
-        // Serialize message body
-        SimpleEncoder enc = new SimpleEncoder();
-        encode(enc);
-        this.body = enc.toBytes();
+    this.hashes = hashes;
+
+    // Serialize message body
+    SimpleEncoder enc = new SimpleEncoder();
+    encode(enc);
+    this.body = enc.toBytes();
+  }
+
+  @Override
+  public void encode(SimpleEncoder enc) {
+    // Serialize hash count
+    enc.writeInt(hashes.size());
+
+    // Serialize each hash (32 bytes)
+    for (Bytes32 hash : hashes) {
+      enc.write(hash.toArray());
     }
+  }
 
-    @Override
-    public void encode(SimpleEncoder enc) {
-        // Serialize hash count
-        enc.writeInt(hashes.size());
-
-        // Serialize each hash (32 bytes)
-        for (Bytes32 hash : hashes) {
-            enc.write(hash.toArray());
-        }
-    }
-
-    @Override
-    public String toString() {
-        return String.format(
-            "SyncTransactionsRequestMessage[hashes=%d, size=%d bytes]",
-            hashes != null ? hashes.size() : 0,
-            body != null ? body.length : 0
-        );
-    }
+  @Override
+  public String toString() {
+    return String.format(
+        "SyncTransactionsRequestMessage[hashes=%d, size=%d bytes]",
+        hashes != null ? hashes.size() : 0,
+        body != null ? body.length : 0
+    );
+  }
 }

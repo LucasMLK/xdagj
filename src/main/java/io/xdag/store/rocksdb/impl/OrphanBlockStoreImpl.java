@@ -38,107 +38,106 @@ import org.bouncycastle.util.encoders.Hex;
 /**
  * OrphanBlockStore implementation
  * <p>
- * Stores orphan blocks with their timestamps.
- * Returns Bytes32 hashes instead of Address objects.
+ * Stores orphan blocks with their timestamps. Returns Bytes32 hashes instead of Address objects.
  */
 @Slf4j
 public class OrphanBlockStoreImpl implements OrphanBlockStore {
 
 
-    // <hash,nexthash>
-    private final KVSource<byte[], byte[]> orphanSource;
+  // <hash,nexthash>
+  private final KVSource<byte[], byte[]> orphanSource;
 
-    public OrphanBlockStoreImpl(KVSource<byte[], byte[]> orphan) {
-        this.orphanSource = orphan;
+  public OrphanBlockStoreImpl(KVSource<byte[], byte[]> orphan) {
+    this.orphanSource = orphan;
+  }
+
+  public void start() {
+    this.orphanSource.init();
+    if (orphanSource.get(ORPHAN_SIZE) == null) {
+      this.orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(0, false));
     }
+  }
 
-    public void start() {
-        this.orphanSource.init();
-        if (orphanSource.get(ORPHAN_SIZE) == null) {
-            this.orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(0, false));
+  @Override
+  public void stop() {
+    orphanSource.close();
+  }
+
+  @Override
+  public boolean isRunning() {
+    return false;
+  }
+
+  public void reset() {
+    this.orphanSource.reset();
+    this.orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(0, false));
+  }
+
+  /**
+   * Get orphan block hashes
+   * <p>
+   * Returns list of Bytes32 hashes instead of Address objects. Filters by timestamp and returns up
+   * to 'num' orphans.
+   */
+  public List<Bytes32> getOrphan(long num, long[] sendtime) {
+    List<Bytes32> res = Lists.newArrayList();
+    if (orphanSource.get(ORPHAN_SIZE) == null || getOrphanSize() == 0) {
+      return null;
+    } else {
+      long orphanSize = getOrphanSize();
+      long addNum = Math.min(orphanSize, num);
+      byte[] key = BytesUtils.of(ORPHAN_PREFEX);
+      List<Pair<byte[], byte[]>> ans = orphanSource.prefixKeyAndValueLookup(key);
+      ans.sort(Comparator.comparingLong(a -> BytesUtils.bytesToLong(a.getValue(), 0, true)));
+      for (Pair<byte[], byte[]> an : ans) {
+        if (addNum == 0) {
+          break;
         }
-    }
-
-    @Override
-    public void stop() {
-        orphanSource.close();
-    }
-
-    @Override
-    public boolean isRunning() {
-        return false;
-    }
-
-    public void reset() {
-        this.orphanSource.reset();
-        this.orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(0, false));
-    }
-
-    /**
-     * Get orphan block hashes
-     * <p>
-     * Returns list of Bytes32 hashes instead of Address objects.
-     * Filters by timestamp and returns up to 'num' orphans.
-     */
-    public List<Bytes32> getOrphan(long num, long[] sendtime) {
-        List<Bytes32> res = Lists.newArrayList();
-        if (orphanSource.get(ORPHAN_SIZE) == null || getOrphanSize() == 0) {
-            return null;
-        } else {
-            long orphanSize = getOrphanSize();
-            long addNum = Math.min(orphanSize, num);
-            byte[] key = BytesUtils.of(ORPHAN_PREFEX);
-            List<Pair<byte[],byte[]>> ans = orphanSource.prefixKeyAndValueLookup(key);
-            ans.sort(Comparator.comparingLong(a -> BytesUtils.bytesToLong(a.getValue(), 0, true)));
-            for (Pair<byte[],byte[]> an : ans) {
-                if (addNum == 0) {
-                    break;
-                }
-                // Null check added to handle missing values
-                if (an.getValue() == null) {
-                    continue;
-                }
-                long time =  BytesUtils.bytesToLong(an.getValue(), 0, true);
-                if (time <= sendtime[0]) {
-                    addNum--;
-                    //  Return Bytes32 hash directly (skip prefix byte)
-                    res.add(Bytes32.wrap(an.getKey(), 1));
-                    sendtime[1] = Math.max(sendtime[1],time);
-                }
-            }
-            sendtime[1] = Math.min(sendtime[1]+1,sendtime[0]);
-            return res;
+        // Null check added to handle missing values
+        if (an.getValue() == null) {
+          continue;
         }
+        long time = BytesUtils.bytesToLong(an.getValue(), 0, true);
+        if (time <= sendtime[0]) {
+          addNum--;
+          //  Return Bytes32 hash directly (skip prefix byte)
+          res.add(Bytes32.wrap(an.getKey(), 1));
+          sendtime[1] = Math.max(sendtime[1], time);
+        }
+      }
+      sendtime[1] = Math.min(sendtime[1] + 1, sendtime[0]);
+      return res;
     }
+  }
 
-    public void deleteByHash(byte[] hash) {
-        log.debug("deleteByHash");
-        orphanSource.delete(BytesUtils.merge(ORPHAN_PREFEX, hash));
-        long currentsize = BytesUtils.bytesToLong(orphanSource.get(ORPHAN_SIZE), 0, false);
-        orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(currentsize - 1, false));
-    }
+  public void deleteByHash(byte[] hash) {
+    log.debug("deleteByHash");
+    orphanSource.delete(BytesUtils.merge(ORPHAN_PREFEX, hash));
+    long currentsize = BytesUtils.bytesToLong(orphanSource.get(ORPHAN_SIZE), 0, false);
+    orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(currentsize - 1, false));
+  }
 
-    /**
-     * Add orphan block to queue
-     *
-     * @param hash orphan block hash (Bytes32)
-     * @param timestamp block timestamp
-     */
-    @Override
-    public void addOrphan(Bytes32 hash, long timestamp) {
-        orphanSource.put(BytesUtils.merge(ORPHAN_PREFEX, hash.toArray()),
-                BytesUtils.longToBytes(timestamp, true));
-        long currentsize = BytesUtils.bytesToLong(orphanSource.get(ORPHAN_SIZE), 0, false);
-        orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(currentsize + 1, false));
-        log.debug("Added orphan block {}: timestamp={}, queue size={}",
-                hash.toHexString().substring(0, 16), timestamp, currentsize + 1);
-    }
+  /**
+   * Add orphan block to queue
+   *
+   * @param hash      orphan block hash (Bytes32)
+   * @param timestamp block timestamp
+   */
+  @Override
+  public void addOrphan(Bytes32 hash, long timestamp) {
+    orphanSource.put(BytesUtils.merge(ORPHAN_PREFEX, hash.toArray()),
+        BytesUtils.longToBytes(timestamp, true));
+    long currentsize = BytesUtils.bytesToLong(orphanSource.get(ORPHAN_SIZE), 0, false);
+    orphanSource.put(ORPHAN_SIZE, BytesUtils.longToBytes(currentsize + 1, false));
+    log.debug("Added orphan block {}: timestamp={}, queue size={}",
+        hash.toHexString().substring(0, 16), timestamp, currentsize + 1);
+  }
 
-    public long getOrphanSize() {
-        long currentsize = BytesUtils.bytesToLong(orphanSource.get(ORPHAN_SIZE), 0, false);
-        log.debug("current orphan size:{}", currentsize);
-        log.debug("Hex:{}", Hex.toHexString(orphanSource.get(ORPHAN_SIZE)));
-        return currentsize;
-    }
+  public long getOrphanSize() {
+    long currentsize = BytesUtils.bytesToLong(orphanSource.get(ORPHAN_SIZE), 0, false);
+    log.debug("current orphan size:{}", currentsize);
+    log.debug("Hex:{}", Hex.toHexString(orphanSource.get(ORPHAN_SIZE)));
+    return currentsize;
+  }
 
 }

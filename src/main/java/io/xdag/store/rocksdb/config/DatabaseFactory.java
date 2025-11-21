@@ -28,10 +28,10 @@ import io.xdag.store.rocksdb.base.KVSource;
 
 public interface DatabaseFactory {
 
-    KVSource<byte[], byte[]> getDB(DatabaseName name);
+  KVSource<byte[], byte[]> getDB(DatabaseName name);
 
-    /**
-     * Close all opened resources.
-     */
-    void close();
+  /**
+   * Close all opened resources.
+   */
+  void close();
 }

@@ -34,8 +34,8 @@ import lombok.Data;
 @Builder
 public class ProtocolVersionResponse {
 
-    /**
-     * Protocol version (e.g., "5.1.0")
-     */
-    private String protocolVersion;
+  /**
+   * Protocol version (e.g., "5.1.0")
+   */
+  private String protocolVersion;
 }

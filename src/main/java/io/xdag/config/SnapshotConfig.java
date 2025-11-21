@@ -25,10 +25,9 @@
 package io.xdag.config;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import java.io.File;
 import lombok.Data;
 import org.apache.tuweni.bytes.Bytes32;
-
-import java.io.File;
 
 /**
  * SnapshotConfig - Configuration for importing old XDAG chain snapshots
@@ -86,222 +85,209 @@ import java.io.File;
 @Data
 public class SnapshotConfig {
 
-    /**
-     * Enable snapshot import
-     * Default: false (normal genesis block creation)
-     */
-    @JsonProperty("enabled")
-    private boolean enabled = false;
+  /**
+   * Enable snapshot import Default: false (normal genesis block creation)
+   */
+  @JsonProperty("enabled")
+  private boolean enabled = false;
 
-    /**
-     * Snapshot block height
-     * The main chain height at which the snapshot was taken
-     */
-    @JsonProperty("height")
-    private long height = 0;
+  /**
+   * Snapshot block height The main chain height at which the snapshot was taken
+   */
+  @JsonProperty("height")
+  private long height = 0;
 
-    /**
-     * Snapshot last block hash (hex string with 0x prefix)
-     * This is the hash of the last main block in the snapshot
-     * Used for integrity verification
-     */
-    @JsonProperty("hash")
-    private String hash = "0x0000000000000000000000000000000000000000000000000000000000000000";
+  /**
+   * Snapshot last block hash (hex string with 0x prefix) This is the hash of the last main block in
+   * the snapshot Used for integrity verification
+   */
+  @JsonProperty("hash")
+  private String hash = "0x0000000000000000000000000000000000000000000000000000000000000000";
 
-    /**
-     * Snapshot timestamp (Unix seconds)
-     * The timestamp of the last block in the snapshot
-     */
-    @JsonProperty("timestamp")
-    private long timestamp = 0;
+  /**
+   * Snapshot timestamp (Unix seconds) The timestamp of the last block in the snapshot
+   */
+  @JsonProperty("timestamp")
+  private long timestamp = 0;
 
-    /**
-     * Snapshot data file path
-     * Can be absolute or relative to config directory
-     *
-     * Expected format:
-     * - Binary format with magic header
-     * - Version info
-     * - Block data
-     * - Account balances
-     * - Main chain indexes
-     */
-    @JsonProperty("dataFile")
-    private String dataFile = "";
+  /**
+   * Snapshot data file path Can be absolute or relative to config directory
+   * <p>
+   * Expected format: - Binary format with magic header - Version info - Block data - Account
+   * balances - Main chain indexes
+   */
+  @JsonProperty("dataFile")
+  private String dataFile = "";
 
-    /**
-     * Verify snapshot data before import
-     * If enabled, will check hash matches after loading
-     * Default: true (recommended)
-     */
-    @JsonProperty("verify")
-    private boolean verify = true;
+  /**
+   * Verify snapshot data before import If enabled, will check hash matches after loading Default:
+   * true (recommended)
+   */
+  @JsonProperty("verify")
+  private boolean verify = true;
 
-    /**
-     * Snapshot format version
-     * - v1: Old XDAG binary format
-     * - v2: optimized format
-     */
-    @JsonProperty("format")
-    private String format = "v1";
+  /**
+   * Snapshot format version - v1: Old XDAG binary format - v2: optimized format
+   */
+  @JsonProperty("format")
+  private String format = "v1";
 
-    /**
-     * Expected number of accounts in snapshot
-     * Used for progress reporting and validation
-     * Optional (0 = unknown)
-     */
-    @JsonProperty("expectedAccounts")
-    private long expectedAccounts = 0;
+  /**
+   * Expected number of accounts in snapshot Used for progress reporting and validation Optional (0
+   * = unknown)
+   */
+  @JsonProperty("expectedAccounts")
+  private long expectedAccounts = 0;
 
-    /**
-     * Expected number of blocks in snapshot
-     * Used for progress reporting and validation
-     * Optional (0 = unknown)
-     */
-    @JsonProperty("expectedBlocks")
-    private long expectedBlocks = 0;
+  /**
+   * Expected number of blocks in snapshot Used for progress reporting and validation Optional (0 =
+   * unknown)
+   */
+  @JsonProperty("expectedBlocks")
+  private long expectedBlocks = 0;
 
-    // ========== Helper Methods ==========
+  // ========== Helper Methods ==========
 
-    /**
-     * Get snapshot hash as Bytes32
-     *
-     * @return snapshot hash
-     */
-    public Bytes32 getHashBytes32() {
-        String hex = hash.startsWith("0x") ? hash.substring(2) : hash;
-        return Bytes32.fromHexString(hex);
+  /**
+   * Get snapshot hash as Bytes32
+   *
+   * @return snapshot hash
+   */
+  public Bytes32 getHashBytes32() {
+    String hex = hash.startsWith("0x") ? hash.substring(2) : hash;
+    return Bytes32.fromHexString(hex);
+  }
+
+  /**
+   * Get snapshot data file as File object
+   *
+   * @return data file
+   */
+  public File getDataFileObject() {
+    return new File(dataFile);
+  }
+
+  /**
+   * Check if data file exists
+   *
+   * @return true if file exists and is readable
+   */
+  public boolean dataFileExists() {
+    if (dataFile == null || dataFile.isEmpty()) {
+      return false;
+    }
+    File file = getDataFileObject();
+    return file.exists() && file.isFile() && file.canRead();
+  }
+
+  /**
+   * Validate snapshot configuration
+   *
+   * @throws IllegalArgumentException if configuration is invalid
+   */
+  public void validate() {
+    if (!enabled) {
+      return;  // Skip validation if snapshot is disabled
     }
 
-    /**
-     * Get snapshot data file as File object
-     *
-     * @return data file
-     */
-    public File getDataFileObject() {
-        return new File(dataFile);
+    if (height <= 0) {
+      throw new IllegalArgumentException("Invalid snapshot height: " + height);
     }
 
-    /**
-     * Check if data file exists
-     *
-     * @return true if file exists and is readable
-     */
-    public boolean dataFileExists() {
-        if (dataFile == null || dataFile.isEmpty()) {
-            return false;
-        }
-        File file = getDataFileObject();
-        return file.exists() && file.isFile() && file.canRead();
+    if (timestamp <= 0) {
+      throw new IllegalArgumentException("Invalid snapshot timestamp: " + timestamp);
     }
 
-    /**
-     * Validate snapshot configuration
-     *
-     * @throws IllegalArgumentException if configuration is invalid
-     */
-    public void validate() {
-        if (!enabled) {
-            return;  // Skip validation if snapshot is disabled
-        }
-
-        if (height <= 0) {
-            throw new IllegalArgumentException("Invalid snapshot height: " + height);
-        }
-
-        if (timestamp <= 0) {
-            throw new IllegalArgumentException("Invalid snapshot timestamp: " + timestamp);
-        }
-
-        // Check timestamp is not in future
-        long now = System.currentTimeMillis() / 1000;
-        if (timestamp > now + 86400) {  // Allow 1 day tolerance for clock skew
-            throw new IllegalArgumentException("Snapshot timestamp is in future: " + timestamp);
-        }
-
-        // Validate hash format
-        if (!hash.matches("^0x[0-9a-fA-F]{64}$")) {
-            throw new IllegalArgumentException("Invalid snapshot hash format: " + hash);
-        }
-
-        // Check data file
-        if (dataFile == null || dataFile.isEmpty()) {
-            throw new IllegalArgumentException("Snapshot data file not specified");
-        }
-
-        if (!dataFileExists()) {
-            throw new IllegalArgumentException("Snapshot data file not found or not readable: " + dataFile);
-        }
-
-        // Validate format
-        if (!format.equals("v1") && !format.equals("v2")) {
-            throw new IllegalArgumentException("Unknown snapshot format: " + format);
-        }
+    // Check timestamp is not in future
+    long now = System.currentTimeMillis() / 1000;
+    if (timestamp > now + 86400) {  // Allow 1 day tolerance for clock skew
+      throw new IllegalArgumentException("Snapshot timestamp is in future: " + timestamp);
     }
 
-    /**
-     * Create a snapshot config for testing (minimal valid config)
-     *
-     * @return test snapshot config
-     */
-    public static SnapshotConfig createTestConfig() {
-        SnapshotConfig config = new SnapshotConfig();
-        config.setEnabled(false);  // Disabled by default for tests
-        config.setHeight(0);
-        config.setHash("0x0000000000000000000000000000000000000000000000000000000000000000");
-        config.setTimestamp(1516406400L);  // XDAG_ERA
-        config.setDataFile("");
-        config.setVerify(true);
-        config.setFormat("v1");
-        return config;
+    // Validate hash format
+    if (!hash.matches("^0x[0-9a-fA-F]{64}$")) {
+      throw new IllegalArgumentException("Invalid snapshot hash format: " + hash);
     }
 
-    /**
-     * Get progress percentage for snapshot import
-     *
-     * @param blocksLoaded number of blocks loaded so far
-     * @param accountsLoaded number of accounts loaded so far
-     * @return progress percentage (0-100), or -1 if unknown
-     */
-    public int getProgress(long blocksLoaded, long accountsLoaded) {
-        if (!enabled) {
-            return 100;
-        }
-
-        // If we have expected counts, calculate weighted progress
-        if (expectedBlocks > 0 && expectedAccounts > 0) {
-            double blockProgress = (double) blocksLoaded / expectedBlocks;
-            double accountProgress = (double) accountsLoaded / expectedAccounts;
-            // Weight: 70% blocks, 30% accounts
-            double weighted = (blockProgress * 0.7) + (accountProgress * 0.3);
-            return (int) Math.min(100, weighted * 100);
-        }
-
-        // If only blocks count is known
-        if (expectedBlocks > 0) {
-            return (int) Math.min(100, (blocksLoaded * 100) / expectedBlocks);
-        }
-
-        // Unknown progress
-        return -1;
+    // Check data file
+    if (dataFile == null || dataFile.isEmpty()) {
+      throw new IllegalArgumentException("Snapshot data file not specified");
     }
 
-    /**
-     * Get human-readable description
-     *
-     * @return description string
-     */
-    public String getDescription() {
-        if (!enabled) {
-            return "Snapshot import: disabled";
-        }
-
-        return String.format(
-                "Snapshot import: height=%d, hash=%s, timestamp=%d, file=%s",
-                height,
-                hash.substring(0, Math.min(10, hash.length())) + "...",
-                timestamp,
-                dataFile
-        );
+    if (!dataFileExists()) {
+      throw new IllegalArgumentException(
+          "Snapshot data file not found or not readable: " + dataFile);
     }
+
+    // Validate format
+    if (!format.equals("v1") && !format.equals("v2")) {
+      throw new IllegalArgumentException("Unknown snapshot format: " + format);
+    }
+  }
+
+  /**
+   * Create a snapshot config for testing (minimal valid config)
+   *
+   * @return test snapshot config
+   */
+  public static SnapshotConfig createTestConfig() {
+    SnapshotConfig config = new SnapshotConfig();
+    config.setEnabled(false);  // Disabled by default for tests
+    config.setHeight(0);
+    config.setHash("0x0000000000000000000000000000000000000000000000000000000000000000");
+    config.setTimestamp(1516406400L);  // XDAG_ERA
+    config.setDataFile("");
+    config.setVerify(true);
+    config.setFormat("v1");
+    return config;
+  }
+
+  /**
+   * Get progress percentage for snapshot import
+   *
+   * @param blocksLoaded   number of blocks loaded so far
+   * @param accountsLoaded number of accounts loaded so far
+   * @return progress percentage (0-100), or -1 if unknown
+   */
+  public int getProgress(long blocksLoaded, long accountsLoaded) {
+    if (!enabled) {
+      return 100;
+    }
+
+    // If we have expected counts, calculate weighted progress
+    if (expectedBlocks > 0 && expectedAccounts > 0) {
+      double blockProgress = (double) blocksLoaded / expectedBlocks;
+      double accountProgress = (double) accountsLoaded / expectedAccounts;
+      // Weight: 70% blocks, 30% accounts
+      double weighted = (blockProgress * 0.7) + (accountProgress * 0.3);
+      return (int) Math.min(100, weighted * 100);
+    }
+
+    // If only blocks count is known
+    if (expectedBlocks > 0) {
+      return (int) Math.min(100, (blocksLoaded * 100) / expectedBlocks);
+    }
+
+    // Unknown progress
+    return -1;
+  }
+
+  /**
+   * Get human-readable description
+   *
+   * @return description string
+   */
+  public String getDescription() {
+    if (!enabled) {
+      return "Snapshot import: disabled";
+    }
+
+    return String.format(
+        "Snapshot import: height=%d, hash=%s, timestamp=%d, file=%s",
+        height,
+        hash.substring(0, Math.min(10, hash.length())) + "...",
+        timestamp,
+        dataFile
+    );
+  }
 }

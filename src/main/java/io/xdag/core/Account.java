@@ -24,14 +24,13 @@
 
 package io.xdag.core;
 
+import java.nio.ByteBuffer;
 import lombok.Builder;
 import lombok.Value;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
-
-import java.nio.ByteBuffer;
 
 /**
  * Account - Account model for XDAG

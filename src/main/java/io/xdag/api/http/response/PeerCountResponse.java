@@ -34,8 +34,8 @@ import lombok.Data;
 @Builder
 public class PeerCountResponse {
 
-    /**
-     * Peer count (hex with 0x prefix)
-     */
-    private String peerCount;
+  /**
+   * Peer count (hex with 0x prefix)
+   */
+  private String peerCount;
 }

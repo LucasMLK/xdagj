@@ -23,48 +23,48 @@
  */
 package io.xdag.api.http.auth;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 @Slf4j
 public class ApiKeyStore {
-    private final Map<String, Permission> apiKeys = new ConcurrentHashMap<>();
-    @Getter
-    private final boolean authEnabled;
 
-    public ApiKeyStore(boolean authEnabled) {
-        this.authEnabled = authEnabled;
-    }
+  private final Map<String, Permission> apiKeys = new ConcurrentHashMap<>();
+  @Getter
+  private final boolean authEnabled;
 
-    public void addApiKey(String apiKey, Permission permission) {
-        apiKeys.put(apiKey, permission);
-        log.info("Added API key with {} permission", permission);
-    }
+  public ApiKeyStore(boolean authEnabled) {
+    this.authEnabled = authEnabled;
+  }
+
+  public void addApiKey(String apiKey, Permission permission) {
+    apiKeys.put(apiKey, permission);
+    log.info("Added API key with {} permission", permission);
+  }
 
   public Permission validate(String apiKey) {
-        if (!authEnabled) {
-            return Permission.WRITE;
-        }
-        return apiKeys.getOrDefault(apiKey, null);
+    if (!authEnabled) {
+      return Permission.WRITE;
+    }
+    return apiKeys.getOrDefault(apiKey, null);
+  }
+
+  public boolean hasPermission(String apiKey, Permission required) {
+    if (!authEnabled) {
+      return true;
     }
 
-    public boolean hasPermission(String apiKey, Permission required) {
-        if (!authEnabled) {
-            return true;
-        }
-
-        Permission granted = validate(apiKey);
-        if (granted == null) {
-            return false;
-        }
-
-        return switch (required) {
-            case PUBLIC -> true;
-            case READ -> granted == Permission.READ || granted == Permission.WRITE;
-            case WRITE -> granted == Permission.WRITE;
-        };
+    Permission granted = validate(apiKey);
+    if (granted == null) {
+      return false;
     }
+
+    return switch (required) {
+      case PUBLIC -> true;
+      case READ -> granted == Permission.READ || granted == Permission.WRITE;
+      case WRITE -> granted == Permission.WRITE;
+    };
+  }
 }

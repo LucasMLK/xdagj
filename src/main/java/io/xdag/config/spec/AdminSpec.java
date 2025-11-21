@@ -25,9 +25,8 @@
 package io.xdag.config.spec;
 
 /**
- * Interface for admin configuration specifications
- * Reserved for future admin-related configuration
+ * Interface for admin configuration specifications Reserved for future admin-related configuration
  */
 public interface AdminSpec {
-    // Admin configuration methods will be added here as needed
+  // Admin configuration methods will be added here as needed
 }

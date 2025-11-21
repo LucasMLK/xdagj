@@ -28,8 +28,7 @@ package io.xdag.core;
  * DAG Chain Event Listener
  *
  * <p>Interface for components that need to react to DAG chain state changes.
- * Listeners are notified when blocks are connected to or disconnected from
- * the main chain.
+ * Listeners are notified when blocks are connected to or disconnected from the main chain.
  *
  * <h2>Event Order</h2>
  * <p>Events are delivered in the order they occur:
@@ -65,30 +64,30 @@ package io.xdag.core;
  */
 public interface DagchainListener {
 
-    /**
-     * Called when a block is connected to the main chain.
-     *
-     * <p>This event is triggered after the block has been validated and
-     * added to the blockchain. The block is now part of the main chain.
-     *
-     * <p><strong>Important:</strong> This method should execute quickly.
-     * Perform heavy processing asynchronously.
-     *
-     * @param block The block that was connected
-     */
-    void onBlockConnected(Block block);
+  /**
+   * Called when a block is connected to the main chain.
+   *
+   * <p>This event is triggered after the block has been validated and
+   * added to the blockchain. The block is now part of the main chain.
+   *
+   * <p><strong>Important:</strong> This method should execute quickly.
+   * Perform heavy processing asynchronously.
+   *
+   * @param block The block that was connected
+   */
+  void onBlockConnected(Block block);
 
-    /**
-     * Called when a block is disconnected from the main chain.
-     *
-     * <p>This event is triggered during chain reorganizations when a block
-     * is removed from the main chain. Listeners should revert any state
-     * changes made in {@link #onBlockConnected}.
-     *
-     * <p><strong>Important:</strong> This method should execute quickly.
-     * Perform heavy processing asynchronously.
-     *
-     * @param block The block that was disconnected
-     */
-    void onBlockDisconnected(Block block);
+  /**
+   * Called when a block is disconnected from the main chain.
+   *
+   * <p>This event is triggered during chain reorganizations when a block
+   * is removed from the main chain. Listeners should revert any state changes made in
+   * {@link #onBlockConnected}.
+   *
+   * <p><strong>Important:</strong> This method should execute quickly.
+   * Perform heavy processing asynchronously.
+   *
+   * @param block The block that was disconnected
+   */
+  void onBlockDisconnected(Block block);
 }

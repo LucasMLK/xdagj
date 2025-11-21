@@ -34,30 +34,20 @@ import lombok.Setter;
  * <p>
  * Phase 3 - Network Layer Migration: This message enables Block synchronization over P2P network.
  * <p>
- * Design:
- * - Similar to SyncBlockMessage but uses Block instead of legacy Block
- * - Message format: [Block bytes] + [TTL (4 bytes)]
- * - Uses SYNC_BLOCK_V5 message code (0x1C)
+ * Design: - Similar to SyncBlockMessage but uses Block instead of legacy Block - Message format:
+ * [Block bytes] + [TTL (4 bytes)] - Uses SYNC_BLOCK_V5 message code (0x1C)
  * <p>
- * Difference from NewBlockMessage:
- * - NewBlockMessage: Used for broadcasting new blocks (active propagation)
- * - SyncBlockMessage: Used for synchronization (request/response)
+ * Difference from NewBlockMessage: - NewBlockMessage: Used for broadcasting new blocks (active
+ * propagation) - SyncBlockMessage: Used for synchronization (request/response)
  * <p>
- * Usage:
- * ```java
- * // Sending a Block during synchronization
- * SyncBlockMessage msg = new SyncBlockMessage(Block, 1);
- * channel.sendMessage(msg);
+ * Usage: ```java // Sending a Block during synchronization SyncBlockMessage msg = new
+ * SyncBlockMessage(Block, 1); channel.sendMessage(msg);
  * <p>
- * // Receiving a Block during sync
- * SyncBlockMessage msg = new SyncBlockMessage(messageBody);
- * Block block = msg.getBlock();
- * ```
+ * // Receiving a Block during sync SyncBlockMessage msg = new SyncBlockMessage(messageBody); Block
+ * block = msg.getBlock(); ```
  * <p>
- * Protocol Compatibility:
- * - v1 nodes use SYNC_BLOCK (0x19) with legacy Block
- * - v2 nodes use SYNC_BLOCK_V5 (0x1C) with Block
- * - Protocol negotiation determines which message type to use
+ * Protocol Compatibility: - v1 nodes use SYNC_BLOCK (0x19) with legacy Block - v2 nodes use
+ * SYNC_BLOCK_V5 (0x1C) with Block - Protocol negotiation determines which message type to use
  *
  * @see SyncBlockMessage for legacy Block version
  * @see NewBlockMessage for block broadcasting
@@ -67,91 +57,86 @@ import lombok.Setter;
 @Setter
 public class SyncBlockMessage extends Message {
 
-    /**
-     * Block instance (block structure)
-     */
-    private Block block;
+  /**
+   * Block instance (block structure)
+   */
+  private Block block;
 
-    /**
-     * Time-to-live: number of hops this message can propagate
-     * Usually set to 1 for sync messages (direct response)
-     */
-    private int ttl;
+  /**
+   * Time-to-live: number of hops this message can propagate Usually set to 1 for sync messages
+   * (direct response)
+   */
+  private int ttl;
 
-    /**
-     * Constructor for receiving message from network
-     * <p>
-     * Deserializes message body:
-     * 1. Read Block bytes
-     * 2. Deserialize Block using Block.fromBytes()
-     * 3. Read TTL (int, 4 bytes)
-     *
-     * @param body serialized message body
-     * @throws IllegalArgumentException if deserialization fails
-     */
-    public SyncBlockMessage(byte[] body) {
-        super(XdagMessageCode.SYNC_BLOCK, null);
+  /**
+   * Constructor for receiving message from network
+   * <p>
+   * Deserializes message body: 1. Read Block bytes 2. Deserialize Block using Block.fromBytes() 3.
+   * Read TTL (int, 4 bytes)
+   *
+   * @param body serialized message body
+   * @throws IllegalArgumentException if deserialization fails
+   */
+  public SyncBlockMessage(byte[] body) {
+    super(XdagMessageCode.SYNC_BLOCK, null);
 
-        SimpleDecoder dec = new SimpleDecoder(body);
+    SimpleDecoder dec = new SimpleDecoder(body);
 
-        // Deserialize Block
-        byte[] blockBytes = dec.readBytes();
-        this.block = Block.fromBytes(blockBytes);
+    // Deserialize Block
+    byte[] blockBytes = dec.readBytes();
+    this.block = Block.fromBytes(blockBytes);
 
-        // Deserialize TTL
-        this.ttl = dec.readInt();
+    // Deserialize TTL
+    this.ttl = dec.readInt();
 
-        // Set body for reference
-        this.body = body;
-    }
+    // Set body for reference
+    this.body = body;
+  }
 
-    /**
-     * Constructor for sending message to network
-     * <p>
-     * Serializes message:
-     * 1. Serialize Block using block.toBytes()
-     * 2. Append TTL (int, 4 bytes)
-     *
-     * @param block Block to synchronize
-     * @param ttl time-to-live (usually 1 for sync)
-     */
-    public SyncBlockMessage(Block block, int ttl) {
-        super(XdagMessageCode.SYNC_BLOCK, null);
+  /**
+   * Constructor for sending message to network
+   * <p>
+   * Serializes message: 1. Serialize Block using block.toBytes() 2. Append TTL (int, 4 bytes)
+   *
+   * @param block Block to synchronize
+   * @param ttl   time-to-live (usually 1 for sync)
+   */
+  public SyncBlockMessage(Block block, int ttl) {
+    super(XdagMessageCode.SYNC_BLOCK, null);
 
-        this.block = block;
-        this.ttl = ttl;
+    this.block = block;
+    this.ttl = ttl;
 
-        // Serialize message body
-        SimpleEncoder enc = new SimpleEncoder();
-        encode(enc);
-        this.body = enc.toBytes();
-    }
+    // Serialize message body
+    SimpleEncoder enc = new SimpleEncoder();
+    encode(enc);
+    this.body = enc.toBytes();
+  }
 
-    /**
-     * Encode message to bytes (implements Message.encode)
-     * <p>
-     * Format:
-     * [Block size (4 bytes)] + [Block bytes (variable)] + [TTL (4 bytes)]
-     *
-     * @param enc encoder to write data to
-     */
-    @Override
-    public void encode(SimpleEncoder enc) {
-        // Serialize Block
-        byte[] blockBytes = this.block.toBytes();
-        enc.writeBytes(blockBytes);
+  /**
+   * Encode message to bytes (implements Message.encode)
+   * <p>
+   * Format: [Block size (4 bytes)] + [Block bytes (variable)] + [TTL (4 bytes)]
+   *
+   * @param enc encoder to write data to
+   */
+  @Override
+  public void encode(SimpleEncoder enc) {
+    // Serialize Block
+    byte[] blockBytes = this.block.toBytes();
+    enc.writeBytes(blockBytes);
 
-        // Serialize TTL
-        enc.writeInt(ttl);
-    }
+    // Serialize TTL
+    enc.writeInt(ttl);
+  }
 
-    @Override
-    public String toString() {
-        return String.format(
-            "SyncBlockMessage[block=%s, ttl=%d, size=%d bytes]",
-            block != null ? block.getHash().toHexString().substring(0, 16) + "..." : "null",
-            ttl,
-            body != null ? body.length : 0
-        );
-    }
+  @Override
+  public String toString() {
+    return String.format(
+        "SyncBlockMessage[block=%s, ttl=%d, size=%d bytes]",
+        block != null ? block.getHash().toHexString().substring(0, 16) + "..." : "null",
+        ttl,
+        body != null ? body.length : 0
+    );
+  }
 }

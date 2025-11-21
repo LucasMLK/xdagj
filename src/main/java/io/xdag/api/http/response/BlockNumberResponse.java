@@ -34,8 +34,8 @@ import lombok.Data;
 @Builder
 public class BlockNumberResponse {
 
-    /**
-     * Block number (hex with 0x prefix)
-     */
-    private String blockNumber;
+  /**
+   * Block number (hex with 0x prefix)
+   */
+  private String blockNumber;
 }

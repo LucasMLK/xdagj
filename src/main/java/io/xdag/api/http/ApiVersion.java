@@ -24,13 +24,14 @@
 package io.xdag.api.http;
 
 public class ApiVersion {
-    public static final String V1 = "v1";
-    public static final String V1_PREFIX = "/api/v1";
 
-    public static String getVersionFromPath(String path) {
-        if (path.startsWith(V1_PREFIX)) {
-            return V1;
-        }
-        return null;
+  public static final String V1 = "v1";
+  public static final String V1_PREFIX = "/api/v1";
+
+  public static String getVersionFromPath(String path) {
+    if (path.startsWith(V1_PREFIX)) {
+      return V1;
     }
+    return null;
+  }
 }

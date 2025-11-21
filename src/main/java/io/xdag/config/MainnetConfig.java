@@ -29,31 +29,26 @@ import io.xdag.core.XAmount;
 import org.apache.tuweni.units.bigints.UInt64;
 
 /**
- * Configuration class for the main network (mainnet)
- * Extends AbstractConfig to provide mainnet-specific settings
+ * Configuration class for the main network (mainnet) Extends AbstractConfig to provide
+ * mainnet-specific settings
  */
 public class MainnetConfig extends AbstractConfig {
 
-    /**
-     * Constructor initializes mainnet configuration with specific parameters:
-     * - Network type: MAINNET
-     * - Version: MAINNET_VERSION
-     * - XDAG era: 0x16940000000L
-     * - Main start amount: 2^42 XDAG
-     * - Apollo fork height: 1017323
-     * - Apollo fork amount: 2^39 XDAG
-     * - Field header type: XDAG_FIELD_HEAD
-     * - Wallet file paths for mainnet
-     */
-    public MainnetConfig() {
-        super("mainnet", "xdag-mainnet", Network.MAINNET, Constants.MAINNET_VERSION);
-        this.network = Network.MAINNET;
-        this.xdagEra = 1516406400L;  // 2018-01-20 00:00:00 UTC (correct XDAG_ERA)
-        this.mainStartAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 42).toLong());
-        this.apolloForkHeight = 1017323;
-        this.apolloForkAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 39).toLong());
-        this.walletKeyFile = this.rootDir + "/wallet.dat";
-        this.walletFilePath = this.rootDir + "/wallet/" + Constants.WALLET_FILE_NAME;
-    }
+  /**
+   * Constructor initializes mainnet configuration with specific parameters: - Network type: MAINNET
+   * - Version: MAINNET_VERSION - XDAG era: 0x16940000000L - Main start amount: 2^42 XDAG - Apollo
+   * fork height: 1017323 - Apollo fork amount: 2^39 XDAG - Field header type: XDAG_FIELD_HEAD -
+   * Wallet file paths for mainnet
+   */
+  public MainnetConfig() {
+    super("mainnet", "xdag-mainnet", Network.MAINNET, Constants.MAINNET_VERSION);
+    this.network = Network.MAINNET;
+    this.xdagEra = 1516406400L;  // 2018-01-20 00:00:00 UTC (correct XDAG_ERA)
+    this.mainStartAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 42).toLong());
+    this.apolloForkHeight = 1017323;
+    this.apolloForkAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 39).toLong());
+    this.walletKeyFile = this.rootDir + "/wallet.dat";
+    this.walletFilePath = this.rootDir + "/wallet/" + Constants.WALLET_FILE_NAME;
+  }
 
 }

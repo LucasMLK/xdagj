@@ -29,32 +29,26 @@ import io.xdag.core.XAmount;
 import org.apache.tuweni.units.bigints.UInt64;
 
 /**
- * Configuration class for the test network (testnet)
- * Extends AbstractConfig to provide testnet-specific settings
+ * Configuration class for the test network (testnet) Extends AbstractConfig to provide
+ * testnet-specific settings
  */
 public class TestnetConfig extends AbstractConfig {
 
-    /**
-     * Constructor initializes testnet configuration with specific parameters:
-     * - Network type: TESTNET
-     * - Version: TESTNET_VERSION
-     * - Wait epoch: 1
-     * - XDAG era: 0x16900000000L
-     * - Main start amount: 2^42 XDAG
-     * - Apollo fork height: 196250
-     * - Apollo fork amount: 2^39 XDAG
-     * - Field header type: XDAG_FIELD_HEAD_TEST
-     * - Wallet file paths for testnet
-     */
-    public TestnetConfig() {
-        super("testnet", "xdag-testnet", Network.TESTNET, Constants.TESTNET_VERSION);
-        this.waitEpoch = 1;
-        this.xdagEra = 1516406400L;  // 2018-01-20 00:00:00 UTC (correct XDAG_ERA)
-        this.mainStartAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 42).toLong());
-        this.apolloForkHeight = 196250;
-        this.apolloForkAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 39).toLong());
-        this.walletKeyFile = this.rootDir + "/wallet-testnet.dat";
-        this.walletFilePath = this.rootDir + "/wallet/" + Constants.WALLET_FILE_NAME;
-    }
+  /**
+   * Constructor initializes testnet configuration with specific parameters: - Network type: TESTNET
+   * - Version: TESTNET_VERSION - Wait epoch: 1 - XDAG era: 0x16900000000L - Main start amount: 2^42
+   * XDAG - Apollo fork height: 196250 - Apollo fork amount: 2^39 XDAG - Field header type:
+   * XDAG_FIELD_HEAD_TEST - Wallet file paths for testnet
+   */
+  public TestnetConfig() {
+    super("testnet", "xdag-testnet", Network.TESTNET, Constants.TESTNET_VERSION);
+    this.waitEpoch = 1;
+    this.xdagEra = 1516406400L;  // 2018-01-20 00:00:00 UTC (correct XDAG_ERA)
+    this.mainStartAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 42).toLong());
+    this.apolloForkHeight = 196250;
+    this.apolloForkAmount = XAmount.ofXAmount(UInt64.valueOf(1L << 39).toLong());
+    this.walletKeyFile = this.rootDir + "/wallet-testnet.dat";
+    this.walletFilePath = this.rootDir + "/wallet/" + Constants.WALLET_FILE_NAME;
+  }
 
 }

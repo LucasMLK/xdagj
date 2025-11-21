@@ -40,22 +40,22 @@ package io.xdag.store.rocksdb.transaction;
  */
 public class TransactionException extends Exception {
 
-    /**
-     * Constructs a new transaction exception with the specified detail message.
-     *
-     * @param message the detail message
-     */
-    public TransactionException(String message) {
-        super(message);
-    }
+  /**
+   * Constructs a new transaction exception with the specified detail message.
+   *
+   * @param message the detail message
+   */
+  public TransactionException(String message) {
+    super(message);
+  }
 
-    /**
-     * Constructs a new transaction exception with the specified detail message and cause.
-     *
-     * @param message the detail message
-     * @param cause the cause (which is saved for later retrieval)
-     */
-    public TransactionException(String message, Throwable cause) {
-        super(message, cause);
-    }
+  /**
+   * Constructs a new transaction exception with the specified detail message and cause.
+   *
+   * @param message the detail message
+   * @param cause   the cause (which is saved for later retrieval)
+   */
+  public TransactionException(String message, Throwable cause) {
+    super(message, cause);
+  }
 }

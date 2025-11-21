@@ -34,93 +34,93 @@ import lombok.Data;
 @Builder
 public class TransactionDetailResponse {
 
-    /**
-     * Transaction hash (hex with 0x prefix)
-     */
-    private String hash;
+  /**
+   * Transaction hash (hex with 0x prefix)
+   */
+  private String hash;
+
+  /**
+   * From address (Base58)
+   */
+  private String from;
+
+  /**
+   * To address (Base58)
+   */
+  private String to;
+
+  /**
+   * Amount in XDAG units (decimal string)
+   */
+  private String amount;
+
+  /**
+   * Transaction fee in XDAG units (decimal string)
+   */
+  private String fee;
+
+  /**
+   * Nonce (hex with 0x prefix)
+   */
+  private String nonce;
+
+  /**
+   * Transaction data (hex with 0x prefix)
+   */
+  private String data;
+
+  /**
+   * Signature information
+   */
+  private SignatureInfo signature;
+
+  /**
+   * Block number (hex with 0x prefix)
+   */
+  private String blockNumber;
+
+  /**
+   * Block hash (hex with 0x prefix)
+   */
+  private String blockHash;
+
+  /**
+   * Timestamp (hex with 0x prefix)
+   */
+  private String timestamp;
+
+  /**
+   * Transaction status: "confirmed", "pending", or "failed"
+   */
+  private String status;
+
+  /**
+   * Whether transaction is valid
+   */
+  private boolean valid;
+
+  /**
+   * Whether signature is valid
+   */
+  private boolean signatureValid;
+
+  @Data
+  @Builder
+  public static class SignatureInfo {
 
     /**
-     * From address (Base58)
+     * V value (hex with 0x prefix)
      */
-    private String from;
+    private String v;
 
     /**
-     * To address (Base58)
+     * R value (hex with 0x prefix)
      */
-    private String to;
+    private String r;
 
     /**
-     * Amount in XDAG units (decimal string)
+     * S value (hex with 0x prefix)
      */
-    private String amount;
-
-    /**
-     * Transaction fee in XDAG units (decimal string)
-     */
-    private String fee;
-
-    /**
-     * Nonce (hex with 0x prefix)
-     */
-    private String nonce;
-
-    /**
-     * Transaction data (hex with 0x prefix)
-     */
-    private String data;
-
-    /**
-     * Signature information
-     */
-    private SignatureInfo signature;
-
-    /**
-     * Block number (hex with 0x prefix)
-     */
-    private String blockNumber;
-
-    /**
-     * Block hash (hex with 0x prefix)
-     */
-    private String blockHash;
-
-    /**
-     * Timestamp (hex with 0x prefix)
-     */
-    private String timestamp;
-
-    /**
-     * Transaction status: "confirmed", "pending", or "failed"
-     */
-    private String status;
-
-    /**
-     * Whether transaction is valid
-     */
-    private boolean valid;
-
-    /**
-     * Whether signature is valid
-     */
-    private boolean signatureValid;
-
-    @Data
-    @Builder
-    public static class SignatureInfo {
-
-        /**
-         * V value (hex with 0x prefix)
-         */
-        private String v;
-
-        /**
-         * R value (hex with 0x prefix)
-         */
-        private String r;
-
-        /**
-         * S value (hex with 0x prefix)
-         */
-        private String s;
-    }
+    private String s;
+  }
 }

@@ -56,162 +56,164 @@ import org.rocksdb.WriteOptions;
 @Slf4j
 public class RocksDBTransactionManager implements TransactionalStore {
 
-    /**
-     * Reference to the RocksDB instance
-     */
-    private final RocksDB db;
+  /**
+   * Reference to the RocksDB instance
+   */
+  private final RocksDB db;
 
-    /**
-     * Active transactions: transaction ID -> WriteBatch
-     */
-    private final ConcurrentHashMap<String, WriteBatch> activeTransactions = new ConcurrentHashMap<>();
+  /**
+   * Active transactions: transaction ID -> WriteBatch
+   */
+  private final ConcurrentHashMap<String, WriteBatch> activeTransactions = new ConcurrentHashMap<>();
 
-    /**
-     * Transaction ID generator (monotonically increasing)
-     */
-    private final AtomicLong txIdGenerator = new AtomicLong(0);
+  /**
+   * Transaction ID generator (monotonically increasing)
+   */
+  private final AtomicLong txIdGenerator = new AtomicLong(0);
 
-    /**
-     * Create a new RocksDBTransactionManager.
-     *
-     * @param db RocksDB instance to use for transactions
-     */
-    public RocksDBTransactionManager(RocksDB db) {
-        if (db == null) {
-            throw new IllegalArgumentException("RocksDB instance cannot be null");
-        }
-        this.db = db;
-        log.info("RocksDBTransactionManager initialized");
+  /**
+   * Create a new RocksDBTransactionManager.
+   *
+   * @param db RocksDB instance to use for transactions
+   */
+  public RocksDBTransactionManager(RocksDB db) {
+    if (db == null) {
+      throw new IllegalArgumentException("RocksDB instance cannot be null");
+    }
+    this.db = db;
+    log.info("RocksDBTransactionManager initialized");
+  }
+
+  @Override
+  public String beginTransaction() {
+    // Generate unique transaction ID
+    String txId = "tx-" + txIdGenerator.incrementAndGet();
+
+    // Create new WriteBatch for this transaction
+    WriteBatch batch = new WriteBatch();
+    activeTransactions.put(txId, batch);
+
+    log.debug("Transaction {} started", txId);
+    return txId;
+  }
+
+  @Override
+  public void commitTransaction(String txId) throws TransactionException {
+    // Retrieve and remove transaction from active transactions
+    WriteBatch batch = activeTransactions.remove(txId);
+
+    if (batch == null) {
+      throw new TransactionException("Transaction not found: " + txId);
     }
 
-    @Override
-    public String beginTransaction() {
-        // Generate unique transaction ID
-        String txId = "tx-" + txIdGenerator.incrementAndGet();
+    // Write all operations atomically to RocksDB
+    try (WriteOptions options = new WriteOptions()) {
+      db.write(options, batch);
+      batch.close();
 
-        // Create new WriteBatch for this transaction
-        WriteBatch batch = new WriteBatch();
-        activeTransactions.put(txId, batch);
+      log.debug("Transaction {} committed successfully", txId);
 
-        log.debug("Transaction {} started", txId);
-        return txId;
+    } catch (RocksDBException e) {
+      log.error("Failed to commit transaction {}: {}", txId, e.getMessage(), e);
+      batch.close();
+      throw new TransactionException("Commit failed: " + e.getMessage(), e);
+    }
+  }
+
+  @Override
+  public void rollbackTransaction(String txId) {
+    // Retrieve and remove transaction from active transactions
+    WriteBatch batch = activeTransactions.remove(txId);
+
+    if (batch != null) {
+      batch.close();
+      log.debug("Transaction {} rolled back", txId);
+    } else {
+      log.warn("Attempted to rollback non-existent transaction: {}", txId);
+    }
+  }
+
+  @Override
+  public void putInTransaction(String txId, byte[] key, byte[] value) throws TransactionException {
+    WriteBatch batch = activeTransactions.get(txId);
+
+    if (batch == null) {
+      throw new TransactionException("Transaction not found: " + txId);
     }
 
-    @Override
-    public void commitTransaction(String txId) throws TransactionException {
-        // Retrieve and remove transaction from active transactions
-        WriteBatch batch = activeTransactions.remove(txId);
+    try {
+      batch.put(key, value);
 
-        if (batch == null) {
-            throw new TransactionException("Transaction not found: " + txId);
-        }
+      if (log.isTraceEnabled()) {
+        log.trace("Transaction {}: PUT key (length={}), value (length={})",
+            txId, key.length, value.length);
+      }
 
-        // Write all operations atomically to RocksDB
-        try (WriteOptions options = new WriteOptions()) {
-            db.write(options, batch);
-            batch.close();
+    } catch (RocksDBException e) {
+      throw new TransactionException(
+          "Put operation failed in transaction " + txId + ": " + e.getMessage(), e);
+    }
+  }
 
-            log.debug("Transaction {} committed successfully", txId);
+  @Override
+  public void deleteInTransaction(String txId, byte[] key) throws TransactionException {
+    WriteBatch batch = activeTransactions.get(txId);
 
-        } catch (RocksDBException e) {
-            log.error("Failed to commit transaction {}: {}", txId, e.getMessage(), e);
-            batch.close();
-            throw new TransactionException("Commit failed: " + e.getMessage(), e);
-        }
+    if (batch == null) {
+      throw new TransactionException("Transaction not found: " + txId);
     }
 
-    @Override
-    public void rollbackTransaction(String txId) {
-        // Retrieve and remove transaction from active transactions
-        WriteBatch batch = activeTransactions.remove(txId);
+    try {
+      batch.delete(key);
 
-        if (batch != null) {
-            batch.close();
-            log.debug("Transaction {} rolled back", txId);
-        } else {
-            log.warn("Attempted to rollback non-existent transaction: {}", txId);
-        }
+      if (log.isTraceEnabled()) {
+        log.trace("Transaction {}: DELETE key (length={})", txId, key.length);
+      }
+
+    } catch (RocksDBException e) {
+      throw new TransactionException(
+          "Delete operation failed in transaction " + txId + ": " + e.getMessage(), e);
+    }
+  }
+
+  @Override
+  public boolean isTransactionActive(String txId) {
+    return activeTransactions.containsKey(txId);
+  }
+
+  @Override
+  public int getActiveTransactionCount() {
+    return activeTransactions.size();
+  }
+
+  /**
+   * Cleanup all active transactions.
+   *
+   * <p>This method should be called during shutdown to ensure all WriteBatch objects
+   * are properly closed and resources are released.
+   *
+   * <p>Warning: Any uncommitted transactions will be lost.
+   */
+  public void shutdown() {
+    log.info("Shutting down RocksDBTransactionManager ({} active transactions)",
+        activeTransactions.size());
+
+    for (String txId : activeTransactions.keySet()) {
+      log.warn("Rolling back uncommitted transaction during shutdown: {}", txId);
+      rollbackTransaction(txId);
     }
 
-    @Override
-    public void putInTransaction(String txId, byte[] key, byte[] value) throws TransactionException {
-        WriteBatch batch = activeTransactions.get(txId);
+    log.info("RocksDBTransactionManager shutdown complete");
+  }
 
-        if (batch == null) {
-            throw new TransactionException("Transaction not found: " + txId);
-        }
-
-        try {
-            batch.put(key, value);
-
-            if (log.isTraceEnabled()) {
-                log.trace("Transaction {}: PUT key (length={}), value (length={})",
-                        txId, key.length, value.length);
-            }
-
-        } catch (RocksDBException e) {
-            throw new TransactionException("Put operation failed in transaction " + txId + ": " + e.getMessage(), e);
-        }
-    }
-
-    @Override
-    public void deleteInTransaction(String txId, byte[] key) throws TransactionException {
-        WriteBatch batch = activeTransactions.get(txId);
-
-        if (batch == null) {
-            throw new TransactionException("Transaction not found: " + txId);
-        }
-
-        try {
-            batch.delete(key);
-
-            if (log.isTraceEnabled()) {
-                log.trace("Transaction {}: DELETE key (length={})", txId, key.length);
-            }
-
-        } catch (RocksDBException e) {
-            throw new TransactionException("Delete operation failed in transaction " + txId + ": " + e.getMessage(), e);
-        }
-    }
-
-    @Override
-    public boolean isTransactionActive(String txId) {
-        return activeTransactions.containsKey(txId);
-    }
-
-    @Override
-    public int getActiveTransactionCount() {
-        return activeTransactions.size();
-    }
-
-    /**
-     * Cleanup all active transactions.
-     *
-     * <p>This method should be called during shutdown to ensure all WriteBatch objects
-     * are properly closed and resources are released.
-     *
-     * <p>Warning: Any uncommitted transactions will be lost.
-     */
-    public void shutdown() {
-        log.info("Shutting down RocksDBTransactionManager ({} active transactions)",
-                activeTransactions.size());
-
-        for (String txId : activeTransactions.keySet()) {
-            log.warn("Rolling back uncommitted transaction during shutdown: {}", txId);
-            rollbackTransaction(txId);
-        }
-
-        log.info("RocksDBTransactionManager shutdown complete");
-    }
-
-    /**
-     * Get transaction statistics (for monitoring/debugging).
-     *
-     * @return statistics string
-     */
-    public String getStatistics() {
-        return String.format("RocksDBTransactionManager[active=%d, totalCreated=%d]",
-                activeTransactions.size(),
-                txIdGenerator.get());
-    }
+  /**
+   * Get transaction statistics (for monitoring/debugging).
+   *
+   * @return statistics string
+   */
+  public String getStatistics() {
+    return String.format("RocksDBTransactionManager[active=%d, totalCreated=%d]",
+        activeTransactions.size(),
+        txIdGenerator.get());
+  }
 }

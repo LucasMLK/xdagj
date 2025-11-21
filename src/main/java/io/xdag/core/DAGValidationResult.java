@@ -48,71 +48,92 @@ import org.apache.tuweni.bytes.Bytes32;
 @Builder
 public class DAGValidationResult {
 
-    /** Validation passed */
-    private final boolean valid;
+  /**
+   * Validation passed
+   */
+  private final boolean valid;
 
-    /** Error code if validation failed */
-    private final DAGErrorCode errorCode;
+  /**
+   * Error code if validation failed
+   */
+  private final DAGErrorCode errorCode;
 
-    /** Human-readable error message */
-    private final String errorMessage;
+  /**
+   * Human-readable error message
+   */
+  private final String errorMessage;
 
-    /** Block hash that caused the error (if applicable) */
-    private final Bytes32 conflictingBlockHash;
+  /**
+   * Block hash that caused the error (if applicable)
+   */
+  private final Bytes32 conflictingBlockHash;
+
+  /**
+   * DAG validation error codes
+   */
+  public enum DAGErrorCode {
+    /**
+     * Validation passed
+     */
+    VALID,
 
     /**
-     * DAG validation error codes
+     * Cycle detected in DAG
      */
-    public enum DAGErrorCode {
-        /** Validation passed */
-        VALID,
-
-        /** Cycle detected in DAG */
-        CYCLE_DETECTED,
-
-        /** Referenced block is too old (>16384 epochs) */
-        TIME_WINDOW_VIOLATION,
-
-        /** Invalid number of block links (not in 1-16 range) */
-        INVALID_LINK_COUNT,
-
-        /** Referenced block has later or equal timestamp */
-        TIMESTAMP_ORDER_VIOLATION,
-
-        /** Path depth from genesis exceeds 1000 layers */
-        TRAVERSAL_DEPTH_EXCEEDED
-    }
+    CYCLE_DETECTED,
 
     /**
-     * Create a valid result
+     * Referenced block is too old (>16384 epochs)
      */
-    public static DAGValidationResult valid() {
-        return DAGValidationResult.builder()
-                .valid(true)
-                .errorCode(DAGErrorCode.VALID)
-                .build();
-    }
+    TIME_WINDOW_VIOLATION,
 
     /**
-     * Create an invalid result with error code and message
+     * Invalid number of block links (not in 1-16 range)
      */
-    public static DAGValidationResult invalid(DAGErrorCode code, String message) {
-        return DAGValidationResult.builder()
-                .valid(false)
-                .errorCode(code)
-                .errorMessage(message)
-                .build();
-    }
+    INVALID_LINK_COUNT,
 
     /**
-     * Create an invalid result with error code, message, and conflicting block
+     * Referenced block has later or equal timestamp
      */
-    public static DAGValidationResult invalid(DAGErrorCode code, String message, Bytes32 conflictingBlock) {
-        return DAGValidationResult.builder()
-                .valid(false)
-                .errorCode(code)
-                .errorMessage(message)
-                .conflictingBlockHash(conflictingBlock)
-                .build();
-    }
+    TIMESTAMP_ORDER_VIOLATION,
+
+    /**
+     * Path depth from genesis exceeds 1000 layers
+     */
+    TRAVERSAL_DEPTH_EXCEEDED
+  }
+
+  /**
+   * Create a valid result
+   */
+  public static DAGValidationResult valid() {
+    return DAGValidationResult.builder()
+        .valid(true)
+        .errorCode(DAGErrorCode.VALID)
+        .build();
+  }
+
+  /**
+   * Create an invalid result with error code and message
+   */
+  public static DAGValidationResult invalid(DAGErrorCode code, String message) {
+    return DAGValidationResult.builder()
+        .valid(false)
+        .errorCode(code)
+        .errorMessage(message)
+        .build();
+  }
+
+  /**
+   * Create an invalid result with error code, message, and conflicting block
+   */
+  public static DAGValidationResult invalid(DAGErrorCode code, String message,
+      Bytes32 conflictingBlock) {
+    return DAGValidationResult.builder()
+        .valid(false)
+        .errorCode(code)
+        .errorMessage(message)
+        .conflictingBlockHash(conflictingBlock)
+        .build();
+  }
 }

@@ -34,14 +34,13 @@ import lombok.Data;
 @Builder
 public class ChainIdResponse {
 
-    /**
-     * Chain ID (hex with 0x prefix)
-     * 0x1 = mainnet, 0x2 = testnet, 0x3 = devnet
-     */
-    private String chainId;
+  /**
+   * Chain ID (hex with 0x prefix) 0x1 = mainnet, 0x2 = testnet, 0x3 = devnet
+   */
+  private String chainId;
 
-    /**
-     * Network type name: "mainnet", "testnet", or "devnet"
-     */
-    private String networkType;
+  /**
+   * Network type name: "mainnet", "testnet", or "devnet"
+   */
+  private String networkType;
 }

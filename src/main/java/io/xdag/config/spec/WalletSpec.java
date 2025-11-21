@@ -25,20 +25,22 @@
 package io.xdag.config.spec;
 
 /**
- * Interface for wallet configuration specifications
- * Defines methods to access wallet file paths and settings
+ * Interface for wallet configuration specifications Defines methods to access wallet file paths and
+ * settings
  */
 public interface WalletSpec {
 
-    /**
-     * Get the wallet key file location
-     * @return String containing the path to the wallet key file
-     */
-    String getWalletKeyFile();
+  /**
+   * Get the wallet key file location
+   *
+   * @return String containing the path to the wallet key file
+   */
+  String getWalletKeyFile();
 
-    /**
-     * Get the wallet file path
-     * @return String containing the path to the wallet file
-     */
-    String getWalletFilePath();
+  /**
+   * Get the wallet file path
+   *
+   * @return String containing the path to the wallet file
+   */
+  String getWalletFilePath();
 }

@@ -24,14 +24,16 @@
 
 package io.xdag.core;
 
+import static io.xdag.core.ValidationResult.ValidationLevel.ECONOMIC;
+import static io.xdag.core.ValidationResult.ValidationLevel.STATE;
+import static io.xdag.core.ValidationResult.ValidationLevel.SYNTAX;
+import static io.xdag.core.XUnit.NANO_XDAG;
+
 import io.xdag.core.ValidationResult.ValidationLevel;
 import io.xdag.store.TransactionStore;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
-
-import static io.xdag.core.ValidationResult.ValidationLevel.*;
-import static io.xdag.core.XUnit.NANO_XDAG;
 
 /**
  * Default implementation of TransactionValidator.
@@ -55,194 +57,194 @@ import static io.xdag.core.XUnit.NANO_XDAG;
 @Slf4j
 public class TransactionValidatorImpl implements TransactionValidator {
 
-    // ========== Dependencies ==========
+  // ========== Dependencies ==========
 
-    private final DagAccountManager accountManager;
-    private final TransactionStore transactionStore;
-    private final XAmount minFee;
-    private final XAmount maxFee;
+  private final DagAccountManager accountManager;
+  private final TransactionStore transactionStore;
+  private final XAmount minFee;
+  private final XAmount maxFee;
 
-    /**
-     * Create a new TransactionValidatorImpl.
-     *
-     * @param accountManager account manager for state queries
-     * @param transactionStore transaction store for execution status
-     * @param minFee minimum transaction fee
-     * @param maxFee maximum transaction fee (anti-DoS)
-     */
-    public TransactionValidatorImpl(
-            DagAccountManager accountManager,
-            TransactionStore transactionStore,
-            XAmount minFee,
-            XAmount maxFee) {
-        this.accountManager = accountManager;
-        this.transactionStore = transactionStore;
-        this.minFee = minFee;
-        this.maxFee = maxFee;
+  /**
+   * Create a new TransactionValidatorImpl.
+   *
+   * @param accountManager   account manager for state queries
+   * @param transactionStore transaction store for execution status
+   * @param minFee           minimum transaction fee
+   * @param maxFee           maximum transaction fee (anti-DoS)
+   */
+  public TransactionValidatorImpl(
+      DagAccountManager accountManager,
+      TransactionStore transactionStore,
+      XAmount minFee,
+      XAmount maxFee) {
+    this.accountManager = accountManager;
+    this.transactionStore = transactionStore;
+    this.minFee = minFee;
+    this.maxFee = maxFee;
 
-        log.info("TransactionValidator initialized (minFee={}, maxFee={})",
-                minFee.toDecimal(9, XUnit.XDAG),
-                maxFee.toDecimal(9, XUnit.XDAG));
+    log.info("TransactionValidator initialized (minFee={}, maxFee={})",
+        minFee.toDecimal(9, XUnit.XDAG),
+        maxFee.toDecimal(9, XUnit.XDAG));
+  }
+
+  // ========== Public API ==========
+
+  @Override
+  public ValidationResult validate(Transaction tx) {
+    // Level 1: Syntax validation
+    ValidationResult syntaxResult = validateSyntax(tx);
+    if (!syntaxResult.isValid()) {
+      return syntaxResult;
     }
 
-    // ========== Public API ==========
-
-    @Override
-    public ValidationResult validate(Transaction tx) {
-        // Level 1: Syntax validation
-        ValidationResult syntaxResult = validateSyntax(tx);
-        if (!syntaxResult.isValid()) {
-            return syntaxResult;
-        }
-
-        // Level 2: State validation
-        ValidationResult stateResult = validateState(tx);
-        if (!stateResult.isValid()) {
-            return stateResult;
-        }
-
-        // Level 3: Economic validation
-        ValidationResult economicResult = validateEconomic(tx);
-        if (!economicResult.isValid()) {
-            return economicResult;
-        }
-
-        return ValidationResult.success();
+    // Level 2: State validation
+    ValidationResult stateResult = validateState(tx);
+    if (!stateResult.isValid()) {
+      return stateResult;
     }
 
-    @Override
-    public ValidationResult validateSyntax(Transaction tx) {
-        try {
-            // 1. Check basic transaction validity (built-in checks)
-            if (!tx.isValid()) {
-                return failure(SYNTAX, "Transaction failed basic validation (amount/fee/nonce/data)");
-            }
-
-            // 2. Check signature components
-            if (tx.getV() < 0 || tx.getV() > 255) {
-                return failure(SYNTAX, String.format("Invalid signature v value: %d", tx.getV()));
-            }
-
-            if (tx.getR() == null || tx.getS() == null) {
-                return failure(SYNTAX, "Signature r or s is null");
-            }
-
-            // 3. Verify signature cryptographically
-            if (!tx.verifySignature()) {
-                return failure(SYNTAX, "Invalid transaction signature");
-            }
-
-            // 4. Check address sizes
-            if (tx.getFrom().size() != 20) {
-                return failure(SYNTAX, String.format("Invalid from address size: %d (expected 20)",
-                        tx.getFrom().size()));
-            }
-
-            if (tx.getTo().size() != 20) {
-                return failure(SYNTAX, String.format("Invalid to address size: %d (expected 20)",
-                        tx.getTo().size()));
-            }
-
-            // 5. Check self-transfer
-            if (tx.getFrom().equals(tx.getTo())) {
-                return failure(SYNTAX, "Cannot transfer to self");
-            }
-
-            return ValidationResult.success();
-
-        } catch (Exception e) {
-            log.warn("Syntax validation exception for tx {}: {}",
-                    getTxShortHash(tx), e.getMessage());
-            return failure(SYNTAX, "Syntax validation error: " + e.getMessage());
-        }
+    // Level 3: Economic validation
+    ValidationResult economicResult = validateEconomic(tx);
+    if (!economicResult.isValid()) {
+      return economicResult;
     }
 
-    @Override
-    public ValidationResult validateState(Transaction tx) {
-        try {
-            // 1. Check if transaction already executed
-            if (transactionStore.isTransactionExecuted(tx.getHash())) {
-                return failure(STATE, "Transaction already executed");
-            }
+    return ValidationResult.success();
+  }
 
-            // 2. Check nonce continuity
-            UInt64 accountNonce = accountManager.getNonce(tx.getFrom());
-            long expectedNonce = accountNonce.toLong() + 1;
+  @Override
+  public ValidationResult validateSyntax(Transaction tx) {
+    try {
+      // 1. Check basic transaction validity (built-in checks)
+      if (!tx.isValid()) {
+        return failure(SYNTAX, "Transaction failed basic validation (amount/fee/nonce/data)");
+      }
 
-            if (tx.getNonce() != expectedNonce) {
-                return failure(STATE, String.format(
-                        "Nonce mismatch: expected %d, got %d",
-                        expectedNonce, tx.getNonce()));
-            }
+      // 2. Check signature components
+      if (tx.getV() < 0 || tx.getV() > 255) {
+        return failure(SYNTAX, String.format("Invalid signature v value: %d", tx.getV()));
+      }
 
-            return ValidationResult.success();
+      if (tx.getR() == null || tx.getS() == null) {
+        return failure(SYNTAX, "Signature r or s is null");
+      }
 
-        } catch (Exception e) {
-            log.warn("State validation exception for tx {}: {}",
-                    getTxShortHash(tx), e.getMessage());
-            return failure(STATE, "State validation error: " + e.getMessage());
-        }
+      // 3. Verify signature cryptographically
+      if (!tx.verifySignature()) {
+        return failure(SYNTAX, "Invalid transaction signature");
+      }
+
+      // 4. Check address sizes
+      if (tx.getFrom().size() != 20) {
+        return failure(SYNTAX, String.format("Invalid from address size: %d (expected 20)",
+            tx.getFrom().size()));
+      }
+
+      if (tx.getTo().size() != 20) {
+        return failure(SYNTAX, String.format("Invalid to address size: %d (expected 20)",
+            tx.getTo().size()));
+      }
+
+      // 5. Check self-transfer
+      if (tx.getFrom().equals(tx.getTo())) {
+        return failure(SYNTAX, "Cannot transfer to self");
+      }
+
+      return ValidationResult.success();
+
+    } catch (Exception e) {
+      log.warn("Syntax validation exception for tx {}: {}",
+          getTxShortHash(tx), e.getMessage());
+      return failure(SYNTAX, "Syntax validation error: " + e.getMessage());
     }
+  }
 
-    @Override
-    public ValidationResult validateEconomic(Transaction tx) {
-        try {
-            // 1. Check minimum fee
-            if (tx.getFee().compareTo(minFee) < 0) {
-                return failure(ECONOMIC, String.format(
-                        "Fee too low: %s < %s (minimum)",
-                        tx.getFee().toDecimal(9, XUnit.XDAG),
-                        minFee.toDecimal(9, XUnit.XDAG)));
-            }
+  @Override
+  public ValidationResult validateState(Transaction tx) {
+    try {
+      // 1. Check if transaction already executed
+      if (transactionStore.isTransactionExecuted(tx.getHash())) {
+        return failure(STATE, "Transaction already executed");
+      }
 
-            // 2. Check maximum fee (anti-DoS)
-            if (tx.getFee().compareTo(maxFee) > 0) {
-                return failure(ECONOMIC, String.format(
-                        "Fee too high: %s > %s (maximum)",
-                        tx.getFee().toDecimal(9, XUnit.XDAG),
-                        maxFee.toDecimal(9, XUnit.XDAG)));
-            }
+      // 2. Check nonce continuity
+      UInt64 accountNonce = accountManager.getNonce(tx.getFrom());
+      long expectedNonce = accountNonce.toLong() + 1;
 
-            // 3. Check sufficient balance (amount + fee)
-            UInt256 balance = accountManager.getBalance(tx.getFrom());
-            XAmount required = tx.getAmount().add(tx.getFee());
+      if (tx.getNonce() != expectedNonce) {
+        return failure(STATE, String.format(
+            "Nonce mismatch: expected %d, got %d",
+            expectedNonce, tx.getNonce()));
+      }
 
-            // Convert XAmount to UInt256 (nano units)
-            UInt256 requiredUInt256 = UInt256.valueOf(required.toDecimal(0, NANO_XDAG).longValue());
+      return ValidationResult.success();
 
-            if (balance.compareTo(requiredUInt256) < 0) {
-                return failure(ECONOMIC, String.format(
-                        "Insufficient balance: have %s, need %s (amount + fee)",
-                        XAmount.of(balance.toLong(), NANO_XDAG).toDecimal(9, XUnit.XDAG),
-                        required.toDecimal(9, XUnit.XDAG)));
-            }
-
-            return ValidationResult.success();
-
-        } catch (Exception e) {
-            log.warn("Economic validation exception for tx {}: {}",
-                    getTxShortHash(tx), e.getMessage());
-            return failure(ECONOMIC, "Economic validation error: " + e.getMessage());
-        }
+    } catch (Exception e) {
+      log.warn("State validation exception for tx {}: {}",
+          getTxShortHash(tx), e.getMessage());
+      return failure(STATE, "State validation error: " + e.getMessage());
     }
+  }
+
+  @Override
+  public ValidationResult validateEconomic(Transaction tx) {
+    try {
+      // 1. Check minimum fee
+      if (tx.getFee().compareTo(minFee) < 0) {
+        return failure(ECONOMIC, String.format(
+            "Fee too low: %s < %s (minimum)",
+            tx.getFee().toDecimal(9, XUnit.XDAG),
+            minFee.toDecimal(9, XUnit.XDAG)));
+      }
+
+      // 2. Check maximum fee (anti-DoS)
+      if (tx.getFee().compareTo(maxFee) > 0) {
+        return failure(ECONOMIC, String.format(
+            "Fee too high: %s > %s (maximum)",
+            tx.getFee().toDecimal(9, XUnit.XDAG),
+            maxFee.toDecimal(9, XUnit.XDAG)));
+      }
+
+      // 3. Check sufficient balance (amount + fee)
+      UInt256 balance = accountManager.getBalance(tx.getFrom());
+      XAmount required = tx.getAmount().add(tx.getFee());
+
+      // Convert XAmount to UInt256 (nano units)
+      UInt256 requiredUInt256 = UInt256.valueOf(required.toDecimal(0, NANO_XDAG).longValue());
+
+      if (balance.compareTo(requiredUInt256) < 0) {
+        return failure(ECONOMIC, String.format(
+            "Insufficient balance: have %s, need %s (amount + fee)",
+            XAmount.of(balance.toLong(), NANO_XDAG).toDecimal(9, XUnit.XDAG),
+            required.toDecimal(9, XUnit.XDAG)));
+      }
+
+      return ValidationResult.success();
+
+    } catch (Exception e) {
+      log.warn("Economic validation exception for tx {}: {}",
+          getTxShortHash(tx), e.getMessage());
+      return failure(ECONOMIC, "Economic validation error: " + e.getMessage());
+    }
+  }
 
   // ========== Helper Methods ==========
 
-    /**
-     * Create a failure result.
-     */
-    private ValidationResult failure(ValidationLevel level, String message) {
-        return ValidationResult.failure(level, message);
-    }
+  /**
+   * Create a failure result.
+   */
+  private ValidationResult failure(ValidationLevel level, String message) {
+    return ValidationResult.failure(level, message);
+  }
 
-    /**
-     * Get short hash for logging.
-     */
-    private String getTxShortHash(Transaction tx) {
-        try {
-            return tx.getHash().toHexString().substring(0, 16);
-        } catch (Exception e) {
-            return "unknown";
-        }
+  /**
+   * Get short hash for logging.
+   */
+  private String getTxShortHash(Transaction tx) {
+    try {
+      return tx.getHash().toHexString().substring(0, 16);
+    } catch (Exception e) {
+      return "unknown";
     }
+  }
 }

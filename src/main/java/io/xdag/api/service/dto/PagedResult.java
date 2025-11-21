@@ -14,22 +14,22 @@ import lombok.Value;
 @Builder
 public class PagedResult<T> {
 
-    @Builder.Default
-    List<T> items = Collections.emptyList();
+  @Builder.Default
+  List<T> items = Collections.emptyList();
 
-    long total;
+  long total;
 
-    public static <T> PagedResult<T> empty() {
-        return PagedResult.<T>builder()
-                .items(Collections.emptyList())
-                .total(0)
-                .build();
-    }
+  public static <T> PagedResult<T> empty() {
+    return PagedResult.<T>builder()
+        .items(Collections.emptyList())
+        .total(0)
+        .build();
+  }
 
-    public static <T> PagedResult<T> of(List<T> items, long total) {
-        return PagedResult.<T>builder()
-                .items(items)
-                .total(total)
-                .build();
-    }
+  public static <T> PagedResult<T> of(List<T> items, long total) {
+    return PagedResult.<T>builder()
+        .items(items)
+        .total(total)
+        .build();
+  }
 }

@@ -24,27 +24,26 @@
 package io.xdag.core;
 
 /**
- * Interface defining lifecycle methods for XDAG components.
- * Provides basic start/stop functionality and status checking.
+ * Interface defining lifecycle methods for XDAG components. Provides basic start/stop functionality
+ * and status checking.
  */
 public interface XdagLifecycle {
-    /**
-     * Starts the component.
-     * Should initialize resources and begin processing.
-     */
-    void start();
 
-    /**
-     * Stops the component.
-     * Should clean up resources and halt processing.
-     */
-    void stop();
+  /**
+   * Starts the component. Should initialize resources and begin processing.
+   */
+  void start();
 
-    /**
-     * Checks if the component is currently running.
-     *
-     * @return true if component is running, false otherwise
-     */
-    boolean isRunning();
+  /**
+   * Stops the component. Should clean up resources and halt processing.
+   */
+  void stop();
+
+  /**
+   * Checks if the component is currently running.
+   *
+   * @return true if component is running, false otherwise
+   */
+  boolean isRunning();
 
 }

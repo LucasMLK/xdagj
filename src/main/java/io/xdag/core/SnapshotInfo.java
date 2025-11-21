@@ -34,55 +34,61 @@ import lombok.Setter;
 @Setter
 public class SnapshotInfo {
 
-    // Type of snapshot data: true for PUBKEY, false for BLOCK_DATA
-    protected boolean type;
-    // The actual data - either block data or public key
-    protected byte[] data;
+  // Type of snapshot data: true for PUBKEY, false for BLOCK_DATA
+  protected boolean type;
+  // The actual data - either block data or public key
+  protected byte[] data;
 
-    /**
-     * Default constructor
-     */
-    public SnapshotInfo() {
-    }
+  /**
+   * Default constructor
+   */
+  public SnapshotInfo() {
+  }
 
-    /**
-     * Constructor with type and data
-     * @param type Type of data (true=PUBKEY, false=BLOCK_DATA)
-     * @param data The snapshot data
-     */
-    public SnapshotInfo(boolean type, byte[] data) {
-        this.type = type;
-        this.data = data;
-    }
+  /**
+   * Constructor with type and data
+   *
+   * @param type Type of data (true=PUBKEY, false=BLOCK_DATA)
+   * @param data The snapshot data
+   */
+  public SnapshotInfo(boolean type, byte[] data) {
+    this.type = type;
+    this.data = data;
+  }
 
-    /**
-     * Get the type of snapshot data
-     * @return true for PUBKEY, false for BLOCK_DATA
-     */
-    public boolean getType() {
-        return type;
-    }
+  /**
+   * Get the type of snapshot data
+   *
+   * @return true for PUBKEY, false for BLOCK_DATA
+   */
+  public boolean getType() {
+    return type;
+  }
 
-    @Override
-    public String toString() {
-        return "SnapshotInfo{" +
-                "type=" + type +
-                ", data=" + Arrays.toString(data) +
-                '}';
-    }
+  @Override
+  public String toString() {
+    return "SnapshotInfo{" +
+        "type=" + type +
+        ", data=" + Arrays.toString(data) +
+        '}';
+  }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        SnapshotInfo that = (SnapshotInfo) o;
-        return type == that.type && Arrays.equals(data, that.data);
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
     }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    SnapshotInfo that = (SnapshotInfo) o;
+    return type == that.type && Arrays.equals(data, that.data);
+  }
 
-    @Override
-    public int hashCode() {
-        int result = (type ? 1 : 0);
-        result = 31 * result + Arrays.hashCode(data);
-        return result;
-    }
+  @Override
+  public int hashCode() {
+    int result = (type ? 1 : 0);
+    result = 31 * result + Arrays.hashCode(data);
+    return result;
+  }
 }

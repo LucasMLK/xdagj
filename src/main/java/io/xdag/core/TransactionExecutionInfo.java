@@ -51,50 +51,50 @@ import org.apache.tuweni.bytes.Bytes32;
 @Builder
 public class TransactionExecutionInfo {
 
-    /**
-     * Hash of the block that executed this transaction
-     */
-    Bytes32 executingBlockHash;
+  /**
+   * Hash of the block that executed this transaction
+   */
+  Bytes32 executingBlockHash;
 
-    /**
-     * Height of the executing block
-     */
-    long executingBlockHeight;
+  /**
+   * Height of the executing block
+   */
+  long executingBlockHeight;
 
-    /**
-     * Timestamp when the transaction was executed (milliseconds)
-     */
-    long executionTimestamp;
+  /**
+   * Timestamp when the transaction was executed (milliseconds)
+   */
+  long executionTimestamp;
 
-    /**
-     * Whether this execution has been reversed (due to chain reorg)
-     */
-    @Builder.Default
-    boolean isReversed = false;
+  /**
+   * Whether this execution has been reversed (due to chain reorg)
+   */
+  @Builder.Default
+  boolean isReversed = false;
 
-    /**
-     * Create execution info for a newly executed transaction.
-     *
-     * @param blockHash executing block hash
-     * @param blockHeight executing block height
-     * @return execution info
-     */
-    public static TransactionExecutionInfo create(Bytes32 blockHash, long blockHeight) {
-        return TransactionExecutionInfo.builder()
-                .executingBlockHash(blockHash)
-                .executingBlockHeight(blockHeight)
-                .executionTimestamp(System.currentTimeMillis())
-                .isReversed(false)
-                .build();
-    }
+  /**
+   * Create execution info for a newly executed transaction.
+   *
+   * @param blockHash   executing block hash
+   * @param blockHeight executing block height
+   * @return execution info
+   */
+  public static TransactionExecutionInfo create(Bytes32 blockHash, long blockHeight) {
+    return TransactionExecutionInfo.builder()
+        .executingBlockHash(blockHash)
+        .executingBlockHeight(blockHeight)
+        .executionTimestamp(System.currentTimeMillis())
+        .isReversed(false)
+        .build();
+  }
 
-    @Override
-    public String toString() {
-        return String.format(
-                "TransactionExecutionInfo{block=%s, height=%d, timestamp=%d, reversed=%b}",
-                executingBlockHash.toHexString().substring(0, 16),
-                executingBlockHeight,
-                executionTimestamp,
-                isReversed);
-    }
+  @Override
+  public String toString() {
+    return String.format(
+        "TransactionExecutionInfo{block=%s, height=%d, timestamp=%d, reversed=%b}",
+        executingBlockHash.toHexString().substring(0, 16),
+        executingBlockHeight,
+        executionTimestamp,
+        isReversed);
+  }
 }

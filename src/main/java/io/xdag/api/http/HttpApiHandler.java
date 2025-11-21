@@ -34,28 +34,28 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class HttpApiHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
 
-    private final HttpApiHandlerV1 handlerV1;
+  private final HttpApiHandlerV1 handlerV1;
 
-    public HttpApiHandler(DagKernel dagKernel, ApiKeyStore apiKeyStore) {
-        this.handlerV1 = new HttpApiHandlerV1(dagKernel, apiKeyStore);
+  public HttpApiHandler(DagKernel dagKernel, ApiKeyStore apiKeyStore) {
+    this.handlerV1 = new HttpApiHandlerV1(dagKernel, apiKeyStore);
+  }
+
+  @Override
+  protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
+    String uri = request.uri();
+
+    String version = ApiVersion.getVersionFromPath(uri);
+
+    if (ApiVersion.V1.equals(version)) {
+      handlerV1.channelRead0(ctx, request);
+    } else {
+      handlerV1.channelRead0(ctx, request);
     }
+  }
 
-    @Override
-    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
-        String uri = request.uri();
-
-        String version = ApiVersion.getVersionFromPath(uri);
-
-        if (ApiVersion.V1.equals(version)) {
-            handlerV1.channelRead0(ctx, request);
-        } else {
-            handlerV1.channelRead0(ctx, request);
-        }
-    }
-
-    @Override
-    public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
-        log.error("Exception in HTTP handler", cause);
-        ctx.close();
-    }
+  @Override
+  public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) {
+    log.error("Exception in HTTP handler", cause);
+    ctx.close();
+  }
 }

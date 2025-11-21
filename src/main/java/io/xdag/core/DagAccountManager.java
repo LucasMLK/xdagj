@@ -35,8 +35,7 @@ import org.apache.tuweni.units.bigints.UInt64;
  * DagAccountManager - Pure account state management for Dag layer
  *
  * <p>This class provides CRUD operations for account state management.
- * It does NOT contain transaction processing logic - that's handled by
- * DagTransactionProcessor.
+ * It does NOT contain transaction processing logic - that's handled by DagTransactionProcessor.
  *
  * <h2>Key Responsibilities</h2>
  * <ul>
@@ -64,219 +63,219 @@ import org.apache.tuweni.units.bigints.UInt64;
 @Slf4j
 public class DagAccountManager {
 
-    private final AccountStore accountStore;
-    private final Config config;
+  private final AccountStore accountStore;
+  private final Config config;
 
-    /**
-     * Create DagAccountManager
-     *
-     * @param accountStore account storage
-     * @param config XDAG configuration
-     */
-    public DagAccountManager(AccountStore accountStore, Config config) {
-        this.accountStore = accountStore;
-        this.config = config;
-    }
+  /**
+   * Create DagAccountManager
+   *
+   * @param accountStore account storage
+   * @param config       XDAG configuration
+   */
+  public DagAccountManager(AccountStore accountStore, Config config) {
+    this.accountStore = accountStore;
+    this.config = config;
+  }
 
-    // ==================== Query Operations ====================
+  // ==================== Query Operations ====================
 
-    /**
-     * Get account balance
-     *
-     * @param address account address (20 bytes)
-     * @return balance (zero if account doesn't exist)
-     */
-    public UInt256 getBalance(Bytes address) {
-        return accountStore.getBalance(address);
-    }
+  /**
+   * Get account balance
+   *
+   * @param address account address (20 bytes)
+   * @return balance (zero if account doesn't exist)
+   */
+  public UInt256 getBalance(Bytes address) {
+    return accountStore.getBalance(address);
+  }
 
-    /**
-     * Get account nonce
-     *
-     * @param address account address (20 bytes)
-     * @return nonce (zero if account doesn't exist)
-     */
-    public UInt64 getNonce(Bytes address) {
-        return accountStore.getNonce(address);
-    }
+  /**
+   * Get account nonce
+   *
+   * @param address account address (20 bytes)
+   * @return nonce (zero if account doesn't exist)
+   */
+  public UInt64 getNonce(Bytes address) {
+    return accountStore.getNonce(address);
+  }
 
-    /**
-     * Check if account exists
-     *
-     * @param address account address (20 bytes)
-     * @return true if account exists
-     */
-    public boolean hasAccount(Bytes address) {
-        return accountStore.hasAccount(address);
-    }
+  /**
+   * Check if account exists
+   *
+   * @param address account address (20 bytes)
+   * @return true if account exists
+   */
+  public boolean hasAccount(Bytes address) {
+    return accountStore.hasAccount(address);
+  }
 
-    /**
-     * Get total balance of all accounts
-     *
-     * @return sum of all account balances
-     */
-    public UInt256 getTotalBalance() {
-        return accountStore.getTotalBalance();
-    }
+  /**
+   * Get total balance of all accounts
+   *
+   * @return sum of all account balances
+   */
+  public UInt256 getTotalBalance() {
+    return accountStore.getTotalBalance();
+  }
 
-    /**
-     * Get total number of accounts
-     *
-     * @return account count
-     */
-    public UInt64 getAccountCount() {
-        return accountStore.getAccountCount();
-    }
+  /**
+   * Get total number of accounts
+   *
+   * @return account count
+   */
+  public UInt64 getAccountCount() {
+    return accountStore.getAccountCount();
+  }
 
-    // ==================== Update Operations ====================
+  // ==================== Update Operations ====================
 
-    /**
-     * Add to account balance
-     *
-     * @param address account address (20 bytes)
-     * @param amount amount to add
-     * @return new balance
-     */
-    public UInt256 addBalance(Bytes address, UInt256 amount) {
-        return accountStore.addBalance(address, amount);
-    }
+  /**
+   * Add to account balance
+   *
+   * @param address account address (20 bytes)
+   * @param amount  amount to add
+   * @return new balance
+   */
+  public UInt256 addBalance(Bytes address, UInt256 amount) {
+    return accountStore.addBalance(address, amount);
+  }
 
-    /**
-     * Subtract from account balance
-     *
-     * @param address account address (20 bytes)
-     * @param amount amount to subtract
-     * @return new balance
-     * @throws IllegalArgumentException if insufficient balance
-     */
-    public UInt256 subtractBalance(Bytes address, UInt256 amount) {
-        return accountStore.subtractBalance(address, amount);
-    }
+  /**
+   * Subtract from account balance
+   *
+   * @param address account address (20 bytes)
+   * @param amount  amount to subtract
+   * @return new balance
+   * @throws IllegalArgumentException if insufficient balance
+   */
+  public UInt256 subtractBalance(Bytes address, UInt256 amount) {
+    return accountStore.subtractBalance(address, amount);
+  }
 
-    /**
-     * Set account balance
-     *
-     * @param address account address (20 bytes)
-     * @param balance new balance
-     */
-    public void setBalance(Bytes address, UInt256 balance) {
-        accountStore.setBalance(address, balance);
-    }
+  /**
+   * Set account balance
+   *
+   * @param address account address (20 bytes)
+   * @param balance new balance
+   */
+  public void setBalance(Bytes address, UInt256 balance) {
+    accountStore.setBalance(address, balance);
+  }
 
-    /**
-     * Increment account nonce by 1
-     *
-     * @param address account address (20 bytes)
-     * @return new nonce value
-     */
-    public UInt64 incrementNonce(Bytes address) {
-        return accountStore.incrementNonce(address);
-    }
+  /**
+   * Increment account nonce by 1
+   *
+   * @param address account address (20 bytes)
+   * @return new nonce value
+   */
+  public UInt64 incrementNonce(Bytes address) {
+    return accountStore.incrementNonce(address);
+  }
 
-    /**
-     * Decrement account nonce by 1
-     *
-     * <p>Used during transaction rollback when restoring account state.
-     *
-     * @param address account address (20 bytes)
-     * @return new nonce value
-     * @throws IllegalStateException if nonce is already zero
-     */
-    public UInt64 decrementNonce(Bytes address) {
-        return accountStore.decrementNonce(address);
-    }
+  /**
+   * Decrement account nonce by 1
+   *
+   * <p>Used during transaction rollback when restoring account state.
+   *
+   * @param address account address (20 bytes)
+   * @return new nonce value
+   * @throws IllegalStateException if nonce is already zero
+   */
+  public UInt64 decrementNonce(Bytes address) {
+    return accountStore.decrementNonce(address);
+  }
 
   // ==================== Account Creation ====================
 
-    /**
-     * Ensure account exists, create if not
-     *
-     * <p>If the account doesn't exist, creates a new EOA account
-     * with zero balance and nonce.
-     *
-     * @param address account address (20 bytes)
-     */
-    public void ensureAccountExists(Bytes address) {
-        if (!accountStore.hasAccount(address)) {
-            Account account = Account.createEOA(address);
-            accountStore.saveAccount(account);
-            log.debug("Created new EOA account: {}", address.toHexString());
-        }
+  /**
+   * Ensure account exists, create if not
+   *
+   * <p>If the account doesn't exist, creates a new EOA account
+   * with zero balance and nonce.
+   *
+   * @param address account address (20 bytes)
+   */
+  public void ensureAccountExists(Bytes address) {
+    if (!accountStore.hasAccount(address)) {
+      Account account = Account.createEOA(address);
+      accountStore.saveAccount(account);
+      log.debug("Created new EOA account: {}", address.toHexString());
     }
+  }
 
   // ==================== Transactional Operations (NEW - Atomic Block Processing) ====================
 
   /**
-     * Add to account balance in a transaction.
-     *
-     * @param txId transaction ID from RocksDBTransactionManager
-     * @param address account address
-     * @param amount amount to add
-     * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
-     */
-    public void addBalanceInTransaction(String txId, Bytes address, UInt256 amount)
-            throws io.xdag.store.rocksdb.transaction.TransactionException {
-        UInt256 currentBalance = getBalance(address);
-        UInt256 newBalance = currentBalance.add(amount);
-        accountStore.setBalanceInTransaction(txId, address, newBalance);
+   * Add to account balance in a transaction.
+   *
+   * @param txId    transaction ID from RocksDBTransactionManager
+   * @param address account address
+   * @param amount  amount to add
+   * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
+   */
+  public void addBalanceInTransaction(String txId, Bytes address, UInt256 amount)
+      throws io.xdag.store.rocksdb.transaction.TransactionException {
+    UInt256 currentBalance = getBalance(address);
+    UInt256 newBalance = currentBalance.add(amount);
+    accountStore.setBalanceInTransaction(txId, address, newBalance);
 
-        if (log.isDebugEnabled()) {
-            log.debug("Transaction {}: addBalance({}, {}) -> {}",
-                    txId, address.toHexString().substring(0, 16),
-                    amount.toDecimalString(), newBalance.toDecimalString());
-        }
+    if (log.isDebugEnabled()) {
+      log.debug("Transaction {}: addBalance({}, {}) -> {}",
+          txId, address.toHexString().substring(0, 16),
+          amount.toDecimalString(), newBalance.toDecimalString());
+    }
+  }
+
+  /**
+   * Subtract from account balance in a transaction.
+   *
+   * @param txId    transaction ID from RocksDBTransactionManager
+   * @param address account address
+   * @param amount  amount to subtract
+   * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
+   * @throws IllegalArgumentException                               if insufficient balance
+   */
+  public void subtractBalanceInTransaction(String txId, Bytes address, UInt256 amount)
+      throws io.xdag.store.rocksdb.transaction.TransactionException {
+    UInt256 currentBalance = getBalance(address);
+    if (currentBalance.compareTo(amount) < 0) {
+      throw new IllegalArgumentException(String.format(
+          "Insufficient balance: have %s, need %s",
+          currentBalance.toDecimalString(), amount.toDecimalString()));
     }
 
-    /**
-     * Subtract from account balance in a transaction.
-     *
-     * @param txId transaction ID from RocksDBTransactionManager
-     * @param address account address
-     * @param amount amount to subtract
-     * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
-     * @throws IllegalArgumentException if insufficient balance
-     */
-    public void subtractBalanceInTransaction(String txId, Bytes address, UInt256 amount)
-            throws io.xdag.store.rocksdb.transaction.TransactionException {
-        UInt256 currentBalance = getBalance(address);
-        if (currentBalance.compareTo(amount) < 0) {
-            throw new IllegalArgumentException(String.format(
-                    "Insufficient balance: have %s, need %s",
-                    currentBalance.toDecimalString(), amount.toDecimalString()));
-        }
+    UInt256 newBalance = currentBalance.subtract(amount);
+    accountStore.setBalanceInTransaction(txId, address, newBalance);
 
-        UInt256 newBalance = currentBalance.subtract(amount);
-        accountStore.setBalanceInTransaction(txId, address, newBalance);
-
-        if (log.isDebugEnabled()) {
-            log.debug("Transaction {}: subtractBalance({}, {}) -> {}",
-                    txId, address.toHexString().substring(0, 16),
-                    amount.toDecimalString(), newBalance.toDecimalString());
-        }
+    if (log.isDebugEnabled()) {
+      log.debug("Transaction {}: subtractBalance({}, {}) -> {}",
+          txId, address.toHexString().substring(0, 16),
+          amount.toDecimalString(), newBalance.toDecimalString());
     }
+  }
 
-    /**
-     * Increment account nonce in a transaction.
-     *
-     * @param txId transaction ID from RocksDBTransactionManager
-     * @param address account address
-     * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
-     */
-    public void incrementNonceInTransaction(String txId, Bytes address)
-            throws io.xdag.store.rocksdb.transaction.TransactionException {
-        // Get current nonce
-        UInt64 currentNonce = getNonce(address);
-        UInt64 newNonce = currentNonce.add(UInt64.ONE);
+  /**
+   * Increment account nonce in a transaction.
+   *
+   * @param txId    transaction ID from RocksDBTransactionManager
+   * @param address account address
+   * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
+   */
+  public void incrementNonceInTransaction(String txId, Bytes address)
+      throws io.xdag.store.rocksdb.transaction.TransactionException {
+    // Get current nonce
+    UInt64 currentNonce = getNonce(address);
+    UInt64 newNonce = currentNonce.add(UInt64.ONE);
 
-        // Convert UInt64 to UInt256 for AccountStore method
-        UInt256 nonceAsUInt256 = UInt256.valueOf(newNonce.toBigInteger());
-        accountStore.setNonceInTransaction(txId, address, nonceAsUInt256);
+    // Convert UInt64 to UInt256 for AccountStore method
+    UInt256 nonceAsUInt256 = UInt256.valueOf(newNonce.toBigInteger());
+    accountStore.setNonceInTransaction(txId, address, nonceAsUInt256);
 
-        if (log.isDebugEnabled()) {
-            log.debug("Transaction {}: incrementNonce({}) from {} to {}",
-                    txId, address.toHexString().substring(0, 16),
-                    currentNonce.toLong(), newNonce.toLong());
-        }
+    if (log.isDebugEnabled()) {
+      log.debug("Transaction {}: incrementNonce({}) from {} to {}",
+          txId, address.toHexString().substring(0, 16),
+          currentNonce.toLong(), newNonce.toLong());
     }
+  }
 
 }

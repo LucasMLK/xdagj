@@ -32,8 +32,7 @@ import lombok.Getter;
  * Hash Calculation Context
  *
  * <p>Encapsulates all parameters needed for PoW hash calculation.
- * Provides a clean, type-safe way to pass calculation parameters
- * to PoW algorithms.
+ * Provides a clean, type-safe way to pass calculation parameters to PoW algorithms.
  *
  * <h2>Why HashContext?</h2>
  * <ul>
@@ -59,105 +58,115 @@ import lombok.Getter;
 @Getter
 public final class HashContext {
 
-    /** Timestamp for hash calculation (XDAG epoch time) */
-    private final long timestamp;
+  /**
+   * Timestamp for hash calculation (XDAG epoch time)
+   */
+  private final long timestamp;
 
-    /** Block height (optional, -1 if not available) */
-    private final long blockHeight;
+  /**
+   * Block height (optional, -1 if not available)
+   */
+  private final long blockHeight;
 
-    /** Epoch number derived from timestamp */
-    private final long epoch;
+  /**
+   * Epoch number derived from timestamp
+   */
+  private final long epoch;
 
-    // ========== Constructor ==========
+  // ========== Constructor ==========
 
-    /**
-     * Creates a new hash context.
-     *
-     * @param timestamp Block or task timestamp
-     * @param blockHeight Block height, or -1 if not applicable
-     * @param epoch Epoch number
-     */
-    private HashContext(long timestamp, long blockHeight, long epoch) {
-        this.timestamp = timestamp;
-        this.blockHeight = blockHeight;
-        this.epoch = epoch;
+  /**
+   * Creates a new hash context.
+   *
+   * @param timestamp   Block or task timestamp
+   * @param blockHeight Block height, or -1 if not applicable
+   * @param epoch       Epoch number
+   */
+  private HashContext(long timestamp, long blockHeight, long epoch) {
+    this.timestamp = timestamp;
+    this.blockHeight = blockHeight;
+    this.epoch = epoch;
+  }
+
+  // ========== Factory Methods ==========
+
+  /**
+   * Creates context for block hash calculation.
+   *
+   * <p>Used when validating or creating blocks. Includes complete
+   * block information for seed selection and validation.
+   *
+   * @param block Block to create context from
+   * @return Hash context for block validation
+   * @throws IllegalArgumentException if block or info is null
+   */
+  public static HashContext forBlock(Block block) {
+    if (block == null || block.getInfo() == null) {
+      throw new IllegalArgumentException("Block and block info cannot be null");
     }
 
-    // ========== Factory Methods ==========
+    long timestamp = XdagTime.epochNumberToMainTime(block.getEpoch());
+    long height = block.getInfo().getHeight();
+    long epoch = block.getEpoch();
 
-    /**
-     * Creates context for block hash calculation.
-     *
-     * <p>Used when validating or creating blocks. Includes complete
-     * block information for seed selection and validation.
-     *
-     * @param block Block to create context from
-     * @return Hash context for block validation
-     * @throws IllegalArgumentException if block or info is null
-     */
-    public static HashContext forBlock(Block block) {
-        if (block == null || block.getInfo() == null) {
-            throw new IllegalArgumentException("Block and block info cannot be null");
-        }
+    return new HashContext(timestamp, height, epoch);
+  }
 
-        long timestamp = XdagTime.epochNumberToMainTime(block.getEpoch());
-        long height = block.getInfo().getHeight();
-        long epoch = block.getEpoch();
+  /**
+   * Creates context for mining pool hash calculation.
+   *
+   * <p>Used when calculating hashes for mining tasks. Block height
+   * is not available during mining, so it's set to -1.
+   *
+   * @param timestamp Mining task timestamp
+   * @return Hash context for pool mining
+   */
+  public static HashContext forMining(long timestamp) {
+    long epoch = XdagTime.getEpochNumber(timestamp);
+    return new HashContext(timestamp, -1, epoch);
+  }
 
-        return new HashContext(timestamp, height, epoch);
-    }
+  /**
+   * Creates context from timestamp and height.
+   *
+   * <p>General-purpose factory method for custom use cases.
+   *
+   * @param timestamp   Timestamp
+   * @param blockHeight Block height (or -1)
+   * @return Hash context
+   */
+  public static HashContext of(long timestamp, long blockHeight) {
+    long epoch = XdagTime.getEpochNumber(timestamp);
+    return new HashContext(timestamp, blockHeight, epoch);
+  }
 
-    /**
-     * Creates context for mining pool hash calculation.
-     *
-     * <p>Used when calculating hashes for mining tasks. Block height
-     * is not available during mining, so it's set to -1.
-     *
-     * @param timestamp Mining task timestamp
-     * @return Hash context for pool mining
-     */
-    public static HashContext forMining(long timestamp) {
-        long epoch = XdagTime.getEpochNumber(timestamp);
-        return new HashContext(timestamp, -1, epoch);
-    }
-
-    /**
-     * Creates context from timestamp and height.
-     *
-     * <p>General-purpose factory method for custom use cases.
-     *
-     * @param timestamp Timestamp
-     * @param blockHeight Block height (or -1)
-     * @return Hash context
-     */
-    public static HashContext of(long timestamp, long blockHeight) {
-        long epoch = XdagTime.getEpochNumber(timestamp);
-        return new HashContext(timestamp, blockHeight, epoch);
-    }
-
-    // ========== Utility Methods ==========
+  // ========== Utility Methods ==========
 
   @Override
-    public String toString() {
-        return String.format("HashContext[timestamp=%d, height=%d, epoch=%d]",
-                timestamp, blockHeight, epoch);
-    }
+  public String toString() {
+    return String.format("HashContext[timestamp=%d, height=%d, epoch=%d]",
+        timestamp, blockHeight, epoch);
+  }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        HashContext that = (HashContext) o;
-        return timestamp == that.timestamp
-                && blockHeight == that.blockHeight
-                && epoch == that.epoch;
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
     }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    HashContext that = (HashContext) o;
+    return timestamp == that.timestamp
+        && blockHeight == that.blockHeight
+        && epoch == that.epoch;
+  }
 
-    @Override
-    public int hashCode() {
-        int result = Long.hashCode(timestamp);
-        result = 31 * result + Long.hashCode(blockHeight);
-        result = 31 * result + Long.hashCode(epoch);
-        return result;
-    }
+  @Override
+  public int hashCode() {
+    int result = Long.hashCode(timestamp);
+    result = 31 * result + Long.hashCode(blockHeight);
+    result = 31 * result + Long.hashCode(epoch);
+    return result;
+  }
 }

@@ -31,69 +31,68 @@ import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Network API Service
- * Provides network-related data access for both CLI and RPC
+ * Network API Service Provides network-related data access for both CLI and RPC
  */
 @Slf4j
 public class NetworkApiService {
 
-    private final DagKernel dagKernel;
+  private final DagKernel dagKernel;
 
-    public NetworkApiService(DagKernel dagKernel) {
-        this.dagKernel = dagKernel;
-    }
+  public NetworkApiService(DagKernel dagKernel) {
+    this.dagKernel = dagKernel;
+  }
 
-    /**
-     * Get active network connections
-     *
-     * @return List of connection information
-     */
-    public List<ConnectionInfo> getConnections() {
-        try {
-            if (dagKernel.getP2pService() != null) {
-                // TODO: Implement P2pService channel list
-                // This is a placeholder implementation
-                log.warn("P2P channel listing not yet implemented");
-                return new ArrayList<>();
-            } else {
-                log.warn("P2pService not available");
-                return new ArrayList<>();
-            }
-        } catch (Exception e) {
-            log.error("Failed to get network connections", e);
-            return new ArrayList<>();
-        }
+  /**
+   * Get active network connections
+   *
+   * @return List of connection information
+   */
+  public List<ConnectionInfo> getConnections() {
+    try {
+      if (dagKernel.getP2pService() != null) {
+        // TODO: Implement P2pService channel list
+        // This is a placeholder implementation
+        log.warn("P2P channel listing not yet implemented");
+        return new ArrayList<>();
+      } else {
+        log.warn("P2pService not available");
+        return new ArrayList<>();
+      }
+    } catch (Exception e) {
+      log.error("Failed to get network connections", e);
+      return new ArrayList<>();
     }
+  }
 
-    /**
-     * Connect to a remote peer
-     *
-     * @param host Peer host address
-     * @param port Peer port
-     * @return true if connection initiated successfully
-     */
-    public boolean connect(String host, int port) {
-        try {
-            if (dagKernel.getP2pService() != null) {
-                // TODO: Implement P2pService connect method
-                log.warn("P2P connect not yet implemented in  {}:{}", host, port);
-                return false;
-            } else {
-                log.warn("P2pService not available");
-                return false;
-            }
-        } catch (Exception e) {
-            log.error("Failed to connect to peer: {}:{}", host, port, e);
-            return false;
-        }
+  /**
+   * Connect to a remote peer
+   *
+   * @param host Peer host address
+   * @param port Peer port
+   * @return true if connection initiated successfully
+   */
+  public boolean connect(String host, int port) {
+    try {
+      if (dagKernel.getP2pService() != null) {
+        // TODO: Implement P2pService connect method
+        log.warn("P2P connect not yet implemented in  {}:{}", host, port);
+        return false;
+      } else {
+        log.warn("P2pService not available");
+        return false;
+      }
+    } catch (Exception e) {
+      log.error("Failed to connect to peer: {}:{}", host, port, e);
+      return false;
     }
+  }
 
-    /**
-     * Get network type
-     *
-     * @return Network type (MAINNET, TESTNET, DEVNET)
-     */
-    public String getNetworkType() {
-        return dagKernel.getConfig().getNodeSpec().getNetwork().name();
-    }
+  /**
+   * Get network type
+   *
+   * @return Network type (MAINNET, TESTNET, DEVNET)
+   */
+  public String getNetworkType() {
+    return dagKernel.getConfig().getNodeSpec().getNetwork().name();
+  }
 }

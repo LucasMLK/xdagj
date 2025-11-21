@@ -29,74 +29,75 @@ package io.xdag.config.cli;
  */
 public enum XdagOption {
 
-    /**
-     * Display help information
-     */
-    HELP("help"),
+  /**
+   * Display help information
+   */
+  HELP("help"),
 
-    /**
-     * Display version information
-     */
-    VERSION("version"),
+  /**
+   * Display version information
+   */
+  VERSION("version"),
 
-    /**
-     * Account management operations
-     */
-    ACCOUNT("account"),
+  /**
+   * Account management operations
+   */
+  ACCOUNT("account"),
 
-    /**
-     * Change wallet password
-     */
-    CHANGE_PASSWORD("changepassword"),
+  /**
+   * Change wallet password
+   */
+  CHANGE_PASSWORD("changepassword"),
 
-    /**
-     * Password option
-     */
-    PASSWORD("password"),
+  /**
+   * Password option
+   */
+  PASSWORD("password"),
 
-    /**
-     * Export private key for an address
-     */
-    DUMP_PRIVATE_KEY("dumpprivatekey"),
+  /**
+   * Export private key for an address
+   */
+  DUMP_PRIVATE_KEY("dumpprivatekey"),
 
-    /**
-     * Import a private key
-     */
-    IMPORT_PRIVATE_KEY("importprivatekey"),
+  /**
+   * Import a private key
+   */
+  IMPORT_PRIVATE_KEY("importprivatekey"),
 
-    /**
-     * Import wallet using mnemonic phrase
-     */
-    IMPORT_MNEMONIC("importmnemonic"),
+  /**
+   * Import wallet using mnemonic phrase
+   */
+  IMPORT_MNEMONIC("importmnemonic"),
 
-    /**
-     * Convert wallet from old format
-     */
-    CONVERT_OLD_WALLET("convertoldwallet"),
+  /**
+   * Convert wallet from old format
+   */
+  CONVERT_OLD_WALLET("convertoldwallet"),
 
-    /**
-     * Enable snapshot functionality
-     */
-    ENABLE_SNAPSHOT("enablesnapshot"),
+  /**
+   * Enable snapshot functionality
+   */
+  ENABLE_SNAPSHOT("enablesnapshot"),
 
-    /**
-     * Create a new snapshot
-     */
-    MAKE_SNAPSHOT("makesnapshot");
+  /**
+   * Create a new snapshot
+   */
+  MAKE_SNAPSHOT("makesnapshot");
 
-    private final String name;
+  private final String name;
 
-    /**
-     * Constructor
-     * @param s Option name string
-     */
-    XdagOption(String s) {
-        name = s;
-    }
+  /**
+   * Constructor
+   *
+   * @param s Option name string
+   */
+  XdagOption(String s) {
+    name = s;
+  }
 
-    @Override
-    public String toString() {
-        return this.name;
-    }
+  @Override
+  public String toString() {
+    return this.name;
+  }
 
 }

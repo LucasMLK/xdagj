@@ -30,71 +30,71 @@ import org.apache.tuweni.units.bigints.UInt64;
 
 public class Constants {
 
-    public static final long MAIN_CHAIN_PERIOD = 64 << 10;
+  public static final long MAIN_CHAIN_PERIOD = 64 << 10;
 
-    /**
-     * Flag set when block is marked as main block
-     */
-    public static final byte BI_MAIN = 0x01;
-    /**
-     * Similar to BI_MAIN but indicates block is not yet confirmed as main block
-     */
-    public static final byte BI_MAIN_CHAIN = 0x02;
-    /**
-     * Flag set after block is applied (may be set even if block has issues but was referenced)
-     */
-    public static final byte BI_APPLIED = 0x04;
-    /**
-     * Flag set after block is applied
-     */
-    public static final byte BI_MAIN_REF = 0x08;
-    /**
-     * Flag set when orphan block is removed after being linked by another block
-     */
-    public static final byte BI_REF = 0x10;
-    /**
-     * Flag set when block signature can be verified with own public key
-     */
-    public static final byte BI_OURS = 0x20;
-    /**
-     * Flag for candidate main block not yet persisted
-     */
-    public static final byte BI_EXTRA = 0x40;
-    public static final byte BI_REMARK = (byte) 0x80;
-    public static final Long SEND_PERIOD = 10L;
+  /**
+   * Flag set when block is marked as main block
+   */
+  public static final byte BI_MAIN = 0x01;
+  /**
+   * Similar to BI_MAIN but indicates block is not yet confirmed as main block
+   */
+  public static final byte BI_MAIN_CHAIN = 0x02;
+  /**
+   * Flag set after block is applied (may be set even if block has issues but was referenced)
+   */
+  public static final byte BI_APPLIED = 0x04;
+  /**
+   * Flag set after block is applied
+   */
+  public static final byte BI_MAIN_REF = 0x08;
+  /**
+   * Flag set when orphan block is removed after being linked by another block
+   */
+  public static final byte BI_REF = 0x10;
+  /**
+   * Flag set when block signature can be verified with own public key
+   */
+  public static final byte BI_OURS = 0x20;
+  /**
+   * Flag for candidate main block not yet persisted
+   */
+  public static final byte BI_EXTRA = 0x40;
+  public static final byte BI_REMARK = (byte) 0x80;
+  public static final Long SEND_PERIOD = 10L;
 
-    public static final long REQUEST_BLOCKS_MAX_TIME = UInt64.valueOf(1L << 20).toLong();
-    public static final long REQUEST_WAIT = 64;
-    public static final long MAX_ALLOWED_EXTRA = 65536;
-    /**
-     * Number of confirmations per round is 16
-     */
-    public static final int CONFIRMATIONS_COUNT = 16;
-    public static final int MAIN_BIG_PERIOD_LOG = 21;
+  public static final long REQUEST_BLOCKS_MAX_TIME = UInt64.valueOf(1L << 20).toLong();
+  public static final long REQUEST_WAIT = 64;
+  public static final long MAX_ALLOWED_EXTRA = 65536;
+  /**
+   * Number of confirmations per round is 16
+   */
+  public static final int CONFIRMATIONS_COUNT = 16;
+  public static final int MAIN_BIG_PERIOD_LOG = 21;
 
-    public static final String WALLET_FILE_NAME = "wallet.data";
+  public static final String WALLET_FILE_NAME = "wallet.data";
 
-    public static final String CLIENT_NAME = "xdagj";
+  public static final String CLIENT_NAME = "xdagj";
 
-    public static final String CLIENT_VERSION = System.getProperty("xdagj.version");
+  public static final String CLIENT_VERSION = System.getProperty("xdagj.version");
 
-    /**
-     * Fork height for sync issue resolution
-     */
-    public static final Long SYNC_FIX_HEIGHT = 0L;
+  /**
+   * Fork height for sync issue resolution
+   */
+  public static final Long SYNC_FIX_HEIGHT = 0L;
 
-    public static final int HASH_RATE_LAST_MAX_TIME = 32;
+  public static final int HASH_RATE_LAST_MAX_TIME = 32;
 
-    public enum MessageType {
-        UPDATE,
-        PRE_TOP,
-        NEW_LINK
-    }
+  public enum MessageType {
+    UPDATE,
+    PRE_TOP,
+    NEW_LINK
+  }
 
-    public static final short MAINNET_VERSION = 0;
-    public static final short TESTNET_VERSION = 0;
-    public static final short DEVNET_VERSION = 0;
+  public static final short MAINNET_VERSION = 0;
+  public static final short TESTNET_VERSION = 0;
+  public static final short DEVNET_VERSION = 0;
 
-    public static final XAmount MIN_GAS = XAmount.of(100, XUnit.MILLI_XDAG);
+  public static final XAmount MIN_GAS = XAmount.of(100, XUnit.MILLI_XDAG);
 
 }

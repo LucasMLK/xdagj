@@ -34,49 +34,47 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 public class XdagMessageFactory {
-    /**
-     * Decode a raw message.
-     *
-     * @param code
-     *            The message code
-     * @param body
-     *            The message body
-     * @return The decoded message, or NULL if the message type is not unknown
-     * @throws MessageException
-     *             when the encoding is illegal
-     */
-    public Message create(byte code, byte[] body) throws MessageException {
 
-        XdagMessageCode c = XdagMessageCode.of(code);
-        if (c == null) {
-            //log.debug("Invalid message code: {}", Hex.encode0x(Bytes.of(code)));
-            return null;
-        }
+  /**
+   * Decode a raw message.
+   *
+   * @param code The message code
+   * @param body The message body
+   * @return The decoded message, or NULL if the message type is not unknown
+   * @throws MessageException when the encoding is illegal
+   */
+  public Message create(byte code, byte[] body) throws MessageException {
 
-        try {
-            return switch (c) {
-                case BLOCK_REQUEST -> new BlockRequestMessage(body);
-                case SYNCBLOCK_REQUEST -> new SyncBlockRequestMessage(body);
-                //  Block messages
-                case NEW_BLOCK -> new NewBlockMessage(body);
-                case SYNC_BLOCK -> new SyncBlockMessage(body);
-                //  Hybrid sync protocol messages
-                case SYNC_HEIGHT_REQUEST -> new SyncHeightRequestMessage(body);
-                case SYNC_HEIGHT_REPLY -> new SyncHeightReplyMessage(body);
-                case SYNC_MAIN_BLOCKS_REQUEST -> new SyncMainBlocksRequestMessage(body);
-                case SYNC_MAIN_BLOCKS_REPLY -> new SyncMainBlocksReplyMessage(body);
-                case SYNC_EPOCH_BLOCKS_REQUEST -> new SyncEpochBlocksRequestMessage(body);
-                case SYNC_EPOCH_BLOCKS_REPLY -> new SyncEpochBlocksReplyMessage(body);
-                case SYNC_BLOCKS_REQUEST -> new SyncBlocksRequestMessage(body);
-                case SYNC_BLOCKS_REPLY -> new SyncBlocksReplyMessage(body);
-                case SYNC_TRANSACTIONS_REQUEST -> new SyncTransactionsRequestMessage(body);
-                case SYNC_TRANSACTIONS_REPLY -> new SyncTransactionsReplyMessage(body);
-                //  Transaction broadcast message (Phase 3)
-                case NEW_TRANSACTION -> new NewTransactionMessage(body);
-            };
-        } catch (Exception e) {
-            throw new MessageException("Failed to decode message", e);
-        }
+    XdagMessageCode c = XdagMessageCode.of(code);
+    if (c == null) {
+      //log.debug("Invalid message code: {}", Hex.encode0x(Bytes.of(code)));
+      return null;
     }
+
+    try {
+      return switch (c) {
+        case BLOCK_REQUEST -> new BlockRequestMessage(body);
+        case SYNCBLOCK_REQUEST -> new SyncBlockRequestMessage(body);
+        //  Block messages
+        case NEW_BLOCK -> new NewBlockMessage(body);
+        case SYNC_BLOCK -> new SyncBlockMessage(body);
+        //  Hybrid sync protocol messages
+        case SYNC_HEIGHT_REQUEST -> new SyncHeightRequestMessage(body);
+        case SYNC_HEIGHT_REPLY -> new SyncHeightReplyMessage(body);
+        case SYNC_MAIN_BLOCKS_REQUEST -> new SyncMainBlocksRequestMessage(body);
+        case SYNC_MAIN_BLOCKS_REPLY -> new SyncMainBlocksReplyMessage(body);
+        case SYNC_EPOCH_BLOCKS_REQUEST -> new SyncEpochBlocksRequestMessage(body);
+        case SYNC_EPOCH_BLOCKS_REPLY -> new SyncEpochBlocksReplyMessage(body);
+        case SYNC_BLOCKS_REQUEST -> new SyncBlocksRequestMessage(body);
+        case SYNC_BLOCKS_REPLY -> new SyncBlocksReplyMessage(body);
+        case SYNC_TRANSACTIONS_REQUEST -> new SyncTransactionsRequestMessage(body);
+        case SYNC_TRANSACTIONS_REPLY -> new SyncTransactionsReplyMessage(body);
+        //  Transaction broadcast message (Phase 3)
+        case NEW_TRANSACTION -> new NewTransactionMessage(body);
+      };
+    } catch (Exception e) {
+      throw new MessageException("Failed to decode message", e);
+    }
+  }
 
 }

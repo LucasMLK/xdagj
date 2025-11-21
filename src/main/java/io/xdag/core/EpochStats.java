@@ -47,35 +47,51 @@ import org.apache.tuweni.units.bigints.UInt256;
 @Builder
 public class EpochStats {
 
-    /** Epoch number (timestamp / 64) */
-    private final long epoch;
+  /**
+   * Epoch number (timestamp / 64)
+   */
+  private final long epoch;
 
-    /** Start time of epoch (epoch * 64) */
-    private final long startTime;
+  /**
+   * Start time of epoch (epoch * 64)
+   */
+  private final long startTime;
 
-    /** End time of epoch ((epoch + 1) * 64) */
-    private final long endTime;
+  /**
+   * End time of epoch ((epoch + 1) * 64)
+   */
+  private final long endTime;
 
-    /** Total candidate blocks in this epoch */
-    private final int totalBlocks;
+  /**
+   * Total candidate blocks in this epoch
+   */
+  private final int totalBlocks;
 
-    /** Winning block hash (smallest hash in epoch), null if no winner */
-    private final Bytes32 winningBlockHash;
+  /**
+   * Winning block hash (smallest hash in epoch), null if no winner
+   */
+  private final Bytes32 winningBlockHash;
 
-    /** Average block time within epoch (seconds) */
-    private final double averageBlockTime;
+  /**
+   * Average block time within epoch (seconds)
+   */
+  private final double averageBlockTime;
 
-    /** Total difficulty added in this epoch (sum of all block work) */
-    private final UInt256 totalDifficulty;
+  /**
+   * Total difficulty added in this epoch (sum of all block work)
+   */
+  private final UInt256 totalDifficulty;
 
-    /** Whether this epoch has a main block (winner that is not orphan) */
-    private final boolean hasMainBlock;
+  /**
+   * Whether this epoch has a main block (winner that is not orphan)
+   */
+  private final boolean hasMainBlock;
 
-    /**
-     * Check if this is an empty epoch (no blocks)
-     */
-    public boolean isEmpty() {
-        return totalBlocks == 0;
-    }
+  /**
+   * Check if this is an empty epoch (no blocks)
+   */
+  public boolean isEmpty() {
+    return totalBlocks == 0;
+  }
 
 }

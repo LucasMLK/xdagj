@@ -24,15 +24,14 @@
 
 package io.xdag.core;
 
+import static io.xdag.core.XUnit.NANO_XDAG;
+
 import io.xdag.store.TransactionStore;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
-
-import java.util.ArrayList;
-import java.util.List;
-
-import static io.xdag.core.XUnit.NANO_XDAG;
 
 /**
  * DagTransactionProcessor - Complete transaction processing for Dag layer

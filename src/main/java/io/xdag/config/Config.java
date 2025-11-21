@@ -26,8 +26,8 @@ package io.xdag.config;
 
 import io.xdag.config.spec.AdminSpec;
 import io.xdag.config.spec.FundSpec;
-import io.xdag.config.spec.NodeSpec;
 import io.xdag.config.spec.HttpSpec;
+import io.xdag.config.spec.NodeSpec;
 import io.xdag.config.spec.RandomxSpec;
 import io.xdag.config.spec.SnapshotSpec;
 import io.xdag.config.spec.WalletSpec;
@@ -35,121 +35,121 @@ import io.xdag.core.XAmount;
 import java.util.List;
 
 /**
- * Interface for XDAG blockchain configurations.
- * Provides methods to access various configuration settings and specifications.
+ * Interface for XDAG blockchain configurations. Provides methods to access various configuration
+ * settings and specifications.
  */
 public interface Config {
 
-    /**
-     * Get the configuration file name
-     */
-    String getConfigName();
+  /**
+   * Get the configuration file name
+   */
+  String getConfigName();
 
-    /**
-     * Get the client identifier
-     */
-    String getClientId();
+  /**
+   * Get the client identifier
+   */
+  String getClientId();
 
-    /**
-     * Get the client capabilities tree set
-     */
-    CapabilityTreeSet getClientCapabilities();
+  /**
+   * Get the client capabilities tree set
+   */
+  CapabilityTreeSet getClientCapabilities();
 
-    /**
-     * Get the root directory path for configuration
-     */
-    String getRootDir();
+  /**
+   * Get the root directory path for configuration
+   */
+  String getRootDir();
 
-    /**
-     * Get the node specification configuration
-     */
-    NodeSpec getNodeSpec();
+  /**
+   * Get the node specification configuration
+   */
+  NodeSpec getNodeSpec();
 
-    /**
-     * Get the admin specification configuration
-     */
-    AdminSpec getAdminSpec();
+  /**
+   * Get the admin specification configuration
+   */
+  AdminSpec getAdminSpec();
 
-    /**
-     * Get the wallet specification configuration
-     */
-    WalletSpec getWalletSpec();
+  /**
+   * Get the wallet specification configuration
+   */
+  WalletSpec getWalletSpec();
 
-    /**
-     * Get the initial amount for main network
-     */
-    XAmount getMainStartAmount();
+  /**
+   * Get the initial amount for main network
+   */
+  XAmount getMainStartAmount();
 
-    /**
-     * Get the XDAG era value
-     */
-    long getXdagEra();
+  /**
+   * Get the XDAG era value
+   */
+  long getXdagEra();
 
-    /**
-     * Get the Apollo fork block height
-     */
-    long getApolloForkHeight();
+  /**
+   * Get the Apollo fork block height
+   */
+  long getApolloForkHeight();
 
-    /**
-     * Get the Apollo fork amount
-     */
-    XAmount getApolloForkAmount();
+  /**
+   * Get the Apollo fork amount
+   */
+  XAmount getApolloForkAmount();
 
-    /**
-     * Change parameters based on command line arguments
-     */
-    void changePara(String[] args);
+  /**
+   * Change parameters based on command line arguments
+   */
+  void changePara(String[] args);
 
-    /**
-     * Set the directory paths
-     */
-    void setDir();
+  /**
+   * Set the directory paths
+   */
+  void setDir();
 
-    /**
-     * Get the HTTP API specification configuration
-     */
-    HttpSpec getHttpSpec();
+  /**
+   * Get the HTTP API specification configuration
+   */
+  HttpSpec getHttpSpec();
 
-    /**
-     * Get the snapshot specification configuration
-     */
-    SnapshotSpec getSnapshotSpec();
+  /**
+   * Get the snapshot specification configuration
+   */
+  SnapshotSpec getSnapshotSpec();
 
-    /**
-     * Get the RandomX specification configuration
-     */
-    RandomxSpec getRandomxSpec();
+  /**
+   * Get the RandomX specification configuration
+   */
+  RandomxSpec getRandomxSpec();
 
-    /**
-     * Check if transaction history is enabled
-     */
-    boolean getEnableTxHistory();
+  /**
+   * Check if transaction history is enabled
+   */
+  boolean getEnableTxHistory();
 
-    /**
-     * Check if block generation is enabled
-     */
-    boolean getEnableGenerateBlock();
+  /**
+   * Check if block generation is enabled
+   */
+  boolean getEnableGenerateBlock();
 
-    /**
-     * Get the transaction page size limit
-     */
-    long getTxPageSizeLimit();
+  /**
+   * Get the transaction page size limit
+   */
+  long getTxPageSizeLimit();
 
-    /**
-     * Get the pool whitelist IP addresses
-     */
-    List<String> getPoolWhiteIPList();
+  /**
+   * Get the pool whitelist IP addresses
+   */
+  List<String> getPoolWhiteIPList();
 
-    /**
-     * Get the websocket server port
-     */
-    int getWebsocketServerPort();
+  /**
+   * Get the websocket server port
+   */
+  int getWebsocketServerPort();
 
-    /**
-     * Get the fund specification configuration
-     */
-    FundSpec getFundSpec();
+  /**
+   * Get the fund specification configuration
+   */
+  FundSpec getFundSpec();
 
-    String getNodeTag();
+  String getNodeTag();
 
 }

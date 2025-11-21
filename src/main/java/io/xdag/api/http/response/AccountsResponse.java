@@ -35,30 +35,30 @@ import lombok.Data;
 @Builder
 public class AccountsResponse {
 
-    private List<AccountInfo> accounts;
+  private List<AccountInfo> accounts;
 
-    @Data
-    @Builder
-    public static class AccountInfo {
+  @Data
+  @Builder
+  public static class AccountInfo {
 
-        /**
-         * Base58 address
-         */
-        private String address;
+    /**
+     * Base58 address
+     */
+    private String address;
 
-        /**
-         * Balance in XDAG units (decimal string with 9 decimals)
-         */
-        private String balance;
+    /**
+     * Balance in XDAG units (decimal string with 9 decimals)
+     */
+    private String balance;
 
-        /**
-         * Account nonce
-         */
-        private long nonce;
+    /**
+     * Account nonce
+     */
+    private long nonce;
 
-        /**
-         * Account type: "hd" or "imported"
-         */
-        private String type;
-    }
+    /**
+     * Account type: "hd" or "imported"
+     */
+    private String type;
+  }
 }

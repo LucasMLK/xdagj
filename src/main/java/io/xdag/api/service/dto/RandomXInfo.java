@@ -31,8 +31,8 @@ import lombok.Data;
  * RandomXInfo - Information about RandomX proof-of-work fork status
  *
  * <p>This class provides information about the RandomX mining algorithm fork.
- * External miners and pool servers use this to determine which hashing algorithm
- * to use (SHA256 pre-fork, RandomX post-fork).
+ * External miners and pool servers use this to determine which hashing algorithm to use (SHA256
+ * pre-fork, RandomX post-fork).
  *
  * <h2>RandomX Fork</h2>
  * <p>XDAG transitioned from SHA256 to RandomX proof-of-work at a specific epoch.
@@ -61,100 +61,98 @@ import lombok.Data;
 @Builder
 public class RandomXInfo {
 
-    /**
-     * Whether RandomX is enabled in node configuration
-     */
-    private final boolean enabled;
+  /**
+   * Whether RandomX is enabled in node configuration
+   */
+  private final boolean enabled;
 
-    /**
-     * Current epoch number
-     */
-    private final long currentEpoch;
+  /**
+   * Current epoch number
+   */
+  private final long currentEpoch;
 
-    /**
-     * Epoch at which RandomX fork activates
-     * (blocks before this epoch use SHA256, after use RandomX)
-     */
-    private final long forkEpoch;
+  /**
+   * Epoch at which RandomX fork activates (blocks before this epoch use SHA256, after use RandomX)
+   */
+  private final long forkEpoch;
 
-    /**
-     * Whether RandomX VM is initialized and ready
-     * (false during initialization, true when ready to hash)
-     */
-    private final boolean vmReady;
+  /**
+   * Whether RandomX VM is initialized and ready (false during initialization, true when ready to
+   * hash)
+   */
+  private final boolean vmReady;
 
-    /**
-     * RandomX seed epoch interval (how often seed changes)
-     * Typically 64 or 128 epochs
-     */
-    private final long seedEpochInterval;
+  /**
+   * RandomX seed epoch interval (how often seed changes) Typically 64 or 128 epochs
+   */
+  private final long seedEpochInterval;
 
-    /**
-     * Check if RandomX fork is currently active
-     *
-     * @return true if current epoch >= fork epoch and RandomX is enabled
-     */
-    public boolean isForkActive() {
-        return enabled && currentEpoch >= forkEpoch;
-    }
+  /**
+   * Check if RandomX fork is currently active
+   *
+   * @return true if current epoch >= fork epoch and RandomX is enabled
+   */
+  public boolean isForkActive() {
+    return enabled && currentEpoch >= forkEpoch;
+  }
 
-    /**
-     * Get algorithm name based on current state
-     *
-     * @return "RandomX" if fork active, "SHA256" otherwise
-     */
-    public String getAlgorithmName() {
-        return isForkActive() ? "RandomX" : "SHA256";
-    }
+  /**
+   * Get algorithm name based on current state
+   *
+   * @return "RandomX" if fork active, "SHA256" otherwise
+   */
+  public String getAlgorithmName() {
+    return isForkActive() ? "RandomX" : "SHA256";
+  }
 
-    /**
-     * Create RandomXInfo for pre-fork state (SHA256 mining)
-     *
-     * @param currentEpoch Current epoch number
-     * @param forkEpoch Epoch when RandomX will activate
-     * @return RandomXInfo indicating SHA256 mining
-     */
-    public static RandomXInfo preFork(long currentEpoch, long forkEpoch) {
-        return RandomXInfo.builder()
-                .enabled(true)
-                .currentEpoch(currentEpoch)
-                .forkEpoch(forkEpoch)
-                .vmReady(false)
-                .seedEpochInterval(64)
-                .build();
-    }
+  /**
+   * Create RandomXInfo for pre-fork state (SHA256 mining)
+   *
+   * @param currentEpoch Current epoch number
+   * @param forkEpoch    Epoch when RandomX will activate
+   * @return RandomXInfo indicating SHA256 mining
+   */
+  public static RandomXInfo preFork(long currentEpoch, long forkEpoch) {
+    return RandomXInfo.builder()
+        .enabled(true)
+        .currentEpoch(currentEpoch)
+        .forkEpoch(forkEpoch)
+        .vmReady(false)
+        .seedEpochInterval(64)
+        .build();
+  }
 
-    /**
-     * Create RandomXInfo for post-fork state (RandomX mining)
-     *
-     * @param currentEpoch Current epoch number
-     * @param forkEpoch Epoch when RandomX activated
-     * @param vmReady Whether RandomX VM is initialized
-     * @return RandomXInfo indicating RandomX mining
-     */
-    public static RandomXInfo postFork(long currentEpoch, long forkEpoch, boolean vmReady) {
-        return RandomXInfo.builder()
-                .enabled(true)
-                .currentEpoch(currentEpoch)
-                .forkEpoch(forkEpoch)
-                .vmReady(vmReady)
-                .seedEpochInterval(64)
-                .build();
-    }
+  /**
+   * Create RandomXInfo for post-fork state (RandomX mining)
+   *
+   * @param currentEpoch Current epoch number
+   * @param forkEpoch    Epoch when RandomX activated
+   * @param vmReady      Whether RandomX VM is initialized
+   * @return RandomXInfo indicating RandomX mining
+   */
+  public static RandomXInfo postFork(long currentEpoch, long forkEpoch, boolean vmReady) {
+    return RandomXInfo.builder()
+        .enabled(true)
+        .currentEpoch(currentEpoch)
+        .forkEpoch(forkEpoch)
+        .vmReady(vmReady)
+        .seedEpochInterval(64)
+        .build();
+  }
 
-    /**
-     * Create RandomXInfo when RandomX is disabled (always SHA256)
-     *
-     * @param currentEpoch Current epoch number
-     * @return RandomXInfo indicating SHA256 mining
-     */
-    public static RandomXInfo disabled(long currentEpoch) {
-        return RandomXInfo.builder()
-                .enabled(false)
-                .currentEpoch(currentEpoch)
-                .forkEpoch(Long.MAX_VALUE)
-                .vmReady(false)
-                .seedEpochInterval(64)
-                .build();
-    }
+  /**
+   * Create RandomXInfo when RandomX is disabled (always SHA256)
+   *
+   * @param currentEpoch Current epoch number
+   * @return RandomXInfo indicating SHA256 mining
+   */
+  public static RandomXInfo disabled(long currentEpoch) {
+    return RandomXInfo.builder()
+        .enabled(false)
+        .currentEpoch(currentEpoch)
+        .forkEpoch(Long.MAX_VALUE)
+        .vmReady(false)
+        .seedEpochInterval(64)
+        .build();
+  }
 }

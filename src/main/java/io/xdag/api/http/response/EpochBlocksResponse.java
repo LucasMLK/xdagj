@@ -24,10 +24,9 @@
 package io.xdag.api.http.response;
 
 import io.xdag.api.http.pagination.PaginationInfo;
+import java.util.List;
 import lombok.Builder;
 import lombok.Data;
-
-import java.util.List;
 
 /**
  * Response for epoch blocks query with pagination
@@ -35,33 +34,34 @@ import java.util.List;
 @Data
 @Builder
 public class EpochBlocksResponse {
-    /**
-     * The queried epoch number
-     */
-    private long epoch;
 
-    /**
-     * Total number of blocks in this epoch (across all pages)
-     */
-    private long blockCount;
+  /**
+   * The queried epoch number
+   */
+  private long epoch;
 
-    /**
-     * Pagination metadata
-     */
-    private PaginationInfo pagination;
+  /**
+   * Total number of blocks in this epoch (across all pages)
+   */
+  private long blockCount;
 
-    /**
-     * Blocks in the current page
-     */
-    private List<BlockSummaryResponse> blocks;
+  /**
+   * Pagination metadata
+   */
+  private PaginationInfo pagination;
 
-    public static EpochBlocksResponse of(long epoch, List<BlockSummaryResponse> blocks,
-                                          PaginationInfo pagination, long total) {
-        return EpochBlocksResponse.builder()
-                .epoch(epoch)
-                .blockCount(total)
-                .pagination(pagination)
-                .blocks(blocks)
-                .build();
-    }
+  /**
+   * Blocks in the current page
+   */
+  private List<BlockSummaryResponse> blocks;
+
+  public static EpochBlocksResponse of(long epoch, List<BlockSummaryResponse> blocks,
+      PaginationInfo pagination, long total) {
+    return EpochBlocksResponse.builder()
+        .epoch(epoch)
+        .blockCount(total)
+        .pagination(pagination)
+        .blocks(blocks)
+        .build();
+  }
 }

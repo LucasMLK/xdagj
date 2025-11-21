@@ -32,81 +32,81 @@ import org.apache.commons.lang3.StringUtils;
  */
 public class Numeric {
 
-    private static final String HEX_PREFIX = "0x";
-    private static final char[] HEX_CHAR_MAP = "0123456789abcdef".toCharArray();
+  private static final String HEX_PREFIX = "0x";
+  private static final char[] HEX_CHAR_MAP = "0123456789abcdef".toCharArray();
 
-    private Numeric() {
-    }
+  private Numeric() {
+  }
 
-    /**
-     * Removes "0x" prefix from hex string if present
-     */
-    public static String cleanHexPrefix(String input) {
-        if (containsHexPrefix(input)) {
-            return input.substring(2);
-        } else {
-            return input;
-        }
+  /**
+   * Removes "0x" prefix from hex string if present
+   */
+  public static String cleanHexPrefix(String input) {
+    if (containsHexPrefix(input)) {
+      return input.substring(2);
+    } else {
+      return input;
     }
+  }
 
-    /**
-     * Checks if string starts with "0x" prefix
-     */
-    public static boolean containsHexPrefix(String input) {
-        return !StringUtils.isEmpty(input)
-                && input.length() > 1
-                && input.charAt(0) == '0'
-                && input.charAt(1) == 'x';
-    }
+  /**
+   * Checks if string starts with "0x" prefix
+   */
+  public static boolean containsHexPrefix(String input) {
+    return !StringUtils.isEmpty(input)
+        && input.length() > 1
+        && input.charAt(0) == '0'
+        && input.charAt(1) == 'x';
+  }
 
-    /**
-     * Converts byte array to BigInteger
-     */
-    public static BigInteger toBigInt(byte[] value) {
-        return new BigInteger(1, value);
-    }
+  /**
+   * Converts byte array to BigInteger
+   */
+  public static BigInteger toBigInt(byte[] value) {
+    return new BigInteger(1, value);
+  }
 
-    /**
-     * Converts hex string to BigInteger, handling "0x" prefix
-     */
-    public static BigInteger toBigInt(String hexValue) {
-        String cleanValue = cleanHexPrefix(hexValue);
-        return toBigIntNoPrefix(cleanValue);
-    }
+  /**
+   * Converts hex string to BigInteger, handling "0x" prefix
+   */
+  public static BigInteger toBigInt(String hexValue) {
+    String cleanValue = cleanHexPrefix(hexValue);
+    return toBigIntNoPrefix(cleanValue);
+  }
 
-    /**
-     * Converts hex string without prefix to BigInteger
-     */
-    public static BigInteger toBigIntNoPrefix(String hexValue) {
-        return new BigInteger(hexValue, 16);
-    }
+  /**
+   * Converts hex string without prefix to BigInteger
+   */
+  public static BigInteger toBigIntNoPrefix(String hexValue) {
+    return new BigInteger(hexValue, 16);
+  }
 
-    /**
-     * Converts byte array to hex string with offset and length
-     */
-    public static String toHexString(byte[] input, int offset, int length, boolean withPrefix) {
-        final String output = new String(toHexCharArray(input, offset, length, withPrefix));
-        return withPrefix ? HEX_PREFIX + output : output;
-    }
+  /**
+   * Converts byte array to hex string with offset and length
+   */
+  public static String toHexString(byte[] input, int offset, int length, boolean withPrefix) {
+    final String output = new String(toHexCharArray(input, offset, length, withPrefix));
+    return withPrefix ? HEX_PREFIX + output : output;
+  }
 
-    /**
-     * Helper method to convert byte array to hex char array
-     */
-    private static char[] toHexCharArray(byte[] input, int offset, int length, boolean withPrefix) {
-        final char[] output = new char[length << 1];
-        for (int i = offset, j = 0; i < length; i++, j++) {
-            final int v = input[i] & 0xFF;
-            output[j++] = HEX_CHAR_MAP[v >>> 4];
-            output[j] = HEX_CHAR_MAP[v & 0x0F];
-        }
-        return output;
+  /**
+   * Helper method to convert byte array to hex char array
+   */
+  private static char[] toHexCharArray(byte[] input, int offset, int length, boolean withPrefix) {
+    final char[] output = new char[length << 1];
+    for (int i = offset, j = 0; i < length; i++, j++) {
+      final int v = input[i] & 0xFF;
+      output[j++] = HEX_CHAR_MAP[v >>> 4];
+      output[j] = HEX_CHAR_MAP[v & 0x0F];
     }
+    return output;
+  }
 
-    /**
-     * Converts byte array to hex string with "0x" prefix
-     */
-    public static String toHexString(byte[] input) {
-        return toHexString(input, 0, input.length, true);
-    }
+  /**
+   * Converts byte array to hex string with "0x" prefix
+   */
+  public static String toHexString(byte[] input) {
+    return toHexString(input, 0, input.length, true);
+  }
 
 }

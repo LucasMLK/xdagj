@@ -31,8 +31,7 @@ import lombok.NoArgsConstructor;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * Epoch information DTO
- * Used by both CLI and RPC to return epoch data
+ * Epoch information DTO Used by both CLI and RPC to return epoch data
  */
 @Data
 @Builder
@@ -40,73 +39,73 @@ import org.apache.tuweni.units.bigints.UInt256;
 @AllArgsConstructor
 public class EpochInfo {
 
-    /**
-     * Epoch number
-     */
-    private long epochNumber;
+  /**
+   * Epoch number
+   */
+  private long epochNumber;
 
-    /**
-     * Is current epoch
-     */
-    private boolean isCurrent;
+  /**
+   * Is current epoch
+   */
+  private boolean isCurrent;
 
-    /**
-     * Epoch start time (seconds)
-     */
-    private long startTime;
+  /**
+   * Epoch start time (seconds)
+   */
+  private long startTime;
 
-    /**
-     * Epoch end time (seconds)
-     */
-    private long endTime;
+  /**
+   * Epoch end time (seconds)
+   */
+  private long endTime;
 
-    /**
-     * Epoch duration (seconds)
-     */
-    private long duration;
+  /**
+   * Epoch duration (seconds)
+   */
+  private long duration;
 
-    /**
-     * Elapsed time (seconds, only for current epoch)
-     */
-    private Long elapsed;
+  /**
+   * Elapsed time (seconds, only for current epoch)
+   */
+  private Long elapsed;
 
-    /**
-     * Progress percentage (only for current epoch)
-     */
-    private Double progress;
+  /**
+   * Progress percentage (only for current epoch)
+   */
+  private Double progress;
 
-    /**
-     * Time until next epoch (seconds, only for current epoch)
-     */
-    private Long timeToNext;
+  /**
+   * Time until next epoch (seconds, only for current epoch)
+   */
+  private Long timeToNext;
 
-    /**
-     * Total candidate blocks in this epoch
-     */
-    private int candidateCount;
+  /**
+   * Total candidate blocks in this epoch
+   */
+  private int candidateCount;
 
-    /**
-     * Winner block hash (full hex string)
-     */
-    private String winnerHash;
+  /**
+   * Winner block hash (full hex string)
+   */
+  private String winnerHash;
 
-    /**
-     * Winner block height
-     */
-    private Long winnerHeight;
+  /**
+   * Winner block height
+   */
+  private Long winnerHeight;
 
-    /**
-     * Orphan blocks count
-     */
-    private int orphanCount;
+  /**
+   * Orphan blocks count
+   */
+  private int orphanCount;
 
-    /**
-     * Average difficulty of candidates
-     */
-    private UInt256 averageDifficulty;
+  /**
+   * Average difficulty of candidates
+   */
+  private UInt256 averageDifficulty;
 
-    /**
-     * Total difficulty of candidates
-     */
-    private UInt256 totalDifficulty;
+  /**
+   * Total difficulty of candidates
+   */
+  private UInt256 totalDifficulty;
 }

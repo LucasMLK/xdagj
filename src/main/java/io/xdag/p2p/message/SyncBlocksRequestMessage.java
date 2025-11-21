@@ -25,12 +25,11 @@ package io.xdag.p2p.message;
 
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
+import java.util.ArrayList;
+import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.tuweni.bytes.Bytes32;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * SyncBlocksRequestMessage - Batch request blocks by hash list
@@ -38,8 +37,8 @@ import java.util.List;
  * <p>Hybrid Sync Protocol - Blocks Batch Request (0x23)
  *
  * <p><strong>Purpose</strong>:
- * Request a batch of blocks by their hash list. Used during the
- * Solidification phase to fill missing blocks discovered during sync.
+ * Request a batch of blocks by their hash list. Used during the Solidification phase to fill
+ * missing blocks discovered during sync.
  *
  * <p><strong>Message Format</strong>:
  * <pre>
@@ -98,106 +97,106 @@ import java.util.List;
 @Setter
 public class SyncBlocksRequestMessage extends Message {
 
-    /**
-     * List of block hashes to request
-     */
-    private List<Bytes32> hashes;
+  /**
+   * List of block hashes to request
+   */
+  private List<Bytes32> hashes;
 
-    /**
-     * Whether to return full block data (true) or BlockInfo only (false)
-     */
-    private boolean isRaw;
+  /**
+   * Whether to return full block data (true) or BlockInfo only (false)
+   */
+  private boolean isRaw;
 
-    /**
-     * Constructor for receiving message from network
-     *
-     * <p>Deserializes message body:
-     * <ol>
-     *   <li>Read hashCount (int, 4 bytes)</li>
-     *   <li>For each hash: read 32 bytes</li>
-     *   <li>Read isRaw (boolean, 1 byte)</li>
-     * </ol>
-     *
-     * @param body serialized message body
-     * @throws IllegalArgumentException if deserialization fails
-     */
-    public SyncBlocksRequestMessage(byte[] body) {
-        super(XdagMessageCode.SYNC_BLOCKS_REQUEST, SyncBlocksReplyMessage.class);
+  /**
+   * Constructor for receiving message from network
+   *
+   * <p>Deserializes message body:
+   * <ol>
+   *   <li>Read hashCount (int, 4 bytes)</li>
+   *   <li>For each hash: read 32 bytes</li>
+   *   <li>Read isRaw (boolean, 1 byte)</li>
+   * </ol>
+   *
+   * @param body serialized message body
+   * @throws IllegalArgumentException if deserialization fails
+   */
+  public SyncBlocksRequestMessage(byte[] body) {
+    super(XdagMessageCode.SYNC_BLOCKS_REQUEST, SyncBlocksReplyMessage.class);
 
-        SimpleDecoder dec = new SimpleDecoder(body);
+    SimpleDecoder dec = new SimpleDecoder(body);
 
-        // Deserialize hash count
-        int hashCount = dec.readInt();
-        this.hashes = new ArrayList<>(hashCount);
+    // Deserialize hash count
+    int hashCount = dec.readInt();
+    this.hashes = new ArrayList<>(hashCount);
 
-        // Deserialize each hash (32 bytes)
-        for (int i = 0; i < hashCount; i++) {
-            byte[] hashBytes = new byte[32];
-            dec.readBytes(hashBytes);
-            this.hashes.add(Bytes32.wrap(hashBytes));
-        }
-
-        // Deserialize isRaw flag
-        this.isRaw = dec.readBoolean();
-
-        // Set body for reference
-        this.body = body;
+    // Deserialize each hash (32 bytes)
+    for (int i = 0; i < hashCount; i++) {
+      byte[] hashBytes = new byte[32];
+      dec.readBytes(hashBytes);
+      this.hashes.add(Bytes32.wrap(hashBytes));
     }
 
-    /**
-     * Constructor for sending message to network
-     *
-     * <p>Serializes message:
-     * <ol>
-     *   <li>Write hashCount (int, 4 bytes)</li>
-     *   <li>For each hash: write 32 bytes</li>
-     *   <li>Write isRaw (boolean, 1 byte)</li>
-     * </ol>
-     *
-     * @param hashes list of block hashes to request
-     * @param isRaw true = full block data, false = BlockInfo only
-     */
-    public SyncBlocksRequestMessage(List<Bytes32> hashes, boolean isRaw) {
-        super(XdagMessageCode.SYNC_BLOCKS_REQUEST, SyncBlocksReplyMessage.class);
+    // Deserialize isRaw flag
+    this.isRaw = dec.readBoolean();
 
-        this.hashes = hashes;
-        this.isRaw = isRaw;
+    // Set body for reference
+    this.body = body;
+  }
 
-        // Serialize message body
-        SimpleEncoder enc = new SimpleEncoder();
-        encode(enc);
-        this.body = enc.toBytes();
+  /**
+   * Constructor for sending message to network
+   *
+   * <p>Serializes message:
+   * <ol>
+   *   <li>Write hashCount (int, 4 bytes)</li>
+   *   <li>For each hash: write 32 bytes</li>
+   *   <li>Write isRaw (boolean, 1 byte)</li>
+   * </ol>
+   *
+   * @param hashes list of block hashes to request
+   * @param isRaw  true = full block data, false = BlockInfo only
+   */
+  public SyncBlocksRequestMessage(List<Bytes32> hashes, boolean isRaw) {
+    super(XdagMessageCode.SYNC_BLOCKS_REQUEST, SyncBlocksReplyMessage.class);
+
+    this.hashes = hashes;
+    this.isRaw = isRaw;
+
+    // Serialize message body
+    SimpleEncoder enc = new SimpleEncoder();
+    encode(enc);
+    this.body = enc.toBytes();
+  }
+
+  /**
+   * Encode message to bytes
+   *
+   * <p>Format:
+   * [4 bytes hashCount] + [32 bytes per hash] + [1 byte isRaw]
+   *
+   */
+  @Override
+  public void encode(SimpleEncoder enc) {
+    // Serialize hash count
+    enc.writeInt(hashes.size());
+
+    // Serialize each hash (32 bytes)
+    for (Bytes32 hash : hashes) {
+      enc.write(hash.toArray());
     }
 
-    /**
-     * Encode message to bytes
-     *
-     * <p>Format:
-     * [4 bytes hashCount] + [32 bytes per hash] + [1 byte isRaw]
-     *
-     */
-    @Override
-    public void encode(SimpleEncoder enc) {
-        // Serialize hash count
-        enc.writeInt(hashes.size());
-
-        // Serialize each hash (32 bytes)
-        for (Bytes32 hash : hashes) {
-            enc.write(hash.toArray());
-        }
-
-        // Serialize isRaw flag
-        enc.writeBoolean(isRaw);
-    }
+    // Serialize isRaw flag
+    enc.writeBoolean(isRaw);
+  }
 
 
-    @Override
-    public String toString() {
-        return String.format(
-            "SyncBlocksRequestMessage[hashes=%d, raw=%b, size=%d bytes]",
-            hashes != null ? hashes.size() : 0,
-            isRaw,
-            body != null ? body.length : 0
-        );
-    }
+  @Override
+  public String toString() {
+    return String.format(
+        "SyncBlocksRequestMessage[hashes=%d, raw=%b, size=%d bytes]",
+        hashes != null ? hashes.size() : 0,
+        isRaw,
+        body != null ? body.length : 0
+    );
+  }
 }

@@ -26,55 +26,52 @@ package io.xdag.store.rocksdb.config;
 
 public enum DatabaseName {
 
-    /**
-     * Block index.
-     */
-    INDEX,
+  /**
+   * Block index.
+   */
+  INDEX,
 
-    /**
-     * Block raw data.
-     */
-    BLOCK,
+  /**
+   * Block raw data.
+   */
+  BLOCK,
 
-    /**
-     * Time related block.
-     */
-    TIME,
+  /**
+   * Time related block.
+   */
+  TIME,
 
-    /**
-     * Orphan block index
-     */
-    ORPHANIND,
+  /**
+   * Orphan block index
+   */
+  ORPHANIND,
 
-    SNAPSHOT,
+  SNAPSHOT,
 
-    ADDRESS,
+  ADDRESS,
 
-    TXHISTORY,
+  TXHISTORY,
 
-    /**
-     * Transaction store (Transaction data)
-     * Primary storage for Transaction objects
-     */
-    TRANSACTION,
+  /**
+   * Transaction store (Transaction data) Primary storage for Transaction objects
+   */
+  TRANSACTION,
 
-    // ========== Phase 2 Core Refactor: New Indexes ==========
+  // ========== Phase 2 Core Refactor: New Indexes ==========
 
-    /**
-     * Block epoch index: epoch -> List<blockHash>
-     * For fast DAG sync by epoch
-     */
-    BLOCK_EPOCH,
+  /**
+   * Block epoch index: epoch -> List<blockHash> For fast DAG sync by epoch
+   */
+  BLOCK_EPOCH,
 
-    /**
-     * Main blocks index: height -> blockHash (only main blocks)
-     * For optimized chain sync
-     */
-    MAIN_BLOCKS,
+  /**
+   * Main blocks index: height -> blockHash (only main blocks) For optimized chain sync
+   */
+  MAIN_BLOCKS,
 
-    /**
-     * Block references index: blockHash -> List<referencingHashes>
-     * For Solidification (finding blocks that reference a given block)
-     */
-    BLOCK_REFS
+  /**
+   * Block references index: blockHash -> List<referencingHashes> For Solidification (finding blocks
+   * that reference a given block)
+   */
+  BLOCK_REFS
 }

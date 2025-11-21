@@ -26,11 +26,10 @@ package io.xdag.store;
 
 import io.xdag.core.Account;
 import io.xdag.core.XdagLifecycle;
+import java.util.Optional;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
-
-import java.util.Optional;
 
 /**
  * AccountStore - EVM-compatible account state storage for XDAG
@@ -80,175 +79,175 @@ import java.util.Optional;
  */
 public interface AccountStore extends XdagLifecycle {
 
-    // ==================== CRUD Operations ====================
+  // ==================== CRUD Operations ====================
 
-    /**
-     * Save or update an account
-     *
-     * <p>If account already exists, it will be overwritten.
-     * This operation is atomic.
-     *
-     * @param account account to save
-     */
-    void saveAccount(Account account);
+  /**
+   * Save or update an account
+   *
+   * <p>If account already exists, it will be overwritten.
+   * This operation is atomic.
+   *
+   * @param account account to save
+   */
+  void saveAccount(Account account);
 
-    /**
-     * Get account by address
-     *
-     * @param address account address (20 bytes, hash160)
-     * @return Optional containing Account if exists, empty otherwise
-     */
-    Optional<Account> getAccount(Bytes address);
+  /**
+   * Get account by address
+   *
+   * @param address account address (20 bytes, hash160)
+   * @return Optional containing Account if exists, empty otherwise
+   */
+  Optional<Account> getAccount(Bytes address);
 
-    /**
-     * Check if account exists
-     *
-     * @param address account address (20 bytes)
-     * @return true if account exists
-     */
-    boolean hasAccount(Bytes address);
+  /**
+   * Check if account exists
+   *
+   * @param address account address (20 bytes)
+   * @return true if account exists
+   */
+  boolean hasAccount(Bytes address);
 
   // ==================== Balance Operations ====================
 
-    /**
-     * Get account balance
-     *
-     * @param address account address (20 bytes)
-     * @return balance (UInt256.ZERO if account doesn't exist)
-     */
-    UInt256 getBalance(Bytes address);
+  /**
+   * Get account balance
+   *
+   * @param address account address (20 bytes)
+   * @return balance (UInt256.ZERO if account doesn't exist)
+   */
+  UInt256 getBalance(Bytes address);
 
-    /**
-     * Update account balance
-     *
-     * <p>If account doesn't exist, creates a new EOA account with the balance.
-     * If account exists, updates its balance.
-     *
-     * @param address account address (20 bytes)
-     * @param balance new balance
-     */
-    void setBalance(Bytes address, UInt256 balance);
+  /**
+   * Update account balance
+   *
+   * <p>If account doesn't exist, creates a new EOA account with the balance.
+   * If account exists, updates its balance.
+   *
+   * @param address account address (20 bytes)
+   * @param balance new balance
+   */
+  void setBalance(Bytes address, UInt256 balance);
 
-    /**
-     * Add to account balance
-     *
-     * @param address account address (20 bytes)
-     * @param amount amount to add
-     * @return new balance after addition
-     */
-    UInt256 addBalance(Bytes address, UInt256 amount);
+  /**
+   * Add to account balance
+   *
+   * @param address account address (20 bytes)
+   * @param amount  amount to add
+   * @return new balance after addition
+   */
+  UInt256 addBalance(Bytes address, UInt256 amount);
 
-    /**
-     * Subtract from account balance
-     *
-     * @param address account address (20 bytes)
-     * @param amount amount to subtract
-     * @return new balance after subtraction
-     * @throws IllegalArgumentException if insufficient balance
-     */
-    UInt256 subtractBalance(Bytes address, UInt256 amount);
+  /**
+   * Subtract from account balance
+   *
+   * @param address account address (20 bytes)
+   * @param amount  amount to subtract
+   * @return new balance after subtraction
+   * @throws IllegalArgumentException if insufficient balance
+   */
+  UInt256 subtractBalance(Bytes address, UInt256 amount);
 
-    /**
-     * Get total balance of all accounts
-     *
-     * @return sum of all account balances
-     */
-    UInt256 getTotalBalance();
+  /**
+   * Get total balance of all accounts
+   *
+   * @return sum of all account balances
+   */
+  UInt256 getTotalBalance();
 
-    // ==================== Nonce Operations ====================
+  // ==================== Nonce Operations ====================
 
-    /**
-     * Get account nonce
-     *
-     * @param address account address (20 bytes)
-     * @return nonce (UInt64.ZERO if account doesn't exist)
-     */
-    UInt64 getNonce(Bytes address);
+  /**
+   * Get account nonce
+   *
+   * @param address account address (20 bytes)
+   * @return nonce (UInt64.ZERO if account doesn't exist)
+   */
+  UInt64 getNonce(Bytes address);
 
-    /**
-     * Set account nonce
-     *
-     * <p>If account doesn't exist, creates a new EOA account with the nonce.
-     *
-     * @param address account address (20 bytes)
-     * @param nonce new nonce value
-     */
-    void setNonce(Bytes address, UInt64 nonce);
+  /**
+   * Set account nonce
+   *
+   * <p>If account doesn't exist, creates a new EOA account with the nonce.
+   *
+   * @param address account address (20 bytes)
+   * @param nonce   new nonce value
+   */
+  void setNonce(Bytes address, UInt64 nonce);
 
-    /**
-     * Increment account nonce by 1
-     *
-     * <p>Used when processing transactions. If account doesn't exist,
-     * creates a new EOA with nonce = 1.
-     *
-     * @param address account address (20 bytes)
-     * @return new nonce value after increment
-     */
-    UInt64 incrementNonce(Bytes address);
+  /**
+   * Increment account nonce by 1
+   *
+   * <p>Used when processing transactions. If account doesn't exist,
+   * creates a new EOA with nonce = 1.
+   *
+   * @param address account address (20 bytes)
+   * @return new nonce value after increment
+   */
+  UInt64 incrementNonce(Bytes address);
 
-    /**
-     * Decrement account nonce by 1
-     *
-     * <p>Used during transaction rollback when restoring account state.
-     * If account doesn't exist or nonce is already zero, throws IllegalStateException.
-     *
-     * @param address account address (20 bytes)
-     * @return new nonce value after decrement
-     * @throws IllegalStateException if account doesn't exist or nonce is zero
-     */
-    UInt64 decrementNonce(Bytes address);
+  /**
+   * Decrement account nonce by 1
+   *
+   * <p>Used during transaction rollback when restoring account state.
+   * If account doesn't exist or nonce is already zero, throws IllegalStateException.
+   *
+   * @param address account address (20 bytes)
+   * @return new nonce value after decrement
+   * @throws IllegalStateException if account doesn't exist or nonce is zero
+   */
+  UInt64 decrementNonce(Bytes address);
 
-    // ==================== Contract Operations ====================
+  // ==================== Contract Operations ====================
 
   // ==================== Batch Operations ====================
 
   // ==================== Statistics ====================
 
-    /**
-     * Get total number of accounts
-     *
-     * @return account count
-     */
-    UInt64 getAccountCount();
+  /**
+   * Get total number of accounts
+   *
+   * @return account count
+   */
+  UInt64 getAccountCount();
 
   // ==================== Maintenance ====================
 
-    /**
-     * Reset all account data
-     *
-     * <p>WARNING: This deletes ALL accounts and cannot be undone!
-     * Only use for testing or migration.
-     */
-    void reset();
+  /**
+   * Reset all account data
+   *
+   * <p>WARNING: This deletes ALL accounts and cannot be undone!
+   * Only use for testing or migration.
+   */
+  void reset();
 
   // ==================== Transactional Methods (Atomic Block Processing) ====================
 
   /**
-     * Update account balance within a transaction
-     *
-     * <p>This method buffers the balance update in a transaction. If the account doesn't
-     * exist, creates a new EOA account with the balance. The operation is NOT written to
-     * disk until the transaction is committed.
-     *
-     * @param txId transaction ID from RocksDBTransactionManager
-     * @param address account address (20 bytes)
-     * @param newBalance new balance
-     * @throws io.xdag.store.rocksdb.transaction.TransactionException if operation fails
-     */
-    void setBalanceInTransaction(String txId, Bytes address, UInt256 newBalance)
-            throws io.xdag.store.rocksdb.transaction.TransactionException;
+   * Update account balance within a transaction
+   *
+   * <p>This method buffers the balance update in a transaction. If the account doesn't
+   * exist, creates a new EOA account with the balance. The operation is NOT written to disk until
+   * the transaction is committed.
+   *
+   * @param txId       transaction ID from RocksDBTransactionManager
+   * @param address    account address (20 bytes)
+   * @param newBalance new balance
+   * @throws io.xdag.store.rocksdb.transaction.TransactionException if operation fails
+   */
+  void setBalanceInTransaction(String txId, Bytes address, UInt256 newBalance)
+      throws io.xdag.store.rocksdb.transaction.TransactionException;
 
-    /**
-     * Update account nonce within a transaction
-     *
-     * <p>This method buffers the nonce update in a transaction. The operation is NOT
-     * written to disk until the transaction is committed.
-     *
-     * @param txId transaction ID from RocksDBTransactionManager
-     * @param address account address (20 bytes)
-     * @param newNonce new nonce
-     * @throws io.xdag.store.rocksdb.transaction.TransactionException if operation fails
-     */
-    void setNonceInTransaction(String txId, Bytes address, UInt256 newNonce)
-            throws io.xdag.store.rocksdb.transaction.TransactionException;
+  /**
+   * Update account nonce within a transaction
+   *
+   * <p>This method buffers the nonce update in a transaction. The operation is NOT
+   * written to disk until the transaction is committed.
+   *
+   * @param txId     transaction ID from RocksDBTransactionManager
+   * @param address  account address (20 bytes)
+   * @param newNonce new nonce
+   * @throws io.xdag.store.rocksdb.transaction.TransactionException if operation fails
+   */
+  void setNonceInTransaction(String txId, Bytes address, UInt256 newNonce)
+      throws io.xdag.store.rocksdb.transaction.TransactionException;
 }

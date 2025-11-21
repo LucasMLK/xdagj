@@ -68,409 +68,412 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 @Setter
 public class Wallet {
 
-    public static final Set<PosixFilePermission> POSIX_SECURED_PERMISSIONS = Set.of(OWNER_READ, OWNER_WRITE);
-    private static final int VERSION = 4;
-    private static final int SALT_LENGTH = 16;
-    private static final int BCRYPT_COST = 12;
-    private static final String MNEMONIC_PASS_PHRASE = "";
-    /**
-     * Returns the file where the wallet is persisted.
-     */
-    private final File file;
-    private final Config config;
+  public static final Set<PosixFilePermission> POSIX_SECURED_PERMISSIONS = Set.of(OWNER_READ,
+      OWNER_WRITE);
+  private static final int VERSION = 4;
+  private static final int SALT_LENGTH = 16;
+  private static final int BCRYPT_COST = 12;
+  private static final String MNEMONIC_PASS_PHRASE = "";
+  /**
+   * Returns the file where the wallet is persisted.
+   */
+  private final File file;
+  private final Config config;
 
-    private final Map<Bytes, ECKeyPair> accounts = Collections.synchronizedMap(new LinkedHashMap<>());
-    private String password;
+  private final Map<Bytes, ECKeyPair> accounts = Collections.synchronizedMap(new LinkedHashMap<>());
+  private String password;
 
-    // HD wallet key
-    private String mnemonicPhrase = "";
-    private int nextAccountIndex = 0;
+  // HD wallet key
+  private String mnemonicPhrase = "";
+  private int nextAccountIndex = 0;
 
-    static {
-        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-            Security.addProvider(new BouncyCastleProvider());
-        }
+  static {
+    if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
+      Security.addProvider(new BouncyCastleProvider());
+    }
+  }
+
+  /**
+   * Creates a new wallet instance.
+   */
+  public Wallet(Config config) {
+    this.file = FileUtils.getFile(config.getWalletSpec().getWalletFilePath());
+    this.config = config;
+  }
+
+  /**
+   * Returns whether the wallet file exists and non-empty.
+   */
+  public boolean exists() {
+    return file.length() > 0;
+  }
+
+  /**
+   * Deletes the wallet file.
+   */
+  public void delete() throws IOException {
+    Files.delete(file.toPath());
+  }
+
+  /**
+   * Locks the wallet.
+   */
+  public void lock() {
+    password = null;
+    accounts.clear();
+  }
+
+  public ECKeyPair getDefKey() {
+    List<ECKeyPair> accountList = getAccounts();
+    if (CollectionUtils.isNotEmpty(accountList)) {
+      return accountList.getFirst();
+    }
+    return null;
+  }
+
+  /**
+   * Unlocks this wallet
+   */
+  public boolean unlock(String password) {
+    if (password == null) {
+      throw new IllegalArgumentException("Password can not be null");
     }
 
-    /**
-     * Creates a new wallet instance.
-     */
-    public Wallet(Config config) {
-        this.file = FileUtils.getFile(config.getWalletSpec().getWalletFilePath());
-        this.config = config;
-    }
+    try {
+      byte[] key;
+      byte[] salt;
 
-    /**
-     * Returns whether the wallet file exists and non-empty.
-     */
-    public boolean exists() {
-        return file.length() > 0;
-    }
+      if (exists()) {
 
-    /**
-     * Deletes the wallet file.
-     */
-    public void delete() throws IOException {
-        Files.delete(file.toPath());
-    }
+        SimpleDecoder dec = new SimpleDecoder(FileUtils.readFileToByteArray(file));
+        int version = dec.readInt(); // version
 
-    /**
-     * Locks the wallet.
-     */
-    public void lock() {
-        password = null;
-        accounts.clear();
-    }
-
-    public ECKeyPair getDefKey() {
-        List<ECKeyPair> accountList = getAccounts();
-        if (CollectionUtils.isNotEmpty(accountList)) {
-            return accountList.getFirst();
-        }
-        return null;
-    }
-
-    /**
-     * Unlocks this wallet
-     */
-    public boolean unlock(String password) {
-        if (password == null) {
-            throw new IllegalArgumentException("Password can not be null");
-        }
-
-        try {
-            byte[] key;
-            byte[] salt;
-
-            if (exists()) {
-
-                SimpleDecoder dec = new SimpleDecoder(FileUtils.readFileToByteArray(file));
-                int version = dec.readInt(); // version
-
-                Set<ECKeyPair> newAccounts;
-                switch (version) {
-                    // only version 4
-                    case 4 -> {
-                        salt = dec.readBytes();
-                        key = BCrypt.generate(password.getBytes(UTF_8), salt, BCRYPT_COST);
-                        try {
-                            newAccounts = readAccounts(key, dec, true, version);
-                            readHdSeed(key, dec);
-                        } catch (Exception e) {
-                            log.warn("Failed to read HD mnemonic phrase");
-                            return false;
-                        }
-                    }
-                    default -> throw new RuntimeException("Unknown wallet version.");
-                }
-
-                synchronized (accounts) {
-                    accounts.clear();
-                    for (ECKeyPair account : newAccounts) {
-                        Bytes b = Bytes.wrap(toBytesAddress(account));
-                        accounts.put(b, account);
-                    }
-                }
+        Set<ECKeyPair> newAccounts;
+        switch (version) {
+          // only version 4
+          case 4 -> {
+            salt = dec.readBytes();
+            key = BCrypt.generate(password.getBytes(UTF_8), salt, BCRYPT_COST);
+            try {
+              newAccounts = readAccounts(key, dec, true, version);
+              readHdSeed(key, dec);
+            } catch (Exception e) {
+              log.warn("Failed to read HD mnemonic phrase");
+              return false;
             }
-            this.password = password;
-            return true;
-        } catch (Exception e) {
-            log.error("Failed to open wallet", e);
+          }
+          default -> throw new RuntimeException("Unknown wallet version.");
         }
-        return false;
-    }
 
-    /**
-     * Reads the account keys.
-     */
-    protected LinkedHashSet<ECKeyPair> readAccounts(byte[] key, SimpleDecoder dec, boolean vlq, int version)
-        throws CryptoException {
-        LinkedHashSet<ECKeyPair> keys = new LinkedHashSet<>();
-        int total = dec.readInt(); // size
-
-        for (int i = 0; i < total; i++) {
-            byte[] iv = dec.readBytes(vlq);
-            byte[] privateKey = Aes.decrypt(dec.readBytes(vlq), key, iv);
-            ECKeyPair keyPair = ECKeyPair.fromPrivateKey(PrivateKey.fromBigInteger(Numeric.toBigInt(privateKey)));
-            keys.add(keyPair);
-        }
-        return keys;
-    }
-
-    /**
-     * Writes the account keys.
-     */
-    protected void writeAccounts(byte[] key, SimpleEncoder enc) throws CryptoException {
         synchronized (accounts) {
-            enc.writeInt(accounts.size());
-            for (ECKeyPair keyPair : accounts.values()) {
-                byte[] iv = CryptoProvider.nextBytes(16);
-
-                enc.writeBytes(iv);
-                enc.writeBytes(Aes.encrypt(keyPair.getPrivateKey().toBytes().toArray(), key, iv));
-            }
+          accounts.clear();
+          for (ECKeyPair account : newAccounts) {
+            Bytes b = Bytes.wrap(toBytesAddress(account));
+            accounts.put(b, account);
+          }
         }
+      }
+      this.password = password;
+      return true;
+    } catch (Exception e) {
+      log.error("Failed to open wallet", e);
     }
+    return false;
+  }
 
-    /**
-     * Reads the mnemonic phase and next account index.
-     */
-    protected void readHdSeed(byte[] key, SimpleDecoder dec) throws CryptoException {
-        byte[] iv = dec.readBytes();
-        byte[] hdSeedEncrypted = dec.readBytes();
-        byte[] hdSeedRaw = Aes.decrypt(hdSeedEncrypted, key, iv);
+  /**
+   * Reads the account keys.
+   */
+  protected LinkedHashSet<ECKeyPair> readAccounts(byte[] key, SimpleDecoder dec, boolean vlq,
+      int version)
+      throws CryptoException {
+    LinkedHashSet<ECKeyPair> keys = new LinkedHashSet<>();
+    int total = dec.readInt(); // size
 
-        SimpleDecoder d = new SimpleDecoder(hdSeedRaw);
-        mnemonicPhrase = d.readString();
-        nextAccountIndex = d.readInt();
+    for (int i = 0; i < total; i++) {
+      byte[] iv = dec.readBytes(vlq);
+      byte[] privateKey = Aes.decrypt(dec.readBytes(vlq), key, iv);
+      ECKeyPair keyPair = ECKeyPair.fromPrivateKey(
+          PrivateKey.fromBigInteger(Numeric.toBigInt(privateKey)));
+      keys.add(keyPair);
     }
+    return keys;
+  }
 
-    /**
-     * Writes the mnemonic phase and next account index.
-     */
-    protected void writeHdSeed(byte[] key, SimpleEncoder enc) throws CryptoException {
-        SimpleEncoder e = new SimpleEncoder();
-        e.writeString(mnemonicPhrase);
-        e.writeInt(nextAccountIndex);
-
+  /**
+   * Writes the account keys.
+   */
+  protected void writeAccounts(byte[] key, SimpleEncoder enc) throws CryptoException {
+    synchronized (accounts) {
+      enc.writeInt(accounts.size());
+      for (ECKeyPair keyPair : accounts.values()) {
         byte[] iv = CryptoProvider.nextBytes(16);
-        byte[] hdSeedRaw = e.toBytes();
-        byte[] hdSeedEncrypted = Aes.encrypt(hdSeedRaw, key, iv);
 
         enc.writeBytes(iv);
-        enc.writeBytes(hdSeedEncrypted);
+        enc.writeBytes(Aes.encrypt(keyPair.getPrivateKey().toBytes().toArray(), key, iv));
+      }
+    }
+  }
+
+  /**
+   * Reads the mnemonic phase and next account index.
+   */
+  protected void readHdSeed(byte[] key, SimpleDecoder dec) throws CryptoException {
+    byte[] iv = dec.readBytes();
+    byte[] hdSeedEncrypted = dec.readBytes();
+    byte[] hdSeedRaw = Aes.decrypt(hdSeedEncrypted, key, iv);
+
+    SimpleDecoder d = new SimpleDecoder(hdSeedRaw);
+    mnemonicPhrase = d.readString();
+    nextAccountIndex = d.readInt();
+  }
+
+  /**
+   * Writes the mnemonic phase and next account index.
+   */
+  protected void writeHdSeed(byte[] key, SimpleEncoder enc) throws CryptoException {
+    SimpleEncoder e = new SimpleEncoder();
+    e.writeString(mnemonicPhrase);
+    e.writeInt(nextAccountIndex);
+
+    byte[] iv = CryptoProvider.nextBytes(16);
+    byte[] hdSeedRaw = e.toBytes();
+    byte[] hdSeedEncrypted = Aes.encrypt(hdSeedRaw, key, iv);
+
+    enc.writeBytes(iv);
+    enc.writeBytes(hdSeedEncrypted);
+  }
+
+  /**
+   * Returns if this wallet is unlocked.
+   */
+  public boolean isUnlocked() {
+    return !isLocked();
+  }
+
+  /**
+   * Returns whether the wallet is locked.
+   */
+  public boolean isLocked() {
+    return password == null;
+  }
+
+  /**
+   * Returns a copy of the accounts inside this wallet.
+   */
+  public List<ECKeyPair> getAccounts() {
+    requireUnlocked();
+    synchronized (accounts) {
+      return Lists.newArrayList(accounts.values());
+    }
+  }
+
+  /**
+   * Sets the accounts inside this wallet.
+   */
+  public void setAccounts(List<ECKeyPair> list) {
+    requireUnlocked();
+    accounts.clear();
+    for (ECKeyPair key : list) {
+      addAccount(key);
+    }
+  }
+
+  /**
+   * Returns account by index.
+   */
+  public ECKeyPair getAccount(int idx) {
+    requireUnlocked();
+    synchronized (accounts) {
+      return getAccounts().get(idx);
+    }
+  }
+
+  /**
+   * Returns account by address.
+   */
+  public ECKeyPair getAccount(byte[] address) {
+    requireUnlocked();
+
+    synchronized (accounts) {
+      return accounts.get(Bytes.of(address));
+    }
+  }
+
+  /**
+   * Flushes this wallet into the disk.
+   */
+  public boolean flush() {
+    requireUnlocked();
+
+    try {
+      SimpleEncoder enc = new SimpleEncoder();
+      enc.writeInt(VERSION);
+
+      byte[] salt = CryptoProvider.nextBytes(SALT_LENGTH);
+      enc.writeBytes(salt);
+
+      byte[] key = BCrypt.generate(password.getBytes(UTF_8), salt, BCRYPT_COST);
+
+      writeAccounts(key, enc);
+      writeHdSeed(key, enc);
+
+      if (!file.getParentFile().exists() && !file.getParentFile().mkdirs()) {
+        log.error("Failed to create the directory for wallet");
+        return false;
+      }
+
+      // set posix permissions
+      if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")
+          && !file.exists()) {
+        Files.createFile(file.toPath());
+        Files.setPosixFilePermissions(file.toPath(), POSIX_SECURED_PERMISSIONS);
+      }
+
+      FileUtils.writeByteArrayToFile(file, enc.toBytes());
+      return true;
+    } catch (IOException e) {
+      log.error("Failed to write wallet to disk", e);
+    } catch (CryptoException e) {
+      throw new RuntimeException(e);
+    }
+    return false;
+  }
+
+
+  private void requireUnlocked() {
+    if (!isUnlocked()) {
+      throw new RuntimeException("Wallet is Locked!");
+    }
+  }
+
+  /**
+   * Adds a new account to the wallet.
+   */
+  public boolean addAccount(ECKeyPair newKey) {
+    requireUnlocked();
+
+    synchronized (accounts) {
+      Bytes b = toBytesAddress(newKey);
+      if (accounts.containsKey(b)) {
+        return false;
+      }
+
+      accounts.put(b, newKey);
+      return true;
+    }
+  }
+
+  /**
+   * Add an account with randomly generated key.
+   */
+  public ECKeyPair addAccountRandom() {
+    ECKeyPair key = ECKeyPair.generate();
+    addAccount(key);
+    return key;
+  }
+
+  /**
+   * Adds a list of accounts to the wallet.
+   */
+  public int addAccounts(List<ECKeyPair> accounts) {
+    requireUnlocked();
+
+    int n = 0;
+    for (ECKeyPair acc : accounts) {
+      n += addAccount(acc) ? 1 : 0;
+    }
+    return n;
+  }
+
+  /**
+   * Deletes an account in the wallet.
+   */
+  public boolean removeAccount(ECKeyPair key) {
+    return removeAccount(toBytesAddress(key).toArrayUnsafe());
+  }
+
+  /**
+   * Deletes an account in the wallet.
+   */
+  public boolean removeAccount(byte[] address) {
+    requireUnlocked();
+    synchronized (accounts) {
+      return accounts.remove(Bytes.of(address)) != null;
+    }
+  }
+
+  /**
+   * Changes the password of the wallet.
+   */
+  public void changePassword(String newPassword) {
+    requireUnlocked();
+
+    if (newPassword == null) {
+      throw new IllegalArgumentException("Password can not be null");
     }
 
-    /**
-     * Returns if this wallet is unlocked.
-     */
-    public boolean isUnlocked() {
-        return !isLocked();
+    this.password = newPassword;
+  }
+
+  // ================
+  // HD wallet
+  // ================
+
+  /**
+   * Returns whether the HD seed is initialized.
+   *
+   * @return true if set, otherwise false
+   */
+  public boolean isHdWalletInitialized() {
+    requireUnlocked();
+    return mnemonicPhrase != null && !mnemonicPhrase.isEmpty();
+  }
+
+  /**
+   * Initialize the HD wallet.
+   *
+   * @param mnemonicPhrase the mnemonic word list
+   */
+  public void initializeHdWallet(String mnemonicPhrase) {
+    this.mnemonicPhrase = mnemonicPhrase;
+    this.nextAccountIndex = 0;
+  }
+
+  /**
+   * Returns the HD seed.
+   */
+  public byte[] getSeed() {
+    try {
+      return Bip39Mnemonic.toSeed(this.mnemonicPhrase, MNEMONIC_PASS_PHRASE).toArrayUnsafe();
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to generate seed from mnemonic", e);
     }
+  }
 
-    /**
-     * Returns whether the wallet is locked.
-     */
-    public boolean isLocked() {
-        return password == null;
-    }
+  /**
+   * Derives a key based on the current HD account index, and put it into the wallet.
+   */
+  public ECKeyPair addAccountWithNextHdKey() {
+    requireUnlocked();
+    requireHdWalletInitialized();
 
-    /**
-     * Returns a copy of the accounts inside this wallet.
-     */
-    public List<ECKeyPair> getAccounts() {
-        requireUnlocked();
-        synchronized (accounts) {
-            return Lists.newArrayList(accounts.values());
-        }
-    }
-
-    /**
-     * Sets the accounts inside this wallet.
-     */
-    public void setAccounts(List<ECKeyPair> list) {
-        requireUnlocked();
-        accounts.clear();
-        for (ECKeyPair key : list) {
-            addAccount(key);
-        }
-    }
-
-    /**
-     * Returns account by index.
-     */
-    public ECKeyPair getAccount(int idx) {
-        requireUnlocked();
-        synchronized (accounts) {
-            return getAccounts().get(idx);
-        }
-    }
-
-    /**
-     * Returns account by address.
-     */
-    public ECKeyPair getAccount(byte[] address) {
-        requireUnlocked();
-
-        synchronized (accounts) {
-            return accounts.get(Bytes.of(address));
-        }
-    }
-
-    /**
-     * Flushes this wallet into the disk.
-     */
-    public boolean flush() {
-        requireUnlocked();
-
-        try {
-            SimpleEncoder enc = new SimpleEncoder();
-            enc.writeInt(VERSION);
-
-            byte[] salt = CryptoProvider.nextBytes(SALT_LENGTH);
-            enc.writeBytes(salt);
-
-            byte[] key = BCrypt.generate(password.getBytes(UTF_8), salt, BCRYPT_COST);
-
-            writeAccounts(key, enc);
-            writeHdSeed(key, enc);
-
-            if (!file.getParentFile().exists() && !file.getParentFile().mkdirs()) {
-                log.error("Failed to create the directory for wallet");
-                return false;
-            }
-
-            // set posix permissions
-            if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix") && !file.exists()) {
-                Files.createFile(file.toPath());
-                Files.setPosixFilePermissions(file.toPath(), POSIX_SECURED_PERMISSIONS);
-            }
-
-            FileUtils.writeByteArrayToFile(file, enc.toBytes());
-            return true;
-        } catch (IOException e) {
-            log.error("Failed to write wallet to disk", e);
-        } catch (CryptoException e) {
-          throw new RuntimeException(e);
-        }
-      return false;
-    }
-
-
-    private void requireUnlocked() {
-        if (!isUnlocked()) {
-            throw new RuntimeException("Wallet is Locked!");
-        }
-    }
-
-    /**
-     * Adds a new account to the wallet.
-     */
-    public boolean addAccount(ECKeyPair newKey) {
-        requireUnlocked();
-
-        synchronized (accounts) {
-            Bytes b = toBytesAddress(newKey);
-            if (accounts.containsKey(b)) {
-                return false;
-            }
-
-            accounts.put(b, newKey);
-            return true;
-        }
-    }
-
-    /**
-     * Add an account with randomly generated key.
-     */
-    public ECKeyPair addAccountRandom() {
-        ECKeyPair key = ECKeyPair.generate();
-        addAccount(key);
-        return key;
-    }
-
-    /**
-     * Adds a list of accounts to the wallet.
-     */
-    public int addAccounts(List<ECKeyPair> accounts) {
-        requireUnlocked();
-
-        int n = 0;
-        for (ECKeyPair acc : accounts) {
-            n += addAccount(acc) ? 1 : 0;
-        }
-        return n;
-    }
-
-    /**
-     * Deletes an account in the wallet.
-     */
-    public boolean removeAccount(ECKeyPair key) {
-        return removeAccount(toBytesAddress(key).toArrayUnsafe());
-    }
-
-    /**
-     * Deletes an account in the wallet.
-     */
-    public boolean removeAccount(byte[] address) {
-        requireUnlocked();
-        synchronized (accounts) {
-            return accounts.remove(Bytes.of(address)) != null;
-        }
-    }
-
-    /**
-     * Changes the password of the wallet.
-     */
-    public void changePassword(String newPassword) {
-        requireUnlocked();
-
-        if (newPassword == null) {
-            throw new IllegalArgumentException("Password can not be null");
-        }
-
-        this.password = newPassword;
-    }
-
-    // ================
-    // HD wallet
-    // ================
-
-    /**
-     * Returns whether the HD seed is initialized.
-     *
-     * @return true if set, otherwise false
-     */
-    public boolean isHdWalletInitialized() {
-        requireUnlocked();
-        return mnemonicPhrase != null && !mnemonicPhrase.isEmpty();
-    }
-
-    /**
-     * Initialize the HD wallet.
-     *
-     * @param mnemonicPhrase the mnemonic word list
-     */
-    public void initializeHdWallet(String mnemonicPhrase) {
-        this.mnemonicPhrase = mnemonicPhrase;
-        this.nextAccountIndex = 0;
-    }
-
-    /**
-     * Returns the HD seed.
-     */
-    public byte[] getSeed() {
-        try {
-            return Bip39Mnemonic.toSeed(this.mnemonicPhrase, MNEMONIC_PASS_PHRASE).toArrayUnsafe();
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to generate seed from mnemonic", e);
-        }
-    }
-
-    /**
-     * Derives a key based on the current HD account index, and put it into the
-     * wallet.
-     */
-    public ECKeyPair addAccountWithNextHdKey() {
-        requireUnlocked();
-        requireHdWalletInitialized();
-
-        synchronized (accounts) {
-            byte[] seed = getSeed();
-            Bip32Key masterKeyPair = Bip44Wallet.createMasterKey(seed);
+    synchronized (accounts) {
+      byte[] seed = getSeed();
+      Bip32Key masterKeyPair = Bip44Wallet.createMasterKey(seed);
 //            Bip32Key masterKeypair = Bip32Key.generateKeyPair(seed);
-            Bip32Key bip44Keypair = Bip44Wallet.deriveXdagKey(masterKeyPair,0, nextAccountIndex++);
+      Bip32Key bip44Keypair = Bip44Wallet.deriveXdagKey(masterKeyPair, 0, nextAccountIndex++);
 //            Bip32Key bip44Keypair = WalletUtils.generateBip44KeyPair(masterKeyPair, nextAccountIndex++);
-            Bytes b = Bytes.wrap(toBytesAddress(bip44Keypair.keyPair()));
-            accounts.put(b, bip44Keypair.keyPair());
-            return bip44Keypair.keyPair();
-        }
+      Bytes b = Bytes.wrap(toBytesAddress(bip44Keypair.keyPair()));
+      accounts.put(b, bip44Keypair.keyPair());
+      return bip44Keypair.keyPair();
     }
+  }
 
-    private void requireHdWalletInitialized() {
-        if (!isHdWalletInitialized()) {
-            throw new IllegalArgumentException("HD Seed is not initialized");
-        }
+  private void requireHdWalletInitialized() {
+    if (!isHdWalletInitialized()) {
+      throw new IllegalArgumentException("HD Seed is not initialized");
     }
+  }
 
 }

@@ -31,8 +31,8 @@ import lombok.Getter;
  * NewTransactionMessage - Broadcast new transaction to P2P network (Phase 3)
  *
  * <p>This message is used for real-time transaction propagation through the
- * P2P network. When a node receives a valid transaction (via RPC or from another peer),
- * it broadcasts this message to all connected peers to spread the transaction quickly.
+ * P2P network. When a node receives a valid transaction (via RPC or from another peer), it
+ * broadcasts this message to all connected peers to spread the transaction quickly.
  *
  * <p><strong>Message Format</strong>:
  * <pre>
@@ -89,121 +89,121 @@ import lombok.Getter;
 @Getter
 public class NewTransactionMessage extends Message {
 
-    /**
-     * Maximum TTL value (default: 5 hops)
-     * <p>
-     * This limits transaction propagation to 5 network hops, which is sufficient
-     * for most P2P networks while preventing excessive propagation.
-     */
-    public static final int DEFAULT_TTL = 5;
+  /**
+   * Maximum TTL value (default: 5 hops)
+   * <p>
+   * This limits transaction propagation to 5 network hops, which is sufficient for most P2P
+   * networks while preventing excessive propagation.
+   */
+  public static final int DEFAULT_TTL = 5;
 
-    /**
-     * Time-To-Live (hop count remaining)
-     * <p>
-     * Decrements by 1 with each forward. When TTL reaches 0, message is dropped.
-     */
-    private final int ttl;
+  /**
+   * Time-To-Live (hop count remaining)
+   * <p>
+   * Decrements by 1 with each forward. When TTL reaches 0, message is dropped.
+   */
+  private final int ttl;
 
-    /**
-     * The transaction being broadcast
-     */
-    private final Transaction transaction;
+  /**
+   * The transaction being broadcast
+   */
+  private final Transaction transaction;
 
-    /**
-     * Constructor for receiving message from network
-     *
-     * <p>Deserializes the transaction from message body.
-     *
-     * @param body serialized message body containing TTL + transaction
-     * @throws IllegalArgumentException if deserialization fails
-     */
-    public NewTransactionMessage(byte[] body) {
-        super(XdagMessageCode.NEW_TRANSACTION, null);
+  /**
+   * Constructor for receiving message from network
+   *
+   * <p>Deserializes the transaction from message body.
+   *
+   * @param body serialized message body containing TTL + transaction
+   * @throws IllegalArgumentException if deserialization fails
+   */
+  public NewTransactionMessage(byte[] body) {
+    super(XdagMessageCode.NEW_TRANSACTION, null);
 
-        // Deserialize: [1 byte TTL] + [Transaction bytes]
-        if (body == null || body.length < 2) {
-            throw new IllegalArgumentException("Message body too short");
-        }
-
-        // Read TTL (first byte)
-        this.ttl = body[0] & 0xFF;
-
-        // Read transaction (remaining bytes)
-        byte[] txBytes = new byte[body.length - 1];
-        System.arraycopy(body, 1, txBytes, 0, txBytes.length);
-        this.transaction = Transaction.fromBytes(txBytes);
-
-        this.body = body;
+    // Deserialize: [1 byte TTL] + [Transaction bytes]
+    if (body == null || body.length < 2) {
+      throw new IllegalArgumentException("Message body too short");
     }
 
-    /**
-     * Constructor for sending message to network (initial broadcast)
-     *
-     * <p>Creates message with default TTL.
-     *
-     * @param transaction the transaction to broadcast
-     */
-    public NewTransactionMessage(Transaction transaction) {
-        this(transaction, DEFAULT_TTL);
-    }
+    // Read TTL (first byte)
+    this.ttl = body[0] & 0xFF;
 
-    /**
-     * Constructor for sending message with custom TTL
-     *
-     * <p>Used when forwarding received transaction with decremented TTL.
-     *
-     * @param transaction the transaction to broadcast
-     * @param ttl Time-To-Live (hop count)
-     */
-    public NewTransactionMessage(Transaction transaction, int ttl) {
-        super(XdagMessageCode.NEW_TRANSACTION, null);
+    // Read transaction (remaining bytes)
+    byte[] txBytes = new byte[body.length - 1];
+    System.arraycopy(body, 1, txBytes, 0, txBytes.length);
+    this.transaction = Transaction.fromBytes(txBytes);
 
-        this.transaction = transaction;
-        this.ttl = Math.max(0, Math.min(ttl, DEFAULT_TTL));  // Clamp to [0, DEFAULT_TTL]
+    this.body = body;
+  }
 
-        // Serialize transaction
-        SimpleEncoder enc = new SimpleEncoder();
-        encode(enc);
-        this.body = enc.toBytes();
-    }
+  /**
+   * Constructor for sending message to network (initial broadcast)
+   *
+   * <p>Creates message with default TTL.
+   *
+   * @param transaction the transaction to broadcast
+   */
+  public NewTransactionMessage(Transaction transaction) {
+    this(transaction, DEFAULT_TTL);
+  }
 
-    @Override
-    public void encode(SimpleEncoder enc) {
-        // Serialize: [1 byte TTL] + [Transaction bytes]
-        enc.writeByte((byte) ttl);
+  /**
+   * Constructor for sending message with custom TTL
+   *
+   * <p>Used when forwarding received transaction with decremented TTL.
+   *
+   * @param transaction the transaction to broadcast
+   * @param ttl         Time-To-Live (hop count)
+   */
+  public NewTransactionMessage(Transaction transaction, int ttl) {
+    super(XdagMessageCode.NEW_TRANSACTION, null);
 
-        byte[] txBytes = transaction.toBytes();
-        enc.write(txBytes);
-    }
+    this.transaction = transaction;
+    this.ttl = Math.max(0, Math.min(ttl, DEFAULT_TTL));  // Clamp to [0, DEFAULT_TTL]
 
-    /**
-     * Check if this message should be forwarded
-     *
-     * @return true if TTL > 0, false otherwise
-     */
-    public boolean shouldForward() {
-        return ttl > 0;
-    }
+    // Serialize transaction
+    SimpleEncoder enc = new SimpleEncoder();
+    encode(enc);
+    this.body = enc.toBytes();
+  }
 
-    /**
-     * Create a new message for forwarding with decremented TTL
-     *
-     * @return new message with TTL - 1
-     */
-    public NewTransactionMessage decrementTTL() {
-        return new NewTransactionMessage(transaction, ttl - 1);
-    }
+  @Override
+  public void encode(SimpleEncoder enc) {
+    // Serialize: [1 byte TTL] + [Transaction bytes]
+    enc.writeByte((byte) ttl);
 
-    @Override
-    public String toString() {
-        return String.format(
-            "NewTransactionMessage[hash=%s, from=%s, to=%s, amount=%s, ttl=%d, size=%d bytes]",
-            transaction.getHash().toHexString().substring(0, 16) + "...",
-            transaction.getFrom().toHexString().substring(0, 10) + "...",
-            transaction.getTo().toHexString().substring(0, 10) + "...",
-            transaction.getAmount().toString(),
-            ttl,
-            body != null ? body.length : 0
-        );
-    }
+    byte[] txBytes = transaction.toBytes();
+    enc.write(txBytes);
+  }
+
+  /**
+   * Check if this message should be forwarded
+   *
+   * @return true if TTL > 0, false otherwise
+   */
+  public boolean shouldForward() {
+    return ttl > 0;
+  }
+
+  /**
+   * Create a new message for forwarding with decremented TTL
+   *
+   * @return new message with TTL - 1
+   */
+  public NewTransactionMessage decrementTTL() {
+    return new NewTransactionMessage(transaction, ttl - 1);
+  }
+
+  @Override
+  public String toString() {
+    return String.format(
+        "NewTransactionMessage[hash=%s, from=%s, to=%s, amount=%s, ttl=%d, size=%d bytes]",
+        transaction.getHash().toHexString().substring(0, 16) + "...",
+        transaction.getFrom().toHexString().substring(0, 10) + "...",
+        transaction.getTo().toHexString().substring(0, 10) + "...",
+        transaction.getAmount().toString(),
+        ttl,
+        body != null ? body.length : 0
+    );
+  }
 }

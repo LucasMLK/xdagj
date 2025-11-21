@@ -29,21 +29,21 @@ import org.apache.tuweni.bytes.Bytes;
 
 public class BlockMessage implements Message {
 
-    Bytes data;
-    MessageType type;
+  Bytes data;
+  MessageType type;
 
-    public BlockMessage(Bytes data, MessageType type) {
-        this.data = data;
-        this.type = type;
-    }
+  public BlockMessage(Bytes data, MessageType type) {
+    this.data = data;
+    this.type = type;
+  }
 
-    @Override
-    public MessageType getType() {
-        return type;
-    }
+  @Override
+  public MessageType getType() {
+    return type;
+  }
 
-    @Override
-    public Bytes getData() {
-        return data;
-    }
+  @Override
+  public Bytes getData() {
+    return data;
+  }
 }

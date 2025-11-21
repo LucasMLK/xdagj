@@ -41,136 +41,135 @@ import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
 
 /**
- * Account API Service
- * Provides account-related data access for both CLI and RPC
+ * Account API Service Provides account-related data access for both CLI and RPC
  */
 @Slf4j
 public class AccountApiService {
 
-    private final DagKernel dagKernel;
+  private final DagKernel dagKernel;
 
-    public AccountApiService(DagKernel dagKernel) {
-        this.dagKernel = dagKernel;
+  public AccountApiService(DagKernel dagKernel) {
+    this.dagKernel = dagKernel;
+  }
+
+  /**
+   * Convert UInt256 to XAmount for display
+   */
+  private static XAmount uint256ToXAmount(UInt256 balance) {
+    return XAmount.ofXAmount(balance.toLong());
+  }
+
+  /**
+   * Get account balance from AccountStore
+   */
+  private XAmount getAccountBalance(Bytes address) {
+    UInt256 balance = dagKernel.getAccountStore().getBalance(address);
+    return uint256ToXAmount(balance);
+  }
+
+  /**
+   * Get account nonce from AccountStore
+   */
+  private long getAccountNonce(Bytes address) {
+    return dagKernel.getAccountStore().getNonce(address).toLong();
+  }
+
+  /**
+   * Get all accounts from wallet sorted by balance
+   *
+   * @param limit Maximum number of accounts to return (0 = all)
+   * @return List of account information sorted by balance descending
+   */
+  public List<AccountInfo> getAccounts(int limit) {
+    List<ECKeyPair> keyPairs = dagKernel.getWallet().getAccounts();
+
+    // Sort by balance descending
+    keyPairs.sort((o1, o2) -> {
+      Bytes addr1 = Bytes.wrap(toBytesAddress(o1));
+      Bytes addr2 = Bytes.wrap(toBytesAddress(o2));
+      XAmount balance1 = getAccountBalance(addr1);
+      XAmount balance2 = getAccountBalance(addr2);
+      return balance2.compareTo(balance1);
+    });
+
+    List<AccountInfo> accounts = new ArrayList<>();
+    int count = 0;
+    for (ECKeyPair keyPair : keyPairs) {
+      if (limit > 0 && count >= limit) {
+        break;
+      }
+
+      Bytes addr = Bytes.wrap(toBytesAddress(keyPair));
+      XAmount balance = getAccountBalance(addr);
+      long nonce = getAccountNonce(addr);
+      String address = AddressUtils.toBase58Address(keyPair);
+
+      accounts.add(AccountInfo.builder()
+          .address(address)
+          .balance(balance)
+          .nonce(nonce)
+          .addressBytes(addr.toArray())
+          .build());
+      count++;
     }
 
-    /**
-     * Convert UInt256 to XAmount for display
-     */
-    private static XAmount uint256ToXAmount(UInt256 balance) {
-        return XAmount.ofXAmount(balance.toLong());
+    return accounts;
+  }
+
+  /**
+   * Get account information by address
+   *
+   * @param address Account address (Base58 format)
+   * @return Account information or null if not found
+   */
+  public AccountInfo getAccountByAddress(String address) {
+    try {
+      if (!checkAddress(address)) {
+        log.error("Invalid address format: {}", address);
+        return null;
+      }
+
+      Bytes addr = Bytes.wrap(fromBase58(address).toArray());
+      XAmount balance = getAccountBalance(addr);
+      long nonce = getAccountNonce(addr);
+
+      return AccountInfo.builder()
+          .address(address)
+          .balance(balance)
+          .nonce(nonce)
+          .addressBytes(addr.toArray())
+          .build();
+
+    } catch (Exception e) {
+      log.error("Failed to get account by address: {}", address, e);
+      return null;
+    }
+  }
+
+  /**
+   * Get total balance of all wallet accounts
+   *
+   * @return Total balance
+   */
+  public XAmount getTotalBalance() {
+    XAmount totalBalance = XAmount.ZERO;
+    List<ECKeyPair> accounts = dagKernel.getWallet().getAccounts();
+
+    for (ECKeyPair account : accounts) {
+      Bytes addr = Bytes.wrap(toBytesAddress(account));
+      totalBalance = totalBalance.add(getAccountBalance(addr));
     }
 
-    /**
-     * Get account balance from AccountStore
-     */
-    private XAmount getAccountBalance(Bytes address) {
-        UInt256 balance = dagKernel.getAccountStore().getBalance(address);
-        return uint256ToXAmount(balance);
-    }
+    return totalBalance;
+  }
 
-    /**
-     * Get account nonce from AccountStore
-     */
-    private long getAccountNonce(Bytes address) {
-        return dagKernel.getAccountStore().getNonce(address).toLong();
-    }
-
-    /**
-     * Get all accounts from wallet sorted by balance
-     *
-     * @param limit Maximum number of accounts to return (0 = all)
-     * @return List of account information sorted by balance descending
-     */
-    public List<AccountInfo> getAccounts(int limit) {
-        List<ECKeyPair> keyPairs = dagKernel.getWallet().getAccounts();
-
-        // Sort by balance descending
-        keyPairs.sort((o1, o2) -> {
-            Bytes addr1 = Bytes.wrap(toBytesAddress(o1));
-            Bytes addr2 = Bytes.wrap(toBytesAddress(o2));
-            XAmount balance1 = getAccountBalance(addr1);
-            XAmount balance2 = getAccountBalance(addr2);
-            return balance2.compareTo(balance1);
-        });
-
-        List<AccountInfo> accounts = new ArrayList<>();
-        int count = 0;
-        for (ECKeyPair keyPair : keyPairs) {
-            if (limit > 0 && count >= limit) {
-                break;
-            }
-
-            Bytes addr = Bytes.wrap(toBytesAddress(keyPair));
-            XAmount balance = getAccountBalance(addr);
-            long nonce = getAccountNonce(addr);
-            String address = AddressUtils.toBase58Address(keyPair);
-
-            accounts.add(AccountInfo.builder()
-                    .address(address)
-                    .balance(balance)
-                    .nonce(nonce)
-                    .addressBytes(addr.toArray())
-                    .build());
-            count++;
-        }
-
-        return accounts;
-    }
-
-    /**
-     * Get account information by address
-     *
-     * @param address Account address (Base58 format)
-     * @return Account information or null if not found
-     */
-    public AccountInfo getAccountByAddress(String address) {
-        try {
-            if (!checkAddress(address)) {
-                log.error("Invalid address format: {}", address);
-                return null;
-            }
-
-            Bytes addr = Bytes.wrap(fromBase58(address).toArray());
-            XAmount balance = getAccountBalance(addr);
-            long nonce = getAccountNonce(addr);
-
-            return AccountInfo.builder()
-                    .address(address)
-                    .balance(balance)
-                    .nonce(nonce)
-                    .addressBytes(addr.toArray())
-                    .build();
-
-        } catch (Exception e) {
-            log.error("Failed to get account by address: {}", address, e);
-            return null;
-        }
-    }
-
-    /**
-     * Get total balance of all wallet accounts
-     *
-     * @return Total balance
-     */
-    public XAmount getTotalBalance() {
-        XAmount totalBalance = XAmount.ZERO;
-        List<ECKeyPair> accounts = dagKernel.getWallet().getAccounts();
-
-        for (ECKeyPair account : accounts) {
-            Bytes addr = Bytes.wrap(toBytesAddress(account));
-            totalBalance = totalBalance.add(getAccountBalance(addr));
-        }
-
-        return totalBalance;
-    }
-
-    /**
-     * Update account nonce (for transaction processing)
-     *
-     * @param address Account address bytes
-     * @param nonce New nonce value
-     */
-    public void updateAccountNonce(Bytes address, long nonce) {
-        dagKernel.getAccountStore().setNonce(address, UInt64.valueOf(nonce));
-    }
+  /**
+   * Update account nonce (for transaction processing)
+   *
+   * @param address Account address bytes
+   * @param nonce   New nonce value
+   */
+  public void updateAccountNonce(Bytes address, long nonce) {
+    dagKernel.getAccountStore().setNonce(address, UInt64.valueOf(nonce));
+  }
 }

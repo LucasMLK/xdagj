@@ -55,106 +55,106 @@ import lombok.Getter;
 @EqualsAndHashCode
 public class ValidationResult {
 
+  /**
+   * Validation status
+   */
+  boolean valid;
+
+  /**
+   * Error message (null if valid)
+   */
+  String errorMessage;
+
+  /**
+   * Validation level that failed (null if valid)
+   */
+  ValidationLevel failedLevel;
+
+  /**
+   * Validation levels in order of execution
+   */
+  public enum ValidationLevel {
     /**
-     * Validation status
+     * Syntax validation: signature, format, field checks
      */
-    boolean valid;
+    SYNTAX,
 
     /**
-     * Error message (null if valid)
+     * State validation: nonce, replay protection
      */
-    String errorMessage;
+    STATE,
 
     /**
-     * Validation level that failed (null if valid)
+     * Economic validation: balance, fee checks
      */
-    ValidationLevel failedLevel;
+    ECONOMIC
+  }
 
-    /**
-     * Validation levels in order of execution
-     */
-    public enum ValidationLevel {
-        /**
-         * Syntax validation: signature, format, field checks
-         */
-        SYNTAX,
+  /**
+   * Create a successful validation result.
+   *
+   * @return success result
+   */
+  public static ValidationResult success() {
+    return new ValidationResult(true, null, null);
+  }
 
-        /**
-         * State validation: nonce, replay protection
-         */
-        STATE,
+  /**
+   * Create a failed validation result.
+   *
+   * @param level   validation level that failed
+   * @param message error message
+   * @return failure result
+   */
+  public static ValidationResult failure(ValidationLevel level, String message) {
+    return new ValidationResult(false, message, level);
+  }
 
-        /**
-         * Economic validation: balance, fee checks
-         */
-        ECONOMIC
+  /**
+   * Create a failed validation result (for backward compatibility).
+   *
+   * @param message error message
+   * @return failure result
+   */
+  public static ValidationResult error(String message) {
+    return new ValidationResult(false, message, null);
+  }
+
+  // ========== Compatibility Methods ==========
+
+  /**
+   * Check if validation succeeded (alias for isValid()).
+   *
+   * @return true if validation succeeded
+   */
+  public boolean isSuccess() {
+    return valid;
+  }
+
+  /**
+   * Check if validation failed.
+   *
+   * @return true if validation failed
+   */
+  public boolean isError() {
+    return !valid;
+  }
+
+  /**
+   * Get error message (alias for getErrorMessage()).
+   *
+   * @return error message, or null if valid
+   */
+  public String getError() {
+    return errorMessage;
+  }
+
+  @Override
+  public String toString() {
+    if (valid) {
+      return "ValidationResult{success}";
+    } else {
+      return String.format("ValidationResult{error='%s'}", errorMessage);
     }
-
-    /**
-     * Create a successful validation result.
-     *
-     * @return success result
-     */
-    public static ValidationResult success() {
-        return new ValidationResult(true, null, null);
-    }
-
-    /**
-     * Create a failed validation result.
-     *
-     * @param level validation level that failed
-     * @param message error message
-     * @return failure result
-     */
-    public static ValidationResult failure(ValidationLevel level, String message) {
-        return new ValidationResult(false, message, level);
-    }
-
-    /**
-     * Create a failed validation result (for backward compatibility).
-     *
-     * @param message error message
-     * @return failure result
-     */
-    public static ValidationResult error(String message) {
-        return new ValidationResult(false, message, null);
-    }
-
-    // ========== Compatibility Methods ==========
-
-    /**
-     * Check if validation succeeded (alias for isValid()).
-     *
-     * @return true if validation succeeded
-     */
-    public boolean isSuccess() {
-        return valid;
-    }
-
-    /**
-     * Check if validation failed.
-     *
-     * @return true if validation failed
-     */
-    public boolean isError() {
-        return !valid;
-    }
-
-    /**
-     * Get error message (alias for getErrorMessage()).
-     *
-     * @return error message, or null if valid
-     */
-    public String getError() {
-        return errorMessage;
-    }
-
-    @Override
-    public String toString() {
-        if (valid) {
-            return "ValidationResult{success}";
-        } else {
-            return String.format("ValidationResult{error='%s'}", errorMessage);
-        }
-    }
+  }
 }

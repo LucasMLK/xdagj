@@ -31,8 +31,7 @@ import lombok.NoArgsConstructor;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * Block summary DTO (for list display)
- * Used by both CLI and RPC to return block list data
+ * Block summary DTO (for list display) Used by both CLI and RPC to return block list data
  */
 @Data
 @Builder
@@ -40,43 +39,43 @@ import org.apache.tuweni.units.bigints.UInt256;
 @AllArgsConstructor
 public class BlockSummary {
 
-    /**
-     * Block hash (hex string)
-     */
-    private String hash;
+  /**
+   * Block hash (hex string)
+   */
+  private String hash;
 
-    /**
-     * Block height
-     */
-    private long height;
+  /**
+   * Block height
+   */
+  private long height;
 
-    /**
-     * Block timestamp in milliseconds
-     */
-    private long timestamp;
+  /**
+   * Block timestamp in milliseconds
+   */
+  private long timestamp;
 
-    /**
-     * Epoch number
-     */
-    private long epoch;
+  /**
+   * Epoch number
+   */
+  private long epoch;
 
-    /**
-     * Block difficulty
-     */
-    private UInt256 difficulty;
+  /**
+   * Block difficulty
+   */
+  private UInt256 difficulty;
 
-    /**
-     * Transaction count in this block
-     */
-    private int transactionCount;
+  /**
+   * Transaction count in this block
+   */
+  private int transactionCount;
 
-    /**
-     * Block state (Main, Orphan)
-     */
-    private String state;
+  /**
+   * Block state (Main, Orphan)
+   */
+  private String state;
 
-    /**
-     * Coinbase address (Base58 format)
-     */
-    private String coinbase;
+  /**
+   * Coinbase address (Base58 format)
+   */
+  private String coinbase;
 }

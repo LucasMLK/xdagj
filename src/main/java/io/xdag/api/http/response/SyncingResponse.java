@@ -30,35 +30,35 @@ import lombok.Data;
 /**
  * Response for xdag_syncing - follows RPC API v2 design
  * <p>
- * If syncing: returns object with sync details
- * If not syncing: returns false (handled at JSON-RPC serialization level)
+ * If syncing: returns object with sync details If not syncing: returns false (handled at JSON-RPC
+ * serialization level)
  */
 @Data
 @Builder
 public class SyncingResponse {
 
-    /**
-     * Whether currently syncing
-     */
-    private boolean syncing;
+  /**
+   * Whether currently syncing
+   */
+  private boolean syncing;
 
-    /**
-     * Starting block number (hex with 0x prefix) - only present if syncing
-     */
-    private String startingBlock;
+  /**
+   * Starting block number (hex with 0x prefix) - only present if syncing
+   */
+  private String startingBlock;
 
-    /**
-     * Current block number (hex with 0x prefix) - only present if syncing
-     */
-    private String currentBlock;
+  /**
+   * Current block number (hex with 0x prefix) - only present if syncing
+   */
+  private String currentBlock;
 
-    /**
-     * Highest known block number (hex with 0x prefix) - only present if syncing
-     */
-    private String highestBlock;
+  /**
+   * Highest known block number (hex with 0x prefix) - only present if syncing
+   */
+  private String highestBlock;
 
-    /**
-     * Sync progress percentage - only present if syncing
-     */
-    private Double progress;
+  /**
+   * Sync progress percentage - only present if syncing
+   */
+  private Double progress;
 }

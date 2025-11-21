@@ -35,8 +35,8 @@ import org.apache.tuweni.bytes.Bytes32;
  * <p>Hybrid Sync Protocol - Height Query Reply (0x1E)
  *
  * <p><strong>Purpose</strong>:
- * Returns the local node's main chain height information in response
- * to a {@link SyncHeightRequestMessage}.
+ * Returns the local node's main chain height information in response to a
+ * {@link SyncHeightRequestMessage}.
  *
  * <p><strong>Message Format</strong>:
  * <pre>
@@ -77,97 +77,97 @@ import org.apache.tuweni.bytes.Bytes32;
 @Setter
 public class SyncHeightReplyMessage extends Message {
 
-    /**
-     * Current main chain height
-     */
-    private long mainHeight;
+  /**
+   * Current main chain height
+   */
+  private long mainHeight;
 
-    /**
-     * Finalized height (mainHeight - FINALITY_EPOCHS)
-     */
-    private long finalizedHeight;
+  /**
+   * Finalized height (mainHeight - FINALITY_EPOCHS)
+   */
+  private long finalizedHeight;
 
-    /**
-     * Hash of the current main chain tip block
-     */
-    private Bytes32 mainBlockHash;
+  /**
+   * Hash of the current main chain tip block
+   */
+  private Bytes32 mainBlockHash;
 
-    /**
-     * Constructor for receiving message from network
-     *
-     * <p>Deserializes message body:
-     * <ol>
-     *   <li>Read mainHeight (long, 8 bytes)</li>
-     *   <li>Read finalizedHeight (long, 8 bytes)</li>
-     *   <li>Read mainBlockHash (Bytes32, 32 bytes)</li>
-     * </ol>
-     *
-     * @param body serialized message body
-     * @throws IllegalArgumentException if deserialization fails
-     */
-    public SyncHeightReplyMessage(byte[] body) {
-        super(XdagMessageCode.SYNC_HEIGHT_REPLY, null);
+  /**
+   * Constructor for receiving message from network
+   *
+   * <p>Deserializes message body:
+   * <ol>
+   *   <li>Read mainHeight (long, 8 bytes)</li>
+   *   <li>Read finalizedHeight (long, 8 bytes)</li>
+   *   <li>Read mainBlockHash (Bytes32, 32 bytes)</li>
+   * </ol>
+   *
+   * @param body serialized message body
+   * @throws IllegalArgumentException if deserialization fails
+   */
+  public SyncHeightReplyMessage(byte[] body) {
+    super(XdagMessageCode.SYNC_HEIGHT_REPLY, null);
 
-        SimpleDecoder dec = new SimpleDecoder(body);
+    SimpleDecoder dec = new SimpleDecoder(body);
 
-        // Deserialize fields
-        this.mainHeight = dec.readLong();
-        this.finalizedHeight = dec.readLong();
+    // Deserialize fields
+    this.mainHeight = dec.readLong();
+    this.finalizedHeight = dec.readLong();
 
-        // Read 32 bytes for block hash
-        byte[] hashBytes = new byte[32];
-        dec.readBytes(hashBytes);
-        this.mainBlockHash = Bytes32.wrap(hashBytes);
+    // Read 32 bytes for block hash
+    byte[] hashBytes = new byte[32];
+    dec.readBytes(hashBytes);
+    this.mainBlockHash = Bytes32.wrap(hashBytes);
 
-        // Set body for reference
-        this.body = body;
-    }
+    // Set body for reference
+    this.body = body;
+  }
 
-    /**
-     * Constructor for sending message to network
-     *
-     * <p>Serializes message:
-     * <ol>
-     *   <li>Write mainHeight (long, 8 bytes)</li>
-     *   <li>Write finalizedHeight (long, 8 bytes)</li>
-     *   <li>Write mainBlockHash (Bytes32, 32 bytes)</li>
-     * </ol>
-     *
-     * @param mainHeight current main chain height
-     * @param finalizedHeight finalized boundary height
-     * @param mainBlockHash hash of main chain tip block
-     */
-    public SyncHeightReplyMessage(long mainHeight, long finalizedHeight, Bytes32 mainBlockHash) {
-        super(XdagMessageCode.SYNC_HEIGHT_REPLY, null);
+  /**
+   * Constructor for sending message to network
+   *
+   * <p>Serializes message:
+   * <ol>
+   *   <li>Write mainHeight (long, 8 bytes)</li>
+   *   <li>Write finalizedHeight (long, 8 bytes)</li>
+   *   <li>Write mainBlockHash (Bytes32, 32 bytes)</li>
+   * </ol>
+   *
+   * @param mainHeight      current main chain height
+   * @param finalizedHeight finalized boundary height
+   * @param mainBlockHash   hash of main chain tip block
+   */
+  public SyncHeightReplyMessage(long mainHeight, long finalizedHeight, Bytes32 mainBlockHash) {
+    super(XdagMessageCode.SYNC_HEIGHT_REPLY, null);
 
-        this.mainHeight = mainHeight;
-        this.finalizedHeight = finalizedHeight;
-        this.mainBlockHash = mainBlockHash;
+    this.mainHeight = mainHeight;
+    this.finalizedHeight = finalizedHeight;
+    this.mainBlockHash = mainBlockHash;
 
-        // Serialize message body
-        SimpleEncoder enc = new SimpleEncoder();
-        encode(enc);
-        this.body = enc.toBytes();
-    }
+    // Serialize message body
+    SimpleEncoder enc = new SimpleEncoder();
+    encode(enc);
+    this.body = enc.toBytes();
+  }
 
-    @Override
-    public void encode(SimpleEncoder enc) {
-        // Serialize heights
-        enc.writeLong(mainHeight);
-        enc.writeLong(finalizedHeight);
+  @Override
+  public void encode(SimpleEncoder enc) {
+    // Serialize heights
+    enc.writeLong(mainHeight);
+    enc.writeLong(finalizedHeight);
 
-        // Serialize block hash (32 bytes)
-        enc.write(mainBlockHash.toArray());
-    }
+    // Serialize block hash (32 bytes)
+    enc.write(mainBlockHash.toArray());
+  }
 
-    @Override
-    public String toString() {
-        return String.format(
-            "SyncHeightReplyMessage[mainHeight=%d, finalizedHeight=%d, tipHash=%s, size=%d bytes]",
-            mainHeight,
-            finalizedHeight,
-            mainBlockHash != null ? mainBlockHash.toHexString().substring(0, 16) + "..." : "null",
-            body != null ? body.length : 0
-        );
-    }
+  @Override
+  public String toString() {
+    return String.format(
+        "SyncHeightReplyMessage[mainHeight=%d, finalizedHeight=%d, tipHash=%s, size=%d bytes]",
+        mainHeight,
+        finalizedHeight,
+        mainBlockHash != null ? mainBlockHash.toHexString().substring(0, 16) + "..." : "null",
+        body != null ? body.length : 0
+    );
+  }
 }

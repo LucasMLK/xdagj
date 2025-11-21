@@ -31,8 +31,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Account information DTO
- * Used by both CLI and RPC to return account data
+ * Account information DTO Used by both CLI and RPC to return account data
  */
 @Data
 @Builder
@@ -40,23 +39,23 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AccountInfo {
 
-    /**
-     * Account address (Base58 format for display)
-     */
-    private String address;
+  /**
+   * Account address (Base58 format for display)
+   */
+  private String address;
 
-    /**
-     * Account balance
-     */
-    private XAmount balance;
+  /**
+   * Account balance
+   */
+  private XAmount balance;
 
-    /**
-     * Account nonce (transaction count)
-     */
-    private long nonce;
+  /**
+   * Account nonce (transaction count)
+   */
+  private long nonce;
 
-    /**
-     * Raw address bytes (20 bytes, for internal use)
-     */
-    private byte[] addressBytes;
+  /**
+   * Raw address bytes (20 bytes, for internal use)
+   */
+  private byte[] addressBytes;
 }

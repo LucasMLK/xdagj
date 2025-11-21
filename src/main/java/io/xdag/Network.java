@@ -31,74 +31,78 @@ import java.util.Map;
  */
 public enum Network {
 
-    /**
-     * Main network for production use
-     */
-    MAINNET((byte) 0, "mainnet"),
+  /**
+   * Main network for production use
+   */
+  MAINNET((byte) 0, "mainnet"),
 
-    /**
-     * Test network for testing purposes
-     */
-    TESTNET((byte) 1, "testnet"),
+  /**
+   * Test network for testing purposes
+   */
+  TESTNET((byte) 1, "testnet"),
 
-    /**
-     * Development network for development purposes
-     */
-    DEVNET((byte) 2, "devnet");
+  /**
+   * Development network for development purposes
+   */
+  DEVNET((byte) 2, "devnet");
 
-    /**
-     * Constructor for Network enum
-     * @param id Network identifier byte
-     * @param label Network label string
-     */
-    Network(byte id, String label) {
-        this.id = id;
-        this.label = label;
+  /**
+   * Constructor for Network enum
+   *
+   * @param id    Network identifier byte
+   * @param label Network label string
+   */
+  Network(byte id, String label) {
+    this.id = id;
+    this.label = label;
+  }
+
+  private final byte id;
+  private final String label;
+
+  private static final Map<String, Network> labels = new HashMap<>();
+  private static final Map<Byte, Network> ids = new HashMap<>();
+
+  // Initialize static maps
+  static {
+    for (Network net : Network.values()) {
+      labels.put(net.label, net);
+      ids.put(net.id, net);
     }
+  }
 
-    private final byte id;
-    private final String label;
+  /**
+   * Get network identifier
+   *
+   * @return Network id byte
+   */
+  public byte id() {
+    return id;
+  }
 
-    private static final Map<String, Network> labels = new HashMap<>();
-    private static final Map<Byte, Network> ids = new HashMap<>();
+  @Override
+  public String toString() {
+    return label;
+  }
 
-    // Initialize static maps
-    static {
-        for (Network net : Network.values()) {
-            labels.put(net.label, net);
-            ids.put(net.id, net);
-        }
-    }
+  /**
+   * Get Network enum by network id
+   *
+   * @param networkId Network identifier byte
+   * @return Corresponding Network enum value
+   */
+  public static Network of(byte networkId) {
+    return ids.get(networkId);
+  }
 
-    /**
-     * Get network identifier
-     * @return Network id byte
-     */
-    public byte id() {
-        return id;
-    }
-
-    @Override
-    public String toString() {
-        return label;
-    }
-
-    /**
-     * Get Network enum by network id
-     * @param networkId Network identifier byte
-     * @return Corresponding Network enum value
-     */
-    public static Network of(byte networkId) {
-        return ids.get(networkId);
-    }
-
-    /**
-     * Get Network enum by network label
-     * @param label Network label string
-     * @return Corresponding Network enum value
-     */
-    public static Network of(String label) {
-        return labels.get(label);
-    }
+  /**
+   * Get Network enum by network label
+   *
+   * @param label Network label string
+   * @return Corresponding Network enum value
+   */
+  public static Network of(String label) {
+    return labels.get(label);
+  }
 
 }

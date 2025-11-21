@@ -24,21 +24,21 @@
 package io.xdag.api.http.response;
 
 import io.xdag.api.http.pagination.PaginationInfo;
+import java.util.List;
 import lombok.Builder;
 import lombok.Data;
-
-import java.util.List;
 
 @Data
 @Builder
 public class PagedResponse<T> {
-    private List<T> data;
-    private PaginationInfo pagination;
 
-    public static <T> PagedResponse<T> of(List<T> data, PaginationInfo pagination) {
-        return PagedResponse.<T>builder()
-                .data(data)
-                .pagination(pagination)
-                .build();
-    }
+  private List<T> data;
+  private PaginationInfo pagination;
+
+  public static <T> PagedResponse<T> of(List<T> data, PaginationInfo pagination) {
+    return PagedResponse.<T>builder()
+        .data(data)
+        .pagination(pagination)
+        .build();
+  }
 }

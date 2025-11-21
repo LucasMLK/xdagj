@@ -30,8 +30,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 /**
- * Network connection information DTO
- * Used by both CLI and RPC to return network peer data
+ * Network connection information DTO Used by both CLI and RPC to return network peer data
  */
 @Data
 @Builder
@@ -39,48 +38,48 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class ConnectionInfo {
 
-    /**
-     * Peer host address
-     */
-    private String host;
+  /**
+   * Peer host address
+   */
+  private String host;
 
-    /**
-     * Peer port
-     */
-    private int port;
+  /**
+   * Peer port
+   */
+  private int port;
 
-    /**
-     * Connection status (Active, Inactive, etc.)
-     */
-    private String status;
+  /**
+   * Connection status (Active, Inactive, etc.)
+   */
+  private String status;
 
-    /**
-     * Connection type (Inbound, Outbound)
-     */
-    private String type;
+  /**
+   * Connection type (Inbound, Outbound)
+   */
+  private String type;
 
-    /**
-     * Connection start time (milliseconds)
-     */
-    private Long connectedSince;
+  /**
+   * Connection start time (milliseconds)
+   */
+  private Long connectedSince;
 
-    /**
-     * Data sent (bytes)
-     */
-    private Long bytesSent;
+  /**
+   * Data sent (bytes)
+   */
+  private Long bytesSent;
 
-    /**
-     * Data received (bytes)
-     */
-    private Long bytesReceived;
+  /**
+   * Data received (bytes)
+   */
+  private Long bytesReceived;
 
-    /**
-     * Peer version
-     */
-    private String peerVersion;
+  /**
+   * Peer version
+   */
+  private String peerVersion;
 
-    /**
-     * Peer height
-     */
-    private Long peerHeight;
+  /**
+   * Peer height
+   */
+  private Long peerHeight;
 }

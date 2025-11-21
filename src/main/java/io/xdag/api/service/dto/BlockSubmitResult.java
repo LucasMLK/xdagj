@@ -55,69 +55,69 @@ import org.apache.tuweni.bytes.Bytes32;
 @Builder
 public class BlockSubmitResult {
 
-    /**
-     * Whether the block was accepted
-     */
-    private final boolean accepted;
+  /**
+   * Whether the block was accepted
+   */
+  private final boolean accepted;
 
-    /**
-     * Hash of the submitted block (for reference)
-     */
-    private final Bytes32 blockHash;
+  /**
+   * Hash of the submitted block (for reference)
+   */
+  private final Bytes32 blockHash;
 
-    /**
-     * Human-readable message describing the result
-     */
-    private final String message;
+  /**
+   * Human-readable message describing the result
+   */
+  private final String message;
 
-    /**
-     * Error code (null if accepted)
-     */
-    private final String errorCode;
+  /**
+   * Error code (null if accepted)
+   */
+  private final String errorCode;
 
-    /**
-     * Create an accepted result
-     *
-     * @param blockHash Hash of the accepted block
-     * @return BlockSubmitResult indicating acceptance
-     */
-    public static BlockSubmitResult accepted(Bytes32 blockHash) {
-        return BlockSubmitResult.builder()
-                .accepted(true)
-                .blockHash(blockHash)
-                .message("Block accepted and imported successfully")
-                .errorCode(null)
-                .build();
-    }
+  /**
+   * Create an accepted result
+   *
+   * @param blockHash Hash of the accepted block
+   * @return BlockSubmitResult indicating acceptance
+   */
+  public static BlockSubmitResult accepted(Bytes32 blockHash) {
+    return BlockSubmitResult.builder()
+        .accepted(true)
+        .blockHash(blockHash)
+        .message("Block accepted and imported successfully")
+        .errorCode(null)
+        .build();
+  }
 
-    /**
-     * Create a rejected result
-     *
-     * @param reason Human-readable rejection reason
-     * @return BlockSubmitResult indicating rejection
-     */
-    public static BlockSubmitResult rejected(String reason) {
-        return BlockSubmitResult.builder()
-                .accepted(false)
-                .blockHash(null)
-                .message(reason)
-                .errorCode("REJECTED")
-                .build();
-    }
+  /**
+   * Create a rejected result
+   *
+   * @param reason Human-readable rejection reason
+   * @return BlockSubmitResult indicating rejection
+   */
+  public static BlockSubmitResult rejected(String reason) {
+    return BlockSubmitResult.builder()
+        .accepted(false)
+        .blockHash(null)
+        .message(reason)
+        .errorCode("REJECTED")
+        .build();
+  }
 
-    /**
-     * Create a rejected result with error code
-     *
-     * @param reason Human-readable rejection reason
-     * @param errorCode Machine-readable error code
-     * @return BlockSubmitResult indicating rejection
-     */
-    public static BlockSubmitResult rejected(String reason, String errorCode) {
-        return BlockSubmitResult.builder()
-                .accepted(false)
-                .blockHash(null)
-                .message(reason)
-                .errorCode(errorCode)
-                .build();
-    }
+  /**
+   * Create a rejected result with error code
+   *
+   * @param reason    Human-readable rejection reason
+   * @param errorCode Machine-readable error code
+   * @return BlockSubmitResult indicating rejection
+   */
+  public static BlockSubmitResult rejected(String reason, String errorCode) {
+    return BlockSubmitResult.builder()
+        .accepted(false)
+        .blockHash(null)
+        .message(reason)
+        .errorCode(errorCode)
+        .build();
+  }
 }

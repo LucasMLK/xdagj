@@ -31,61 +31,84 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Interface for node configuration specifications
- * Defines methods to access node parameters and network settings
+ * Interface for node configuration specifications Defines methods to access node parameters and
+ * network settings
  */
 public interface NodeSpec {
 
-    // Network related methods
-    Network getNetwork();
-    short getNetworkVersion();
-    String getNodeTag();
-    int getWaitEpoch();
+  // Network related methods
+  Network getNetwork();
 
-    // Commented out as appears deprecated
-    // int getNetMaxMessageQueueSize();
+  short getNetworkVersion();
 
-    // Network handshake and messaging
-    int getNetHandshakeExpiry();
-    Set<XdagMessageCode> getNetPrioritizedMessages();
-    int getNetMaxInboundConnectionsPerIp();
-    int getNetMaxInboundConnections();
-    int getNetChannelIdleTimeout();
+  String getNodeTag();
 
-    // Node connection settings
-    String getNodeIp();
-    int getNodePort();
-    int getMaxConnections();
-    int getMaxInboundConnectionsPerIp();
-    int getConnectionReadTimeout();
-    int getConnectionTimeout();
+  int getWaitEpoch();
 
-    // Node operation parameters
-    int getTTL();
-    int getAwardEpoch();
+  // Commented out as appears deprecated
+  // int getNetMaxMessageQueueSize();
 
-    // Whitelist management
-    List<InetSocketAddress> getWhiteIPList();
-    void setWhiteIPList(List<InetSocketAddress> list);
+  // Network handshake and messaging
+  int getNetHandshakeExpiry();
 
-    // Storage configuration
-    String getStoreDir();
-    void setStoreDir(String dir);
-    String getStoreBackupDir();
-    void setStoreBackupDir(String dir);
-    String getWhiteListDir();
-    String getNetDBDir();
-    int getStoreMaxOpenFiles();
-    int getStoreMaxThreads();
-    boolean isStoreFromBackup();
+  Set<XdagMessageCode> getNetPrioritizedMessages();
 
-    // Network packet settings
-    int getNetMaxFrameBodySize();
-    int getNetMaxPacketSize();
+  int getNetMaxInboundConnectionsPerIp();
 
-    String getRejectAddress(); // Address for rejected transactions
-    
-    // There appears to be a typo in method name - should be "getNodeRatio"
-    double getNodeRation();
+  int getNetMaxInboundConnections();
+
+  int getNetChannelIdleTimeout();
+
+  // Node connection settings
+  String getNodeIp();
+
+  int getNodePort();
+
+  int getMaxConnections();
+
+  int getMaxInboundConnectionsPerIp();
+
+  int getConnectionReadTimeout();
+
+  int getConnectionTimeout();
+
+  // Node operation parameters
+  int getTTL();
+
+  int getAwardEpoch();
+
+  // Whitelist management
+  List<InetSocketAddress> getWhiteIPList();
+
+  void setWhiteIPList(List<InetSocketAddress> list);
+
+  // Storage configuration
+  String getStoreDir();
+
+  void setStoreDir(String dir);
+
+  String getStoreBackupDir();
+
+  void setStoreBackupDir(String dir);
+
+  String getWhiteListDir();
+
+  String getNetDBDir();
+
+  int getStoreMaxOpenFiles();
+
+  int getStoreMaxThreads();
+
+  boolean isStoreFromBackup();
+
+  // Network packet settings
+  int getNetMaxFrameBodySize();
+
+  int getNetMaxPacketSize();
+
+  String getRejectAddress(); // Address for rejected transactions
+
+  // There appears to be a typo in method name - should be "getNodeRatio"
+  double getNodeRation();
 
 }

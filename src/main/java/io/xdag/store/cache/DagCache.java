@@ -77,281 +77,291 @@ import org.apache.tuweni.bytes.Bytes32;
 @Slf4j
 public class DagCache {
 
-    // ==================== Cache Instances ====================
+  // ==================== Cache Instances ====================
 
-    /** Block cache - most recently accessed Block objects (raw data) */
-    private final Cache<Bytes32, Block> blockCache;
+  /**
+   * Block cache - most recently accessed Block objects (raw data)
+   */
+  private final Cache<Bytes32, Block> blockCache;
 
-    /** BlockInfo cache - most recently accessed BlockInfo metadata */
-    private final Cache<Bytes32, BlockInfo> blockInfoCache;
+  /**
+   * BlockInfo cache - most recently accessed BlockInfo metadata
+   */
+  private final Cache<Bytes32, BlockInfo> blockInfoCache;
 
-    /** Transaction cache - most recently accessed Transaction objects */
-    private final Cache<Bytes32, Transaction> transactionCache;
+  /**
+   * Transaction cache - most recently accessed Transaction objects
+   */
+  private final Cache<Bytes32, Transaction> transactionCache;
 
-    /** Height-to-Hash cache - main chain height mapping */
-    private final Cache<Long, Bytes32> heightToHashCache;
+  /**
+   * Height-to-Hash cache - main chain height mapping
+   */
+  private final Cache<Long, Bytes32> heightToHashCache;
 
-    /** Epoch winner cache - epoch competition results */
-    private final Cache<Long, Bytes32> epochWinnerCache;
+  /**
+   * Epoch winner cache - epoch competition results
+   */
+  private final Cache<Long, Bytes32> epochWinnerCache;
 
-    // ==================== Constructor ====================
+  // ==================== Constructor ====================
 
-    public DagCache() {
-        log.info("Initializing DagCache (L1)...");
+  public DagCache() {
+    log.info("Initializing DagCache (L1)...");
 
-        // Block cache configuration
-        this.blockCache = Caffeine.newBuilder()
-                .maximumSize(10_000)  // 10K blocks × 500 bytes = 5 MB
-                .expireAfterAccess(Duration.ofMinutes(30))  // 30 min idle time
-                .recordStats()  // Enable statistics
-                .build();
+    // Block cache configuration
+    this.blockCache = Caffeine.newBuilder()
+        .maximumSize(10_000)  // 10K blocks × 500 bytes = 5 MB
+        .expireAfterAccess(Duration.ofMinutes(30))  // 30 min idle time
+        .recordStats()  // Enable statistics
+        .build();
 
-        // BlockInfo cache configuration
-        this.blockInfoCache = Caffeine.newBuilder()
-                .maximumSize(50_000)  // 50K BlockInfo × 84 bytes = 4.2 MB
-                .expireAfterAccess(Duration.ofHours(1))  // 1 hour idle time
-                .recordStats()
-                .build();
+    // BlockInfo cache configuration
+    this.blockInfoCache = Caffeine.newBuilder()
+        .maximumSize(50_000)  // 50K BlockInfo × 84 bytes = 4.2 MB
+        .expireAfterAccess(Duration.ofHours(1))  // 1 hour idle time
+        .recordStats()
+        .build();
 
-        // Transaction cache configuration
-        this.transactionCache = Caffeine.newBuilder()
-                .maximumSize(20_000)  // 20K tx × 200 bytes = 4 MB
-                .expireAfterAccess(Duration.ofMinutes(15))  // 15 min idle time
-                .recordStats()
-                .build();
+    // Transaction cache configuration
+    this.transactionCache = Caffeine.newBuilder()
+        .maximumSize(20_000)  // 20K tx × 200 bytes = 4 MB
+        .expireAfterAccess(Duration.ofMinutes(15))  // 15 min idle time
+        .recordStats()
+        .build();
 
-        // Height-to-Hash cache configuration
-        this.heightToHashCache = Caffeine.newBuilder()
-                .maximumSize(10_000)  // Most recent 10K main blocks
-                .expireAfterAccess(Duration.ofHours(2))  // 2 hour idle time
-                .recordStats()
-                .build();
+    // Height-to-Hash cache configuration
+    this.heightToHashCache = Caffeine.newBuilder()
+        .maximumSize(10_000)  // Most recent 10K main blocks
+        .expireAfterAccess(Duration.ofHours(2))  // 2 hour idle time
+        .recordStats()
+        .build();
 
-        // Epoch winner cache configuration
-        this.epochWinnerCache = Caffeine.newBuilder()
-                .maximumSize(5_000)  // Most recent 5K epochs
-                .expireAfterAccess(Duration.ofHours(2))  // 2 hour idle time
-                .recordStats()
-                .build();
+    // Epoch winner cache configuration
+    this.epochWinnerCache = Caffeine.newBuilder()
+        .maximumSize(5_000)  // Most recent 5K epochs
+        .expireAfterAccess(Duration.ofHours(2))  // 2 hour idle time
+        .recordStats()
+        .build();
 
-        log.info("DagCache initialized: Block(10K), BlockInfo(50K), Tx(20K), Height(10K), Epoch(5K)");
+    log.info("DagCache initialized: Block(10K), BlockInfo(50K), Tx(20K), Height(10K), Epoch(5K)");
+  }
+
+  // ==================== Block Cache Operations ====================
+
+  /**
+   * Get block from cache
+   *
+   * @param hash Block hash
+   * @return Block or null if not in cache
+   */
+  public Block getBlock(Bytes32 hash) {
+    return blockCache.getIfPresent(hash);
+  }
+
+  /**
+   * Put block into cache
+   *
+   * @param hash  Block hash
+   * @param block Block object
+   */
+  public void putBlock(Bytes32 hash, Block block) {
+    if (hash != null && block != null) {
+      blockCache.put(hash, block);
     }
+  }
 
-    // ==================== Block Cache Operations ====================
-
-    /**
-     * Get block from cache
-     *
-     * @param hash Block hash
-     * @return Block or null if not in cache
-     */
-    public Block getBlock(Bytes32 hash) {
-        return blockCache.getIfPresent(hash);
+  /**
+   * Invalidate block from cache
+   *
+   * @param hash Block hash
+   */
+  public void invalidateBlock(Bytes32 hash) {
+    if (hash != null) {
+      blockCache.invalidate(hash);
     }
+  }
 
-    /**
-     * Put block into cache
-     *
-     * @param hash Block hash
-     * @param block Block object
-     */
-    public void putBlock(Bytes32 hash, Block block) {
-        if (hash != null && block != null) {
-            blockCache.put(hash, block);
-        }
+  // ==================== BlockInfo Cache Operations ====================
+
+  /**
+   * Get BlockInfo from cache
+   *
+   * @param hash Block hash
+   * @return BlockInfo or null if not in cache
+   */
+  public BlockInfo getBlockInfo(Bytes32 hash) {
+    return blockInfoCache.getIfPresent(hash);
+  }
+
+  /**
+   * Put BlockInfo into cache
+   *
+   * @param hash      Block hash
+   * @param blockInfo BlockInfo object
+   */
+  public void putBlockInfo(Bytes32 hash, BlockInfo blockInfo) {
+    if (hash != null && blockInfo != null) {
+      blockInfoCache.put(hash, blockInfo);
     }
+  }
 
-    /**
-     * Invalidate block from cache
-     *
-     * @param hash Block hash
-     */
-    public void invalidateBlock(Bytes32 hash) {
-        if (hash != null) {
-            blockCache.invalidate(hash);
-        }
+  /**
+   * Invalidate BlockInfo from cache
+   *
+   * @param hash Block hash
+   */
+  public void invalidateBlockInfo(Bytes32 hash) {
+    if (hash != null) {
+      blockInfoCache.invalidate(hash);
     }
+  }
 
-    // ==================== BlockInfo Cache Operations ====================
+  // ==================== Transaction Cache Operations ====================
 
-    /**
-     * Get BlockInfo from cache
-     *
-     * @param hash Block hash
-     * @return BlockInfo or null if not in cache
-     */
-    public BlockInfo getBlockInfo(Bytes32 hash) {
-        return blockInfoCache.getIfPresent(hash);
-    }
-
-    /**
-     * Put BlockInfo into cache
-     *
-     * @param hash Block hash
-     * @param blockInfo BlockInfo object
-     */
-    public void putBlockInfo(Bytes32 hash, BlockInfo blockInfo) {
-        if (hash != null && blockInfo != null) {
-            blockInfoCache.put(hash, blockInfo);
-        }
-    }
-
-    /**
-     * Invalidate BlockInfo from cache
-     *
-     * @param hash Block hash
-     */
-    public void invalidateBlockInfo(Bytes32 hash) {
-        if (hash != null) {
-            blockInfoCache.invalidate(hash);
-        }
-    }
-
-    // ==================== Transaction Cache Operations ====================
-
-    /**
-     * Get transaction from cache
-     *
-     * @param hash Transaction hash
-     * @return Transaction or null if not in cache
-     */
-    public Transaction getTransaction(Bytes32 hash) {
-        return transactionCache.getIfPresent(hash);
-    }
+  /**
+   * Get transaction from cache
+   *
+   * @param hash Transaction hash
+   * @return Transaction or null if not in cache
+   */
+  public Transaction getTransaction(Bytes32 hash) {
+    return transactionCache.getIfPresent(hash);
+  }
 
   // ==================== Height-to-Hash Cache Operations ====================
 
-    /**
-     * Get block hash by main chain height
-     *
-     * @param height Main chain height
-     * @return Block hash or null if not in cache
-     */
-    public Bytes32 getHashByHeight(long height) {
-        return heightToHashCache.getIfPresent(height);
-    }
+  /**
+   * Get block hash by main chain height
+   *
+   * @param height Main chain height
+   * @return Block hash or null if not in cache
+   */
+  public Bytes32 getHashByHeight(long height) {
+    return heightToHashCache.getIfPresent(height);
+  }
 
-    /**
-     * Put height-to-hash mapping into cache
-     *
-     * @param height Main chain height
-     * @param hash Block hash
-     */
-    public void putHashByHeight(long height, Bytes32 hash) {
-        if (hash != null) {
-            heightToHashCache.put(height, hash);
-        }
+  /**
+   * Put height-to-hash mapping into cache
+   *
+   * @param height Main chain height
+   * @param hash   Block hash
+   */
+  public void putHashByHeight(long height, Bytes32 hash) {
+    if (hash != null) {
+      heightToHashCache.put(height, hash);
     }
+  }
 
-    /**
-     * Invalidate height-to-hash mapping
-     *
-     * @param height Main chain height
-     */
-    public void invalidateHeight(long height) {
-        heightToHashCache.invalidate(height);
+  /**
+   * Invalidate height-to-hash mapping
+   *
+   * @param height Main chain height
+   */
+  public void invalidateHeight(long height) {
+    heightToHashCache.invalidate(height);
+  }
+
+  // ==================== Epoch Winner Cache Operations ====================
+
+  /**
+   * Get epoch winner block hash
+   *
+   * @param epoch Epoch number
+   * @return Winner block hash or null if not in cache
+   */
+  public Bytes32 getEpochWinner(long epoch) {
+    return epochWinnerCache.getIfPresent(epoch);
+  }
+
+  /**
+   * Put epoch winner into cache
+   *
+   * @param epoch      Epoch number
+   * @param winnerHash Winner block hash
+   */
+  public void putEpochWinner(long epoch, Bytes32 winnerHash) {
+    if (winnerHash != null) {
+      epochWinnerCache.put(epoch, winnerHash);
     }
-
-    // ==================== Epoch Winner Cache Operations ====================
-
-    /**
-     * Get epoch winner block hash
-     *
-     * @param epoch Epoch number
-     * @return Winner block hash or null if not in cache
-     */
-    public Bytes32 getEpochWinner(long epoch) {
-        return epochWinnerCache.getIfPresent(epoch);
-    }
-
-    /**
-     * Put epoch winner into cache
-     *
-     * @param epoch Epoch number
-     * @param winnerHash Winner block hash
-     */
-    public void putEpochWinner(long epoch, Bytes32 winnerHash) {
-        if (winnerHash != null) {
-            epochWinnerCache.put(epoch, winnerHash);
-        }
-    }
+  }
 
   // ==================== Cache Management ====================
 
-    /**
-     * Clear all caches
-     */
-    public void invalidateAll() {
-        log.info("Invalidating all caches...");
-        blockCache.invalidateAll();
-        blockInfoCache.invalidateAll();
-        transactionCache.invalidateAll();
-        heightToHashCache.invalidateAll();
-        epochWinnerCache.invalidateAll();
-        log.info("All caches invalidated");
-    }
+  /**
+   * Clear all caches
+   */
+  public void invalidateAll() {
+    log.info("Invalidating all caches...");
+    blockCache.invalidateAll();
+    blockInfoCache.invalidateAll();
+    transactionCache.invalidateAll();
+    heightToHashCache.invalidateAll();
+    epochWinnerCache.invalidateAll();
+    log.info("All caches invalidated");
+  }
 
   // ==================== Statistics ====================
 
   /**
-     * Calculate overall cache hit rate
-     *
-     * @return Hit rate (0.0 to 1.0)
-     */
-    public double getOverallHitRate() {
-        long totalHits = blockCache.stats().hitCount()
-                + blockInfoCache.stats().hitCount()
-                + transactionCache.stats().hitCount()
-                + heightToHashCache.stats().hitCount()
-                + epochWinnerCache.stats().hitCount();
+   * Calculate overall cache hit rate
+   *
+   * @return Hit rate (0.0 to 1.0)
+   */
+  public double getOverallHitRate() {
+    long totalHits = blockCache.stats().hitCount()
+        + blockInfoCache.stats().hitCount()
+        + transactionCache.stats().hitCount()
+        + heightToHashCache.stats().hitCount()
+        + epochWinnerCache.stats().hitCount();
 
-        long totalRequests = blockCache.stats().requestCount()
-                + blockInfoCache.stats().requestCount()
-                + transactionCache.stats().requestCount()
-                + heightToHashCache.stats().requestCount()
-                + epochWinnerCache.stats().requestCount();
+    long totalRequests = blockCache.stats().requestCount()
+        + blockInfoCache.stats().requestCount()
+        + transactionCache.stats().requestCount()
+        + heightToHashCache.stats().requestCount()
+        + epochWinnerCache.stats().requestCount();
 
-        return totalRequests == 0 ? 0.0 : (double) totalHits / totalRequests;
-    }
+    return totalRequests == 0 ? 0.0 : (double) totalHits / totalRequests;
+  }
 
-    /**
-     * Get cache size summary
-     *
-     * @return Human-readable cache size summary
-     */
-    public String getCacheSizeSummary() {
-        return String.format(
-                "DagCache[Block:%d, BlockInfo:%d, Tx:%d, Height:%d, Epoch:%d, HitRate:%.2f%%]",
-                blockCache.estimatedSize(),
-                blockInfoCache.estimatedSize(),
-                transactionCache.estimatedSize(),
-                heightToHashCache.estimatedSize(),
-                epochWinnerCache.estimatedSize(),
-                getOverallHitRate() * 100
-        );
-    }
+  /**
+   * Get cache size summary
+   *
+   * @return Human-readable cache size summary
+   */
+  public String getCacheSizeSummary() {
+    return String.format(
+        "DagCache[Block:%d, BlockInfo:%d, Tx:%d, Height:%d, Epoch:%d, HitRate:%.2f%%]",
+        blockCache.estimatedSize(),
+        blockInfoCache.estimatedSize(),
+        transactionCache.estimatedSize(),
+        heightToHashCache.estimatedSize(),
+        epochWinnerCache.estimatedSize(),
+        getOverallHitRate() * 100
+    );
+  }
 
-    /**
-     * Log cache statistics
-     */
-    public void logStats() {
-        log.info("=== DagCache Statistics ===");
-        log.info("Block Cache: {}", formatCacheStats(blockCache.stats()));
-        log.info("BlockInfo Cache: {}", formatCacheStats(blockInfoCache.stats()));
-        log.info("Transaction Cache: {}", formatCacheStats(transactionCache.stats()));
-        log.info("Height Cache: {}", formatCacheStats(heightToHashCache.stats()));
-        log.info("Epoch Winner Cache: {}", formatCacheStats(epochWinnerCache.stats()));
-        log.info("Overall Hit Rate: {:.2f}%", getOverallHitRate() * 100);
-        log.info("==========================");
-    }
+  /**
+   * Log cache statistics
+   */
+  public void logStats() {
+    log.info("=== DagCache Statistics ===");
+    log.info("Block Cache: {}", formatCacheStats(blockCache.stats()));
+    log.info("BlockInfo Cache: {}", formatCacheStats(blockInfoCache.stats()));
+    log.info("Transaction Cache: {}", formatCacheStats(transactionCache.stats()));
+    log.info("Height Cache: {}", formatCacheStats(heightToHashCache.stats()));
+    log.info("Epoch Winner Cache: {}", formatCacheStats(epochWinnerCache.stats()));
+    log.info("Overall Hit Rate: {:.2f}%", getOverallHitRate() * 100);
+    log.info("==========================");
+  }
 
-    private String formatCacheStats(CacheStats stats) {
-        return String.format(
-                "hits=%d, misses=%d, hitRate=%.2f%%, size=%d",
-                stats.hitCount(),
-                stats.missCount(),
-                stats.hitRate() * 100,
-                stats.requestCount()
-        );
-    }
+  private String formatCacheStats(CacheStats stats) {
+    return String.format(
+        "hits=%d, misses=%d, hitRate=%.2f%%, size=%d",
+        stats.hitCount(),
+        stats.missCount(),
+        stats.hitRate() * 100,
+        stats.requestCount()
+    );
+  }
 }

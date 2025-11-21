@@ -26,16 +26,15 @@ package io.xdag.consensus.pow;
 
 import io.xdag.config.Config;
 import io.xdag.core.Block;
-import io.xdag.core.DagchainListener;
 import io.xdag.core.DagChain;
+import io.xdag.core.DagchainListener;
 import io.xdag.crypto.randomx.RandomXFlag;
 import io.xdag.crypto.randomx.RandomXUtils;
+import java.util.Set;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-
-import java.util.Set;
 
 /**
  * RandomX Proof of Work Implementation
@@ -78,217 +77,217 @@ import java.util.Set;
 @Slf4j
 public class RandomXPow implements PowAlgorithm, DagchainListener {
 
-    // ========== Dependencies (Injected) ==========
+  // ========== Dependencies (Injected) ==========
 
-    private final Config config;
-    private final DagChain dagChain;
+  private final Config config;
+  private final DagChain dagChain;
 
-    // ========== Internal Services ==========
+  // ========== Internal Services ==========
 
-    @Getter
-    private final RandomXSeedManager seedManager;
+  @Getter
+  private final RandomXSeedManager seedManager;
 
-    private final RandomXHashService hashService;
+  private final RandomXHashService hashService;
 
-    // ========== State ==========
+  // ========== State ==========
 
-    private volatile boolean started = false;
+  private volatile boolean started = false;
 
-    // ========== Constructor ==========
+  // ========== Constructor ==========
 
-    /**
-     * Create RandomX PoW with dependency injection.
-     *
-     * @param config System configuration (for network type and RandomX flags)
-     * @param dagChain Blockchain (for seed derivation and event registration)
-     * @throws IllegalArgumentException if config or dagChain is null
-     */
-    public RandomXPow(Config config, DagChain dagChain) {
-        if (config == null) {
-            throw new IllegalArgumentException("Config cannot be null");
-        }
-        if (dagChain == null) {
-            throw new IllegalArgumentException("DagChain cannot be null");
-        }
-
-        this.config = config;
-        this.dagChain = dagChain;
-
-        // Initialize RandomX flags
-        Set<RandomXFlag> flags = RandomXUtils.getRecommendedFlags();
-        if (config.getRandomxSpec().getRandomxFlag()) {
-            flags.add(RandomXFlag.LARGE_PAGES);
-            flags.add(RandomXFlag.FULL_MEM);
-            log.info("RandomX large pages and full memory enabled");
-        }
-
-        // Create internal services
-        this.seedManager = new RandomXSeedManager(config, flags);
-        this.hashService = new RandomXHashService(seedManager);
-
-        log.info("RandomXPow created with flags: {}", flags);
+  /**
+   * Create RandomX PoW with dependency injection.
+   *
+   * @param config   System configuration (for network type and RandomX flags)
+   * @param dagChain Blockchain (for seed derivation and event registration)
+   * @throws IllegalArgumentException if config or dagChain is null
+   */
+  public RandomXPow(Config config, DagChain dagChain) {
+    if (config == null) {
+      throw new IllegalArgumentException("Config cannot be null");
+    }
+    if (dagChain == null) {
+      throw new IllegalArgumentException("DagChain cannot be null");
     }
 
-    // ========== Lifecycle ==========
+    this.config = config;
+    this.dagChain = dagChain;
 
-    @Override
-    public void start() {
-        if (started) {
-            throw new IllegalStateException("RandomXPow already started");
-        }
-
-        log.info("Starting RandomXPow...");
-
-        // Initialize seed manager
-        seedManager.setDagChain(dagChain);
-        seedManager.initialize();
-
-        // Register as blockchain listener for automatic seed updates
-        dagChain.addListener(this);
-
-        started = true;
-
-        log.info("RandomXPow started successfully");
+    // Initialize RandomX flags
+    Set<RandomXFlag> flags = RandomXUtils.getRecommendedFlags();
+    if (config.getRandomxSpec().getRandomxFlag()) {
+      flags.add(RandomXFlag.LARGE_PAGES);
+      flags.add(RandomXFlag.FULL_MEM);
+      log.info("RandomX large pages and full memory enabled");
     }
 
-    @Override
-    public void stop() {
-        if (!started) {
-            log.warn("RandomXPow not started, nothing to stop");
-            return;
-        }
+    // Create internal services
+    this.seedManager = new RandomXSeedManager(config, flags);
+    this.hashService = new RandomXHashService(seedManager);
 
-        log.info("Stopping RandomXPow...");
+    log.info("RandomXPow created with flags: {}", flags);
+  }
 
-        // Unregister blockchain listener
-        dagChain.removeListener(this);
-
-        // Cleanup resources
-        seedManager.cleanup();
-
-        started = false;
-
-        log.info("RandomXPow stopped");
-    }
-
-    // ========== PowAlgorithm Implementation ==========
-
-    @Override
-    public byte[] calculateBlockHash(byte[] data, HashContext context) {
-        if (!started) {
-            throw new IllegalStateException("RandomXPow not started");
-        }
-        if (data == null) {
-            throw new IllegalArgumentException("Data cannot be null");
-        }
-        if (context == null) {
-            throw new IllegalArgumentException("HashContext cannot be null");
-        }
-
-        return hashService.calculateBlockHash(data, context.getTimestamp());
-    }
-
-    @Override
-    public Bytes32 calculatePoolHash(byte[] data, HashContext context) {
-        if (!started) {
-            throw new IllegalStateException("RandomXPow not started");
-        }
-        if (data == null) {
-            throw new IllegalArgumentException("Data cannot be null");
-        }
-        if (context == null) {
-            throw new IllegalArgumentException("HashContext cannot be null");
-        }
-
-        return hashService.calculatePoolHash(Bytes.wrap(data), context.getTimestamp());
-    }
-
-    @Override
-    public boolean isActive(long epoch) {
-        if (!started) {
-            return false;
-        }
-        return seedManager.isAfterFork(epoch);
-    }
-
-    @Override
-    public boolean isReady() {
-        return started && hashService.isReady();
-    }
-
-    @Override
-    public String getName() {
-        return "RandomX";
-    }
-
-    // ========== DagchainListener Implementation ==========
-
-    /**
-     * Automatically update seed when blocks are connected.
-     *
-     * <p>This method is called by the DAG chain when a block is added to
-     * the main chain. It triggers seed manager to check for epoch boundaries
-     * and update seeds accordingly.
-     *
-     * <p><strong>Thread Safety:</strong> This method may be called from
-     * different threads. The seed manager handles synchronization internally.
-     *
-     * @param block Connected block
-     */
-    @Override
-    public void onBlockConnected(Block block) {
-        if (!started) {
-            log.warn("Received block connected event but RandomXPow not started");
-            return;
-        }
-
-        try {
-            seedManager.updateSeedForBlock(block);
-
-            // Log at epoch boundaries
-            long height = block.getInfo().getHeight();
-            long epochMask = seedManager.getSeedEpochBlocks() - 1;
-            if ((height & epochMask) == 0) {
-                log.info("Seed updated at epoch boundary: height={}, epoch={}",
-                        height, seedManager.getCurrentEpochIndex());
-            }
-
-        } catch (Exception e) {
-            log.error("Failed to update seed for block at height " + block.getInfo().getHeight(), e);
-        }
-    }
-
-    /**
-     * Revert seed when blocks are disconnected (chain reorganization).
-     *
-     * <p>This method is called during chain reorganizations when blocks
-     * are removed from the main chain. It reverts seed changes to maintain
-     * consistency with the current chain state.
-     *
-     * @param block Disconnected block
-     */
-    @Override
-    public void onBlockDisconnected(Block block) {
-        if (!started) {
-            log.warn("Received block disconnected event but RandomXPow not started");
-            return;
-        }
-
-        try {
-            seedManager.revertSeedForBlock(block);
-
-            log.debug("Seed reverted for block at height {}", block.getInfo().getHeight());
-
-        } catch (Exception e) {
-            log.error("Failed to revert seed for block at height " + block.getInfo().getHeight(), e);
-        }
-    }
-
-    // ========== Diagnostic Methods ==========
+  // ========== Lifecycle ==========
 
   @Override
-    public String toString() {
-        return String.format("RandomXPow[started=%s, ready=%s, epoch=%d]",
-                started, isReady(), seedManager.getCurrentEpochIndex());
+  public void start() {
+    if (started) {
+      throw new IllegalStateException("RandomXPow already started");
     }
+
+    log.info("Starting RandomXPow...");
+
+    // Initialize seed manager
+    seedManager.setDagChain(dagChain);
+    seedManager.initialize();
+
+    // Register as blockchain listener for automatic seed updates
+    dagChain.addListener(this);
+
+    started = true;
+
+    log.info("RandomXPow started successfully");
+  }
+
+  @Override
+  public void stop() {
+    if (!started) {
+      log.warn("RandomXPow not started, nothing to stop");
+      return;
+    }
+
+    log.info("Stopping RandomXPow...");
+
+    // Unregister blockchain listener
+    dagChain.removeListener(this);
+
+    // Cleanup resources
+    seedManager.cleanup();
+
+    started = false;
+
+    log.info("RandomXPow stopped");
+  }
+
+  // ========== PowAlgorithm Implementation ==========
+
+  @Override
+  public byte[] calculateBlockHash(byte[] data, HashContext context) {
+    if (!started) {
+      throw new IllegalStateException("RandomXPow not started");
+    }
+    if (data == null) {
+      throw new IllegalArgumentException("Data cannot be null");
+    }
+    if (context == null) {
+      throw new IllegalArgumentException("HashContext cannot be null");
+    }
+
+    return hashService.calculateBlockHash(data, context.getTimestamp());
+  }
+
+  @Override
+  public Bytes32 calculatePoolHash(byte[] data, HashContext context) {
+    if (!started) {
+      throw new IllegalStateException("RandomXPow not started");
+    }
+    if (data == null) {
+      throw new IllegalArgumentException("Data cannot be null");
+    }
+    if (context == null) {
+      throw new IllegalArgumentException("HashContext cannot be null");
+    }
+
+    return hashService.calculatePoolHash(Bytes.wrap(data), context.getTimestamp());
+  }
+
+  @Override
+  public boolean isActive(long epoch) {
+    if (!started) {
+      return false;
+    }
+    return seedManager.isAfterFork(epoch);
+  }
+
+  @Override
+  public boolean isReady() {
+    return started && hashService.isReady();
+  }
+
+  @Override
+  public String getName() {
+    return "RandomX";
+  }
+
+  // ========== DagchainListener Implementation ==========
+
+  /**
+   * Automatically update seed when blocks are connected.
+   *
+   * <p>This method is called by the DAG chain when a block is added to
+   * the main chain. It triggers seed manager to check for epoch boundaries and update seeds
+   * accordingly.
+   *
+   * <p><strong>Thread Safety:</strong> This method may be called from
+   * different threads. The seed manager handles synchronization internally.
+   *
+   * @param block Connected block
+   */
+  @Override
+  public void onBlockConnected(Block block) {
+    if (!started) {
+      log.warn("Received block connected event but RandomXPow not started");
+      return;
+    }
+
+    try {
+      seedManager.updateSeedForBlock(block);
+
+      // Log at epoch boundaries
+      long height = block.getInfo().getHeight();
+      long epochMask = seedManager.getSeedEpochBlocks() - 1;
+      if ((height & epochMask) == 0) {
+        log.info("Seed updated at epoch boundary: height={}, epoch={}",
+            height, seedManager.getCurrentEpochIndex());
+      }
+
+    } catch (Exception e) {
+      log.error("Failed to update seed for block at height " + block.getInfo().getHeight(), e);
+    }
+  }
+
+  /**
+   * Revert seed when blocks are disconnected (chain reorganization).
+   *
+   * <p>This method is called during chain reorganizations when blocks
+   * are removed from the main chain. It reverts seed changes to maintain consistency with the
+   * current chain state.
+   *
+   * @param block Disconnected block
+   */
+  @Override
+  public void onBlockDisconnected(Block block) {
+    if (!started) {
+      log.warn("Received block disconnected event but RandomXPow not started");
+      return;
+    }
+
+    try {
+      seedManager.revertSeedForBlock(block);
+
+      log.debug("Seed reverted for block at height {}", block.getInfo().getHeight());
+
+    } catch (Exception e) {
+      log.error("Failed to revert seed for block at height " + block.getInfo().getHeight(), e);
+    }
+  }
+
+  // ========== Diagnostic Methods ==========
+
+  @Override
+  public String toString() {
+    return String.format("RandomXPow[started=%s, ready=%s, epoch=%d]",
+        started, isReady(), seedManager.getCurrentEpochIndex());
+  }
 }

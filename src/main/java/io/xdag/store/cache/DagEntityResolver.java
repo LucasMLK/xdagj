@@ -79,89 +79,89 @@ import org.apache.tuweni.bytes.Bytes32;
  * }
  * </pre>
  *
- * @since XDAGJ
  * @see DagStore
  * @see TransactionStore
  * @see ResolvedLinks
+ * @since XDAGJ
  */
 @Slf4j
 public class DagEntityResolver {
 
-    private final DagStore dagStore;
-    private final TransactionStore transactionStore;
+  private final DagStore dagStore;
+  private final TransactionStore transactionStore;
 
-    public DagEntityResolver(DagStore dagStore, TransactionStore transactionStore) {
-        this.dagStore = dagStore;
-        this.transactionStore = transactionStore;
-    }
+  public DagEntityResolver(DagStore dagStore, TransactionStore transactionStore) {
+    this.dagStore = dagStore;
+    this.transactionStore = transactionStore;
+  }
 
-    // ==================== Single Link Resolution ====================
+  // ==================== Single Link Resolution ====================
 
   // ==================== Batch Link Resolution ====================
 
-    /**
-     * Resolve all links in a block
-     *
-     * <p>This method efficiently resolves all links in a single call:
-     * <ol>
-     *   <li>Separates links into Block links and Transaction links</li>
-     *   <li>Batch queries each store</li>
-     *   <li>Identifies missing references</li>
-     *   <li>Returns organized result</li>
-     * </ol>
-     *
-     * @param block Block containing links to resolve
-     * @return ResolvedLinks with all resolved entities and missing references
-     */
-    public ResolvedLinks resolveAllLinks(Block block) {
-        if (block == null || block.getLinks() == null || block.getLinks().isEmpty()) {
-            return ResolvedLinks.builder().build();
-        }
-
-        List<Block> resolvedBlocks = new ArrayList<>();
-        List<Transaction> resolvedTransactions = new ArrayList<>();
-        List<Bytes32> missingReferences = new ArrayList<>();
-
-        // Separate links by type
-        List<Link> blockLinks = new ArrayList<>();
-        List<Link> txLinks = new ArrayList<>();
-
-        for (Link link : block.getLinks()) {
-            if (link.isTransaction()) {
-                txLinks.add(link);
-            } else {
-                blockLinks.add(link);
-            }
-        }
-
-        // Resolve block links
-        for (Link link : blockLinks) {
-            Block refBlock = dagStore.getBlockByHash(link.getTargetHash(), false);
-            if (refBlock != null) {
-                resolvedBlocks.add(refBlock);
-            } else {
-                missingReferences.add(link.getTargetHash());
-                log.debug("Missing block reference: {}", link.getTargetHash().toHexString());
-            }
-        }
-
-        // Resolve transaction links
-        for (Link link : txLinks) {
-            Transaction tx = transactionStore.getTransaction(link.getTargetHash());
-            if (tx != null) {
-                resolvedTransactions.add(tx);
-            } else {
-                missingReferences.add(link.getTargetHash());
-                log.debug("Missing transaction reference: {}", link.getTargetHash().toHexString());
-            }
-        }
-
-        return ResolvedLinks.builder()
-                .referencedBlocks(resolvedBlocks)
-                .referencedTransactions(resolvedTransactions)
-                .missingReferences(missingReferences)
-                .build();
+  /**
+   * Resolve all links in a block
+   *
+   * <p>This method efficiently resolves all links in a single call:
+   * <ol>
+   *   <li>Separates links into Block links and Transaction links</li>
+   *   <li>Batch queries each store</li>
+   *   <li>Identifies missing references</li>
+   *   <li>Returns organized result</li>
+   * </ol>
+   *
+   * @param block Block containing links to resolve
+   * @return ResolvedLinks with all resolved entities and missing references
+   */
+  public ResolvedLinks resolveAllLinks(Block block) {
+    if (block == null || block.getLinks() == null || block.getLinks().isEmpty()) {
+      return ResolvedLinks.builder().build();
     }
+
+    List<Block> resolvedBlocks = new ArrayList<>();
+    List<Transaction> resolvedTransactions = new ArrayList<>();
+    List<Bytes32> missingReferences = new ArrayList<>();
+
+    // Separate links by type
+    List<Link> blockLinks = new ArrayList<>();
+    List<Link> txLinks = new ArrayList<>();
+
+    for (Link link : block.getLinks()) {
+      if (link.isTransaction()) {
+        txLinks.add(link);
+      } else {
+        blockLinks.add(link);
+      }
+    }
+
+    // Resolve block links
+    for (Link link : blockLinks) {
+      Block refBlock = dagStore.getBlockByHash(link.getTargetHash(), false);
+      if (refBlock != null) {
+        resolvedBlocks.add(refBlock);
+      } else {
+        missingReferences.add(link.getTargetHash());
+        log.debug("Missing block reference: {}", link.getTargetHash().toHexString());
+      }
+    }
+
+    // Resolve transaction links
+    for (Link link : txLinks) {
+      Transaction tx = transactionStore.getTransaction(link.getTargetHash());
+      if (tx != null) {
+        resolvedTransactions.add(tx);
+      } else {
+        missingReferences.add(link.getTargetHash());
+        log.debug("Missing transaction reference: {}", link.getTargetHash().toHexString());
+      }
+    }
+
+    return ResolvedLinks.builder()
+        .referencedBlocks(resolvedBlocks)
+        .referencedTransactions(resolvedTransactions)
+        .missingReferences(missingReferences)
+        .build();
+  }
 
   // ==================== Validation Helpers ====================
 

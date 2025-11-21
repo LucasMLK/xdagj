@@ -34,9 +34,8 @@ import lombok.Setter;
  * <p>Hybrid Sync Protocol - Epoch Blocks Request (0x21)
  *
  * <p><strong>Purpose</strong>:
- * Request all block hashes for a range of epochs. Used for Phase 2
- * (DAG Area Synchronization) of hybrid sync to get all candidate
- * blocks in multiple epochs with a single request.
+ * Request all block hashes for a range of epochs. Used for Phase 2 (DAG Area Synchronization) of
+ * hybrid sync to get all candidate blocks in multiple epochs with a single request.
  *
  * <p><strong>Message Format</strong>:
  * <pre>
@@ -89,80 +88,80 @@ import lombok.Setter;
 @Setter
 public class SyncEpochBlocksRequestMessage extends Message {
 
-    /**
-     * Start epoch number (inclusive)
-     */
-    private long startEpoch;
+  /**
+   * Start epoch number (inclusive)
+   */
+  private long startEpoch;
 
-    /**
-     * End epoch number (inclusive)
-     */
-    private long endEpoch;
+  /**
+   * End epoch number (inclusive)
+   */
+  private long endEpoch;
 
-    /**
-     * Constructor for receiving message from network
-     *
-     * <p>Deserializes message body:
-     * <ol>
-     *   <li>Read startEpoch (long, 8 bytes)</li>
-     *   <li>Read endEpoch (long, 8 bytes)</li>
-     * </ol>
-     *
-     * @param body serialized message body
-     * @throws IllegalArgumentException if deserialization fails
-     */
-    public SyncEpochBlocksRequestMessage(byte[] body) {
-        super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REQUEST, SyncEpochBlocksReplyMessage.class);
+  /**
+   * Constructor for receiving message from network
+   *
+   * <p>Deserializes message body:
+   * <ol>
+   *   <li>Read startEpoch (long, 8 bytes)</li>
+   *   <li>Read endEpoch (long, 8 bytes)</li>
+   * </ol>
+   *
+   * @param body serialized message body
+   * @throws IllegalArgumentException if deserialization fails
+   */
+  public SyncEpochBlocksRequestMessage(byte[] body) {
+    super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REQUEST, SyncEpochBlocksReplyMessage.class);
 
-        SimpleDecoder dec = new SimpleDecoder(body);
+    SimpleDecoder dec = new SimpleDecoder(body);
 
-        // Deserialize epoch range
-        this.startEpoch = dec.readLong();
-        this.endEpoch = dec.readLong();
+    // Deserialize epoch range
+    this.startEpoch = dec.readLong();
+    this.endEpoch = dec.readLong();
 
-        // Set body for reference
-        this.body = body;
-    }
+    // Set body for reference
+    this.body = body;
+  }
 
-    /**
-     * Constructor for sending message to network
-     *
-     * <p>Serializes message:
-     * <ol>
-     *   <li>Write startEpoch (long, 8 bytes)</li>
-     *   <li>Write endEpoch (long, 8 bytes)</li>
-     * </ol>
-     *
-     * @param startEpoch start epoch number (inclusive)
-     * @param endEpoch end epoch number (inclusive)
-     */
-    public SyncEpochBlocksRequestMessage(long startEpoch, long endEpoch) {
-        super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REQUEST, SyncEpochBlocksReplyMessage.class);
+  /**
+   * Constructor for sending message to network
+   *
+   * <p>Serializes message:
+   * <ol>
+   *   <li>Write startEpoch (long, 8 bytes)</li>
+   *   <li>Write endEpoch (long, 8 bytes)</li>
+   * </ol>
+   *
+   * @param startEpoch start epoch number (inclusive)
+   * @param endEpoch   end epoch number (inclusive)
+   */
+  public SyncEpochBlocksRequestMessage(long startEpoch, long endEpoch) {
+    super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REQUEST, SyncEpochBlocksReplyMessage.class);
 
-        this.startEpoch = startEpoch;
-        this.endEpoch = endEpoch;
+    this.startEpoch = startEpoch;
+    this.endEpoch = endEpoch;
 
-        // Serialize message body
-        SimpleEncoder enc = new SimpleEncoder();
-        encode(enc);
-        this.body = enc.toBytes();
-    }
+    // Serialize message body
+    SimpleEncoder enc = new SimpleEncoder();
+    encode(enc);
+    this.body = enc.toBytes();
+  }
 
-    @Override
-    public void encode(SimpleEncoder enc) {
-        // Serialize epoch range
-        enc.writeLong(startEpoch);
-        enc.writeLong(endEpoch);
-    }
+  @Override
+  public void encode(SimpleEncoder enc) {
+    // Serialize epoch range
+    enc.writeLong(startEpoch);
+    enc.writeLong(endEpoch);
+  }
 
-    @Override
-    public String toString() {
-        return String.format(
-            "SyncEpochBlocksRequestMessage[startEpoch=%d, endEpoch=%d, range=%d, size=%d bytes]",
-            startEpoch,
-            endEpoch,
-            endEpoch - startEpoch + 1,
-            body != null ? body.length : 0
-        );
-    }
+  @Override
+  public String toString() {
+    return String.format(
+        "SyncEpochBlocksRequestMessage[startEpoch=%d, endEpoch=%d, range=%d, size=%d bytes]",
+        startEpoch,
+        endEpoch,
+        endEpoch - startEpoch + 1,
+        body != null ? body.length : 0
+    );
+  }
 }

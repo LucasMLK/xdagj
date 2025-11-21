@@ -32,8 +32,7 @@ import lombok.NoArgsConstructor;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * Chain statistics information DTO
- * Used by both CLI and RPC to return blockchain statistics
+ * Chain statistics information DTO Used by both CLI and RPC to return blockchain statistics
  */
 @Data
 @Builder
@@ -41,73 +40,73 @@ import org.apache.tuweni.units.bigints.UInt256;
 @AllArgsConstructor
 public class ChainStatsInfo {
 
-    /**
-     * Main chain block count
-     */
-    private long mainBlockCount;
+  /**
+   * Main chain block count
+   */
+  private long mainBlockCount;
 
-    /**
-     * Total block count
-     */
-    private long totalBlockCount;
+  /**
+   * Total block count
+   */
+  private long totalBlockCount;
 
-    /**
-     * Top block height
-     */
-    private Long topBlockHeight;
+  /**
+   * Top block height
+   */
+  private Long topBlockHeight;
 
-    /**
-     * Top block hash (full hex string)
-     */
-    private String topBlockHash;
+  /**
+   * Top block hash (full hex string)
+   */
+  private String topBlockHash;
 
-    /**
-     * Current epoch
-     */
-    private long currentEpoch;
+  /**
+   * Current epoch
+   */
+  private long currentEpoch;
 
-    /**
-     * Current difficulty
-     */
-    private UInt256 currentDifficulty;
+  /**
+   * Current difficulty
+   */
+  private UInt256 currentDifficulty;
 
-    /**
-     * Max difficulty
-     */
-    private UInt256 maxDifficulty;
+  /**
+   * Max difficulty
+   */
+  private UInt256 maxDifficulty;
 
-    /**
-     * Orphan block count
-     */
-    private long orphanCount;
+  /**
+   * Orphan block count
+   */
+  private long orphanCount;
 
-    /**
-     * Waiting sync count
-     */
-    private long waitingSyncCount;
+  /**
+   * Waiting sync count
+   */
+  private long waitingSyncCount;
 
-    /**
-     * Sync progress (percentage)
-     */
-    private double syncProgress;
+  /**
+   * Sync progress (percentage)
+   */
+  private double syncProgress;
 
-    /**
-     * Connected peer count
-     */
-    private int connectedPeers;
+  /**
+   * Connected peer count
+   */
+  private int connectedPeers;
 
-    /**
-     * Total host count
-     */
-    private int totalHosts;
+  /**
+   * Total host count
+   */
+  private int totalHosts;
 
-    /**
-     * Total wallet balance
-     */
-    private XAmount totalWalletBalance;
+  /**
+   * Total wallet balance
+   */
+  private XAmount totalWalletBalance;
 
-    /**
-     * Wallet account count
-     */
-    private int accountCount;
+  /**
+   * Wallet account count
+   */
+  private int accountCount;
 }

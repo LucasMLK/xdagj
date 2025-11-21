@@ -29,18 +29,19 @@ import lombok.Data;
 @Data
 @Builder
 public class PaginationInfo {
-    private int page;
-    private int size;
-    private long total;
-    private int totalPages;
 
-    public static PaginationInfo of(PageRequest pageRequest, long total) {
-        int totalPages = (int) Math.ceil((double) total / pageRequest.getSize());
-        return PaginationInfo.builder()
-                .page(pageRequest.getPage())
-                .size(pageRequest.getSize())
-                .total(total)
-                .totalPages(totalPages)
-                .build();
-    }
+  private int page;
+  private int size;
+  private long total;
+  private int totalPages;
+
+  public static PaginationInfo of(PageRequest pageRequest, long total) {
+    int totalPages = (int) Math.ceil((double) total / pageRequest.getSize());
+    return PaginationInfo.builder()
+        .page(pageRequest.getPage())
+        .size(pageRequest.getSize())
+        .total(total)
+        .totalPages(totalPages)
+        .build();
+  }
 }

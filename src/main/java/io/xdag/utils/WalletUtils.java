@@ -31,53 +31,55 @@ import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 
 /**
- * Utility class for wallet operations including BIP44 key generation, address encoding/decoding and validation
+ * Utility class for wallet operations including BIP44 key generation, address encoding/decoding and
+ * validation
  */
 @Slf4j
 public class WalletUtils {
 
-    /**
-     * Prompt message for wallet password input
-     */
-    public static final String WALLET_PASSWORD_PROMPT = "Please Enter Wallet Password: ";
+  /**
+   * Prompt message for wallet password input
+   */
+  public static final String WALLET_PASSWORD_PROMPT = "Please Enter Wallet Password: ";
 
-    /**
-     * Decodes a Base58 string to byte array
-     *
-     * @param base58 Base58 encoded string
-     * @return Decoded byte array
-     * @throws AddressFormatException if the input is invalid
-     */
-    public static Bytes fromBase58(String base58) throws AddressFormatException {
-      Bytes bytes = Base58.decodeCheck(base58);
+  /**
+   * Decodes a Base58 string to byte array
+   *
+   * @param base58 Base58 encoded string
+   * @return Decoded byte array
+   * @throws AddressFormatException if the input is invalid
+   */
+  public static Bytes fromBase58(String base58) throws AddressFormatException {
+    Bytes bytes = Base58.decodeCheck(base58);
 
-      if (bytes.size() != 20)
-            throw new AddressFormatException("Wrong number of bytes: " + bytes.size());
-        return bytes;
+    if (bytes.size() != 20) {
+      throw new AddressFormatException("Wrong number of bytes: " + bytes.size());
     }
+    return bytes;
+  }
 
-    /**
-     * Validates a Base58 encoded address
-     *
-     * @param base58 Base58 encoded address
-     * @return true if valid, false otherwise
-     */
-    public static boolean checkAddress(String base58) {
-        try {
-            Base58.decodeCheck(base58);
-        } catch (AddressFormatException e) {
-            return false;
-        }
-        return true;
+  /**
+   * Validates a Base58 encoded address
+   *
+   * @param base58 Base58 encoded address
+   * @return true if valid, false otherwise
+   */
+  public static boolean checkAddress(String base58) {
+    try {
+      Base58.decodeCheck(base58);
+    } catch (AddressFormatException e) {
+      return false;
     }
+    return true;
+  }
 
-    /**
-     * Validates an address using its hash
-     *
-     * @param hash Block hash (32 bytes)
-     * @return true if valid, false otherwise
-     */
-    public static boolean checkAddress(Bytes32 hash) {
-        return hash.slice(28, 4).toInt() == 0;
-    }
+  /**
+   * Validates an address using its hash
+   *
+   * @param hash Block hash (32 bytes)
+   * @return true if valid, false otherwise
+   */
+  public static boolean checkAddress(Bytes32 hash) {
+    return hash.slice(28, 4).toInt() == 0;
+  }
 }

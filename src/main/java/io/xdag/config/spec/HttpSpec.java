@@ -25,32 +25,32 @@
 package io.xdag.config.spec;
 
 /**
- * HTTP API server configuration specification
- * Defines methods to access HTTP API server configuration parameters
+ * HTTP API server configuration specification Defines methods to access HTTP API server
+ * configuration parameters
  */
 public interface HttpSpec {
 
-    boolean isRpcHttpEnabled();
+  boolean isRpcHttpEnabled();
 
-    String getRpcHttpHost();
+  String getRpcHttpHost();
 
-    int getRpcHttpPort();
+  int getRpcHttpPort();
 
-    boolean isRpcEnableHttps();
+  boolean isRpcEnableHttps();
 
-    String getRpcHttpCorsOrigins();
+  String getRpcHttpCorsOrigins();
 
-    int getRpcHttpMaxContentLength();
+  int getRpcHttpMaxContentLength();
 
-    int getRpcHttpBossThreads();
+  int getRpcHttpBossThreads();
 
-    int getRpcHttpWorkerThreads();
+  int getRpcHttpWorkerThreads();
 
-    String getRpcHttpsCertFile();
+  String getRpcHttpsCertFile();
 
-    String getRpcHttpsKeyFile();
+  String getRpcHttpsKeyFile();
 
-    boolean isRpcHttpAuthEnabled();
+  boolean isRpcHttpAuthEnabled();
 
-    String[] getRpcHttpApiKeys();
+  String[] getRpcHttpApiKeys();
 }

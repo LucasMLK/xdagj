@@ -34,8 +34,8 @@ import lombok.Data;
 @Builder
 public class CoinbaseResponse {
 
-    /**
-     * Coinbase address (Base58)
-     */
-    private String coinbase;
+  /**
+   * Coinbase address (Base58)
+   */
+  private String coinbase;
 }

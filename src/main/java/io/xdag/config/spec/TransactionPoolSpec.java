@@ -46,59 +46,59 @@ import lombok.Data;
 @Builder
 public class TransactionPoolSpec {
 
-    /**
-     * Maximum number of transactions in the pool.
-     * <p>Default: 10,000 transactions
-     */
-    @Builder.Default
-    private int maxPoolSize = 10000;
+  /**
+   * Maximum number of transactions in the pool.
+   * <p>Default: 10,000 transactions
+   */
+  @Builder.Default
+  private int maxPoolSize = 10000;
 
-    /**
-     * Maximum transaction age in milliseconds before expiration.
-     * <p>Default: 1 hour (3,600,000 ms)
-     */
-    @Builder.Default
-    private long maxTxAgeMillis = 3600_000L;
+  /**
+   * Maximum transaction age in milliseconds before expiration.
+   * <p>Default: 1 hour (3,600,000 ms)
+   */
+  @Builder.Default
+  private long maxTxAgeMillis = 3600_000L;
 
-    /**
-     * Minimum transaction fee in nano XDAG.
-     * <p>Default: 100 milli-XDAG = 100,000,000 nano XDAG
-     */
-    @Builder.Default
-    private long minFeeNano = 100_000_000L;
+  /**
+   * Minimum transaction fee in nano XDAG.
+   * <p>Default: 100 milli-XDAG = 100,000,000 nano XDAG
+   */
+  @Builder.Default
+  private long minFeeNano = 100_000_000L;
 
-    /**
-     * Cleanup task interval in milliseconds.
-     * <p>Default: 5 minutes (300,000 ms)
-     */
-    @Builder.Default
-    private long cleanupIntervalMillis = 300_000L;
+  /**
+   * Cleanup task interval in milliseconds.
+   * <p>Default: 5 minutes (300,000 ms)
+   */
+  @Builder.Default
+  private long cleanupIntervalMillis = 300_000L;
 
-    /**
-     * Get minimum fee as XAmount.
-     *
-     * @return minimum fee
-     */
-    public XAmount getMinFee() {
-        return XAmount.of(minFeeNano, XUnit.NANO_XDAG);
-    }
+  /**
+   * Get minimum fee as XAmount.
+   *
+   * @return minimum fee
+   */
+  public XAmount getMinFee() {
+    return XAmount.of(minFeeNano, XUnit.NANO_XDAG);
+  }
 
-    /**
-     * Create default configuration.
-     *
-     * @return default TransactionPoolSpec
-     */
-    public static TransactionPoolSpec createDefault() {
-        return TransactionPoolSpec.builder().build();
-    }
+  /**
+   * Create default configuration.
+   *
+   * @return default TransactionPoolSpec
+   */
+  public static TransactionPoolSpec createDefault() {
+    return TransactionPoolSpec.builder().build();
+  }
 
-    @Override
-    public String toString() {
-        return String.format(
-                "TransactionPoolSpec{maxPoolSize=%d, maxTxAge=%dms, minFee=%s, cleanupInterval=%dms}",
-                maxPoolSize,
-                maxTxAgeMillis,
-                XAmount.of(minFeeNano, XUnit.NANO_XDAG).toDecimal(9, XUnit.XDAG),
-                cleanupIntervalMillis);
-    }
+  @Override
+  public String toString() {
+    return String.format(
+        "TransactionPoolSpec{maxPoolSize=%d, maxTxAge=%dms, minFee=%s, cleanupInterval=%dms}",
+        maxPoolSize,
+        maxTxAgeMillis,
+        XAmount.of(minFeeNano, XUnit.NANO_XDAG).toDecimal(9, XUnit.XDAG),
+        cleanupIntervalMillis);
+  }
 }

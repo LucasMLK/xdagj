@@ -31,7 +31,6 @@ import io.xdag.core.XAmount;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
@@ -120,19 +119,8 @@ public class CompactSerializer {
         // difficulty: 32 bytes
         out.write(stats.getDifficulty().toBytes().toArray());
 
-        // maxDifficulty: 32 bytes
-        out.write(stats.getMaxDifficulty().toBytes().toArray());
-
         // Core counts (all variable length)
         writeVarLong(out, stats.getMainBlockCount());
-        writeVarLong(out, stats.getTotalMainBlockCount());
-        writeVarLong(out, stats.getTotalBlockCount());
-        writeVarInt(out, stats.getTotalHostCount());
-
-        // Sync & orphan tracking
-        writeVarLong(out, stats.getWaitingSyncCount());
-        writeVarLong(out, stats.getNoRefCount());
-        writeVarLong(out, stats.getExtraCount());
 
         // balance
         serializeXAmount(out, stats.getBalance());
@@ -153,68 +141,88 @@ public class CompactSerializer {
         // lastOrphanCleanupEpoch
         writeVarLong(out, stats.getLastOrphanCleanupEpoch());
 
-        // topBlock (nullable Bytes32)
-        if (stats.getTopBlock() == null) {
-            out.write(0); // absent
-        } else {
-            out.write(1); // present
-            out.write(stats.getTopBlock().toArray());
-        }
-
-        // topDifficulty (32 bytes)
-        out.write(stats.getTopDifficulty().toBytes().toArray());
-
-        // preTopBlock (nullable Bytes32)
-        if (stats.getPreTopBlock() == null) {
-            out.write(0); // absent
-        } else {
-            out.write(1); // present
-            out.write(stats.getPreTopBlock().toArray());
-        }
-
-        // preTopDifficulty (32 bytes)
-        out.write(stats.getPreTopDifficulty().toBytes().toArray());
-
         return out.toByteArray();
     }
 
     /**
      * Deserialize ChainStats from bytes (optimized)
      * <p>
-     * 3 Optimization: Reads only the 10 core fields.
-     * Deprecated fields are set to defaults in fromLegacy() if needed.
+     * v3: Reads simplified ChainStats with backward compatibility.
+     * If reading old format data (with legacy fields), skips them and uses only core fields.
      * <p>
-     * v2: Reads new consensus fields with backward compatibility.
-     * If reading old format data (no new fields), returns with defaults.
+     * Format:
+     * - difficulty (32 bytes)
+     * - mainBlockCount (var long)
+     * - balance (XAmount)
+     * - baseDifficultyTarget (nullable, 1 byte flag + 32 bytes if present)
+     * - lastDifficultyAdjustmentEpoch (var long)
+     * - lastOrphanCleanupEpoch (var long)
      */
     public static ChainStats deserializeChainStats(byte[] data) throws IOException {
         ByteReader reader = new ByteReader(data);
 
-        UInt256 difficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
-        UInt256 maxDifficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
+        // Try to detect format version by data length
+        boolean isLegacyFormat = data.length > 150;  // Legacy format is much longer
 
-        long mainBlockCount = reader.readVarLong();
-        long totalMainBlockCount = reader.readVarLong();
-        long totalBlockCount = reader.readVarLong();
-        int totalHostCount = reader.readVarInt();
-
-        long waitingSyncCount = reader.readVarLong();
-        long noRefCount = reader.readVarLong();
-        long extraCount = reader.readVarLong();
-
-        XAmount balance = deserializeXAmount(reader);
-
-        // NEW CONSENSUS FIELDS (v2) - with backward compatibility
+        UInt256 difficulty;
+        long mainBlockCount;
+        XAmount balance;
         UInt256 baseDifficultyTarget = null;
         long lastDifficultyAdjustmentEpoch = 0;
         long lastOrphanCleanupEpoch = 0;
-        Bytes32 topBlock = null;
-        UInt256 topDifficulty = UInt256.ZERO;
-        Bytes32 preTopBlock = null;
-        UInt256 preTopDifficulty = UInt256.ZERO;
 
-        // Check if there's more data (v2 format)
-        if (reader.hasMoreData()) {
+        if (isLegacyFormat) {
+            // Legacy format: skip obsolete fields
+            difficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
+            reader.readBytes(32);  // Skip maxDifficulty
+
+            mainBlockCount = reader.readVarLong();
+            reader.readVarLong();  // Skip totalMainBlockCount
+            reader.readVarLong();  // Skip totalBlockCount
+            reader.readVarInt();   // Skip totalHostCount
+
+            reader.readVarLong();  // Skip waitingSyncCount
+            reader.readVarLong();  // Skip noRefCount
+            reader.readVarLong();  // Skip extraCount
+
+            balance = deserializeXAmount(reader);
+
+            // Try to read new consensus fields if present
+            if (reader.hasMoreData()) {
+                byte baseDiffFlag = reader.readByte();
+                if (baseDiffFlag == 1) {
+                    baseDifficultyTarget = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
+                }
+
+                lastDifficultyAdjustmentEpoch = reader.readVarLong();
+                lastOrphanCleanupEpoch = reader.readVarLong();
+
+                // Skip legacy topBlock, topDifficulty, preTopBlock, preTopDifficulty if present
+                if (reader.hasMoreData()) {
+                    byte topBlockFlag = reader.readByte();
+                    if (topBlockFlag == 1) {
+                        reader.readBytes(32);  // Skip topBlock
+                    }
+                    if (reader.hasMoreData()) {
+                        reader.readBytes(32);  // Skip topDifficulty
+                    }
+                    if (reader.hasMoreData()) {
+                        byte preTopBlockFlag = reader.readByte();
+                        if (preTopBlockFlag == 1) {
+                            reader.readBytes(32);  // Skip preTopBlock
+                        }
+                    }
+                    if (reader.hasMoreData()) {
+                        reader.readBytes(32);  // Skip preTopDifficulty
+                    }
+                }
+            }
+        } else {
+            // New format (v3)
+            difficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
+            mainBlockCount = reader.readVarLong();
+            balance = deserializeXAmount(reader);
+
             // baseDifficultyTarget (nullable)
             byte baseDiffFlag = reader.readByte();
             if (baseDiffFlag == 1) {
@@ -226,44 +234,15 @@ public class CompactSerializer {
 
             // lastOrphanCleanupEpoch
             lastOrphanCleanupEpoch = reader.readVarLong();
-
-            // topBlock (nullable)
-            byte topBlockFlag = reader.readByte();
-            if (topBlockFlag == 1) {
-                topBlock = Bytes32.wrap(reader.readBytes(32));
-            }
-
-            // topDifficulty
-            topDifficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
-
-            // preTopBlock (nullable)
-            byte preTopBlockFlag = reader.readByte();
-            if (preTopBlockFlag == 1) {
-                preTopBlock = Bytes32.wrap(reader.readBytes(32));
-            }
-
-            // preTopDifficulty
-            preTopDifficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
         }
 
         return ChainStats.builder()
                 .difficulty(difficulty)
-                .maxDifficulty(maxDifficulty)
                 .mainBlockCount(mainBlockCount)
-                .totalMainBlockCount(totalMainBlockCount)
-                .totalBlockCount(totalBlockCount)
-                .totalHostCount(totalHostCount)
-                .waitingSyncCount(waitingSyncCount)
-                .noRefCount(noRefCount)
-                .extraCount(extraCount)
                 .balance(balance)
                 .baseDifficultyTarget(baseDifficultyTarget)
                 .lastDifficultyAdjustmentEpoch(lastDifficultyAdjustmentEpoch)
                 .lastOrphanCleanupEpoch(lastOrphanCleanupEpoch)
-                .topBlock(topBlock)
-                .topDifficulty(topDifficulty)
-                .preTopBlock(preTopBlock)
-                .preTopDifficulty(preTopDifficulty)
                 .build();
     }
 

@@ -26,5 +26,5 @@ package io.xdag.core.listener;
 
 public interface Listener {
 
-    void onMessage(Message message);
+  void onMessage(Message message);
 }

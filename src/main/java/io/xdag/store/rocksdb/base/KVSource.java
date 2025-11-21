@@ -31,32 +31,32 @@ import org.apache.commons.lang3.tuple.Pair;
 
 public interface KVSource<K, V> {
 
-    String getName();
+  String getName();
 
-    void setName(String name);
+  void setName(String name);
 
-    boolean isAlive();
+  boolean isAlive();
 
-    void init();
+  void init();
 
-    void close();
+  void close();
 
-    void reset();
+  void reset();
 
-    void put(K key, V val);
+  void put(K key, V val);
 
-    V get(K key);
+  V get(K key);
 
-    void delete(K key);
+  void delete(K key);
 
-    Set<byte[]> keys() throws RuntimeException;
+  Set<byte[]> keys() throws RuntimeException;
 
-    List<K> prefixKeyLookup(byte[] key);
+  List<K> prefixKeyLookup(byte[] key);
 
-    void fetchPrefix(byte[] key, Function<Pair<K, V>, Boolean> func);
+  void fetchPrefix(byte[] key, Function<Pair<K, V>, Boolean> func);
 
-    List<V> prefixValueLookup(byte[] key);
+  List<V> prefixValueLookup(byte[] key);
 
-    List<Pair<byte[], byte[]>> prefixKeyAndValueLookup(byte[] key);
+  List<Pair<byte[], byte[]>> prefixKeyAndValueLookup(byte[] key);
 
 }

@@ -33,8 +33,8 @@ import lombok.NoArgsConstructor;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * Block detail DTO (for detailed view)
- * Used by both CLI and RPC to return detailed block information
+ * Block detail DTO (for detailed view) Used by both CLI and RPC to return detailed block
+ * information
  */
 @Data
 @Builder
@@ -42,87 +42,88 @@ import org.apache.tuweni.units.bigints.UInt256;
 @AllArgsConstructor
 public class BlockDetail {
 
+  /**
+   * Block hash (hex string)
+   */
+  private String hash;
+
+  /**
+   * Block height (null if orphan)
+   */
+  private Long height;
+
+  /**
+   * Block timestamp in milliseconds
+   */
+  private long timestamp;
+
+  /**
+   * Epoch number
+   */
+  private long epoch;
+
+  /**
+   * Block difficulty
+   */
+  private UInt256 difficulty;
+
+  /**
+   * Block state (Main, Orphan)
+   */
+  private String state;
+
+  /**
+   * Coinbase address (Base58 format)
+   */
+  private String coinbase;
+
+  /**
+   * Block links (references to other blocks)
+   */
+  private List<LinkInfo> blockLinks;
+
+  /**
+   * Transaction links
+   */
+  private List<String> transactionHashes;
+
+  /**
+   * Transactions in this block
+   */
+  private List<TransactionInfo> transactions;
+
+  /**
+   * Total amount transferred in all transactions
+   */
+  private XAmount totalAmount;
+
+  /**
+   * Total fees paid in all transactions
+   */
+  private XAmount totalFees;
+
+  /**
+   * Link information DTO
+   */
+  @Data
+  @Builder
+  @NoArgsConstructor
+  @AllArgsConstructor
+  public static class LinkInfo {
+
     /**
-     * Block hash (hex string)
+     * Linked block hash (full hex string)
      */
     private String hash;
 
     /**
-     * Block height (null if orphan)
+     * Linked block height (null if not available)
      */
     private Long height;
 
     /**
-     * Block timestamp in milliseconds
+     * Linked block epoch (null if not available)
      */
-    private long timestamp;
-
-    /**
-     * Epoch number
-     */
-    private long epoch;
-
-    /**
-     * Block difficulty
-     */
-    private UInt256 difficulty;
-
-    /**
-     * Block state (Main, Orphan)
-     */
-    private String state;
-
-    /**
-     * Coinbase address (Base58 format)
-     */
-    private String coinbase;
-
-    /**
-     * Block links (references to other blocks)
-     */
-    private List<LinkInfo> blockLinks;
-
-    /**
-     * Transaction links
-     */
-    private List<String> transactionHashes;
-
-    /**
-     * Transactions in this block
-     */
-    private List<TransactionInfo> transactions;
-
-    /**
-     * Total amount transferred in all transactions
-     */
-    private XAmount totalAmount;
-
-    /**
-     * Total fees paid in all transactions
-     */
-    private XAmount totalFees;
-
-    /**
-     * Link information DTO
-     */
-    @Data
-    @Builder
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class LinkInfo {
-        /**
-         * Linked block hash (full hex string)
-         */
-        private String hash;
-
-        /**
-         * Linked block height (null if not available)
-         */
-        private Long height;
-
-        /**
-         * Linked block epoch (null if not available)
-         */
-        private Long epoch;
-    }
+    private Long epoch;
+  }
 }

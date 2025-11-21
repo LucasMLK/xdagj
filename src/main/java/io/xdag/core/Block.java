@@ -82,11 +82,11 @@ public class Block implements Serializable {
    * amount, fee, etc. - Loaded from BlockStore at runtime - Does NOT participate in serialization
    * (toBytes/fromBytes) - Does NOT participate in equals/hashCode (only hash is used)
    * <p>
-   * Usage: - getInfo(): Get BlockInfo (maybe null if not loaded) - withInfo(info): Create new
-   * Block with BlockInfo attached -- GETTER -- Get BlockInfo (maybe null if not loaded from
-   * BlockStore) Phase 4 Step 2.3: BlockInfo contains runtime metadata: - flags (BI_MAIN,
-   * BI_APPLIED, BI_REF, BI_MAIN_REF, etc.) - difficulty, ref, maxDiffLink - amount, fee - remark,
-   * snapshot info Note: Use withInfo() to attach BlockInfo after loading from BlockStore
+   * Usage: - getInfo(): Get BlockInfo (maybe null if not loaded) - withInfo(info): Create new Block
+   * with BlockInfo attached -- GETTER -- Get BlockInfo (maybe null if not loaded from BlockStore)
+   * Phase 4 Step 2.3: BlockInfo contains runtime metadata: - flags (BI_MAIN, BI_APPLIED, BI_REF,
+   * BI_MAIN_REF, etc.) - difficulty, ref, maxDiffLink - amount, fee - remark, snapshot info Note:
+   * Use withInfo() to attach BlockInfo after loading from BlockStore
    *
    */
   @Builder.Default

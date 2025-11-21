@@ -28,7 +28,7 @@ import io.xdag.config.Constants.MessageType;
 
 public interface Message {
 
-    MessageType getType();
+  MessageType getType();
 
-    Object getData();
+  Object getData();
 }

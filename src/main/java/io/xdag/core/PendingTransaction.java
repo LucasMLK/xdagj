@@ -40,51 +40,51 @@ import lombok.Getter;
 @Getter
 public class PendingTransaction {
 
-    /**
-     * The wrapped transaction
-     */
-    private final Transaction transaction;
+  /**
+   * The wrapped transaction
+   */
+  private final Transaction transaction;
 
-    /**
-     * Timestamp when this transaction was added to the pool (milliseconds)
-     */
-    private final long entryTime;
+  /**
+   * Timestamp when this transaction was added to the pool (milliseconds)
+   */
+  private final long entryTime;
 
-    /**
-     * Create a PendingTransaction with current timestamp.
-     *
-     * @param transaction the transaction to wrap
-     */
-    public PendingTransaction(Transaction transaction) {
-        this.transaction = transaction;
-        this.entryTime = System.currentTimeMillis();
-    }
+  /**
+   * Create a PendingTransaction with current timestamp.
+   *
+   * @param transaction the transaction to wrap
+   */
+  public PendingTransaction(Transaction transaction) {
+    this.transaction = transaction;
+    this.entryTime = System.currentTimeMillis();
+  }
 
-    /**
-     * Get the age of this transaction in milliseconds.
-     *
-     * @return age in milliseconds
-     */
-    public long getAge() {
-        return System.currentTimeMillis() - entryTime;
-    }
+  /**
+   * Get the age of this transaction in milliseconds.
+   *
+   * @return age in milliseconds
+   */
+  public long getAge() {
+    return System.currentTimeMillis() - entryTime;
+  }
 
-    /**
-     * Check if this transaction has expired.
-     *
-     * @param maxAgeMillis maximum allowed age
-     * @return true if expired
-     */
-    public boolean isExpired(long maxAgeMillis) {
-        return getAge() > maxAgeMillis;
-    }
+  /**
+   * Check if this transaction has expired.
+   *
+   * @param maxAgeMillis maximum allowed age
+   * @return true if expired
+   */
+  public boolean isExpired(long maxAgeMillis) {
+    return getAge() > maxAgeMillis;
+  }
 
-    @Override
-    public String toString() {
-        return String.format("PendingTransaction{hash=%s, from=%s, nonce=%d, age=%dms}",
-                transaction.getHash().toHexString().substring(0, 16),
-                transaction.getFrom().toHexString().substring(0, 8),
-                transaction.getNonce(),
-                getAge());
-    }
+  @Override
+  public String toString() {
+    return String.format("PendingTransaction{hash=%s, from=%s, nonce=%d, age=%dms}",
+        transaction.getHash().toHexString().substring(0, 16),
+        transaction.getFrom().toHexString().substring(0, 8),
+        transaction.getNonce(),
+        getAge());
+  }
 }

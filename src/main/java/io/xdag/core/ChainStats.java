@@ -30,373 +30,193 @@ import java.io.Serializable;
 import lombok.Builder;
 import lombok.Value;
 import lombok.With;
-import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * Immutable chain statistics for XDAG network (optimized)
- * <p>
- * This class replaces the mutable XdagStats with a type-safe, immutable implementation.
- * Uses UInt256 for difficulty values.
- * <p>
- * 3 Optimization: Removed 5 unused fields (blockCount, hostCount, mainBlockTime,
- * globalMinerHash, ourLastBlockHash) that were only used for legacy compatibility.
- * <p>
- * Optimized size: ~120 bytes (down from ~180 bytes, 33% reduction)
+ * Immutable chain statistics for XDAG 1.0 epoch-based consensus
+ *
+ * <p>Optimized for XDAG 1.0 design - removed legacy fields that are never updated:
+ * <ul>
+ *   <li>Removed: totalMainBlockCount, totalBlockCount, totalHostCount (network-wide stats, never maintained)</li>
+ *   <li>Removed: waitingSyncCount, noRefCount, extraCount (should use OrphanBlockStore instead)</li>
+ *   <li>Removed: maxDifficulty (redundant with difficulty - we always follow heaviest chain)</li>
+ *   <li>Removed: topBlock, topDifficulty, preTopBlock, preTopDifficulty (legacy, redundant with main chain tip)</li>
+ * </ul>
+ *
+ * <p><strong>Core Fields (6 fields, ~80 bytes):</strong>
+ * <ul>
+ *   <li>difficulty (32 bytes) - Current chain cumulative difficulty for chain selection</li>
+ *   <li>mainBlockCount (8 bytes) - Local main chain length (epoch winners)</li>
+ *   <li>balance (8 bytes) - Current wallet balance</li>
+ *   <li>baseDifficultyTarget (32 bytes) - PoW validation target</li>
+ *   <li>lastDifficultyAdjustmentEpoch (8 bytes) - Last difficulty adjustment</li>
+ *   <li>lastOrphanCleanupEpoch (8 bytes) - Last orphan cleanup</li>
+ * </ul>
+ *
+ * @since XDAGJ 1.0
  */
 @Value
 @Builder(toBuilder = true)
 @With
 public class ChainStats implements Serializable {
 
-    // ========== Core Chain State (Cumulative Difficulty for Chain Selection) ==========
-    // NOTE: These cumulative difficulty fields are used for CHAIN SELECTION (heaviest chain wins)
-    // They are DIFFERENT from baseDifficultyTarget which is used for PoW VALIDATION
-
-    /**
-     * Current chain cumulative difficulty (sum of all block difficulties from genesis)
-     * <p>
-     * This is used for chain selection (heaviest chain wins), NOT for PoW validation.
-     * For PoW validation, see baseDifficultyTarget below.
-     */
-    UInt256 difficulty;
-
-    /**
-     * Maximum cumulative difficulty seen in the network
-     * <p>
-     * This is used to determine which fork is the main chain (heaviest chain wins).
-     * Higher cumulative difficulty = main chain.
-     */
-    UInt256 maxDifficulty;
-
-    /**
-     * Current number of main blocks in local chain
-     */
-    long mainBlockCount;
-
-    /**
-     * Total number of main blocks in the network
-     */
-    long totalMainBlockCount;
-
-    /**
-     * Total number of blocks in the network (including orphans)
-     */
-    long totalBlockCount;
-
-    /**
-     * Total number of hosts/peers seen in the network
-     */
-    int totalHostCount;
-
-    // ========== Sync & Orphan Tracking ==========
-
-    /**
-     * Number of blocks waiting for synchronization (missing parent blocks)
-     */
-    long waitingSyncCount;
-
-    /**
-     * Number of blocks with no references (orphan blocks)
-     */
-    long noRefCount;
-
-    /**
-     * Number of extra blocks
-     */
-    long extraCount;
-
-    // ========== Account State ==========
-
-    /**
-     * Current balance
-     */
-    XAmount balance;
-
-    // ========== Difficulty Management (New Consensus) ==========
-
-    /**
-     * Base difficulty target for PoW validation
-     * <p>
-     * All blocks must satisfy: hash <= baseDifficultyTarget
-     * This prevents spam blocks and ensures minimum proof of work.
-     * <p>
-     * Adjusted periodically based on network hashrate to maintain
-     * target blocks per epoch (see OPTIMAL_CONSENSUS_DESIGN.md)
-     */
-    UInt256 baseDifficultyTarget;
-
-    /**
-     * Last epoch when difficulty was adjusted
-     * <p>
-     * Used to determine when next difficulty adjustment should occur.
-     * Adjustment happens every DIFFICULTY_ADJUSTMENT_INTERVAL epochs.
-     */
-    long lastDifficultyAdjustmentEpoch;
-
-    /**
-     * Last epoch when orphan blocks were cleaned up
-     * <p>
-     * Used to trigger periodic orphan block cleanup.
-     * Cleanup removes orphan blocks older than ORPHAN_RETENTION_WINDOW.
-     */
-    long lastOrphanCleanupEpoch;
-
-    // ========== Top Block State (Merged from XdagTopStatus) ==========
-    // NOTE: These are also CUMULATIVE difficulties, not PoW validation targets
-
-    /**
-     * Current top block hash (highest cumulative difficulty)
-     */
-    Bytes32 topBlock;
-
-    /**
-     * Current top block cumulative difficulty
-     */
-    UInt256 topDifficulty;
-
-    /**
-     * Previous top block hash
-     */
-    Bytes32 preTopBlock;
-
-    /**
-     * Previous top block cumulative difficulty
-     */
-    UInt256 preTopDifficulty;
-
-    // ========== Helper Methods ==========
-
-    /**
-     * Create initial chain stats with zero values
-     */
-    public static ChainStats zero() {
-        return ChainStats.builder()
-                .difficulty(UInt256.ZERO)
-                .maxDifficulty(UInt256.ZERO)
-                .mainBlockCount(0)
-                .totalMainBlockCount(0)
-                .totalBlockCount(0)
-                .totalHostCount(0)
-                .waitingSyncCount(0)
-                .noRefCount(0)
-                .extraCount(0)
-                .balance(XAmount.ZERO)
-                .baseDifficultyTarget(null)  // Will be set during initialization
-                .lastDifficultyAdjustmentEpoch(0)
-                .lastOrphanCleanupEpoch(0)
-                .topBlock(null)
-                .topDifficulty(UInt256.ZERO)
-                .preTopBlock(null)
-                .preTopDifficulty(UInt256.ZERO)
-                .build();
-    }
-
-  // ========== Computed Properties ==========
+  // ========== Core Chain State ==========
 
   /**
-     * Get sync completion percentage
-     */
-    public double getSyncProgress() {
-        if (totalBlockCount == 0) {
-            return 100.0;
-        }
-        long syncedCount = totalBlockCount - waitingSyncCount;
-        return (double) syncedCount / totalBlockCount * 100.0;
+   * Current chain cumulative difficulty (sum of all block difficulties from genesis)
+   * <p>
+   * Used for chain selection (heaviest chain wins), NOT for PoW validation. For PoW validation, see
+   * baseDifficultyTarget.
+   */
+  UInt256 difficulty;
+
+  /**
+   * Current number of main blocks in local chain (epoch winners)
+   * <p>
+   * This is the height of the local main chain. Each epoch winner gets a sequential height.
+   */
+  long mainBlockCount;
+
+  /**
+   * Current wallet balance across all accounts
+   */
+  XAmount balance;
+
+  // ========== Difficulty Management ==========
+
+  /**
+   * Base difficulty target for PoW validation
+   * <p>
+   * All blocks must satisfy: hash <= baseDifficultyTarget This prevents spam blocks and ensures
+   * minimum proof of work.
+   * <p>
+   * Adjusted periodically based on network hashrate to maintain target blocks per epoch.
+   */
+  UInt256 baseDifficultyTarget;
+
+  /**
+   * Last epoch when difficulty was adjusted
+   * <p>
+   * Used to determine when next difficulty adjustment should occur. Adjustment happens every
+   * DIFFICULTY_ADJUSTMENT_INTERVAL epochs.
+   */
+  long lastDifficultyAdjustmentEpoch;
+
+  /**
+   * Last epoch when orphan blocks were cleaned up
+   * <p>
+   * Used to trigger periodic orphan block cleanup. Cleanup removes orphan blocks older than
+   * ORPHAN_RETENTION_WINDOW.
+   */
+  long lastOrphanCleanupEpoch;
+
+  // ========== Factory Methods ==========
+
+  /**
+   * Create initial chain stats with zero values
+   */
+  public static ChainStats zero() {
+    return ChainStats.builder()
+        .difficulty(UInt256.ZERO)
+        .mainBlockCount(0)
+        .balance(XAmount.ZERO)
+        .baseDifficultyTarget(null)  // Will be set during initialization
+        .lastDifficultyAdjustmentEpoch(0)
+        .lastOrphanCleanupEpoch(0)
+        .build();
+  }
+
+  // ========== Display Methods ==========
+
+  @Override
+  public String toString() {
+    return String.format("ChainStats[mainBlocks=%d, difficulty=%s, balance=%s, target=%s]",
+        mainBlockCount,
+        difficulty.toDecimalString(),
+        balance.toDecimal(9, XUnit.XDAG).toPlainString(),
+        baseDifficultyTarget != null ? baseDifficultyTarget.toHexString().substring(0, 10) + "..."
+            : "null");
+  }
+
+  // ========== Serialization Methods ==========
+
+  /**
+   * Serialize ChainStats to bytes for storage
+   * <p>
+   * Format (80 bytes total):
+   * <ul>
+   *   <li>[32 bytes] difficulty</li>
+   *   <li>[8 bytes] mainBlockCount</li>
+   *   <li>[8 bytes] balance (nano)</li>
+   *   <li>[1 byte] baseDifficultyTarget null flag</li>
+   *   <li>[32 bytes] baseDifficultyTarget (if not null)</li>
+   *   <li>[8 bytes] lastDifficultyAdjustmentEpoch</li>
+   *   <li>[8 bytes] lastOrphanCleanupEpoch</li>
+   * </ul>
+   */
+  public byte[] toBytes() {
+    SimpleEncoder enc = new SimpleEncoder();
+
+    // Write difficulty (32 bytes)
+    enc.write(difficulty.toBytes().toArray());
+
+    // Write long fields
+    enc.writeLong(mainBlockCount);
+    enc.writeLong(balance.toXAmount().toLong());
+
+    // Write baseDifficultyTarget (nullable)
+    if (baseDifficultyTarget == null) {
+      enc.writeBoolean(false);
+    } else {
+      enc.writeBoolean(true);
+      enc.write(baseDifficultyTarget.toBytes().toArray());
     }
 
-    @Override
-    public String toString() {
-        return String.format("ChainStats[mainBlocks=%d/%d, totalBlocks=%d, difficulty=%s, maxDiff=%s, hosts=%d, balance=%s, orphans=%d, sync=%.1f%%]",
-                mainBlockCount, totalMainBlockCount,
-                totalBlockCount,
-                difficulty.toDecimalString(),
-                maxDifficulty.toDecimalString(),
-                totalHostCount,
-                balance.toDecimal(9, XUnit.XDAG).toPlainString(),
-                noRefCount,
-                getSyncProgress());
+    // Write epoch tracking
+    enc.writeLong(lastDifficultyAdjustmentEpoch);
+    enc.writeLong(lastOrphanCleanupEpoch);
+
+    return enc.toBytes();
+  }
+
+  /**
+   * Deserialize ChainStats from bytes
+   */
+  public static ChainStats fromBytes(byte[] data) {
+    SimpleDecoder dec = new SimpleDecoder(data);
+
+    // Read difficulty (32 bytes)
+    byte[] difficultyBytes = new byte[32];
+    dec.readBytes(difficultyBytes);
+    UInt256 difficulty = UInt256.fromBytes(org.apache.tuweni.bytes.Bytes.wrap(difficultyBytes));
+
+    // Read long fields
+    long mainBlockCount = dec.readLong();
+    long balanceNano = dec.readLong();
+    XAmount balance = XAmount.of(balanceNano);
+
+    // Read baseDifficultyTarget (nullable)
+    UInt256 baseDifficultyTarget = null;
+    boolean hasBaseDifficultyTarget = dec.readBoolean();
+    if (hasBaseDifficultyTarget) {
+      byte[] baseDifficultyBytes = new byte[32];
+      dec.readBytes(baseDifficultyBytes);
+      baseDifficultyTarget = UInt256.fromBytes(
+          org.apache.tuweni.bytes.Bytes.wrap(baseDifficultyBytes));
     }
 
-    // ========== Serialization Methods ==========
+    // Read epoch tracking
+    long lastDifficultyAdjustmentEpoch = dec.readLong();
+    long lastOrphanCleanupEpoch = dec.readLong();
 
-    /**
-     * Serialize ChainStats to bytes for network transmission
-     * <p>
-     * Format:
-     * [32 bytes] difficulty
-     * [32 bytes] maxDifficulty
-     * [8 bytes] mainBlockCount
-     * [8 bytes] totalMainBlockCount
-     * [8 bytes] totalBlockCount
-     * [4 bytes] totalHostCount
-     * [8 bytes] waitingSyncCount
-     * [8 bytes] noRefCount
-     * [8 bytes] extraCount
-     * [8 bytes] balance (nano)
-     * [1 byte] baseDifficultyTarget null flag
-     * [32 bytes] baseDifficultyTarget (if not null)
-     * [8 bytes] lastDifficultyAdjustmentEpoch
-     * [8 bytes] lastOrphanCleanupEpoch
-     * [1 byte] topBlock null flag (0=null, 1=not null)
-     * [32 bytes] topBlock (if not null)
-     * [32 bytes] topDifficulty
-     * [1 byte] preTopBlock null flag
-     * [32 bytes] preTopBlock (if not null)
-     * [32 bytes] preTopDifficulty
-     */
-    public byte[] toBytes() {
-        SimpleEncoder enc = new SimpleEncoder();
-
-        // Write UInt256 fields (32 bytes each)
-        enc.write(difficulty.toBytes().toArray());
-        enc.write(maxDifficulty.toBytes().toArray());
-
-        // Write long fields
-        enc.writeLong(mainBlockCount);
-        enc.writeLong(totalMainBlockCount);
-        enc.writeLong(totalBlockCount);
-
-        // Write int field
-        enc.writeInt(totalHostCount);
-
-        // Write long fields
-        enc.writeLong(waitingSyncCount);
-        enc.writeLong(noRefCount);
-        enc.writeLong(extraCount);
-
-        // Write balance as long (nano)
-        enc.writeLong(balance.toXAmount().toLong());
-
-        // Write baseDifficultyTarget (nullable)
-        if (baseDifficultyTarget == null) {
-            enc.writeBoolean(false);
-        } else {
-            enc.writeBoolean(true);
-            enc.write(baseDifficultyTarget.toBytes().toArray());
-        }
-
-        // Write difficulty adjustment epochs
-        enc.writeLong(lastDifficultyAdjustmentEpoch);
-        enc.writeLong(lastOrphanCleanupEpoch);
-
-        // Write topBlock (nullable)
-        if (topBlock == null) {
-            enc.writeBoolean(false);
-        } else {
-            enc.writeBoolean(true);
-            enc.write(topBlock.toArray());
-        }
-
-        // Write topDifficulty
-        enc.write(topDifficulty.toBytes().toArray());
-
-        // Write preTopBlock (nullable)
-        if (preTopBlock == null) {
-            enc.writeBoolean(false);
-        } else {
-            enc.writeBoolean(true);
-            enc.write(preTopBlock.toArray());
-        }
-
-        // Write preTopDifficulty
-        enc.write(preTopDifficulty.toBytes().toArray());
-
-        return enc.toBytes();
-    }
-
-    /**
-     * Deserialize ChainStats from bytes received from network
-     */
-    public static ChainStats fromBytes(byte[] data) {
-        SimpleDecoder dec = new SimpleDecoder(data);
-
-        // Read UInt256 fields (32 bytes each)
-        byte[] difficultyBytes = new byte[32];
-        dec.readBytes(difficultyBytes);
-        UInt256 difficulty = UInt256.fromBytes(org.apache.tuweni.bytes.Bytes.wrap(difficultyBytes));
-
-        byte[] maxDifficultyBytes = new byte[32];
-        dec.readBytes(maxDifficultyBytes);
-        UInt256 maxDifficulty = UInt256.fromBytes(org.apache.tuweni.bytes.Bytes.wrap(maxDifficultyBytes));
-
-        // Read long fields
-        long mainBlockCount = dec.readLong();
-        long totalMainBlockCount = dec.readLong();
-        long totalBlockCount = dec.readLong();
-
-        // Read int field
-        int totalHostCount = dec.readInt();
-
-        // Read long fields
-        long waitingSyncCount = dec.readLong();
-        long noRefCount = dec.readLong();
-        long extraCount = dec.readLong();
-
-        // Read balance
-        long balanceNano = dec.readLong();
-        XAmount balance = XAmount.of(balanceNano);
-
-        // Read baseDifficultyTarget (nullable)
-        UInt256 baseDifficultyTarget = null;
-        boolean hasBaseDifficultyTarget = dec.readBoolean();
-        if (hasBaseDifficultyTarget) {
-            byte[] baseDifficultyBytes = new byte[32];
-            dec.readBytes(baseDifficultyBytes);
-            baseDifficultyTarget = UInt256.fromBytes(org.apache.tuweni.bytes.Bytes.wrap(baseDifficultyBytes));
-        }
-
-        // Read difficulty adjustment epochs
-        long lastDifficultyAdjustmentEpoch = dec.readLong();
-        long lastOrphanCleanupEpoch = dec.readLong();
-
-        // Read topBlock (nullable)
-        Bytes32 topBlock = null;
-        boolean hasTopBlock = dec.readBoolean();
-        if (hasTopBlock) {
-            byte[] topBlockBytes = new byte[32];
-            dec.readBytes(topBlockBytes);
-            topBlock = Bytes32.wrap(topBlockBytes);
-        }
-
-        // Read topDifficulty
-        byte[] topDifficultyBytes = new byte[32];
-        dec.readBytes(topDifficultyBytes);
-        UInt256 topDifficulty = UInt256.fromBytes(org.apache.tuweni.bytes.Bytes.wrap(topDifficultyBytes));
-
-        // Read preTopBlock (nullable)
-        Bytes32 preTopBlock = null;
-        boolean hasPreTopBlock = dec.readBoolean();
-        if (hasPreTopBlock) {
-            byte[] preTopBlockBytes = new byte[32];
-            dec.readBytes(preTopBlockBytes);
-            preTopBlock = Bytes32.wrap(preTopBlockBytes);
-        }
-
-        // Read preTopDifficulty
-        byte[] preTopDifficultyBytes = new byte[32];
-        dec.readBytes(preTopDifficultyBytes);
-        UInt256 preTopDifficulty = UInt256.fromBytes(org.apache.tuweni.bytes.Bytes.wrap(preTopDifficultyBytes));
-
-        // Build ChainStats using builder
-        return ChainStats.builder()
-                .difficulty(difficulty)
-                .maxDifficulty(maxDifficulty)
-                .mainBlockCount(mainBlockCount)
-                .totalMainBlockCount(totalMainBlockCount)
-                .totalBlockCount(totalBlockCount)
-                .totalHostCount(totalHostCount)
-                .waitingSyncCount(waitingSyncCount)
-                .noRefCount(noRefCount)
-                .extraCount(extraCount)
-                .balance(balance)
-                .baseDifficultyTarget(baseDifficultyTarget)
-                .lastDifficultyAdjustmentEpoch(lastDifficultyAdjustmentEpoch)
-                .lastOrphanCleanupEpoch(lastOrphanCleanupEpoch)
-                .topBlock(topBlock)
-                .topDifficulty(topDifficulty)
-                .preTopBlock(preTopBlock)
-                .preTopDifficulty(preTopDifficulty)
-                .build();
-    }
+    // Build ChainStats
+    return ChainStats.builder()
+        .difficulty(difficulty)
+        .mainBlockCount(mainBlockCount)
+        .balance(balance)
+        .baseDifficultyTarget(baseDifficultyTarget)
+        .lastDifficultyAdjustmentEpoch(lastDifficultyAdjustmentEpoch)
+        .lastOrphanCleanupEpoch(lastOrphanCleanupEpoch)
+        .build();
+  }
 }

@@ -31,14 +31,14 @@ import io.xdag.config.cli.XdagCli;
  */
 public class Bootstrap {
 
-    /**
-     * Main method that launches the XDAG CLI application
-     * 
-     * @param args Command line arguments passed to the application
-     * @throws Exception If any error occurs during application startup
-     */
-    public static void main(String[] args) throws Exception {
-        XdagCli.main(args);
-    }
+  /**
+   * Main method that launches the XDAG CLI application
+   *
+   * @param args Command line arguments passed to the application
+   * @throws Exception If any error occurs during application startup
+   */
+  public static void main(String[] args) throws Exception {
+    XdagCli.main(args);
+  }
 
 }

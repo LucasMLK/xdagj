@@ -32,35 +32,36 @@ import org.apache.commons.lang3.Strings;
 
 public class RocksdbFactory implements DatabaseFactory {
 
-    private final EnumMap<DatabaseName, KVSource<byte[], byte[]>> databases = new EnumMap<>(DatabaseName.class);
+  private final EnumMap<DatabaseName, KVSource<byte[], byte[]>> databases = new EnumMap<>(
+      DatabaseName.class);
 
-    protected Config config;
+  protected Config config;
 
-    public RocksdbFactory(Config config) {
-        this.config = config;
+  public RocksdbFactory(Config config) {
+    this.config = config;
+  }
+
+  @Override
+  public KVSource<byte[], byte[]> getDB(DatabaseName name) {
+    return databases.computeIfAbsent(
+        name, k -> {
+          RocksdbKVSource dataSource;
+          // time data source must set fixed prefix length
+          if (Strings.CS.equals(DatabaseName.TIME.toString(), name.toString())) {
+            dataSource = new RocksdbKVSource(name.toString(), 9);
+          } else {
+            dataSource = new RocksdbKVSource(name.toString());
+          }
+          dataSource.setConfig(config);
+          return dataSource;
+        });
+  }
+
+  @Override
+  public void close() {
+    for (KVSource<byte[], byte[]> db : databases.values()) {
+      db.close();
     }
-
-    @Override
-    public KVSource<byte[], byte[]> getDB(DatabaseName name) {
-        return databases.computeIfAbsent(
-                name, k -> {
-                    RocksdbKVSource dataSource;
-                    // time data source must set fixed prefix length
-                    if (Strings.CS.equals(DatabaseName.TIME.toString(), name.toString())) {
-                        dataSource = new RocksdbKVSource(name.toString(), 9);
-                    } else {
-                        dataSource = new RocksdbKVSource(name.toString());
-                    }
-                    dataSource.setConfig(config);
-                    return dataSource;
-                });
-    }
-
-    @Override
-    public void close() {
-        for (KVSource<byte[], byte[]> db : databases.values()) {
-            db.close();
-        }
-        databases.clear();
-    }
+    databases.clear();
+  }
 }

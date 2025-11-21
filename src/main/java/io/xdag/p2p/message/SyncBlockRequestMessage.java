@@ -60,92 +60,92 @@ import org.apache.tuweni.bytes.MutableBytes;
 @Setter
 public class SyncBlockRequestMessage extends Message {
 
-    /**
-     * Hash of the requested block
-     */
-    private Bytes hash;
+  /**
+   * Hash of the requested block
+   */
+  private Bytes hash;
 
-    /**
-     * Current chain statistics (for peer synchronization)
-     */
-    private ChainStats chainStats;
+  /**
+   * Current chain statistics (for peer synchronization)
+   */
+  private ChainStats chainStats;
 
-    /**
-     * Constructor for receiving message from network
-     *
-     * <p>Deserializes message body:
-     * <ol>
-     *   <li>Read hash (32 bytes)</li>
-     *   <li>Read chainStats (variable size)</li>
-     * </ol>
-     *
-     * @param body serialized message body
-     * @throws IllegalArgumentException if deserialization fails
-     */
-    public SyncBlockRequestMessage(byte[] body) {
-        super(XdagMessageCode.SYNCBLOCK_REQUEST, SyncBlockMessage.class);
+  /**
+   * Constructor for receiving message from network
+   *
+   * <p>Deserializes message body:
+   * <ol>
+   *   <li>Read hash (32 bytes)</li>
+   *   <li>Read chainStats (variable size)</li>
+   * </ol>
+   *
+   * @param body serialized message body
+   * @throws IllegalArgumentException if deserialization fails
+   */
+  public SyncBlockRequestMessage(byte[] body) {
+    super(XdagMessageCode.SYNCBLOCK_REQUEST, SyncBlockMessage.class);
 
-        SimpleDecoder dec = new SimpleDecoder(body);
+    SimpleDecoder dec = new SimpleDecoder(body);
 
-        // Deserialize hash (32 bytes)
-        byte[] hashBytes = new byte[32];
-        dec.readBytes(hashBytes);
-        this.hash = Bytes32.wrap(hashBytes);
+    // Deserialize hash (32 bytes)
+    byte[] hashBytes = new byte[32];
+    dec.readBytes(hashBytes);
+    this.hash = Bytes32.wrap(hashBytes);
 
-        // Deserialize chain stats
-        this.chainStats = ChainStats.fromBytes(dec.readBytes());
+    // Deserialize chain stats
+    this.chainStats = ChainStats.fromBytes(dec.readBytes());
 
-        // Set body for reference
-        this.body = body;
-    }
+    // Set body for reference
+    this.body = body;
+  }
 
-    /**
-     * Constructor for sending message to network
-     *
-     * <p>Serializes message:
-     * <ol>
-     *   <li>Write hash (32 bytes)</li>
-     *   <li>Write chainStats (variable size)</li>
-     * </ol>
-     *
-     * @param hash block hash to request
-     * @param chainStats current chain statistics
-     */
-    public SyncBlockRequestMessage(MutableBytes hash, ChainStats chainStats) {
-        super(XdagMessageCode.SYNCBLOCK_REQUEST, SyncBlockMessage.class);
+  /**
+   * Constructor for sending message to network
+   *
+   * <p>Serializes message:
+   * <ol>
+   *   <li>Write hash (32 bytes)</li>
+   *   <li>Write chainStats (variable size)</li>
+   * </ol>
+   *
+   * @param hash       block hash to request
+   * @param chainStats current chain statistics
+   */
+  public SyncBlockRequestMessage(MutableBytes hash, ChainStats chainStats) {
+    super(XdagMessageCode.SYNCBLOCK_REQUEST, SyncBlockMessage.class);
 
-        this.hash = Bytes32.wrap(hash);
-        this.chainStats = chainStats;
+    this.hash = Bytes32.wrap(hash);
+    this.chainStats = chainStats;
 
-        // Serialize message body
-        SimpleEncoder enc = new SimpleEncoder();
-        encode(enc);
-        this.body = enc.toBytes();
-    }
+    // Serialize message body
+    SimpleEncoder enc = new SimpleEncoder();
+    encode(enc);
+    this.body = enc.toBytes();
+  }
 
-    /**
-     * Encode message to bytes
-     *
-     * <p>Format:
-     * [32 bytes hash] + [variable chainStats]
-     *
-     */
+  /**
+   * Encode message to bytes
+   *
+   * <p>Format:
+   * [32 bytes hash] + [variable chainStats]
+   *
+   */
 
-    @Override
-    public void encode(SimpleEncoder enc) {
-        // Serialize hash (32 bytes)
-        enc.write(hash.toArray());
+  @Override
+  public void encode(SimpleEncoder enc) {
+    // Serialize hash (32 bytes)
+    enc.write(hash.toArray());
 
-        // Serialize chain stats
-        enc.writeBytes(chainStats.toBytes());
-    }
+    // Serialize chain stats
+    enc.writeBytes(chainStats.toBytes());
+  }
 
-    @Override
-    public String toString() {
-        return String.format(
-            "SyncBlockRequestMessage[hash=%s, size=%d bytes]",
-            hash != null ? hash.toHexString().substring(0, 16) + "..." : "null",
-            body != null ? body.length : 0
-        );
-    }
+  @Override
+  public String toString() {
+    return String.format(
+        "SyncBlockRequestMessage[hash=%s, size=%d bytes]",
+        hash != null ? hash.toHexString().substring(0, 16) + "..." : "null",
+        body != null ? body.length : 0
+    );
+  }
 }

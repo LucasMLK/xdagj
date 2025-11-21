@@ -53,78 +53,78 @@ import org.apache.tuweni.bytes.Bytes32;
  */
 public interface PowAlgorithm {
 
-    /**
-     * Calculate proof-of-work hash for block validation.
-     *
-     * <p>Used by the blockchain to validate blocks and verify PoW.
-     * This method must be deterministic and thread-safe.
-     *
-     * @param data Block data to hash
-     * @param context Hash calculation context (timestamp, height, etc.)
-     * @return 32-byte hash result, or null if algorithm not ready
-     * @throws IllegalArgumentException if data or context is null
-     */
-    byte[] calculateBlockHash(byte[] data, HashContext context);
+  /**
+   * Calculate proof-of-work hash for block validation.
+   *
+   * <p>Used by the blockchain to validate blocks and verify PoW.
+   * This method must be deterministic and thread-safe.
+   *
+   * @param data    Block data to hash
+   * @param context Hash calculation context (timestamp, height, etc.)
+   * @return 32-byte hash result, or null if algorithm not ready
+   * @throws IllegalArgumentException if data or context is null
+   */
+  byte[] calculateBlockHash(byte[] data, HashContext context);
 
-    /**
-     * Calculate hash for mining pool share validation.
-     *
-     * <p>Used by mining pools to validate shares submitted by miners.
-     * Pool mining may use different parameters than block validation.
-     *
-     * @param data Mining task data
-     * @param context Hash calculation context
-     * @return 32-byte hash result, or null if algorithm not ready
-     * @throws IllegalArgumentException if data or context is null
-     */
-    Bytes32 calculatePoolHash(byte[] data, HashContext context);
+  /**
+   * Calculate hash for mining pool share validation.
+   *
+   * <p>Used by mining pools to validate shares submitted by miners.
+   * Pool mining may use different parameters than block validation.
+   *
+   * @param data    Mining task data
+   * @param context Hash calculation context
+   * @return 32-byte hash result, or null if algorithm not ready
+   * @throws IllegalArgumentException if data or context is null
+   */
+  Bytes32 calculatePoolHash(byte[] data, HashContext context);
 
-    /**
-     * Check if this PoW algorithm is active for the given epoch.
-     *
-     * <p>For RandomX-only implementations, this typically returns true always.
-     *
-     * @param epoch Epoch number to check
-     * @return true if this algorithm should be used for the epoch
-     */
-    boolean isActive(long epoch);
+  /**
+   * Check if this PoW algorithm is active for the given epoch.
+   *
+   * <p>For RandomX-only implementations, this typically returns true always.
+   *
+   * @param epoch Epoch number to check
+   * @return true if this algorithm should be used for the epoch
+   */
+  boolean isActive(long epoch);
 
-    /**
-     * Start the PoW algorithm.
-     *
-     * <p>Initializes resources, prepares internal state, and registers
-     * event listeners if needed. Must be called before hash calculations.
-     *
-     * @throws IllegalStateException if already started or dependencies not set
-     */
-    void start();
+  /**
+   * Start the PoW algorithm.
+   *
+   * <p>Initializes resources, prepares internal state, and registers
+   * event listeners if needed. Must be called before hash calculations.
+   *
+   * @throws IllegalStateException if already started or dependencies not set
+   */
+  void start();
 
-    /**
-     * Stop the PoW algorithm.
-     *
-     * <p>Cleans up resources and unregisters event listeners.
-     * After stop(), the algorithm cannot be restarted.
-     */
-    void stop();
+  /**
+   * Stop the PoW algorithm.
+   *
+   * <p>Cleans up resources and unregisters event listeners.
+   * After stop(), the algorithm cannot be restarted.
+   */
+  void stop();
 
-    /**
-     * Check if the PoW algorithm is ready for hash calculations.
-     *
-     * <p>An algorithm may not be ready if:
-     * <ul>
-     *   <li>Not yet started</li>
-     *   <li>Waiting for seed initialization (RandomX)</li>
-     *   <li>In transition between epochs</li>
-     * </ul>
-     *
-     * @return true if ready to calculate hashes, false otherwise
-     */
-    boolean isReady();
+  /**
+   * Check if the PoW algorithm is ready for hash calculations.
+   *
+   * <p>An algorithm may not be ready if:
+   * <ul>
+   *   <li>Not yet started</li>
+   *   <li>Waiting for seed initialization (RandomX)</li>
+   *   <li>In transition between epochs</li>
+   * </ul>
+   *
+   * @return true if ready to calculate hashes, false otherwise
+   */
+  boolean isReady();
 
-    /**
-     * Get the algorithm name for logging and debugging.
-     *
-     * @return Algorithm name (e.g., "RandomX")
-     */
-    String getName();
+  /**
+   * Get the algorithm name for logging and debugging.
+   *
+   * @return Algorithm name (e.g., "RandomX")
+   */
+  String getName();
 }

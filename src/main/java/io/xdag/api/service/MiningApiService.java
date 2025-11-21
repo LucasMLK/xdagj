@@ -36,12 +36,11 @@ import io.xdag.core.Block;
 import io.xdag.core.DagChain;
 import io.xdag.core.DagImportResult;
 import io.xdag.utils.XdagTime;
+import java.time.Duration;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
-
-import java.time.Duration;
 
 /**
  * MiningApiService - Node mining API service for pool server integration

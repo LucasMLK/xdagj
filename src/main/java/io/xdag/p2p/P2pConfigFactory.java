@@ -30,65 +30,66 @@ import java.net.InetSocketAddress;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Factory class to create P2pConfig from xdagj Config
- * Handles the mapping between xdagj configuration and xdagj-p2p configuration
+ * Factory class to create P2pConfig from xdagj Config Handles the mapping between xdagj
+ * configuration and xdagj-p2p configuration
  */
 @Slf4j
 public class P2pConfigFactory {
 
-    /**
-     * Create P2pConfig from xdagj Config and node keypair
-     *
-     * @param config   xdagj configuration
-     * @param nodeKey  node keypair for identity
-     * @return configured P2pConfig instance
-     */
-    public static P2pConfig createP2pConfig(Config config, ECKeyPair nodeKey) {
-        P2pConfig p2pConfig = new P2pConfig();
+  /**
+   * Create P2pConfig from xdagj Config and node keypair
+   *
+   * @param config  xdagj configuration
+   * @param nodeKey node keypair for identity
+   * @return configured P2pConfig instance
+   */
+  public static P2pConfig createP2pConfig(Config config, ECKeyPair nodeKey) {
+    P2pConfig p2pConfig = new P2pConfig();
 
-        // Network settings
-        p2pConfig.setPort(config.getNodeSpec().getNodePort());
-        p2pConfig.setIpV4(config.getNodeSpec().getNodeIp());
+    // Network settings
+    p2pConfig.setPort(config.getNodeSpec().getNodePort());
+    p2pConfig.setIpV4(config.getNodeSpec().getNodeIp());
 
-        // Connection limits - use default values if not configured
-        p2pConfig.setMinConnections(8);  // Default minimum connections
-        p2pConfig.setMaxConnections(Math.min(config.getNodeSpec().getMaxConnections(), 100)); // Cap at 100
+    // Connection limits - use default values if not configured
+    p2pConfig.setMinConnections(8);  // Default minimum connections
+    p2pConfig.setMaxConnections(
+        Math.min(config.getNodeSpec().getMaxConnections(), 100)); // Cap at 100
 
-        // Node identity
-        p2pConfig.setNodeKey(nodeKey);
+    // Node identity
+    p2pConfig.setNodeKey(nodeKey);
 
-        // Network ID - convert Network enum to byte
-        p2pConfig.setNetworkId(config.getNodeSpec().getNetwork().id());
-        p2pConfig.setNetworkVersion(config.getNodeSpec().getNetworkVersion());
-        p2pConfig.setClientId(config.getClientId());
+    // Network ID - convert Network enum to byte
+    p2pConfig.setNetworkId(config.getNodeSpec().getNetwork().id());
+    p2pConfig.setNetworkVersion(config.getNodeSpec().getNetworkVersion());
+    p2pConfig.setClientId(config.getClientId());
 
-        // Discovery settings
-        p2pConfig.setDiscoverEnable(true); // Enable Kademlia DHT discovery
-        p2pConfig.setDataDir(config.getRootDir()); // For reputation persistence
+    // Discovery settings
+    p2pConfig.setDiscoverEnable(true); // Enable Kademlia DHT discovery
+    p2pConfig.setDataDir(config.getRootDir()); // For reputation persistence
 
-        // Use white IP list as seed nodes
-        for (InetSocketAddress whiteIp : config.getNodeSpec().getWhiteIPList()) {
-            p2pConfig.getSeedNodes().add(whiteIp);
-            p2pConfig.getTrustNodes().add(whiteIp.getAddress());
-            log.debug("Added seed/trust node: {}:{}",
-                whiteIp.getAddress().getHostAddress(), whiteIp.getPort());
-        }
-
-        // Protocol settings
-        p2pConfig.setNetMaxFrameBodySize(config.getNodeSpec().getNetMaxFrameBodySize());
-        p2pConfig.setEnableFrameCompression(true);
-
-        // Disconnection policy
-        p2pConfig.setDisconnectionPolicyEnable(
-                config.getNodeSpec().getMaxConnections() > 50 // Only enable if > 50 connections
-        );
-
-        log.info("P2P configuration created: minConn={}, maxConn={}, seeds={}, port={}",
-                p2pConfig.getMinConnections(),
-                p2pConfig.getMaxConnections(),
-                p2pConfig.getSeedNodes().size(),
-                p2pConfig.getPort());
-
-        return p2pConfig;
+    // Use white IP list as seed nodes
+    for (InetSocketAddress whiteIp : config.getNodeSpec().getWhiteIPList()) {
+      p2pConfig.getSeedNodes().add(whiteIp);
+      p2pConfig.getTrustNodes().add(whiteIp.getAddress());
+      log.debug("Added seed/trust node: {}:{}",
+          whiteIp.getAddress().getHostAddress(), whiteIp.getPort());
     }
+
+    // Protocol settings
+    p2pConfig.setNetMaxFrameBodySize(config.getNodeSpec().getNetMaxFrameBodySize());
+    p2pConfig.setEnableFrameCompression(true);
+
+    // Disconnection policy
+    p2pConfig.setDisconnectionPolicyEnable(
+        config.getNodeSpec().getMaxConnections() > 50 // Only enable if > 50 connections
+    );
+
+    log.info("P2P configuration created: minConn={}, maxConn={}, seeds={}, port={}",
+        p2pConfig.getMinConnections(),
+        p2pConfig.getMaxConnections(),
+        p2pConfig.getSeedNodes().size(),
+        p2pConfig.getPort());
+
+    return p2pConfig;
+  }
 }

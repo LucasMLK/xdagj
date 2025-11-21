@@ -573,6 +573,8 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
     private Object handleGetSyncing() {
         ChainStatsInfo stats = chainApiService.getChainStats();
 
+        // Note: syncProgress removed from ChainStats - always return false for now
+        // TODO: Implement proper sync state detection using DagChain.isNodeBehind()
         if (stats == null || stats.getSyncProgress() >= 100.0) {
             return false;
         }

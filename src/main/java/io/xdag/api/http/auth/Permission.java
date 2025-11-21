@@ -24,7 +24,7 @@
 package io.xdag.api.http.auth;
 
 public enum Permission {
-    PUBLIC,     // No authentication required
-    READ,       // Authentication required, read-only operations
-    WRITE       // Authentication required, write operations
+  PUBLIC,     // No authentication required
+  READ,       // Authentication required, read-only operations
+  WRITE       // Authentication required, write operations
 }

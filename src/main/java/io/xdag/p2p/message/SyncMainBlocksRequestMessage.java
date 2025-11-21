@@ -34,8 +34,8 @@ import lombok.Setter;
  * <p>Hybrid Sync Protocol - Main Blocks Request (0x1F)
  *
  * <p><strong>Purpose</strong>:
- * Request a batch of main chain blocks in a specified height range.
- * Used for Phase 1 (Linear Main Chain Synchronization) of hybrid sync.
+ * Request a batch of main chain blocks in a specified height range. Used for Phase 1 (Linear Main
+ * Chain Synchronization) of hybrid sync.
  *
  * <p><strong>Message Format</strong>:
  * <pre>
@@ -97,103 +97,104 @@ import lombok.Setter;
 @Setter
 public class SyncMainBlocksRequestMessage extends Message {
 
-    /**
-     * Start height (inclusive)
-     */
-    private long fromHeight;
+  /**
+   * Start height (inclusive)
+   */
+  private long fromHeight;
 
-    /**
-     * End height (inclusive)
-     */
-    private long toHeight;
+  /**
+   * End height (inclusive)
+   */
+  private long toHeight;
 
-    /**
-     * Maximum blocks to return (default 1000, hard limit 10000)
-     */
-    private int maxBlocks;
+  /**
+   * Maximum blocks to return (default 1000, hard limit 10000)
+   */
+  private int maxBlocks;
 
-    /**
-     * Whether to return full block data (true) or BlockInfo only (false)
-     */
-    private boolean isRaw;
+  /**
+   * Whether to return full block data (true) or BlockInfo only (false)
+   */
+  private boolean isRaw;
 
-    /**
-     * Constructor for receiving message from network
-     *
-     * <p>Deserializes message body:
-     * <ol>
-     *   <li>Read fromHeight (long, 8 bytes)</li>
-     *   <li>Read toHeight (long, 8 bytes)</li>
-     *   <li>Read maxBlocks (int, 4 bytes)</li>
-     *   <li>Read isRaw (boolean, 1 byte)</li>
-     * </ol>
-     *
-     * @param body serialized message body
-     * @throws IllegalArgumentException if deserialization fails
-     */
-    public SyncMainBlocksRequestMessage(byte[] body) {
-        super(XdagMessageCode.SYNC_MAIN_BLOCKS_REQUEST, SyncMainBlocksReplyMessage.class);
+  /**
+   * Constructor for receiving message from network
+   *
+   * <p>Deserializes message body:
+   * <ol>
+   *   <li>Read fromHeight (long, 8 bytes)</li>
+   *   <li>Read toHeight (long, 8 bytes)</li>
+   *   <li>Read maxBlocks (int, 4 bytes)</li>
+   *   <li>Read isRaw (boolean, 1 byte)</li>
+   * </ol>
+   *
+   * @param body serialized message body
+   * @throws IllegalArgumentException if deserialization fails
+   */
+  public SyncMainBlocksRequestMessage(byte[] body) {
+    super(XdagMessageCode.SYNC_MAIN_BLOCKS_REQUEST, SyncMainBlocksReplyMessage.class);
 
-        SimpleDecoder dec = new SimpleDecoder(body);
+    SimpleDecoder dec = new SimpleDecoder(body);
 
-        // Deserialize fields
-        this.fromHeight = dec.readLong();
-        this.toHeight = dec.readLong();
-        this.maxBlocks = dec.readInt();
-        this.isRaw = dec.readBoolean();
+    // Deserialize fields
+    this.fromHeight = dec.readLong();
+    this.toHeight = dec.readLong();
+    this.maxBlocks = dec.readInt();
+    this.isRaw = dec.readBoolean();
 
-        // Set body for reference
-        this.body = body;
-    }
+    // Set body for reference
+    this.body = body;
+  }
 
-    /**
-     * Constructor for sending message to network
-     *
-     * <p>Serializes message:
-     * <ol>
-     *   <li>Write fromHeight (long, 8 bytes)</li>
-     *   <li>Write toHeight (long, 8 bytes)</li>
-     *   <li>Write maxBlocks (int, 4 bytes)</li>
-     *   <li>Write isRaw (boolean, 1 byte)</li>
-     * </ol>
-     *
-     * @param fromHeight start height (inclusive)
-     * @param toHeight end height (inclusive)
-     * @param maxBlocks maximum blocks to return
-     * @param isRaw true = full block data, false = BlockInfo only
-     */
-    public SyncMainBlocksRequestMessage(long fromHeight, long toHeight, int maxBlocks, boolean isRaw) {
-        super(XdagMessageCode.SYNC_MAIN_BLOCKS_REQUEST, SyncMainBlocksReplyMessage.class);
+  /**
+   * Constructor for sending message to network
+   *
+   * <p>Serializes message:
+   * <ol>
+   *   <li>Write fromHeight (long, 8 bytes)</li>
+   *   <li>Write toHeight (long, 8 bytes)</li>
+   *   <li>Write maxBlocks (int, 4 bytes)</li>
+   *   <li>Write isRaw (boolean, 1 byte)</li>
+   * </ol>
+   *
+   * @param fromHeight start height (inclusive)
+   * @param toHeight   end height (inclusive)
+   * @param maxBlocks  maximum blocks to return
+   * @param isRaw      true = full block data, false = BlockInfo only
+   */
+  public SyncMainBlocksRequestMessage(long fromHeight, long toHeight, int maxBlocks,
+      boolean isRaw) {
+    super(XdagMessageCode.SYNC_MAIN_BLOCKS_REQUEST, SyncMainBlocksReplyMessage.class);
 
-        this.fromHeight = fromHeight;
-        this.toHeight = toHeight;
-        this.maxBlocks = maxBlocks;
-        this.isRaw = isRaw;
+    this.fromHeight = fromHeight;
+    this.toHeight = toHeight;
+    this.maxBlocks = maxBlocks;
+    this.isRaw = isRaw;
 
-        // Serialize message body
-        SimpleEncoder enc = new SimpleEncoder();
-        encode(enc);
-        this.body = enc.toBytes();
-    }
+    // Serialize message body
+    SimpleEncoder enc = new SimpleEncoder();
+    encode(enc);
+    this.body = enc.toBytes();
+  }
 
-    @Override
-    public void encode(SimpleEncoder enc) {
-        // Serialize fields
-        enc.writeLong(fromHeight);
-        enc.writeLong(toHeight);
-        enc.writeInt(maxBlocks);
-        enc.writeBoolean(isRaw);
-    }
+  @Override
+  public void encode(SimpleEncoder enc) {
+    // Serialize fields
+    enc.writeLong(fromHeight);
+    enc.writeLong(toHeight);
+    enc.writeInt(maxBlocks);
+    enc.writeBoolean(isRaw);
+  }
 
-    @Override
-    public String toString() {
-        return String.format(
-            "SyncMainBlocksRequestMessage[from=%d, to=%d, max=%d, raw=%b, size=%d bytes]",
-            fromHeight,
-            toHeight,
-            maxBlocks,
-            isRaw,
-            body != null ? body.length : 0
-        );
-    }
+  @Override
+  public String toString() {
+    return String.format(
+        "SyncMainBlocksRequestMessage[from=%d, to=%d, max=%d, raw=%b, size=%d bytes]",
+        fromHeight,
+        toHeight,
+        maxBlocks,
+        isRaw,
+        body != null ? body.length : 0
+    );
+  }
 }

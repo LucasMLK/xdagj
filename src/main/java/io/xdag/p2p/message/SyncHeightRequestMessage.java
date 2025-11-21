@@ -31,8 +31,8 @@ import io.xdag.p2p.utils.SimpleEncoder;
  * <p>Hybrid Sync Protocol - Height Query Message (0x1D)
  *
  * <p><strong>Purpose</strong>:
- * Query remote peer's main chain height information at the start of
- * hybrid sync protocol to determine the synchronization range.
+ * Query remote peer's main chain height information at the start of hybrid sync protocol to
+ * determine the synchronization range.
  *
  * <p><strong>Message Format</strong>:
  * <pre>
@@ -56,36 +56,36 @@ import io.xdag.p2p.utils.SimpleEncoder;
  */
 public class SyncHeightRequestMessage extends Message {
 
-    /**
-     * Constructor for receiving message from network
-     *
-     * <p>This message has no body, so the constructor is simple.
-     *
-     * @param body serialized message body (empty)
-     */
-    public SyncHeightRequestMessage(byte[] body) {
-        super(XdagMessageCode.SYNC_HEIGHT_REQUEST, SyncHeightReplyMessage.class);
-        this.body = body;
-    }
+  /**
+   * Constructor for receiving message from network
+   *
+   * <p>This message has no body, so the constructor is simple.
+   *
+   * @param body serialized message body (empty)
+   */
+  public SyncHeightRequestMessage(byte[] body) {
+    super(XdagMessageCode.SYNC_HEIGHT_REQUEST, SyncHeightReplyMessage.class);
+    this.body = body;
+  }
 
-    /**
-     * Constructor for sending message to network
-     *
-     * <p>Creates an empty message to query peer's height.
-     */
-    public SyncHeightRequestMessage() {
-        super(XdagMessageCode.SYNC_HEIGHT_REQUEST, SyncHeightReplyMessage.class);
-        // Empty message body
-        this.body = new byte[0];
-    }
+  /**
+   * Constructor for sending message to network
+   *
+   * <p>Creates an empty message to query peer's height.
+   */
+  public SyncHeightRequestMessage() {
+    super(XdagMessageCode.SYNC_HEIGHT_REQUEST, SyncHeightReplyMessage.class);
+    // Empty message body
+    this.body = new byte[0];
+  }
 
-    @Override
-    public void encode(SimpleEncoder enc) {
-        // Empty message body - no data to encode
-    }
+  @Override
+  public void encode(SimpleEncoder enc) {
+    // Empty message body - no data to encode
+  }
 
-    @Override
-    public String toString() {
-        return "SyncHeightRequestMessage[empty]";
-    }
+  @Override
+  public String toString() {
+    return "SyncHeightRequestMessage[empty]";
+  }
 }

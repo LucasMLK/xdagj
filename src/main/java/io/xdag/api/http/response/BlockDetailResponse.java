@@ -35,73 +35,73 @@ import lombok.Data;
 @Builder
 public class BlockDetailResponse {
 
-    /**
-     * Block number (hex with 0x prefix)
-     */
-    private String number;
+  /**
+   * Block number (hex with 0x prefix)
+   */
+  private String number;
+
+  /**
+   * Block hash (hex with 0x prefix)
+   */
+  private String hash;
+
+  /**
+   * Block timestamp (hex with 0x prefix)
+   */
+  private String timestamp;
+
+  /**
+   * Epoch number (hex with 0x prefix)
+   */
+  private String epoch;
+
+  /**
+   * Difficulty (hex with 0x prefix)
+   */
+  private String difficulty;
+
+  /**
+   * Coinbase address (Base58)
+   */
+  private String coinbase;
+
+  /**
+   * Block state: "main" or "orphan"
+   */
+  private String state;
+
+  /**
+   * Transaction count
+   */
+  private int transactionCount;
+
+  /**
+   * Transactions - array of transaction hashes or full transaction objects
+   */
+  private List<Object> transactions;
+
+  /**
+   * Block links
+   */
+  private List<LinkInfo> links;
+
+  @Data
+  @Builder
+  public static class LinkInfo {
 
     /**
-     * Block hash (hex with 0x prefix)
+     * Link hash (hex with 0x prefix)
      */
     private String hash;
 
     /**
-     * Block timestamp (hex with 0x prefix)
+     * Link height (hex with 0x prefix)
      */
-    private String timestamp;
+    private String height;
 
     /**
-     * Epoch number (hex with 0x prefix)
+     * Link type: "parent" or "child"
      */
-    private String epoch;
-
-    /**
-     * Difficulty (hex with 0x prefix)
-     */
-    private String difficulty;
-
-    /**
-     * Coinbase address (Base58)
-     */
-    private String coinbase;
-
-    /**
-     * Block state: "main" or "orphan"
-     */
-    private String state;
-
-    /**
-     * Transaction count
-     */
-    private int transactionCount;
-
-    /**
-     * Transactions - array of transaction hashes or full transaction objects
-     */
-    private List<Object> transactions;
-
-    /**
-     * Block links
-     */
-    private List<LinkInfo> links;
-
-    @Data
-    @Builder
-    public static class LinkInfo {
-
-        /**
-         * Link hash (hex with 0x prefix)
-         */
-        private String hash;
-
-        /**
-         * Link height (hex with 0x prefix)
-         */
-        private String height;
-
-        /**
-         * Link type: "parent" or "child"
-         */
-        private String type;
-    }
+    private String type;
+  }
 }

@@ -34,18 +34,18 @@ import lombok.Data;
 @Builder
 public class AccountBalanceResponse {
 
-    /**
-     * Base58 address
-     */
-    private String address;
+  /**
+   * Base58 address
+   */
+  private String address;
 
-    /**
-     * Balance in XDAG units (decimal string with 9 decimals)
-     */
-    private String balance;
+  /**
+   * Balance in XDAG units (decimal string with 9 decimals)
+   */
+  private String balance;
 
-    /**
-     * Block number (hex with 0x prefix)
-     */
-    private String blockNumber;
+  /**
+   * Block number (hex with 0x prefix)
+   */
+  private String blockNumber;
 }

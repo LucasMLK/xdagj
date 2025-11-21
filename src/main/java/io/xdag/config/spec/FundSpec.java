@@ -24,19 +24,21 @@
 package io.xdag.config.spec;
 
 /**
- * Interface for fund configuration specifications
- * Defines methods to access fund parameters
+ * Interface for fund configuration specifications Defines methods to access fund parameters
  */
 public interface FundSpec {
-    /**
-     * Get the fund ratio for distribution
-     * @return Double containing the fund ratio value
-     */
-    double getFundRation(); // Note: There is a typo in method name, should be "getFundRatio"
 
-    /**
-     * Get the fund receiving address
-     * @return String containing the fund address
-     */
-    String getFundAddress();
+  /**
+   * Get the fund ratio for distribution
+   *
+   * @return Double containing the fund ratio value
+   */
+  double getFundRation(); // Note: There is a typo in method name, should be "getFundRatio"
+
+  /**
+   * Get the fund receiving address
+   *
+   * @return String containing the fund address
+   */
+  String getFundAddress();
 }
