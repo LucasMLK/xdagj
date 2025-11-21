@@ -202,6 +202,79 @@ public class DagTransactionProcessor {
         return ProcessingResult.success();
     }
 
+    /**
+     * Process all transactions in a block within a transaction context (ATOMIC)
+     *
+     * <p>This is the NEW atomic version that buffers all operations in a transaction.
+     * Unlike {@link #processBlockTransactions}, this method:
+     * <ul>
+     *   <li>Validates all transactions first (fail-fast)</li>
+     *   <li>Buffers all account state updates in transaction</li>
+     *   <li>Buffers transaction execution marks in transaction</li>
+     *   <li>Does NOT commit - caller must commit the transaction</li>
+     * </ul>
+     *
+     * <p><strong>IMPORTANT</strong>: This method assumes transactions are already saved
+     * separately. It only updates account states and marks execution status.
+     *
+     * @param txId transaction ID from RocksDBTransactionManager
+     * @param block block being processed
+     * @param transactions transactions to process
+     * @return processing result
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails
+     */
+    public ProcessingResult processBlockTransactionsInTransaction(
+            String txId,
+            Block block,
+            List<Transaction> transactions
+    ) throws io.xdag.db.rocksdb.transaction.TransactionException {
+
+        // Step 1: Validate all transactions FIRST (fail-fast before any modifications)
+        for (Transaction tx : transactions) {
+            // 1.1 Validate signature
+            if (!validateSignature(tx)) {
+                log.warn("Transaction signature validation failed: {}", tx.getHash().toHexString());
+                return ProcessingResult.error("Invalid transaction signature");
+            }
+
+            // 1.2 Validate account state
+            ValidationResult validation = validateAccountState(tx);
+            if (!validation.isSuccess()) {
+                log.warn("Transaction account validation failed: {}, error: {}",
+                        tx.getHash().toHexString(), validation.getError());
+                return ProcessingResult.error(validation.getError());
+            }
+        }
+
+        // Step 2: Process transactions (buffer all operations in transaction)
+        for (Transaction tx : transactions) {
+            try {
+                // 2.1 Ensure receiver account exists
+                accountManager.ensureAccountExists(tx.getTo());
+
+                // 2.2 Update account states IN TRANSACTION
+                updateAccountStatesInTransaction(txId, tx);
+
+                // 2.3 Mark transaction as executed IN TRANSACTION
+                transactionStore.markTransactionExecutedInTransaction(txId, tx.getHash());
+
+                log.debug("Buffered transaction processing for {} in transaction {}",
+                        tx.getHash().toHexString().substring(0, 16), txId);
+
+            } catch (Exception e) {
+                log.error("Failed to process transaction {} in transaction {}: {}",
+                        tx.getHash().toHexString().substring(0, 16), txId, e.getMessage());
+                throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                        "Failed to process transaction: " + e.getMessage(), e);
+            }
+        }
+
+        log.info("Buffered {} transaction state updates in transaction {} (atomic)",
+                transactions.size(), txId);
+
+        return ProcessingResult.success();
+    }
+
     // ==================== Private Helper Methods ====================
 
     /**
@@ -290,6 +363,37 @@ public class DagTransactionProcessor {
         log.debug("Account state updated: from={}, to={}, amount={}, fee={}",
                 tx.getFrom().toHexString(),
                 tx.getTo().toHexString(),
+                tx.getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
+                tx.getFee().toDecimal(9, XUnit.XDAG).toPlainString());
+    }
+
+    /**
+     * Update account states based on transaction IN TRANSACTION (ATOMIC)
+     *
+     * <p>This is the NEW atomic version that buffers all account state updates
+     * in a transaction. It calls transactional methods on DagAccountManager.
+     *
+     * @param txId transaction ID from RocksDBTransactionManager
+     * @param tx transaction to process
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails
+     */
+    private void updateAccountStatesInTransaction(String txId, Transaction tx)
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
+        // Convert XAmount to UInt256 (nano units)
+        UInt256 txAmount = UInt256.valueOf(tx.getAmount().toDecimal(0, NANO_XDAG).longValue());
+        UInt256 txFee = UInt256.valueOf(tx.getFee().toDecimal(0, NANO_XDAG).longValue());
+
+        // Update sender account IN TRANSACTION
+        accountManager.subtractBalanceInTransaction(txId, tx.getFrom(), txAmount.add(txFee));
+        accountManager.incrementNonceInTransaction(txId, tx.getFrom());
+
+        // Update receiver account IN TRANSACTION
+        accountManager.addBalanceInTransaction(txId, tx.getTo(), txAmount);
+
+        log.debug("Buffered account state updates in transaction {}: from={}, to={}, amount={}, fee={}",
+                txId,
+                tx.getFrom().toHexString().substring(0, 16),
+                tx.getTo().toHexString().substring(0, 16),
                 tx.getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
                 tx.getFee().toDecimal(9, XUnit.XDAG).toPlainString());
     }

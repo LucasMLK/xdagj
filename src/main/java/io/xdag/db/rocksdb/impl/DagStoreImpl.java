@@ -88,6 +88,9 @@ public class DagStoreImpl implements DagStore {
 
     private final DagCache cache;
 
+    // Transaction manager for atomic operations (NEW - atomic block processing)
+    private io.xdag.db.rocksdb.transaction.RocksDBTransactionManager transactionManager;
+
     private volatile boolean closed = false;
 
     // ==================== Constructor & Lifecycle ====================
@@ -98,6 +101,35 @@ public class DagStoreImpl implements DagStore {
         this.cache = new DagCache();
 
         log.info("Initializing DagStore at: {}", dbDir.getAbsolutePath());
+    }
+
+    /**
+     * Constructor with TransactionManager for atomic block processing
+     *
+     * @param config XDAG configuration
+     * @param transactionManager RocksDB transaction manager for atomic operations
+     */
+    public DagStoreImpl(Config config, io.xdag.db.rocksdb.transaction.RocksDBTransactionManager transactionManager) {
+        this(config, transactionManager, new DagCache());
+    }
+
+    /**
+     * Constructor with TransactionManager and shared DagCache
+     *
+     * @param config XDAG configuration
+     * @param transactionManager RocksDB transaction manager for atomic operations
+     * @param sharedCache Shared DagCache instance (from DagKernel)
+     */
+    public DagStoreImpl(Config config, io.xdag.db.rocksdb.transaction.RocksDBTransactionManager transactionManager, DagCache sharedCache) {
+        this.config = config;
+        this.transactionManager = transactionManager;
+        this.dbDir = new File(config.getNodeSpec().getStoreDir(), DB_NAME);
+        this.cache = sharedCache != null ? sharedCache : new DagCache();
+
+        log.info("Initializing DagStore at: {} (atomic operations {}, shared cache: {})",
+                dbDir.getAbsolutePath(),
+                transactionManager != null ? "enabled" : "disabled",
+                sharedCache != null ? "YES" : "NO");
     }
 
     @Override
@@ -342,6 +374,29 @@ public class DagStoreImpl implements DagStore {
       }
     }
 
+    @Override
+    public void deleteHeightMapping(long height) {
+        if (height <= 0) {
+            log.warn("Invalid height for deletion: {}", height);
+            return;
+        }
+
+        try {
+            // Delete height->hash mapping
+            byte[] heightKey = buildHeightIndexKey(height);
+            db.delete(writeOptions, heightKey);
+
+            // Invalidate cache
+            cache.invalidateHeight(height);
+
+            log.debug("Deleted height mapping for height: {}", height);
+
+        } catch (RocksDBException e) {
+            log.error("Failed to delete height mapping for height {}: {}", height, e.getMessage());
+            throw new RuntimeException("Failed to delete height mapping", e);
+        }
+    }
+
     // ==================== Main Chain Queries ====================
 
     @Override
@@ -541,20 +596,29 @@ public class DagStoreImpl implements DagStore {
     public List<Block> getCandidateBlocksInEpoch(long epoch) {
         List<Block> candidates = new ArrayList<>();
 
+        log.debug("getCandidateBlocksInEpoch: epoch={}", epoch);
+
         try {
             // Build epoch prefix for range scan
             byte[] startKey = buildEpochIndexKey(epoch, Bytes32.ZERO);
             byte[] endKey = buildEpochIndexKey(epoch + 1, Bytes32.ZERO);
 
+            log.debug("getCandidateBlocksInEpoch: scanning from {} to {}",
+                    Bytes.wrap(startKey).toHexString().substring(0, 20),
+                    Bytes.wrap(endKey).toHexString().substring(0, 20));
+
             // Range scan
             try (RocksIterator iterator = db.newIterator(scanReadOptions)) {
                 iterator.seek(startKey);
 
+                int scannedCount = 0;
                 while (iterator.isValid()) {
                     byte[] key = iterator.key();
+                    scannedCount++;
 
                     // Check if still in epoch range
                     if (ByteBuffer.wrap(key).compareTo(ByteBuffer.wrap(endKey)) >= 0) {
+                        log.debug("getCandidateBlocksInEpoch: reached end of epoch range after {} keys", scannedCount);
                         break;
                     }
 
@@ -564,14 +628,26 @@ public class DagStoreImpl implements DagStore {
                         System.arraycopy(key, 9, hashBytes, 0, 32);
                         Bytes32 hash = Bytes32.wrap(hashBytes);
 
+                        log.debug("getCandidateBlocksInEpoch: found hash in epoch index: {}",
+                                hash.toHexString().substring(0, 16));
+
                         Block block = getBlockByHash(hash, false);
                         if (block != null) {
                             candidates.add(block);
+                            log.debug("getCandidateBlocksInEpoch: added candidate {} (height={})",
+                                    hash.toHexString().substring(0, 16),
+                                    block.getInfo() != null ? block.getInfo().getHeight() : "null");
+                        } else {
+                            log.warn("getCandidateBlocksInEpoch: block {} not found via getBlockByHash",
+                                    hash.toHexString().substring(0, 16));
                         }
                     }
 
                     iterator.next();
                 }
+
+                log.debug("getCandidateBlocksInEpoch: scanned {} keys, found {} candidates",
+                        scannedCount, candidates.size());
             }
 
         } catch (Exception e) {
@@ -583,24 +659,37 @@ public class DagStoreImpl implements DagStore {
 
     @Override
     public Block getWinnerBlockInEpoch(long epoch) {
-        // Check cache first
-        Bytes32 winnerHash = cache.getEpochWinner(epoch);
-        if (winnerHash != null) {
-            return getBlockByHash(winnerHash, false);
+        // BUGFIX: Disable cache for epoch winner during import to ensure correct epoch competition
+        // The cache causes a race condition where block2 doesn't compete with block1 because
+        // block1 is cached as winner before block2 arrives. We need to re-scan the epoch index
+        // every time to find ALL blocks in the epoch for proper competition.
+        //
+        // Performance impact: Minimal - this method is only called during block import,
+        // not during queries. The epoch index scan is fast (indexed by epoch + hash).
+
+        // Log cache state for debugging
+        Bytes32 cachedWinnerHash = cache.getEpochWinner(epoch);
+        if (cachedWinnerHash != null) {
+            log.debug("getWinnerBlockInEpoch: Found cached winner {} for epoch {}, but re-scanning to ensure correctness",
+                    cachedWinnerHash.toHexString().substring(0, 16), epoch);
         }
 
-        // Get all candidates
+        // ALWAYS get all candidates (don't trust cache during import)
         List<Block> candidates = getCandidateBlocksInEpoch(epoch);
         if (candidates.isEmpty()) {
             return null;
         }
 
-        // Find winner: smallest hash among main blocks
+        // Find winner: smallest hash among ALL candidates
+        // IMPORTANT: Don't filter by height! During import, blocks may have height=0 (pending)
+        // but still need to participate in epoch competition. The height filter would cause
+        // a race condition where the second block doesn't see the first block as a competitor.
         Block winner = null;
         Bytes32 smallestHash = null;
 
         for (Block candidate : candidates) {
-            if (candidate.getInfo() != null && candidate.getInfo().getHeight() > 0) {
+            if (candidate.getInfo() != null) {
+                // Consider ALL blocks in epoch, including those with height=0 (pending assignment)
                 if (smallestHash == null || candidate.getHash().compareTo(smallestHash) < 0) {
                     smallestHash = candidate.getHash();
                     winner = candidate;
@@ -709,12 +798,21 @@ public class DagStoreImpl implements DagStore {
         try {
             byte[] key = new byte[]{CHAIN_STATS};
             byte[] data = serializeChainStats(stats);
+
+            log.info("Saving ChainStats to RocksDB: mainBlockCount={}, maxDifficulty={}, data size={} bytes",
+                    stats.getMainBlockCount(),
+                    stats.getMaxDifficulty().toDecimalString(),
+                    data.length);
+
             db.put(syncWriteOptions, key, data);  // Use sync write for critical data
 
-            log.debug("Saved ChainStats");
+            log.info("ChainStats saved successfully to RocksDB (sync write)");
 
         } catch (RocksDBException e) {
-            log.error("Failed to save ChainStats", e);
+            log.error("CRITICAL: Failed to save ChainStats to RocksDB", e);
+            throw new RuntimeException("Failed to save ChainStats", e);
+        } catch (Exception e) {
+            log.error("CRITICAL: Unexpected error in saveChainStats()", e);
             throw new RuntimeException("Failed to save ChainStats", e);
         }
     }
@@ -723,15 +821,36 @@ public class DagStoreImpl implements DagStore {
     public ChainStats getChainStats() {
         try {
             byte[] key = new byte[]{CHAIN_STATS};
+            log.debug("Reading ChainStats from RocksDB with key: 0x{}", String.format("%02x", CHAIN_STATS));
+
             byte[] data = db.get(readOptions, key);
             if (data == null) {
+                log.warn("ChainStats data is NULL in RocksDB - chain is empty or data was lost");
                 return null;
             }
 
-            return deserializeChainStats(data);
+            log.info("ChainStats data found in RocksDB: {} bytes", data.length);
+
+            // Attempt deserialization with detailed error handling
+            try {
+                ChainStats stats = deserializeChainStats(data);
+                log.info("ChainStats deserialized successfully: mainBlockCount={}, maxDifficulty={}",
+                        stats.getMainBlockCount(),
+                        stats.getMaxDifficulty().toDecimalString());
+                return stats;
+            } catch (Exception deserializeError) {
+                log.error("CRITICAL: Failed to deserialize ChainStats (data size: {} bytes)", data.length);
+                log.error("Deserialization error details:", deserializeError);
+                log.error("This indicates data corruption or format incompatibility");
+                log.error("Data will be lost - node will start from genesis");
+                return null;
+            }
 
         } catch (RocksDBException e) {
-            log.error("Failed to get ChainStats", e);
+            log.error("CRITICAL: RocksDB error while reading ChainStats", e);
+            return null;
+        } catch (Exception e) {
+            log.error("CRITICAL: Unexpected error in getChainStats()", e);
             return null;
         }
     }
@@ -926,6 +1045,110 @@ public class DagStoreImpl implements DagStore {
             }
         }
         return dir.delete();
+    }
+
+    // ==================== Transactional Methods (Atomic Block Processing) ====================
+
+    @Override
+    public void saveBlockInTransaction(String txId, BlockInfo info, Block block)
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
+        if (transactionManager == null) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "TransactionManager not initialized");
+        }
+
+        Bytes32 hash = block.getHash();
+
+        try {
+            // Serialize block data
+            byte[] blockData = serializeBlock(block);
+            byte[] blockKey = buildBlockKey(hash);
+
+            // Serialize BlockInfo
+            byte[] infoData = serializeBlockInfo(info);
+            byte[] infoKey = buildBlockInfoKey(hash);
+
+            // Epoch index
+            byte[] epochKey = buildEpochIndexKey(info.getEpoch(), hash);
+
+            // Buffer operations in transaction (NOT writing to disk yet)
+            transactionManager.putInTransaction(txId, blockKey, blockData);
+            transactionManager.putInTransaction(txId, infoKey, infoData);
+            transactionManager.putInTransaction(txId, epochKey, EMPTY_VALUE);
+
+            // Height index (only for main blocks)
+            if (info.getHeight() > 0) {
+                byte[] heightKey = buildHeightIndexKey(info.getHeight());
+                transactionManager.putInTransaction(txId, heightKey, hash.toArray());
+            }
+
+            log.debug("Buffered block {} in transaction {} (height={})",
+                    hash.toHexString().substring(0, 16), txId, info.getHeight());
+
+        } catch (Exception e) {
+            log.error("Failed to save block in transaction {}: {}", txId, e.getMessage());
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "Failed to save block: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void saveBlockInfoInTransaction(String txId, BlockInfo info)
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
+        if (transactionManager == null) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "TransactionManager not initialized");
+        }
+
+        try {
+            byte[] infoKey = buildBlockInfoKey(info.getHash());
+            byte[] infoData = serializeBlockInfo(info);
+
+            transactionManager.putInTransaction(txId, infoKey, infoData);
+
+            log.debug("Buffered BlockInfo {} in transaction {}",
+                    info.getHash().toHexString().substring(0, 16), txId);
+
+        } catch (Exception e) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "Failed to save BlockInfo: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void deleteHeightMappingInTransaction(String txId, long height)
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
+        if (transactionManager == null) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "TransactionManager not initialized");
+        }
+
+        try {
+            byte[] heightKey = buildHeightIndexKey(height);
+            transactionManager.deleteInTransaction(txId, heightKey);
+
+            log.debug("Buffered height mapping deletion for height {} in transaction {}",
+                    height, txId);
+
+        } catch (Exception e) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "Failed to delete height mapping: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void updateCacheAfterCommit(Block block) {
+        // Update L1 cache AFTER successful transaction commit
+        cache.putBlock(block.getHash(), block);
+        if (block.getInfo() != null) {
+            cache.putBlockInfo(block.getHash(), block.getInfo());
+            if (block.getInfo().getHeight() > 0) {
+                cache.putHashByHeight(block.getInfo().getHeight(), block.getHash());
+            }
+        }
+
+        log.debug("Cache updated for block {} after commit",
+                block.getHash().toHexString().substring(0, 16));
     }
 
     // ==================== Key Building Methods ====================

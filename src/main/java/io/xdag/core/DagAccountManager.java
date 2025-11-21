@@ -26,8 +26,6 @@ package io.xdag.core;
 
 import io.xdag.config.Config;
 import io.xdag.db.AccountStore;
-import io.xdag.db.rocksdb.transaction.TransactionException;
-import io.xdag.db.rocksdb.transaction.TransactionalStore;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -68,7 +66,6 @@ public class DagAccountManager {
 
     private final AccountStore accountStore;
     private final Config config;
-    private TransactionalStore transactionalStore;  // Optional: for transactional operations
 
     /**
      * Create DagAccountManager
@@ -79,21 +76,6 @@ public class DagAccountManager {
     public DagAccountManager(AccountStore accountStore, Config config) {
         this.accountStore = accountStore;
         this.config = config;
-    }
-
-    /**
-     * Set the transactional store for atomic operations.
-     *
-     * <p>This must be called to enable transactional operations
-     * (xxxInTransaction methods). If not set, calling transactional
-     * methods will throw IllegalStateException.
-     *
-     * @param transactionalStore transactional store instance
-     * @since Phase 0.5 - Transaction Support Infrastructure
-     */
-    public void setTransactionalStore(TransactionalStore transactionalStore) {
-        this.transactionalStore = transactionalStore;
-        log.info("TransactionalStore configured for DagAccountManager");
     }
 
     // ==================== Query Operations ====================
@@ -249,50 +231,22 @@ public class DagAccountManager {
                 address.toHexString(), initialBalance.toDecimalString());
     }
 
-    // ==================== Transactional Operations (Phase 0.5) ====================
-
-    /**
-     * Check if transactional store is available.
-     *
-     * @throws IllegalStateException if transactional store not configured
-     */
-    private void ensureTransactionalStoreAvailable() {
-        if (transactionalStore == null) {
-            throw new IllegalStateException(
-                    "TransactionalStore not configured. Call setTransactionalStore() first.");
-        }
-    }
+    // ==================== Transactional Operations (NEW - Atomic Block Processing) ====================
 
     /**
      * Set account balance in a transaction.
      *
      * <p>This operation is queued and will be executed atomically when the transaction commits.
+     * Uses the NEW AccountStore transactional methods.
      *
-     * @param txId transaction ID
+     * @param txId transaction ID from RocksDBTransactionManager
      * @param address account address
      * @param balance new balance
-     * @throws TransactionException if transaction operation fails
-     * @since Phase 0.5 - Transaction Support Infrastructure
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails
      */
     public void setBalanceInTransaction(String txId, Bytes address, UInt256 balance)
-            throws TransactionException {
-        ensureTransactionalStoreAvailable();
-
-        // Get current account state
-        Account account = accountStore.getAccount(address).orElse(null);
-        if (account == null) {
-            account = Account.createEOA(address);
-        }
-
-        // Update balance
-        Account updatedAccount = account.toBuilder()
-                .balance(balance)
-                .build();
-
-        // Serialize and store in transaction
-        byte[] key = address.toArray();
-        byte[] value = updatedAccount.toBytes();
-        transactionalStore.putInTransaction(txId, key, value);
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
+        accountStore.setBalanceInTransaction(txId, address, balance);
 
         if (log.isDebugEnabled()) {
             log.debug("Transaction {}: setBalance({}, {})",
@@ -303,35 +257,35 @@ public class DagAccountManager {
     /**
      * Add to account balance in a transaction.
      *
-     * @param txId transaction ID
+     * @param txId transaction ID from RocksDBTransactionManager
      * @param address account address
      * @param amount amount to add
-     * @throws TransactionException if transaction operation fails
-     * @since Phase 0.5 - Transaction Support Infrastructure
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails
      */
     public void addBalanceInTransaction(String txId, Bytes address, UInt256 amount)
-            throws TransactionException {
-        ensureTransactionalStoreAvailable();
-
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
         UInt256 currentBalance = getBalance(address);
         UInt256 newBalance = currentBalance.add(amount);
-        setBalanceInTransaction(txId, address, newBalance);
+        accountStore.setBalanceInTransaction(txId, address, newBalance);
+
+        if (log.isDebugEnabled()) {
+            log.debug("Transaction {}: addBalance({}, {}) -> {}",
+                    txId, address.toHexString().substring(0, 16),
+                    amount.toDecimalString(), newBalance.toDecimalString());
+        }
     }
 
     /**
      * Subtract from account balance in a transaction.
      *
-     * @param txId transaction ID
+     * @param txId transaction ID from RocksDBTransactionManager
      * @param address account address
      * @param amount amount to subtract
-     * @throws TransactionException if transaction operation fails
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails
      * @throws IllegalArgumentException if insufficient balance
-     * @since Phase 0.5 - Transaction Support Infrastructure
      */
     public void subtractBalanceInTransaction(String txId, Bytes address, UInt256 amount)
-            throws TransactionException {
-        ensureTransactionalStoreAvailable();
-
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
         UInt256 currentBalance = getBalance(address);
         if (currentBalance.compareTo(amount) < 0) {
             throw new IllegalArgumentException(String.format(
@@ -340,41 +294,36 @@ public class DagAccountManager {
         }
 
         UInt256 newBalance = currentBalance.subtract(amount);
-        setBalanceInTransaction(txId, address, newBalance);
+        accountStore.setBalanceInTransaction(txId, address, newBalance);
+
+        if (log.isDebugEnabled()) {
+            log.debug("Transaction {}: subtractBalance({}, {}) -> {}",
+                    txId, address.toHexString().substring(0, 16),
+                    amount.toDecimalString(), newBalance.toDecimalString());
+        }
     }
 
     /**
      * Increment account nonce in a transaction.
      *
-     * @param txId transaction ID
+     * @param txId transaction ID from RocksDBTransactionManager
      * @param address account address
-     * @throws TransactionException if transaction operation fails
-     * @since Phase 0.5 - Transaction Support Infrastructure
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails
      */
     public void incrementNonceInTransaction(String txId, Bytes address)
-            throws TransactionException {
-        ensureTransactionalStoreAvailable();
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
+        // Get current nonce
+        UInt64 currentNonce = getNonce(address);
+        UInt64 newNonce = currentNonce.add(UInt64.ONE);
 
-        // Get current account state
-        Account account = accountStore.getAccount(address).orElse(null);
-        if (account == null) {
-            account = Account.createEOA(address);
-        }
-
-        // Increment nonce
-        UInt64 newNonce = account.getNonce().add(UInt64.ONE);
-        Account updatedAccount = account.toBuilder()
-                .nonce(newNonce)
-                .build();
-
-        // Serialize and store in transaction
-        byte[] key = address.toArray();
-        byte[] value = updatedAccount.toBytes();
-        transactionalStore.putInTransaction(txId, key, value);
+        // Convert UInt64 to UInt256 for AccountStore method
+        UInt256 nonceAsUInt256 = UInt256.valueOf(newNonce.toBigInteger());
+        accountStore.setNonceInTransaction(txId, address, nonceAsUInt256);
 
         if (log.isDebugEnabled()) {
-            log.debug("Transaction {}: incrementNonce({}) to {}",
-                    txId, address.toHexString().substring(0, 16), newNonce.toLong());
+            log.debug("Transaction {}: incrementNonce({}) from {} to {}",
+                    txId, address.toHexString().substring(0, 16),
+                    currentNonce.toLong(), newNonce.toLong());
         }
     }
 
@@ -383,39 +332,30 @@ public class DagAccountManager {
      *
      * <p>Used during transaction rollback when restoring account state.
      *
-     * @param txId transaction ID
+     * @param txId transaction ID from RocksDBTransactionManager
      * @param address account address
-     * @throws TransactionException if transaction operation fails or nonce is already zero
-     * @since Phase 0.5 - Transaction Support Infrastructure
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails or nonce is already zero
      */
     public void decrementNonceInTransaction(String txId, Bytes address)
-            throws TransactionException {
-        ensureTransactionalStoreAvailable();
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
+        // Get current nonce
+        UInt64 currentNonce = getNonce(address);
 
-        // Get current account state
-        Account account = accountStore.getAccount(address).orElse(null);
-        if (account == null) {
-            throw new TransactionException("Cannot decrement nonce: account does not exist");
+        if (currentNonce.equals(UInt64.ZERO)) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "Cannot decrement nonce: already at zero");
         }
 
-        if (account.getNonce().equals(UInt64.ZERO)) {
-            throw new TransactionException("Cannot decrement nonce: already at zero");
-        }
+        UInt64 newNonce = currentNonce.subtract(UInt64.ONE);
 
-        // Decrement nonce
-        UInt64 newNonce = account.getNonce().subtract(UInt64.ONE);
-        Account updatedAccount = account.toBuilder()
-                .nonce(newNonce)
-                .build();
-
-        // Serialize and store in transaction
-        byte[] key = address.toArray();
-        byte[] value = updatedAccount.toBytes();
-        transactionalStore.putInTransaction(txId, key, value);
+        // Convert UInt64 to UInt256 for AccountStore method
+        UInt256 nonceAsUInt256 = UInt256.valueOf(newNonce.toBigInteger());
+        accountStore.setNonceInTransaction(txId, address, nonceAsUInt256);
 
         if (log.isDebugEnabled()) {
-            log.debug("Transaction {}: decrementNonce({}) to {}",
-                    txId, address.toHexString().substring(0, 16), newNonce.toLong());
+            log.debug("Transaction {}: decrementNonce({}) from {} to {}",
+                    txId, address.toHexString().substring(0, 16),
+                    currentNonce.toLong(), newNonce.toLong());
         }
     }
 }

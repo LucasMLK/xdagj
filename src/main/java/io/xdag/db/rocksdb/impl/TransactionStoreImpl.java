@@ -67,6 +67,11 @@ public class TransactionStoreImpl implements TransactionStore {
     private final KVSource<byte[], byte[]> indexSource;
 
     /**
+     * Transaction manager for atomic operations (NEW - atomic block processing)
+     */
+    private io.xdag.db.rocksdb.transaction.RocksDBTransactionManager transactionManager;
+
+    /**
      * Optional transactional store for atomic operations (Phase 0.5)
      */
     private TransactionalStore transactionalStore;
@@ -82,6 +87,23 @@ public class TransactionStoreImpl implements TransactionStore {
             KVSource<byte[], byte[]> indexSource) {
         this.txSource = txSource;
         this.indexSource = indexSource;
+    }
+
+    /**
+     * Constructor with TransactionManager for atomic block processing
+     *
+     * @param txSource Primary transaction storage
+     * @param indexSource Index storage for block and address mappings
+     * @param transactionManager RocksDB transaction manager for atomic operations
+     */
+    public TransactionStoreImpl(
+            KVSource<byte[], byte[]> txSource,
+            KVSource<byte[], byte[]> indexSource,
+            io.xdag.db.rocksdb.transaction.RocksDBTransactionManager transactionManager) {
+        this.txSource = txSource;
+        this.indexSource = indexSource;
+        this.transactionManager = transactionManager;
+        log.info("TransactionStoreImpl initialized with atomic operations support");
     }
 
     /**
@@ -584,5 +606,90 @@ public class TransactionStoreImpl implements TransactionStore {
                 .executionTimestamp(timestamp)
                 .isReversed(isReversed)
                 .build();
+    }
+
+    // ==================== Transactional Methods (Atomic Block Processing) ====================
+
+    @Override
+    public void indexTransactionInTransaction(String txId, Bytes32 blockHash, Bytes32 txHash)
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
+        if (transactionManager == null) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "TransactionManager not initialized");
+        }
+
+        try {
+            // Forward index: blockHash -> List<txHash>
+            byte[] blockIndexKey = BytesUtils.merge(TX_BLOCK_INDEX, blockHash.toArray());
+            byte[] existingValue = indexSource.get(blockIndexKey);
+
+            byte[] newValue;
+            if (existingValue == null) {
+                // First transaction for this block
+                newValue = txHash.toArray();
+            } else {
+                // Append to existing list
+                newValue = BytesUtils.merge(existingValue, txHash.toArray());
+            }
+
+            transactionManager.putInTransaction(txId, blockIndexKey, newValue);
+
+            // Reverse index: txHash -> blockHash (for timestamp lookup)
+            byte[] reverseKey = BytesUtils.merge(TRANSACTION_TO_BLOCK_INDEX, txHash.toArray());
+            transactionManager.putInTransaction(txId, reverseKey, blockHash.toArray());
+
+            log.debug("Buffered tx index {} -> {} in transaction {}",
+                    txHash.toHexString().substring(0, 16),
+                    blockHash.toHexString().substring(0, 16),
+                    txId);
+
+        } catch (Exception e) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "Failed to index transaction: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void markTransactionExecutedInTransaction(String txId, Bytes32 txHash)
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
+        if (transactionManager == null) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "TransactionManager not initialized");
+        }
+
+        try {
+            byte[] key = BytesUtils.merge(TX_EXECUTION_STATUS, txHash.toArray());
+            byte[] value = new byte[]{1};  // Mark as executed (simplified format)
+
+            transactionManager.putInTransaction(txId, key, value);
+
+            log.debug("Buffered tx execution mark for {} in transaction {}",
+                    txHash.toHexString().substring(0, 16), txId);
+
+        } catch (Exception e) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "Failed to mark transaction executed: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void unmarkTransactionExecutedInTransaction(String txId, Bytes32 txHash)
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
+        if (transactionManager == null) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "TransactionManager not initialized");
+        }
+
+        try {
+            byte[] key = BytesUtils.merge(TX_EXECUTION_STATUS, txHash.toArray());
+            transactionManager.deleteInTransaction(txId, key);
+
+            log.debug("Buffered tx execution unmark for {} in transaction {}",
+                    txHash.toHexString().substring(0, 16), txId);
+
+        } catch (Exception e) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "Failed to unmark transaction: " + e.getMessage(), e);
+        }
     }
 }

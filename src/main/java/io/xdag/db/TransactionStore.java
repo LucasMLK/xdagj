@@ -259,4 +259,47 @@ public interface TransactionStore extends XdagLifecycle {
      * @return execution info, or null if not executed
      */
     io.xdag.core.TransactionExecutionInfo getExecutionInfo(Bytes32 txHash);
+
+    // ==================== Transactional Methods (Atomic Block Processing) ====================
+
+    /**
+     * Index transaction to block mapping within a transaction
+     *
+     * <p>This method buffers the transaction-to-block index operation in a transaction.
+     * The operation is NOT written to disk until the transaction is committed.
+     *
+     * @param txId transaction ID from RocksDBTransactionManager
+     * @param blockHash block containing the transaction
+     * @param txHash transaction hash
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if operation fails
+     */
+    void indexTransactionInTransaction(String txId, Bytes32 blockHash, Bytes32 txHash)
+            throws io.xdag.db.rocksdb.transaction.TransactionException;
+
+    /**
+     * Mark transaction as executed within a transaction
+     *
+     * <p>This method buffers the transaction execution mark in a transaction.
+     * The operation is NOT written to disk until the transaction is committed.
+     *
+     * @param txId transaction ID from RocksDBTransactionManager
+     * @param txHash transaction hash
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if operation fails
+     */
+    void markTransactionExecutedInTransaction(String txId, Bytes32 txHash)
+            throws io.xdag.db.rocksdb.transaction.TransactionException;
+
+    /**
+     * Unmark transaction as executed within a transaction
+     *
+     * <p>This method buffers the transaction execution unmark operation in a transaction.
+     * Used during chain reorganization rollback to allow re-execution.
+     * The operation is NOT written to disk until the transaction is committed.
+     *
+     * @param txId transaction ID from RocksDBTransactionManager
+     * @param txHash transaction hash
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if operation fails
+     */
+    void unmarkTransactionExecutedInTransaction(String txId, Bytes32 txHash)
+            throws io.xdag.db.rocksdb.transaction.TransactionException;
 }

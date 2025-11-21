@@ -141,6 +141,17 @@ public interface DagStore extends XdagLifecycle {
      */
     void deleteBlock(Bytes32 hash);
 
+    /**
+     * Delete height-to-hash mapping for a specific height
+     * <p>
+     * This is used during chain reorganization to remove orphaned height mappings.
+     * When a block is demoted from main chain, its height mapping must be explicitly
+     * deleted to prevent multiple blocks from mapping to the same height.
+     *
+     * @param height Main chain height to delete mapping for
+     */
+    void deleteHeightMapping(long height);
+
     // ==================== Main Chain Queries (Height-Based) ====================
 
     /**
@@ -295,6 +306,61 @@ public interface DagStore extends XdagLifecycle {
      * @return ChainStats or null if not found
      */
     ChainStats getChainStats();
+
+    // ==================== Transactional Methods (Atomic Block Processing) ====================
+
+    /**
+     * Save block within a transaction context (atomic operation)
+     *
+     * <p>This method buffers all block-related writes in a transaction:
+     * <ul>
+     *   <li>Block raw data (BLOCK_DATA)</li>
+     *   <li>BlockInfo metadata (BLOCK_INFO)</li>
+     *   <li>Epoch index (EPOCH_INDEX)</li>
+     *   <li>Height index (HEIGHT_INDEX, if height > 0)</li>
+     * </ul>
+     *
+     * <p>Operations are NOT written to disk until transaction is committed.
+     *
+     * @param txId transaction ID from RocksDBTransactionManager
+     * @param info block metadata
+     * @param block block data
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if operation fails
+     */
+    void saveBlockInTransaction(String txId, BlockInfo info, Block block)
+            throws io.xdag.db.rocksdb.transaction.TransactionException;
+
+    /**
+     * Save BlockInfo within a transaction context
+     *
+     * @param txId transaction ID
+     * @param info block metadata
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if operation fails
+     */
+    void saveBlockInfoInTransaction(String txId, BlockInfo info)
+            throws io.xdag.db.rocksdb.transaction.TransactionException;
+
+    /**
+     * Delete height mapping within a transaction context
+     *
+     * <p>Used during chain reorganization to remove old height mappings atomically.
+     *
+     * @param txId transaction ID
+     * @param height block height to delete
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if operation fails
+     */
+    void deleteHeightMappingInTransaction(String txId, long height)
+            throws io.xdag.db.rocksdb.transaction.TransactionException;
+
+    /**
+     * Update cache after successful transaction commit
+     *
+     * <p>This must be called AFTER transaction is committed to disk.
+     * It updates in-memory caches with the newly committed block.
+     *
+     * @param block block to update in cache
+     */
+    void updateCacheAfterCommit(Block block);
 
     // ==================== Batch Operations ====================
 

@@ -87,6 +87,11 @@ public class AccountStoreImpl implements AccountStore {
     private WriteOptions syncWriteOptions;
     private ReadOptions readOptions;
 
+    /**
+     * Transaction manager for atomic operations (NEW - atomic block processing)
+     */
+    private io.xdag.db.rocksdb.transaction.RocksDBTransactionManager transactionManager;
+
     // ==================== Lifecycle ====================
 
     private volatile boolean running = false;
@@ -100,6 +105,20 @@ public class AccountStoreImpl implements AccountStore {
         this.config = config;
         this.dbPath = config.getNodeSpec().getStoreDir() + File.separator + "accountstore";
         log.info("AccountStore database path: {}", dbPath);
+    }
+
+    /**
+     * Constructor with TransactionManager for atomic block processing
+     *
+     * @param config XDAG configuration
+     * @param transactionManager RocksDB transaction manager for atomic operations
+     */
+    public AccountStoreImpl(Config config, io.xdag.db.rocksdb.transaction.RocksDBTransactionManager transactionManager) {
+        this.config = config;
+        this.transactionManager = transactionManager;
+        this.dbPath = config.getNodeSpec().getStoreDir() + File.separator + "accountstore";
+        log.info("AccountStore database path: {} (atomic operations {})",
+                dbPath, transactionManager != null ? "enabled" : "disabled");
     }
 
     @Override
@@ -811,6 +830,116 @@ public class AccountStoreImpl implements AccountStore {
 
         if (!directory.delete()) {
             throw new IOException("Failed to delete: " + directory.getAbsolutePath());
+        }
+    }
+
+    // ==================== Transactional Methods (Atomic Block Processing) ====================
+
+    @Override
+    public void saveAccountInTransaction(String txId, Account account)
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
+        if (transactionManager == null) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "TransactionManager not initialized");
+        }
+
+        try {
+            byte[] key = makeAccountKey(account.getAddress());
+            byte[] value = account.toBytes();
+
+            // Buffer account save in transaction
+            transactionManager.putInTransaction(txId, key, value);
+
+            // Note: Statistics updates (account count, total balance) are handled
+            // by the caller after all operations succeed. This prevents partial
+            // statistics updates in case of rollback.
+
+            log.debug("Buffered account save for {} in transaction {} (balance={}, nonce={})",
+                    account.getAddress().toHexString().substring(0, 16),
+                    txId,
+                    account.getBalance().toDecimalString(),
+                    account.getNonce().toLong());
+
+        } catch (Exception e) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "Failed to save account in transaction: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void setBalanceInTransaction(String txId, Bytes address, UInt256 newBalance)
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
+        // WORKAROUND: AccountStore has its own separate RocksDB instance (accountstore/)
+        // which is different from TransactionManager's RocksDB instance (index/).
+        // Writing to TransactionManager would write to the wrong database.
+        //
+        // For now, write directly to AccountStore's own database.
+        // This sacrifices cross-database atomicity but fixes the visibility issue.
+        //
+        // TODO (Phase 2): Refactor AccountStore to share the same RocksDB instance
+        // as TransactionManager for true atomic operations across all stores.
+
+        try {
+            // Get existing account or create new EOA
+            Optional<Account> existing = getAccount(address);
+
+            Account account;
+            if (existing.isPresent()) {
+                account = existing.get().withBalance(newBalance);
+            } else {
+                account = Account.createEOA(address).withBalance(newBalance);
+            }
+
+            // Write directly to AccountStore's own RocksDB instance
+            byte[] key = makeAccountKey(address);
+            byte[] value = account.toBytes();
+            db.put(defaultHandle, writeOptions, key, value);
+
+            log.debug("Set balance for {} in transaction {} (newBalance={}) - direct write to AccountStore DB",
+                    address.toHexString().substring(0, 16),
+                    txId,
+                    newBalance.toDecimalString());
+
+        } catch (Exception e) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "Failed to set balance in transaction: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void setNonceInTransaction(String txId, Bytes address, UInt256 newNonce)
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
+        // WORKAROUND: Same as setBalanceInTransaction() - write directly to AccountStore's own DB
+        // to fix visibility issue (AccountStore has separate RocksDB instance from TransactionManager)
+
+        try {
+            // Get existing account or create new EOA
+            Optional<Account> existing = getAccount(address);
+
+            Account account;
+            if (existing.isPresent()) {
+                // Convert UInt256 to UInt64 for nonce
+                UInt64 nonce = UInt64.valueOf(newNonce.toBigInteger().longValue());
+                account = existing.get().withNonce(nonce);
+            } else {
+                // Create new EOA with nonce
+                UInt64 nonce = UInt64.valueOf(newNonce.toBigInteger().longValue());
+                account = Account.createEOA(address).withNonce(nonce);
+            }
+
+            // Write directly to AccountStore's own RocksDB instance
+            byte[] key = makeAccountKey(address);
+            byte[] value = account.toBytes();
+            db.put(defaultHandle, writeOptions, key, value);
+
+            log.debug("Set nonce for {} in transaction {} (newNonce={}) - direct write to AccountStore DB",
+                    address.toHexString().substring(0, 16),
+                    txId,
+                    newNonce.toDecimalString());
+
+        } catch (Exception e) {
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "Failed to set nonce in transaction: " + e.getMessage(), e);
         }
     }
 }

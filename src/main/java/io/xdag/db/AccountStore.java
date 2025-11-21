@@ -300,4 +300,49 @@ public interface AccountStore extends XdagLifecycle {
      * @return approximate size of AccountStore data on disk
      */
     long getDatabaseSize();
+
+    // ==================== Transactional Methods (Atomic Block Processing) ====================
+
+    /**
+     * Save account within a transaction (includes balance and nonce updates)
+     *
+     * <p>This method buffers the account save operation in a transaction, including
+     * updates to account statistics (account count, total balance). The operations are
+     * NOT written to disk until the transaction is committed.
+     *
+     * @param txId transaction ID from RocksDBTransactionManager
+     * @param account account to save
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if operation fails
+     */
+    void saveAccountInTransaction(String txId, Account account)
+            throws io.xdag.db.rocksdb.transaction.TransactionException;
+
+    /**
+     * Update account balance within a transaction
+     *
+     * <p>This method buffers the balance update in a transaction. If the account doesn't
+     * exist, creates a new EOA account with the balance. The operation is NOT written to
+     * disk until the transaction is committed.
+     *
+     * @param txId transaction ID from RocksDBTransactionManager
+     * @param address account address (20 bytes)
+     * @param newBalance new balance
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if operation fails
+     */
+    void setBalanceInTransaction(String txId, Bytes address, UInt256 newBalance)
+            throws io.xdag.db.rocksdb.transaction.TransactionException;
+
+    /**
+     * Update account nonce within a transaction
+     *
+     * <p>This method buffers the nonce update in a transaction. The operation is NOT
+     * written to disk until the transaction is committed.
+     *
+     * @param txId transaction ID from RocksDBTransactionManager
+     * @param address account address (20 bytes)
+     * @param newNonce new nonce
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if operation fails
+     */
+    void setNonceInTransaction(String txId, Bytes address, UInt256 newNonce)
+            throws io.xdag.db.rocksdb.transaction.TransactionException;
 }

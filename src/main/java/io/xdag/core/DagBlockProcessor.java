@@ -155,6 +155,96 @@ public class DagBlockProcessor {
     }
 
     /**
+     * Process a new block within a transaction context (ATOMIC)
+     *
+     * <p>This is the NEW atomic version that buffers all operations in a transaction.
+     * Unlike {@link #processBlock}, this method:
+     * <ul>
+     *   <li>Saves block to DagStore IN TRANSACTION</li>
+     *   <li>Processes transactions IN TRANSACTION (account updates + execution marks)</li>
+     *   <li>Indexes transactions to block IN TRANSACTION</li>
+     *   <li>Does NOT commit - caller must commit the transaction</li>
+     * </ul>
+     *
+     * <p><strong>Processing Flow</strong>:
+     * <ol>
+     *   <li>Validate basic block structure</li>
+     *   <li>Save block to DagStore IN TRANSACTION</li>
+     *   <li>Extract transactions from block</li>
+     *   <li>Process transactions IN TRANSACTION (account updates)</li>
+     *   <li>Index transactions to block IN TRANSACTION</li>
+     * </ol>
+     *
+     * @param txId transaction ID from RocksDBTransactionManager
+     * @param block block to process
+     * @return processing result
+     * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails
+     */
+    public ProcessingResult processBlockInTransaction(String txId, Block block)
+            throws io.xdag.db.rocksdb.transaction.TransactionException {
+
+        // 1. Validate basic block structure
+        if (!validateBasicStructure(block)) {
+            String hashStr = (block != null && block.getHash() != null)
+                    ? block.getHash().toHexString()
+                    : "<null>";
+            log.warn("Block structure validation failed: {}", hashStr);
+            return ProcessingResult.error("Invalid block structure");
+        }
+
+        // 2. Save block to DagStore IN TRANSACTION
+        try {
+            dagStore.saveBlockInTransaction(txId, block.getInfo(), block);
+            log.debug("Buffered block save for {} in transaction {}",
+                    block.getHash().toHexString().substring(0, 16), txId);
+        } catch (Exception e) {
+            log.error("Failed to save block in transaction {}: {}", txId, e.getMessage());
+            throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                    "Failed to save block: " + e.getMessage(), e);
+        }
+
+        // 3. Extract transactions from block
+        List<Transaction> transactions = extractTransactions(block);
+        log.debug("Extracted {} transactions from block {}",
+                transactions.size(), block.getHash().toHexString().substring(0, 16));
+
+        // 4. Process transactions IN TRANSACTION (account state updates + execution marks)
+        if (!transactions.isEmpty()) {
+            DagTransactionProcessor.ProcessingResult txResult =
+                    txProcessor.processBlockTransactionsInTransaction(txId, block, transactions);
+
+            if (!txResult.isSuccess()) {
+                log.warn("Block transaction processing failed in transaction {}: error={}",
+                        txId, txResult.getError());
+                return ProcessingResult.error(txResult.getError());
+            }
+
+            // 5. Index transactions to block IN TRANSACTION
+            for (Transaction tx : transactions) {
+                try {
+                    transactionStore.indexTransactionInTransaction(txId, block.getHash(), tx.getHash());
+                } catch (Exception e) {
+                    log.error("Failed to index transaction {} to block {} in transaction {}: {}",
+                            tx.getHash().toHexString().substring(0, 16),
+                            block.getHash().toHexString().substring(0, 16),
+                            txId, e.getMessage());
+                    throw new io.xdag.db.rocksdb.transaction.TransactionException(
+                            "Failed to index transaction: " + e.getMessage(), e);
+                }
+            }
+        }
+
+        // 6. Log success (buffered operations, not yet committed)
+        log.info("Buffered block processing in transaction {}: hash={}, transactions={}, height={}",
+                txId,
+                block.getHash().toHexString().substring(0, 16),
+                transactions.size(),
+                block.getInfo().getHeight());
+
+        return ProcessingResult.success();
+    }
+
+    /**
      * Validate basic block structure
      *
      * <p>Checks:

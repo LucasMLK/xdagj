@@ -39,10 +39,12 @@ import io.xdag.listener.Listener;
 import io.xdag.utils.XdagTime;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
@@ -294,100 +296,209 @@ public class DagChainImpl implements DagChain {
                 return DagImportResult.error(e, "Failed to calculate cumulative difficulty: " + e.getMessage());
             }
 
-            // Main chain determination
-            boolean isBestChain = cumulativeDifficulty.compareTo(chainStats.getMaxDifficulty()) > 0;
-            long height;
+            // CONSENSUS REFACTORING (2025-11-21): FIXED EPOCH COMPETITION TIMING
+            // BUGFIX: Save block with pending height=0 FIRST to make it visible in epoch index
+            // THEN check epoch competition to see if other blocks exist in the same epoch
+            // This ensures proper epoch competition when blocks arrive rapidly in sequence
 
-            if (isBestChain) {
-                // This block extends the main chain
-                height = chainStats.getMainBlockCount() + 1;
-                log.info("Block {} becomes main block at height {} with cumulative difficulty {}",
-                        block.getHash().toHexString(), height, cumulativeDifficulty.toDecimalString());
-            } else {
-                // This block is an orphan or side chain block
-                height = 0;
-                log.debug("Block {} imported as orphan with cumulative difficulty {}",
-                         block.getHash().toHexString(), cumulativeDifficulty.toDecimalString());
-            }
-
-            // Epoch competition check and reorganization
             long blockEpoch = block.getEpoch();
-            Block currentWinner = getWinnerBlockInEpoch(blockEpoch);
 
-            // DEBUG: Log epoch competition details
-            if (currentWinner == null) {
-                log.debug("No winner found in epoch {} when importing block {}",
-                        blockEpoch, block.getHash().toHexString().substring(0, 16));
-                // Check if there are ANY blocks in this epoch
-                List<Block> candidates = getCandidateBlocksInEpoch(blockEpoch);
-                log.debug("  Total candidates in epoch {}: {}", blockEpoch, candidates.size());
-                for (Block candidate : candidates) {
-                    log.debug("    Candidate: hash={}, height={}",
-                            candidate.getHash().toHexString().substring(0, 16),
-                            candidate.getInfo() != null ? candidate.getInfo().getHeight() : "null");
-                }
-            } else {
-                log.debug("Current winner in epoch {} is {} (height={})",
-                        blockEpoch,
-                        currentWinner.getHash().toHexString().substring(0, 16),
-                        currentWinner.getInfo().getHeight());
-            }
+            // Step 1: Save block with PENDING height=0 to make it visible in epoch index
+            // Special case: Genesis blocks get height=1 immediately
+            long pendingHeight = isGenesisBlock(block) ? 1 : 0;
 
-            boolean epochWinner = currentWinner == null || block.getHash().compareTo(currentWinner.getHash()) < 0;
-
-            if (epochWinner && currentWinner != null && !currentWinner.getHash().equals(block.getHash())) {
-                // This block wins the epoch competition, demote previous winner
-                log.debug("Block {} wins epoch {} competition (smaller hash than {})",
-                         block.getHash().toHexString(), blockEpoch,
-                         currentWinner.getHash().toHexString());
-
-                // IMPORTANT: Save the replacement height BEFORE demotion
-                // The new winner will REPLACE the old winner at the SAME height
-                long replacementHeight = currentWinner.getInfo().getHeight();
-
-                demoteBlockToOrphan(currentWinner);
-
-                // The new winner takes the demoted block's height (REPLACEMENT, not addition)
-                height = replacementHeight;  // NOT mainBlockCount + 1
-                isBestChain = true;
-                log.info("Block {} promoted to main chain at height {} after winning epoch competition",
-                        block.getHash().toHexString(), height);
-            } else if (!epochWinner && isBestChain) {
-                // This block has higher cumulative difficulty but loses epoch competition
-                // Mark as orphan instead of main block
-                height = 0;
-                isBestChain = false;
-                log.debug("Block {} loses epoch {} competition (larger hash than {}), demoting to orphan",
-                         block.getHash().toHexString(), blockEpoch,
-                         currentWinner.getHash().toHexString());
-            }
-
-            // Save block and metadata
-            BlockInfo blockInfo = BlockInfo.builder()
+            BlockInfo pendingInfo = BlockInfo.builder()
                     .hash(block.getHash())
-                    .epoch(block.getEpoch())  // Store epoch directly (XDAG epoch number)
-                    .height(height)
+                    .epoch(block.getEpoch())
+                    .height(pendingHeight)
                     .difficulty(cumulativeDifficulty)
                     .build();
 
-            dagStore.saveBlockInfo(blockInfo);
+            Block blockWithPendingInfo = block.toBuilder().info(pendingInfo).build();
+
+            // Save block with pending height FIRST (makes it visible for epoch competition)
+            dagStore.saveBlockInfo(pendingInfo);
+            dagStore.saveBlock(blockWithPendingInfo);
+
+            // Step 2: NOW check epoch competition (block is visible in epoch index)
+            Block currentWinner = getWinnerBlockInEpoch(blockEpoch);
+
+            // BUGFIX: Check if currentWinner is self (block we just saved)
+            // When a block is saved first and then found by getWinnerBlockInEpoch(),
+            // comparing hash to itself returns 0 (equal), not < 0, causing false negative
+            boolean isEpochWinner = (currentWinner == null) ||
+                                    currentWinner.getHash().equals(block.getHash()) ||  // Winner is self
+                                    (block.getHash().compareTo(currentWinner.getHash()) < 0);
+
+            // Step 3: Update height based on epoch competition result
+            boolean isBestChain;
+            long height;
+
+            if (isEpochWinner) {
+                if (currentWinner != null && !currentWinner.getHash().equals(block.getHash())) {
+                    // Case 1: This block beats the current winner
+                    // Replace current winner at SAME height (replacement, not addition)
+                    long replacementHeight = currentWinner.getInfo().getHeight();
+
+                    log.info("Block {} wins epoch {} competition (hash {} < {})",
+                            block.getHash().toHexString().substring(0, 16),
+                            blockEpoch,
+                            block.getHash().toHexString().substring(0, 16),
+                            currentWinner.getHash().toHexString().substring(0, 16));
+
+                    demoteBlockToOrphan(currentWinner);
+
+                    // New winner takes the SAME height (replacement at same position)
+                    height = replacementHeight;
+                    isBestChain = true;
+                } else if (currentWinner != null && currentWinner.getHash().equals(block.getHash())) {
+                    // Case 2: This block IS the winner, but other main blocks may exist in same epoch
+                    // Check for other main blocks (height > 0) in this epoch that need demotion
+                    log.debug("Block {} is winner, checking for other main blocks in epoch {}",
+                            block.getHash().toHexString().substring(0, 16), blockEpoch);
+
+                    List<Block> allCandidates = getCandidateBlocksInEpoch(blockEpoch);
+                    log.debug("Found {} total candidates in epoch {}",
+                            allCandidates.size(), blockEpoch);
+
+                    Block otherMainBlock = null;
+
+                    for (Block candidate : allCandidates) {
+                        log.debug("Checking candidate {}: height={}, isSelf={}",
+                                candidate.getHash().toHexString().substring(0, 16),
+                                candidate.getInfo() != null ? candidate.getInfo().getHeight() : "null",
+                                candidate.getHash().equals(block.getHash()));
+
+                        if (candidate.getInfo() != null &&
+                            candidate.getInfo().getHeight() > 0 &&
+                            !candidate.getHash().equals(block.getHash())) {
+                            // Found another main block in this epoch - needs demotion
+                            otherMainBlock = candidate;
+                            log.debug("Found other main block {} at height {}",
+                                    otherMainBlock.getHash().toHexString().substring(0, 16),
+                                    otherMainBlock.getInfo().getHeight());
+                            break;
+                        }
+                    }
+
+                    if (otherMainBlock != null) {
+                        // Demote the other main block and take its height
+                        long replacementHeight = otherMainBlock.getInfo().getHeight();
+
+                        log.info("Block {} wins epoch {} competition, demoting previous main block {}",
+                                block.getHash().toHexString().substring(0, 16),
+                                blockEpoch,
+                                otherMainBlock.getHash().toHexString().substring(0, 16));
+
+                        demoteBlockToOrphan(otherMainBlock);
+
+                        // Take the demoted block's height
+                        height = replacementHeight;
+                        isBestChain = true;
+                    } else {
+                        // No other main blocks, assign new height
+                        if (isGenesisBlock(block)) {
+                            height = 1;  // Genesis always gets height=1
+                        } else {
+                            height = chainStats.getMainBlockCount() + 1;
+                            log.debug("Block {} is first winner in epoch {}, assigned height {}",
+                                    block.getHash().toHexString().substring(0, 16),
+                                    blockEpoch, height);
+                        }
+                        isBestChain = true;
+                    }
+                } else {
+                    // Case 3: First block in this epoch (currentWinner == null)
+                    if (isGenesisBlock(block)) {
+                        height = 1;  // Genesis always gets height=1
+                    } else {
+                        // Assign next available height
+                        height = chainStats.getMainBlockCount() + 1;
+                        log.debug("Block {} is first winner in epoch {}, assigned height {}",
+                                block.getHash().toHexString().substring(0, 16),
+                                blockEpoch, height);
+                    }
+                    isBestChain = true;
+                }
+            } else {
+                // Lost epoch competition - orphan
+                log.debug("Block {} loses epoch {} competition (hash {} > {})",
+                         block.getHash().toHexString().substring(0, 16),
+                         blockEpoch,
+                         block.getHash().toHexString().substring(0, 16),
+                         currentWinner.getHash().toHexString().substring(0, 16));
+                height = 0;
+                isBestChain = false;
+            }
+
+            // Update BlockInfo with final height (may be same as pending for orphans/pending blocks)
+            BlockInfo blockInfo = pendingInfo.toBuilder()
+                    .height(height)
+                    .build();
+
             Block blockWithInfo = block.toBuilder().info(blockInfo).build();
-            dagStore.saveBlock(blockWithInfo);
 
-            // DEBUG: Log saved block details for troubleshooting
-            log.debug("Saved block: hash={}, epoch={}, height={}",
-                    blockWithInfo.getHash().toHexString().substring(0, 16),
-                    blockWithInfo.getEpoch(),
-                    blockWithInfo.getInfo().getHeight());
+            // ========== ATOMIC BLOCK PROCESSING ==========
+            // Update block with final height if different from pending height
+            if (height != pendingHeight) {
+                dagStore.saveBlockInfo(blockInfo);
+                dagStore.saveBlock(blockWithInfo);
+                log.debug("Updated block {} with final height={}",
+                        block.getHash().toHexString().substring(0, 16), height);
+            }
 
-            // Index transactions (for all blocks)
-            indexTransactions(block);
+            // Process transactions atomically if this is a main block
+            String txId = null;
+            try {
+                // Get transaction manager from DagKernel
+                io.xdag.db.rocksdb.transaction.RocksDBTransactionManager transactionManager =
+                    dagKernel.getTransactionManager();
 
-            // Update chain statistics and process transactions (ONLY for main blocks)
-            if (isBestChain) {
-                // Process block transactions and update account state
-                // IMPORTANT: Only execute transactions for main blocks to prevent orphan block transactions from affecting state
-                if (dagKernel != null) {
+                log.debug("Transaction execution check: block={}, height={}, isBestChain={}, hasTransactionManager={}",
+                        block.getHash().toHexString().substring(0, 16),
+                        height,
+                        isBestChain,
+                        transactionManager != null);
+
+                if (transactionManager != null && isBestChain) {
+                    // === ATOMIC PATH: Transaction processing in single RocksDB transaction ===
+                    txId = transactionManager.beginTransaction();
+                    log.debug("Started atomic transaction {} for block {}",
+                            txId, block.getHash().toHexString().substring(0, 16));
+
+                    // Process block transactions (indexing + execution) IN TRANSACTION
+                    DagBlockProcessor blockProcessor = dagKernel.getDagBlockProcessor();
+                    if (blockProcessor != null) {
+                        DagBlockProcessor.ProcessingResult processResult =
+                                blockProcessor.processBlockInTransaction(txId, blockWithInfo);
+
+                        if (!processResult.isSuccess()) {
+                            // Transaction processing failed - rollback entire transaction
+                            transactionManager.rollbackTransaction(txId);
+                            log.error("Atomic transaction processing failed for block {}: {}, rolled back transaction {}",
+                                    block.getHash().toHexString().substring(0, 16),
+                                    processResult.getError(), txId);
+                            return DagImportResult.error(new Exception(processResult.getError()),
+                                    "Atomic block processing failed: " + processResult.getError());
+                        }
+                        log.debug("Buffered transaction processing in transaction {}", txId);
+                    }
+
+                    // COMMIT - all buffered operations execute atomically
+                    transactionManager.commitTransaction(txId);
+                    log.info("✓ Atomic commit successful for block {} (transaction {})",
+                            block.getHash().toHexString().substring(0, 16), txId);
+
+                    // Update chain stats AFTER commit (non-transactional derived data)
+                    updateChainStatsForNewMainBlock(blockInfo);
+                    checkAndAdjustDifficulty(blockInfo.getHeight(), block.getEpoch());
+                    cleanupOldOrphans(block.getEpoch());
+
+                } else if (isBestChain) {
+                    // === FALLBACK: Transaction manager not available, use non-atomic transaction execution ===
+                    log.warn("TransactionManager not available, using non-atomic transaction processing for block {}",
+                            block.getHash().toHexString().substring(0, 16));
+
                     DagBlockProcessor blockProcessor = dagKernel.getDagBlockProcessor();
                     if (blockProcessor != null) {
                         DagBlockProcessor.ProcessingResult processResult =
@@ -402,17 +513,28 @@ public class DagChainImpl implements DagChain {
                                     block.getHash().toHexString());
                         }
                     }
+
+                    updateChainStatsForNewMainBlock(blockInfo);
+                    checkAndAdjustDifficulty(blockInfo.getHeight(), block.getEpoch());
+                    cleanupOldOrphans(block.getEpoch());
                 }
 
-                // Update chain statistics
-                updateChainStatsForNewMainBlock(blockInfo);
-
-                // NEW CONSENSUS: Check and adjust difficulty
-                checkAndAdjustDifficulty(blockInfo.getHeight(), block.getEpoch());
-
-                // NEW CONSENSUS: Cleanup old orphans
-                cleanupOldOrphans(block.getEpoch());
+            } catch (Exception e) {
+                // Rollback transaction on any error
+                if (txId != null && dagKernel.getTransactionManager() != null) {
+                    try {
+                        dagKernel.getTransactionManager().rollbackTransaction(txId);
+                        log.error("Rolled back transaction {} for block {} due to error: {}",
+                                txId, block.getHash().toHexString().substring(0, 16), e.getMessage());
+                    } catch (Exception rollbackError) {
+                        log.error("Failed to rollback transaction {}: {}", txId, rollbackError.getMessage());
+                    }
+                }
+                log.error("Error during atomic block import for {}: {}",
+                        block.getHash().toHexString().substring(0, 16), e.getMessage(), e);
+                return DagImportResult.error(e, "Atomic import failed: " + e.getMessage());
             }
+            // ========== END ATOMIC BLOCK PROCESSING ==========
 
             // Notify listeners
             notifyListeners(blockWithInfo);
@@ -430,7 +552,7 @@ public class DagChainImpl implements DagChain {
 
             // Return detailed result
             if (isBestChain) {
-                return DagImportResult.mainBlock(blockEpoch, height, cumulativeDifficulty, epochWinner);
+                return DagImportResult.mainBlock(blockEpoch, height, cumulativeDifficulty, isEpochWinner);
             } else {
                 // BUGFIX: Add orphan blocks to orphan store
                 // Orphan blocks are valid, complete blocks that lost epoch competition
@@ -451,7 +573,7 @@ public class DagChainImpl implements DagChain {
                             e.getMessage());
                 }
 
-                return DagImportResult.orphan(blockEpoch, cumulativeDifficulty, epochWinner);
+                return DagImportResult.orphan(blockEpoch, cumulativeDifficulty, isEpochWinner);
             }
 
         } catch (Exception e) {
@@ -701,10 +823,27 @@ public class DagChainImpl implements DagChain {
                 log.debug("Block {} has missing dependency: {}",
                         block.getHash().toHexString(), missing.toHexString());
 
-                // IMPORTANT: Blocks with missing dependencies should NOT be saved
-                log.debug("Rejecting block {} with missing dependency: {} (should be re-sent when dependency arrives)",
-                        block.getHash().toHexString().substring(0, 16),
-                        missing.toHexString().substring(0, 16));
+                // CHANGE: Save block to orphan store for later retry when dependency arrives
+                // This enables nodes to sync correctly when blocks arrive out of order
+                try {
+                    // Save block to DagStore (attach placeholder BlockInfo if needed)
+                    Block persistableBlock = ensurePersistableBlock(block);
+                    dagStore.saveBlock(persistableBlock);
+
+                    // Add to OrphanBlockStore for dependency tracking
+                    orphanBlockStore.addOrphan(
+                            block.getHash(),
+                            block.getEpoch()
+                    );
+
+                    log.info("Saved block {} to orphan store awaiting dependency: {}",
+                            block.getHash().toHexString().substring(0, 16),
+                            missing.toHexString().substring(0, 16));
+                } catch (Exception e) {
+                    log.error("Failed to save orphan block {} to orphan store: {}",
+                            block.getHash().toHexString().substring(0, 16),
+                            e.getMessage());
+                }
 
                 return DagImportResult.missingDependency(
                         missing,
@@ -1091,8 +1230,7 @@ public class DagChainImpl implements DagChain {
         // If mainBlockCount>0, this gets the actual last main block
         long lastBlockHeight = Math.max(1, currentMainHeight);
 
-        // DEBUG: Log the values to diagnose the issue
-        log.info("DEBUG collectCandidateLinks: currentMainHeight={}, lastBlockHeight={}",
+        log.debug("Collecting candidate links: currentMainHeight={}, lastBlockHeight={}",
                 currentMainHeight, lastBlockHeight);
 
         Block prevMainBlock = dagStore.getMainBlockByHeight(lastBlockHeight, false);
@@ -1104,7 +1242,7 @@ public class DagChainImpl implements DagChain {
             return links;
         }
 
-        log.info("DEBUG: Found prevMainBlock at height {}, epoch={}, hash={}",
+        log.debug("Found previous main block at height {}, epoch={}, hash={}",
                 lastBlockHeight, prevMainBlock.getEpoch(),
                 prevMainBlock.getHash().toHexString().substring(0, 16));
 
@@ -1114,19 +1252,35 @@ public class DagChainImpl implements DagChain {
         long prevEpoch = prevMainBlock.getEpoch();
         long referenceDepth = currentEpoch - prevEpoch;
 
+        // DEVNET: Skip reference depth check to allow development/testing with arbitrary epoch gaps
+        // In development, nodes may be stopped for extended periods, and strict epoch checks
+        // would prevent mining even after successful sync
+        boolean isDevnet = dagKernel.getConfig().getNodeSpec().getNetwork()
+                .toString().toLowerCase().contains("devnet");
+
         boolean allowBootstrap = currentMainHeight <= 1;
-        if (referenceDepth > MINING_MAX_REFERENCE_DEPTH && !allowBootstrap) {
-            log.error("MINING BLOCKED: Previous main block (epoch {}) is {} epochs behind current epoch {}",
-                    prevEpoch, referenceDepth, currentEpoch);
-            log.error("Maximum allowed reference depth for mining: {} epochs (~{} minutes)",
-                    MINING_MAX_REFERENCE_DEPTH, MINING_MAX_REFERENCE_DEPTH * 64 / 60);
-            log.error("Node must sync to latest epoch before mining can resume");
-            log.error("Current lag: {} epochs (~{} minutes)",
-                    referenceDepth, referenceDepth * 64 / 60);
-            return links;  // Return empty links to prevent mining
-        } else if (referenceDepth > MINING_MAX_REFERENCE_DEPTH) {
-            log.warn("Reference depth {} exceeds limit {} but allowing bootstrap because currentMainHeight={}",
-                    referenceDepth, MINING_MAX_REFERENCE_DEPTH, currentMainHeight);
+
+        if (!isDevnet) {
+            // Production networks: enforce strict reference depth limit
+            if (referenceDepth > MINING_MAX_REFERENCE_DEPTH && !allowBootstrap) {
+                log.error("MINING BLOCKED: Previous main block (epoch {}) is {} epochs behind current epoch {}",
+                        prevEpoch, referenceDepth, currentEpoch);
+                log.error("Maximum allowed reference depth for mining: {} epochs (~{} minutes)",
+                        MINING_MAX_REFERENCE_DEPTH, MINING_MAX_REFERENCE_DEPTH * 64 / 60);
+                log.error("Node must sync to latest epoch before mining can resume");
+                log.error("Current lag: {} epochs (~{} minutes)",
+                        referenceDepth, referenceDepth * 64 / 60);
+                return links;  // Return empty links to prevent mining
+            } else if (referenceDepth > MINING_MAX_REFERENCE_DEPTH) {
+                log.warn("Reference depth {} exceeds limit {} but allowing bootstrap because currentMainHeight={}",
+                        referenceDepth, MINING_MAX_REFERENCE_DEPTH, currentMainHeight);
+            }
+        } else {
+            // DEVNET: Log reference depth but don't block mining
+            if (referenceDepth > MINING_MAX_REFERENCE_DEPTH) {
+                log.info("DEVNET: Reference depth {} epochs (~{} minutes) exceeds normal limit {}, but allowing for development",
+                        referenceDepth, referenceDepth * 64 / 60, MINING_MAX_REFERENCE_DEPTH);
+            }
         }
 
         // Step 3: Get all candidates in prev block's epoch
@@ -1428,13 +1582,16 @@ public class DagChainImpl implements DagChain {
             return null;
         }
 
-        // Find block with smallest hash that is not an orphan
+        // Find block with smallest hash among ALL candidates in this epoch
+        // IMPORTANT: Don't filter by height here! During import, blocks may have height=0 (pending)
+        // but still need to participate in epoch competition. The height filter would cause
+        // a race condition where the second block doesn't see the first block as a competitor.
         Block winner = null;
         Bytes32 smallestHash = null;
 
         for (Block candidate : candidates) {
-            // Skip orphan blocks (height = 0)
-            if (candidate.getInfo() != null && candidate.getInfo().getHeight() > 0) {
+            if (candidate.getInfo() != null) {
+                // Consider ALL blocks in epoch, including those with height=0 (pending assignment)
                 if (smallestHash == null || candidate.getHash().compareTo(smallestHash) < 0) {
                     smallestHash = candidate.getHash();
                     winner = candidate;
@@ -1740,78 +1897,99 @@ public class DagChainImpl implements DagChain {
 
     @Override
     public synchronized void checkNewMain() {
-        log.debug("Running checkNewMain() - scanning recent epochs for winners");
+        log.debug("Running checkNewMain() - assigning heights to epoch winners based on epoch order");
 
         long currentEpoch = getCurrentEpoch();
-        long scanStartEpoch = Math.max(1, currentEpoch - 100);  // Scan last 100 epochs
+        long scanStartEpoch = Math.max(1, currentEpoch - ORPHAN_RETENTION_WINDOW);
 
-        // Scan recent epochs and determine winners
+        // Step 1: Collect all epoch winners and their epochs
+        // Map: epoch -> winner block
+        Map<Long, Block> epochWinners = new java.util.TreeMap<>();
+
         for (long epoch = scanStartEpoch; epoch <= currentEpoch; epoch++) {
-            checkEpochWinner(epoch);
-        }
-
-        // Check for chain reorganization
-        checkChainReorganization();
-
-        // Save updated chain stats
-        dagStore.saveChainStats(chainStats);
-
-        log.debug("checkNewMain() completed: mainBlockCount={}, maxDifficulty={}",
-                 chainStats.getMainBlockCount(), chainStats.getMaxDifficulty().toDecimalString());
-    }
-
-    /**
-     * Check and update winner for a specific epoch
-     */
-    private void checkEpochWinner(long epoch) {
-        List<Block> candidates = getCandidateBlocksInEpoch(epoch);
-
-        if (candidates.isEmpty()) {
-            return;  // Empty epoch
-        }
-
-        // Find block with smallest hash
-        Block winner = null;
-        Bytes32 smallestHash = null;
-
-        for (Block candidate : candidates) {
-            if (smallestHash == null || candidate.getHash().compareTo(smallestHash) < 0) {
-                smallestHash = candidate.getHash();
-                winner = candidate;
+            Block winner = getWinnerBlockInEpoch(epoch);
+            if (winner != null) {
+                epochWinners.put(epoch, winner);
             }
         }
 
-        if (winner != null && winner.getInfo() != null && winner.getInfo().getHeight() == 0) {
-            // Winner is currently an orphan, need to promote it
-            log.debug("Promoting block {} to main block for epoch {}",
-                     winner.getHash().toHexString(), epoch);
-            promoteToMainBlock(winner);
+        if (epochWinners.isEmpty()) {
+            log.warn("No epoch winners found in range {} to {}", scanStartEpoch, currentEpoch);
+            return;
         }
-    }
 
-    /**
-     * Promote a block to main block
-     */
-    private void promoteToMainBlock(Block block) {
-        // Calculate new height
-        long newHeight = chainStats.getMainBlockCount() + 1;
+        // Step 2: Sort epoch winners by epoch number (ascending - earliest first)
+        // Heights follow epoch order: epoch 100 → height 1, epoch 101 → height 2, etc.
+        // This ensures continuous heights even with discontinuous epochs
+        List<Map.Entry<Long, Block>> sortedWinners = new ArrayList<>(epochWinners.entrySet());
+        sortedWinners.sort(Map.Entry.comparingByKey());  // Sort by epoch (key)
 
-        // Update BlockInfo
-        BlockInfo updatedInfo = block.getInfo().toBuilder()
-                .height(newHeight)
-                .build();
+        // Step 3: Assign continuous heights: 1, 2, 3, 4, ...
+        long height = 1;
+        Block topBlock = null;
+        UInt256 maxDifficulty = UInt256.ZERO;
 
-        dagStore.saveBlockInfo(updatedInfo);
+        for (Map.Entry<Long, Block> entry : sortedWinners) {
+            long epoch = entry.getKey();
+            Block winner = entry.getValue();
 
-        // Update chain stats
-        chainStats = chainStats
-                .withMainBlockCount(newHeight)
-                .withMaxDifficulty(updatedInfo.getDifficulty())
-                .withTopBlock(block.getHash())
-                .withTopDifficulty(updatedInfo.getDifficulty());
+            // Check if height needs update
+            if (winner.getInfo() == null || winner.getInfo().getHeight() != height) {
+                log.debug("Assigning height {} to epoch {} winner {}",
+                        height, epoch,
+                        winner.getHash().toHexString().substring(0, 16));
 
-        log.info("Promoted block {} to main block at height {}",
-                block.getHash().toHexString(), newHeight);
+                // Update BlockInfo with new height
+                BlockInfo updatedInfo = (winner.getInfo() != null ? winner.getInfo().toBuilder() : BlockInfo.builder())
+                        .hash(winner.getHash())
+                        .epoch(winner.getEpoch())
+                        .height(height)
+                        .difficulty(winner.getInfo() != null ? winner.getInfo().getDifficulty() : UInt256.ZERO)
+                        .build();
+
+                dagStore.saveBlockInfo(updatedInfo);
+
+                // Save updated block
+                Block updatedBlock = winner.toBuilder().info(updatedInfo).build();
+                dagStore.saveBlock(updatedBlock);
+
+                log.info("Assigned height {} to block {} (epoch {})",
+                        height, winner.getHash().toHexString().substring(0, 16), epoch);
+            }
+
+            // Track top block (last in epoch-sorted order)
+            topBlock = winner;
+            if (winner.getInfo() != null && winner.getInfo().getDifficulty().compareTo(maxDifficulty) > 0) {
+                maxDifficulty = winner.getInfo().getDifficulty();
+            }
+
+            height++;
+        }
+
+        // Step 4: Update chain stats
+        long finalMainBlockCount = height - 1;  // height is now one past the last assigned
+        if (topBlock != null) {
+            chainStats = chainStats
+                    .withMainBlockCount(finalMainBlockCount)
+                    .withMaxDifficulty(maxDifficulty)
+                    .withTopBlock(topBlock.getHash())
+                    .withTopDifficulty(topBlock.getInfo() != null ? topBlock.getInfo().getDifficulty() : UInt256.ZERO);
+
+            dagStore.saveChainStats(chainStats);
+
+            log.info("Height assignment completed: {} epoch winners assigned heights 1 to {}",
+                    sortedWinners.size(), finalMainBlockCount);
+            log.debug("Epoch range: {} to {}, mainBlockCount={}",
+                    sortedWinners.get(0).getKey(),
+                    sortedWinners.get(sortedWinners.size() - 1).getKey(),
+                    finalMainBlockCount);
+        }
+
+        // Step 5: Check for chain reorganization (orphan blocks with higher cumulative difficulty)
+        checkChainReorganization();
+
+        log.debug("checkNewMain() completed: mainBlockCount={}, maxDifficulty={}",
+                 chainStats.getMainBlockCount(), chainStats.getMaxDifficulty().toDecimalString());
     }
 
     /**
@@ -1925,10 +2103,10 @@ public class DagChainImpl implements DagChain {
 
         if (newMainChainBlocks.isEmpty()) {
             log.error("Failed to build new main chain path, aborting reorganization");
-            // Restore demoted blocks
-            for (Block block : demotedBlocks) {
-                promoteToMainBlock(block);
-            }
+            // Restore demoted blocks by calling checkNewMain() to reassign heights
+            // Heights will be assigned based on epoch order and cumulative difficulty
+            log.info("Restoring {} demoted blocks by reassigning heights", demotedBlocks.size());
+            checkNewMain();
             return;
         }
 
@@ -2037,6 +2215,9 @@ public class DagChainImpl implements DagChain {
 
     /**
      * Demote all blocks on main chain after the specified height
+     * <p>
+     * SECURITY: Genesis block (height 1) is NEVER demoted.
+     * Reorganization can only happen from height 2 onwards.
      *
      * @param afterHeight demote blocks with height > afterHeight
      * @return list of demoted blocks
@@ -2045,8 +2226,18 @@ public class DagChainImpl implements DagChain {
         List<Block> demoted = new ArrayList<>();
         long currentHeight = chainStats.getMainBlockCount();
 
-        // Demote from highest to afterHeight+1
-        for (long height = currentHeight; height > afterHeight; height--) {
+        // SECURITY: Prevent demoting genesis block (height 1)
+        // Genesis block is the foundation of the chain and must never be rolled back
+        long minHeight = Math.max(2, afterHeight + 1);  // Never go below height 2
+
+        if (afterHeight < 1) {
+            log.warn("SECURITY: Attempted to demote from afterHeight={}, protecting genesis block (height 1)",
+                    afterHeight);
+            log.warn("Reorganization will only affect blocks from height {} onwards", minHeight);
+        }
+
+        // Demote from highest to minHeight (protecting genesis)
+        for (long height = currentHeight; height >= minHeight; height--) {
             Block block = dagStore.getMainBlockByHeight(height, false);
             if (block != null) {
                 demoteBlockToOrphan(block);
@@ -2056,6 +2247,7 @@ public class DagChainImpl implements DagChain {
             }
         }
 
+        log.info("Demoted {} blocks (protected genesis at height 1)", demoted.size());
         return demoted;
     }
 
@@ -2258,8 +2450,8 @@ public class DagChainImpl implements DagChain {
 
                 for (Bytes32 orphanHash : orphanHashes) {
                     try {
-                        // Retrieve orphan block from DagStore
-                        Block orphanBlock = dagStore.getBlockByHash(orphanHash, false);
+                        // Retrieve orphan block from DagStore (full data required for re-import)
+                        Block orphanBlock = dagStore.getBlockByHash(orphanHash, true);
                         if (orphanBlock == null) {
                             log.warn("Orphan block {} not found in DagStore", orphanHash.toHexString().substring(0, 16));
                             orphanBlockStore.deleteByHash(orphanHash.toArray());
@@ -2267,7 +2459,15 @@ public class DagChainImpl implements DagChain {
                         }
 
                         // Attempt to import
+                        log.debug("Re-importing orphan block {} (current height={})",
+                                orphanHash.toHexString().substring(0, 16),
+                                orphanBlock.getInfo() != null ? orphanBlock.getInfo().getHeight() : "null");
                         DagImportResult result = tryToConnect(orphanBlock);
+                        log.debug("Re-import result for block {}: status={}, isMain={}, height={}",
+                                orphanHash.toHexString().substring(0, 16),
+                                result.getStatus(),
+                                result.isMainBlock(),
+                                result.getHeight());
 
                         if (result.isMainBlock() || result.isOrphan()) {
                             successCount++;
@@ -2299,10 +2499,10 @@ public class DagChainImpl implements DagChain {
                 if (successCount > 0) {
                     log.info("Orphan retry pass {} completed: {} succeeded, {} still pending",
                             pass, successCount, failCount);
-                }
+            }
 
-                pass++;
-            } while (madeProgress && pass <= 10);  // Max 10 passes to prevent infinite loop
+            pass++;
+        } while (madeProgress && pass <= 10);  // Max 10 passes to prevent infinite loop
 
             if (totalSuccessCount > 0) {
                 log.info("Orphan block retry completed: {} total blocks imported across {} passes",
@@ -2311,6 +2511,201 @@ public class DagChainImpl implements DagChain {
 
         } finally {
             isRetryingOrphans.set(false);
+        }
+    }
+
+    /**
+     * Attach placeholder BlockInfo for blocks that have not been fully imported yet.
+     *
+     * <p>DagStore requires BlockInfo metadata to persist data. When blocks arrive out of order
+     * we still need to store their raw data so they can be retried once dependencies show up.
+     * This helper builds a zero-height placeholder that is overwritten during the successful import.
+     */
+    private Block ensurePersistableBlock(Block block) {
+        if (block.getInfo() != null) {
+            return block;
+        }
+
+        UInt256 placeholderDifficulty =
+                block.getHeader() != null && block.getHeader().getDifficulty() != null
+                        ? block.getHeader().getDifficulty()
+                        : UInt256.ZERO;
+
+        BlockInfo placeholderInfo = BlockInfo.builder()
+                .hash(block.getHash())
+                .epoch(block.getEpoch())
+                .height(0)
+                .difficulty(placeholderDifficulty)
+                .build();
+
+        return block.toBuilder().info(placeholderInfo).build();
+    }
+
+    /**
+     * Determine the natural height for a block based on its parents
+     * <p>
+     * This method finds the best parent block (highest cumulative difficulty)
+     * and returns its height + 1 as the natural height for this block.
+     * <p>
+     * If no parent blocks exist or are found, returns 1 (genesis height).
+     *
+     * @param block the block to determine natural height for
+     * @return the natural height (parent height + 1, or 1 for genesis)
+     */
+    private long determineNaturalHeight(Block block) {
+        // Genesis blocks always have height 1
+        if (isGenesisBlock(block)) {
+            return 1;
+        }
+
+        long maxParentHeight = 0;
+
+        // Find the highest parent block height
+        for (Link link : block.getLinks()) {
+            if (link.isBlock()) {
+                Block parent = dagStore.getBlockByHash(link.getTargetHash(), false);
+                if (parent != null && parent.getInfo() != null) {
+                    long parentHeight = parent.getInfo().getHeight();
+                    if (parentHeight > maxParentHeight) {
+                        maxParentHeight = parentHeight;
+                    }
+                }
+            }
+        }
+
+        // Natural height is parent height + 1
+        // If no parents found (orphan case), return 0 which will be handled by caller
+        long naturalHeight = maxParentHeight + 1;
+
+        log.debug("Block {} natural height: {} (max parent height: {})",
+                block.getHash().toHexString().substring(0, 16),
+                naturalHeight,
+                maxParentHeight);
+
+        return naturalHeight;
+    }
+
+    /**
+     * Demote a block at specific height and all its descendants
+     * <p>
+     * This is called during height-based chain reorganization when a better
+     * block is found for an existing height. All blocks from the specified
+     * height onwards are demoted to orphan status.
+     * <p>
+     * BUGFIX (2025-11-20): After demotion, scan orphan blocks and promote
+     * suitable replacements to fill gaps in the main chain. This prevents
+     * the chain from having discontinuous heights.
+     *
+     * @param fromHeight the height to start demotion from (inclusive)
+     */
+    private synchronized void demoteBlocksFromHeight(long fromHeight) {
+        long currentHeight = chainStats.getMainBlockCount();
+
+        log.info("Demoting blocks from height {} to {} (chain reorganization)",
+                fromHeight, currentHeight);
+
+        // Step 1: Collect demoted blocks for epoch range calculation
+        List<Block> demotedBlocks = new ArrayList<>();
+        int demotedCount = 0;
+
+        // Demote from highest to fromHeight (reverse order to maintain consistency)
+        for (long height = currentHeight; height >= fromHeight; height--) {
+            Block block = dagStore.getMainBlockByHeight(height, false);
+            if (block != null) {
+                demotedBlocks.add(block);
+                demoteBlockToOrphan(block);
+                demotedCount++;
+                log.debug("Demoted block {} from height {}",
+                        block.getHash().toHexString().substring(0, 16), height);
+            }
+        }
+
+        log.info("Demoted {} blocks during chain reorganization", demotedCount);
+
+        // Step 2: BUGFIX - Find replacement blocks to fill gaps
+        if (!demotedBlocks.isEmpty()) {
+            log.info("Scanning for replacement blocks to fill gaps at heights {} to {}",
+                    fromHeight, currentHeight);
+
+            // Calculate epoch range from demoted blocks
+            long minEpoch = demotedBlocks.stream()
+                    .mapToLong(Block::getEpoch)
+                    .min()
+                    .orElse(0);
+
+            long currentEpoch = XdagTime.getCurrentEpochNumber();
+            long maxEpoch = Math.min(currentEpoch, minEpoch + 1000);  // Limit scan to reasonable range
+
+            // Step 3: Collect orphan block candidates from relevant epochs
+            List<Block> replacementCandidates = new ArrayList<>();
+
+            for (long epoch = minEpoch; epoch <= maxEpoch; epoch++) {
+                try {
+                    List<Block> candidates = dagStore.getCandidateBlocksInEpoch(epoch);
+
+                    // Filter to orphans with valid cumulative difficulty
+                    for (Block candidate : candidates) {
+                        if (candidate.getInfo() != null &&
+                            candidate.getInfo().getHeight() == 0 &&  // Orphan block
+                            candidate.getInfo().getDifficulty().compareTo(UInt256.ZERO) > 0) {
+                            replacementCandidates.add(candidate);
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to scan epoch {} for replacement blocks: {}",
+                            epoch, e.getMessage());
+                }
+            }
+
+            log.info("Found {} orphan block candidates for gap filling",
+                    replacementCandidates.size());
+
+            // Step 4: Sort candidates by cumulative difficulty (descending - best first)
+            replacementCandidates.sort((b1, b2) ->
+                    b2.getInfo().getDifficulty().compareTo(b1.getInfo().getDifficulty()));
+
+            // Step 5: Promote blocks to fill gaps from fromHeight to currentHeight
+            int gapsToFill = (int)(currentHeight - fromHeight + 1);
+            int filledCount = 0;
+
+            for (int i = 0; i < Math.min(gapsToFill, replacementCandidates.size()); i++) {
+                Block replacement = replacementCandidates.get(i);
+                long targetHeight = fromHeight + i;
+
+                try {
+                    promoteBlockToHeight(replacement, targetHeight);
+                    filledCount++;
+
+                    log.info("Filled gap at height {} with block {} (cumDiff: {})",
+                            targetHeight,
+                            replacement.getHash().toHexString().substring(0, 16),
+                            replacement.getInfo().getDifficulty().toDecimalString());
+                } catch (Exception e) {
+                    log.error("Failed to promote block {} to height {}: {}",
+                            replacement.getHash().toHexString().substring(0, 16),
+                            targetHeight, e.getMessage());
+                }
+            }
+
+            log.info("Gap filling completed: filled {}/{} gaps", filledCount, gapsToFill);
+
+            // Step 6: Update chain stats with correct mainBlockCount
+            long newMainBlockCount = fromHeight + filledCount - 1;
+            if (filledCount > 0) {
+                Block newTip = replacementCandidates.get(filledCount - 1);
+                chainStats = chainStats
+                        .withMainBlockCount(newMainBlockCount)
+                        .withMaxDifficulty(newTip.getInfo().getDifficulty())
+                        .withTopBlock(newTip.getHash())
+                        .withTopDifficulty(newTip.getInfo().getDifficulty());
+                dagStore.saveChainStats(chainStats);
+
+                log.info("Updated chain stats: mainBlockCount={}, tip={}",
+                        newMainBlockCount, newTip.getHash().toHexString().substring(0, 16));
+            } else {
+                log.warn("No replacement blocks found - chain has gaps from height {} to {}",
+                        fromHeight, currentHeight);
+            }
         }
     }
 
@@ -2338,6 +2733,23 @@ public class DagChainImpl implements DagChain {
             log.debug("Block {} is already an orphan, skipping demotion",
                     block.getHash().toHexString());
             return;
+        }
+
+        log.debug("Demoting block {} from height {} to orphan",
+                block.getHash().toHexString().substring(0, 16), previousHeight);
+
+        // BUGFIX: Delete old height mapping BEFORE updating BlockInfo
+        // This prevents multiple blocks from mapping to the same height
+        // When a block is demoted from height X to height 0, we must explicitly
+        // delete the height X -> hash mapping from the database
+        try {
+            dagStore.deleteHeightMapping(previousHeight);
+            log.debug("Deleted height mapping for height {} before demotion",
+                    previousHeight);
+        } catch (Exception e) {
+            log.error("Failed to delete height mapping for height {}: {}",
+                    previousHeight, e.getMessage());
+            // Continue with demotion even if delete fails (safer to continue than abort)
         }
 
         // Rollback transaction executions (Phase 1 - Task 1.4)

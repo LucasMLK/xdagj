@@ -44,6 +44,8 @@ import io.xdag.db.rocksdb.config.DatabaseName;
 import io.xdag.db.rocksdb.impl.OrphanBlockStoreImpl;
 import io.xdag.db.rocksdb.config.RocksdbFactory;
 import io.xdag.db.rocksdb.impl.TransactionStoreImpl;
+import io.xdag.db.rocksdb.transaction.RocksDBTransactionManager;
+import io.xdag.db.rocksdb.base.KVSource;
 import io.xdag.db.cache.DagCache;
 import io.xdag.db.cache.DagEntityResolver;
 import io.xdag.p2p.P2pConfigFactory;
@@ -52,6 +54,7 @@ import io.xdag.p2p.config.P2pConfig;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.units.bigints.UInt256;
+import org.rocksdb.RocksDB;
 
 import java.io.File;
 import java.util.Map;
@@ -115,6 +118,7 @@ public class DagKernel {
   private final TransactionStore transactionStore;
   private final AccountStore accountStore;
   private final OrphanBlockStore orphanBlockStore;
+  private final RocksDBTransactionManager transactionManager;
 
   private final DagCache dagCache;
   private final DagEntityResolver entityResolver;
@@ -179,16 +183,41 @@ public class DagKernel {
       this.dbFactory = new RocksdbFactory(config);
       log.info("   ✓ DatabaseFactory initialized");
 
-      // DagStore for Block persistence
-      this.dagStore = new DagStoreImpl(config);
-      log.info("   ✓ DagStore initialized");
+      // Initialize transaction manager (NEW - for atomic block processing)
+      KVSource<byte[], byte[]> indexDb = dbFactory.getDB(DatabaseName.INDEX);
+      if (!(indexDb instanceof io.xdag.db.rocksdb.base.RocksdbKVSource)) {
+          throw new RuntimeException("INDEX database is not a RocksdbKVSource");
+      }
 
-      // TransactionStore for Transaction persistence
+      // IMPORTANT: Initialize the database to create RocksDB instance
+      // RocksDB instance is null until init() is called
+      indexDb.init();
+
+      RocksDB mainDb = ((io.xdag.db.rocksdb.base.RocksdbKVSource) indexDb).getDb();
+      this.transactionManager = new RocksDBTransactionManager(mainDb);
+      log.info("   ✓ RocksDBTransactionManager initialized (atomic operations ready)");
+
+      // ========== Cache Layer (Initialize BEFORE Storage for shared cache) ==========
+
+      log.info("2. Initializing Cache Layer...");
+
+      // L1 Caffeine cache (created first so stores can share it)
+      this.dagCache = new DagCache();
+      log.info("   ✓ DagCache initialized (13.8 MB capacity, shared with stores)");
+
+      // ========== Continue Storage Layer with Shared Cache ==========
+
+      // DagStore for Block persistence (with atomic operation support + shared cache)
+      this.dagStore = new DagStoreImpl(config, transactionManager, this.dagCache);
+      log.info("   ✓ DagStore initialized (atomic operations + shared cache enabled)");
+
+      // TransactionStore for Transaction persistence (with atomic operation support)
       this.transactionStore = new TransactionStoreImpl(
               dbFactory.getDB(DatabaseName.TRANSACTION),
-              dbFactory.getDB(DatabaseName.INDEX)
+              dbFactory.getDB(DatabaseName.INDEX),
+              transactionManager
       );
-      log.info("   ✓ TransactionStore initialized");
+      log.info("   ✓ TransactionStore initialized (atomic operations enabled)");
 
       // OrphanBlockStore for orphan block management
       this.orphanBlockStore = new OrphanBlockStoreImpl(
@@ -196,17 +225,9 @@ public class DagKernel {
       );
       log.info("   ✓ OrphanBlockStore initialized");
 
-      // AccountStore for account state (EVM compatible)
-      this.accountStore = new AccountStoreImpl(config);
-      log.info("   ✓ AccountStore initialized");
-
-      // ========== Cache Layer ==========
-
-      log.info("2. Initializing Cache Layer...");
-
-      // L1 Caffeine cache
-      this.dagCache = new DagCache();
-      log.info("   ✓ DagCache initialized (13.8 MB capacity)");
+      // AccountStore for account state (EVM compatible, with atomic operation support)
+      this.accountStore = new AccountStoreImpl(config, transactionManager);
+      log.info("   ✓ AccountStore initialized (atomic operations enabled)");
 
       // Unified facade for Block/Transaction resolution
       this.entityResolver = new DagEntityResolver(dagStore, transactionStore);
@@ -455,6 +476,12 @@ public class DagKernel {
           // Stop AccountStore
           accountStore.stop();
           log.info("✓ AccountStore stopped");
+
+          // Shutdown transaction manager (rollback any uncommitted transactions)
+          if (transactionManager != null) {
+              transactionManager.shutdown();
+              log.info("✓ RocksDBTransactionManager stopped");
+          }
 
           // Close all RocksDB databases
           for (DatabaseName name : DatabaseName.values()) {
@@ -923,6 +950,15 @@ public class DagKernel {
       }
 
       log.info("✓ Applied {} initial allocations", successCount);
+  }
+
+  /**
+   * Get transaction manager for atomic operations
+   *
+   * @return RocksDBTransactionManager instance
+   */
+  public RocksDBTransactionManager getTransactionManager() {
+      return transactionManager;
   }
 
 }
