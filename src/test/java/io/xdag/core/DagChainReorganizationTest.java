@@ -50,7 +50,7 @@ import static org.junit.Assert.*;
  *
  * <p>Tests chain reorganization when a fork with higher cumulative difficulty arrives.
  *
- * @since XDAGJ v5.1
+ * @since XDAGJ 1.0
  */
 public class DagChainReorganizationTest {
 
@@ -133,7 +133,7 @@ public class DagChainReorganizationTest {
                 "  \"timestamp\": 1516406400,\n" +
                 "  \"initialDifficulty\": \"0x1000\",\n" +
                 "  \"epochLength\": 64,\n" +
-                "  \"extraData\": \"XDAG v5.1 Reorg Test\",\n" +
+                "  \"extraData\": \"XDAGJ 1.0 Reorg Test\",\n" +
                 "  \"genesisCoinbase\": \"0x0000000000000000000000001111111111111111111111111111111111111111\",\n" +
                 "  \"alloc\": {},\n" +
                 "  \"snapshot\": {\n" +
@@ -149,7 +149,7 @@ public class DagChainReorganizationTest {
                 "  }\n" +
                 "}";
 
-        Path genesisFile = tempDir.resolve("genesis.json");
+        Path genesisFile = tempDir.resolve("genesis-devnet.json");
         Files.writeString(genesisFile, genesisJson);
     }
 

@@ -55,7 +55,7 @@ import static org.junit.Assert.*;
  * - Orphan block cleanup
  * - Epoch boundary checking in link collection
  *
- * @since XDAGJ v5.1
+ * @since XDAGJ 1.0
  */
 public class DagChainConsensusTest {
 

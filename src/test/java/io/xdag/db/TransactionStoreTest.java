@@ -116,7 +116,7 @@ public class TransactionStoreTest {
 
     @Test
     public void testSaveTransactionWithData() {
-        Bytes data = Bytes.wrap("Hello XDAG v5.1".getBytes());
+        Bytes data = Bytes.wrap("Hello XDAGJ 1.0".getBytes());
         Transaction tx = Transaction.builder()
                 .from(Bytes.random(20))
                 .to(Bytes.random(20))

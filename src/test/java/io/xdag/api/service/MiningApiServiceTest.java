@@ -48,7 +48,7 @@ import static org.junit.Assert.*;
  *
  * <p>Tests the HTTP API interface for pool server integration without breaking existing functionality.
  *
- * @since XDAGJ v5.1
+ * @since XDAGJ 1.0
  */
 public class MiningApiServiceTest {
 
@@ -139,7 +139,7 @@ public class MiningApiServiceTest {
                 "  \"timestamp\": 1516406400,\n" +
                 "  \"initialDifficulty\": \"0x1000\",\n" +
                 "  \"epochLength\": 64,\n" +
-                "  \"extraData\": \"XDAG v5.1 Mining RPC Test\",\n" +
+                "  \"extraData\": \"XDAGJ 1.0 Mining RPC Test\",\n" +
                 "  \"genesisCoinbase\": \"0x0000000000000000000000001111111111111111111111111111111111111111\",\n" +
                 "  \"alloc\": {},\n" +
                 "  \"snapshot\": {\n" +
@@ -155,7 +155,7 @@ public class MiningApiServiceTest {
                 "  }\n" +
                 "}";
 
-        Path genesisFile = tempDir.resolve("genesis.json");
+        Path genesisFile = tempDir.resolve("genesis-devnet.json");
         Files.writeString(genesisFile, genesisJson);
     }
 

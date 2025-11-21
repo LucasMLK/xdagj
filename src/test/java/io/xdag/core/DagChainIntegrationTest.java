@@ -128,7 +128,7 @@ public class DagChainIntegrationTest {
                 "  \"timestamp\": 1516406400,\n" +
                 "  \"initialDifficulty\": \"0x1000\",\n" +
                 "  \"epochLength\": 64,\n" +
-                "  \"extraData\": \"XDAG v5.1 Test Genesis\",\n" +
+                "  \"extraData\": \"XDAGJ 1.0 Test Genesis\",\n" +
                 "  \"genesisCoinbase\": \"0x0000000000000000000000001111111111111111111111111111111111111111\",\n" +
                 "  \"alloc\": {},\n" +
                 "  \"snapshot\": {\n" +
@@ -144,7 +144,7 @@ public class DagChainIntegrationTest {
                 "  }\n" +
                 "}";
 
-        Path genesisFile = tempDir.resolve("genesis.json");
+        Path genesisFile = tempDir.resolve("genesis-devnet.json");
         Files.writeString(genesisFile, genesisJson);
     }
 

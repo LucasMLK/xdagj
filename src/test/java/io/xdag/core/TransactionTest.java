@@ -36,7 +36,7 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.junit.Test;
 
 /**
- * Unit tests for Transaction (v5.1)
+ * Unit tests for Transaction (XDAGJ 1.0)
  */
 public class TransactionTest {
 
@@ -210,8 +210,8 @@ public class TransactionTest {
             XAmount.of(1, XUnit.MILLI_XDAG)
         );
 
-        int expectedSize = 20 +  // from (v5.1: 20-byte address)
-                          20 +  // to (v5.1: 20-byte address)
+        int expectedSize = 20 +  // from (XDAGJ 1.0: 20-byte address)
+                          20 +  // to (XDAGJ 1.0: 20-byte address)
                           8 +   // amount
                           8 +   // nonce
                           8 +   // fee

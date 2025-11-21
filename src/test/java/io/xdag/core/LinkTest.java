@@ -34,7 +34,7 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.junit.Test;
 
 /**
- * Unit tests for Link (v5.1)
+ * Unit tests for Link (XDAGJ 1.0)
  */
 public class LinkTest {
 

@@ -31,7 +31,7 @@ import java.nio.file.Path;
 /**
  * Helper class for creating test genesis.json files
  *
- * @since v5.1
+ * @since XDAGJ 1.0
  */
 public class TestGenesisHelper {
 
@@ -49,7 +49,7 @@ public class TestGenesisHelper {
                 "  \"initialDifficulty\": \"0x1000\",\n" +
                 "  \"genesisCoinbase\": \"0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF\",\n" +
                 "  \"epochLength\": 64,\n" +
-                "  \"extraData\": \"XDAG v5.1 Test Genesis\",\n" +
+                "  \"extraData\": \"XDAGJ 1.0 Test Genesis\",\n" +
                 "  \"alloc\": {},\n" +
                 "  \"snapshot\": {\n" +
                 "    \"enabled\": false,\n" +
@@ -64,7 +64,7 @@ public class TestGenesisHelper {
                 "  }\n" +
                 "}";
 
-        Path genesisFile = directory.resolve("genesis.json");
+        Path genesisFile = directory.resolve("genesis-devnet.json");
         Files.writeString(genesisFile, genesisJson);
     }
 }

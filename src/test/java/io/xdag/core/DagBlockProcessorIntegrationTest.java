@@ -45,7 +45,7 @@ import java.util.Comparator;
 import static org.junit.Assert.*;
 
 /**
- * Integration test for DagBlockProcessor v5.1
+ * Integration test for DagBlockProcessor XDAGJ 1.0
  *
  * <p>Tests block processing functionality with REAL components (not mocks).
  *
@@ -183,9 +183,9 @@ public class DagBlockProcessorIntegrationTest {
      */
     @Test
     public void testProcessBlockWithInvalidHeader() {
-        // Create block with invalid timestamp (0)
+        // Create block with invalid timestamp (-1 epoch)
         BlockHeader invalidHeader = BlockHeader.builder()
-                .epoch(0)  // Invalid: must be > 0
+                .epoch(-1)  // Invalid: must be > 0
                 .difficulty(org.apache.tuweni.units.bigints.UInt256.ONE)
                 .nonce(Bytes32.ZERO)
                 .coinbase(Bytes.random(20))
@@ -241,9 +241,9 @@ public class DagBlockProcessorIntegrationTest {
      */
     @Test
     public void testProcessBlockWithInvalidTimestamp() {
-        // Create block with invalid timestamp (0)
+        // Create block with invalid timestamp (-1)
         BlockHeader header = BlockHeader.builder()
-                .epoch(0L)  // Invalid timestamp
+                .epoch(-1L)  // Invalid timestamp
                 .difficulty(org.apache.tuweni.units.bigints.UInt256.ONE)
                 .nonce(Bytes32.ZERO)
                 .coinbase(Bytes.random(20))

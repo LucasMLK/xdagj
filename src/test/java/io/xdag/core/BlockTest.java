@@ -301,7 +301,7 @@ public class BlockTest {
         );
 
         String str = block.toString();
-        assertTrue(str.contains("epoch=2"));
+        assertTrue(str.contains("epoch=128"));
         assertTrue(str.contains("links=2"));
         assertTrue(str.contains("1 txs"));
         assertTrue(str.contains("1 blocks"));

@@ -58,7 +58,7 @@ import static org.junit.Assert.*;
  *   <li>Cumulative difficulty selection</li>
  * </ul>
  *
- * @since XDAGJ v5.1
+ * @since XDAGJ 1.0
  */
 public class NetworkPartitionIntegrationTest {
 
@@ -78,11 +78,16 @@ public class NetworkPartitionIntegrationTest {
     private static final long MEDIUM_PARTITION_DURATION = 150;  // 150 epochs (~2.67 hours)
     private static final long LONG_PARTITION_DURATION = 1500;   // 1500 epochs (~26.67 hours)
 
+    private long genesisTime;
+
     @Before
     public void setUp() throws IOException {
         // Create unique temporary directories for both nodes
         tempDirA = Files.createTempDirectory("partition-test-nodeA-");
         tempDirB = Files.createTempDirectory("partition-test-nodeB-");
+
+        // Set genesis time to 200 epochs ago (recent enough for DAG validation, old enough for sync lag)
+        genesisTime = System.currentTimeMillis() - (200 * 64 * 1000L);
 
         // Create test genesis files
         createTestGenesisFile(tempDirA);
@@ -90,6 +95,16 @@ public class NetworkPartitionIntegrationTest {
 
         // Configure Node A
         configA = new DevnetConfig() {
+            @Override
+            public io.xdag.Network getNetwork() {
+                return io.xdag.Network.TESTNET;
+            }
+
+            @Override
+            public long getXdagEra() {
+                return genesisTime / 1000 - 100; // Era slightly before genesis
+            }
+
             @Override
             public String getStoreDir() {
                 return tempDirA.toString();
@@ -103,6 +118,16 @@ public class NetworkPartitionIntegrationTest {
 
         // Configure Node B
         configB = new DevnetConfig() {
+            @Override
+            public io.xdag.Network getNetwork() {
+                return io.xdag.Network.TESTNET;
+            }
+
+            @Override
+            public long getXdagEra() {
+                return genesisTime / 1000 - 100; // Era slightly before genesis
+            }
+
             @Override
             public String getStoreDir() {
                 return tempDirB.toString();
@@ -134,10 +159,11 @@ public class NetworkPartitionIntegrationTest {
     }
 
     private void createTestGenesisFile(Path dir) throws IOException {
+        long timestampSeconds = genesisTime / 1000;
         String genesisJson = "{\n" +
                 "  \"networkId\": \"test\",\n" +
                 "  \"chainId\": 999,\n" +
-                "  \"timestamp\": 1516406400,\n" +
+                "  \"timestamp\": " + timestampSeconds + ",\n" +
                 "  \"initialDifficulty\": \"0x1000\",\n" +
                 "  \"epochLength\": 64,\n" +
                 "  \"extraData\": \"XDAG Partition Test\",\n" +
@@ -156,7 +182,7 @@ public class NetworkPartitionIntegrationTest {
                 "  }\n" +
                 "}";
 
-        Path genesisFile = dir.resolve("genesis-devnet.json");
+        Path genesisFile = dir.resolve("genesis-testnet.json");
         Files.writeString(genesisFile, genesisJson);
     }
 
@@ -340,6 +366,33 @@ public class NetworkPartitionIntegrationTest {
 
         // Get the existing genesis epoch from loaded chain
         Block existingGenesis = chainA.getMainBlockByHeight(1);
+        
+        // HACK: Use reflection to set easy difficulty in chainStats to allow import while in TESTNET mode
+        try {
+            java.lang.reflect.Field statsField = DagChainImpl.class.getDeclaredField("chainStats");
+            statsField.setAccessible(true);
+            ChainStats currentStats = (ChainStats) statsField.get(chainA);
+            ChainStats easyStats = currentStats.toBuilder()
+                    .baseDifficultyTarget(UInt256.MAX_VALUE)
+                    .build();
+            statsField.set(chainA, easyStats);
+            // Also save to store
+            kernelA.getDagStore().saveChainStats(easyStats);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to set easy difficulty via reflection", e);
+        }
+
+        // Advance chain to height 2 to exit bootstrap mode
+        Block bridgeBlock = Block.createWithNonce(
+            existingGenesis.getEpoch() + 1,
+            UInt256.MAX_VALUE, // Easy difficulty
+            Bytes32.ZERO,
+            Bytes.random(20),
+            java.util.List.of(Link.toBlock(existingGenesis.getHash()))
+        );
+        chainA.tryToConnect(bridgeBlock);
+        assertEquals("Chain should be at height 2", 2, chainA.getMainChainLength());
+
         assertNotNull("Genesis should be loaded from genesis-devnet.json", existingGenesis);
 
         long genesisEpoch = existingGenesis.getEpoch();
@@ -571,6 +624,32 @@ public class NetworkPartitionIntegrationTest {
 
         // Get existing genesis
         Block genesis = chainA.getMainBlockByHeight(1);
+        
+        // HACK: Use reflection to set easy difficulty
+        try {
+            java.lang.reflect.Field statsField = DagChainImpl.class.getDeclaredField("chainStats");
+            statsField.setAccessible(true);
+            ChainStats currentStats = (ChainStats) statsField.get(chainA);
+            ChainStats easyStats = currentStats.toBuilder()
+                    .baseDifficultyTarget(UInt256.MAX_VALUE)
+                    .build();
+            statsField.set(chainA, easyStats);
+            kernelA.getDagStore().saveChainStats(easyStats);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to set easy difficulty via reflection", e);
+        }
+
+        // Advance chain to height 2 to exit bootstrap mode
+        Block bridgeBlock = Block.createWithNonce(
+            genesis.getEpoch() + 1,
+            UInt256.MAX_VALUE,
+            Bytes32.ZERO,
+            Bytes.random(20),
+            java.util.List.of(Link.toBlock(genesis.getHash()))
+        );
+        chainA.tryToConnect(bridgeBlock);
+        assertEquals("Chain should be at height 2", 2, chainA.getMainChainLength());
+
         long genesisEpoch = genesis.getEpoch();
         long currentEpoch = XdagTime.getCurrentEpochNumber();
         long referenceDepth = currentEpoch - genesisEpoch;

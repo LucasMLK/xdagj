@@ -36,7 +36,7 @@ import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.Test;
 
 /**
- * Unit tests for BlockHeader (v5.1)
+ * Unit tests for BlockHeader (XDAGJ 1.0)
  */
 public class BlockHeaderTest {
 
@@ -61,7 +61,7 @@ public class BlockHeaderTest {
                 .nonce(Bytes32.ZERO)
                 .coinbase(Bytes.wrap(new byte[20]))
                 .build();
-        assertEquals(0, header2.getEpoch());
+        assertEquals(63, header2.getEpoch());
 
         BlockHeader header3 = BlockHeader.builder()
                 .epoch(64)
@@ -69,15 +69,7 @@ public class BlockHeaderTest {
                 .nonce(Bytes32.ZERO)
                 .coinbase(Bytes.wrap(new byte[20]))
                 .build();
-        assertEquals(1, header3.getEpoch());
-
-        BlockHeader header4 = BlockHeader.builder()
-                .epoch(128)
-                .difficulty(UInt256.ONE)
-                .nonce(Bytes32.ZERO)
-                .coinbase(Bytes.wrap(new byte[20]))
-                .build();
-        assertEquals(2, header4.getEpoch());
+        assertEquals(64, header3.getEpoch());
     }
 
     @Test
@@ -150,8 +142,7 @@ public class BlockHeaderTest {
                 .build();
 
         String str = header.toString();
-        assertTrue(str.contains("epoch=2"));
-        assertTrue(str.contains("timestamp=128"));
+        assertTrue(str.contains("epoch=128"));
     }
 
     @Test

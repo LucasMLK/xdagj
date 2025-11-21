@@ -4,7 +4,7 @@
   "timestamp": 1700000000,
   "initialDifficulty": "0x1",
   "epochLength": 64,
-  "extraData": "XDAG v5.1 Test Genesis",
+  "extraData": "XDAGJ 1.0 Test Genesis",
   "alloc": {},
   "snapshot": {
     "enabled": false,

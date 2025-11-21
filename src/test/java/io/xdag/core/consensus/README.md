@@ -1,6 +1,6 @@
 # Consensus Tests
 
-This package contains core consensus tests for XDAG v5.1.
+This package contains core consensus tests for XDAGJ 1.0.
 
 ## Test Classes
 

@@ -44,7 +44,7 @@ import java.util.Comparator;
 import static org.junit.Assert.*;
 
 /**
- * Integration test for DagKernel v5.1
+ * Integration test for DagKernel XDAGJ 1.0
  *
  * <p>Tests the complete lifecycle and component initialization of DagKernel.
  * Uses REAL components (not mocks) to verify actual behavior.
@@ -101,7 +101,7 @@ public class DagKernelIntegrationTest {
                 "  \"timestamp\": 1516406400,\n" +
                 "  \"initialDifficulty\": \"0x1000\",\n" +
                 "  \"epochLength\": 64,\n" +
-                "  \"extraData\": \"XDAG v5.1 Test Genesis\",\n" +
+                "  \"extraData\": \"XDAGJ 1.0 Test Genesis\",\n" +
                 "  \"genesisCoinbase\": \"0x0000000000000000000000001111111111111111111111111111111111111111\",\n" +
                 "  \"alloc\": {},\n" +
                 "  \"snapshot\": {\n" +
@@ -117,7 +117,7 @@ public class DagKernelIntegrationTest {
                 "  }\n" +
                 "}";
 
-        Path genesisFile = tempDir.resolve("genesis.json");
+        Path genesisFile = tempDir.resolve("genesis-devnet.json");
         Files.writeString(genesisFile, genesisJson);
     }
 

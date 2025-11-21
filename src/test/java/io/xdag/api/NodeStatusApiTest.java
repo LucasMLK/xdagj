@@ -45,7 +45,7 @@ import static org.junit.Assert.*;
 /**
  * Tests for Node Status API
  *
- * @since XDAGJ v5.1
+ * @since XDAGJ 1.0
  */
 public class NodeStatusApiTest {
 
