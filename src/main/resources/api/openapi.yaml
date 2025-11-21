@@ -233,6 +233,70 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
 
+  /api/v1/blocks/epoch/{epoch}:
+    get:
+      tags:
+        - Blocks
+      summary: Get all blocks in a specific epoch
+      description: |
+        Returns all blocks (main block and orphan blocks) in the specified epoch.
+        This is useful for consensus verification and debugging epoch competition.
+        Blocks are sorted by hash (smallest hash wins the epoch).
+      parameters:
+        - name: epoch
+          in: path
+          required: true
+          description: Epoch number
+          schema:
+            type: integer
+            format: int64
+          example: 12345
+      responses:
+        '200':
+          description: All blocks in the epoch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EpochBlocksResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/blocks/epoch/range:
+    get:
+      tags:
+        - Blocks
+      summary: Get all blocks in an epoch range
+      description: |
+        Returns all blocks (main blocks and orphan blocks) grouped by epoch
+        for the specified range. Maximum range size is 1000 epochs.
+        This is useful for analyzing consensus behavior across multiple epochs.
+      parameters:
+        - name: fromEpoch
+          in: query
+          required: true
+          description: Start epoch (inclusive)
+          schema:
+            type: integer
+            format: int64
+          example: 12340
+        - name: toEpoch
+          in: query
+          required: true
+          description: End epoch (inclusive)
+          schema:
+            type: integer
+            format: int64
+          example: 12350
+      responses:
+        '200':
+          description: Blocks grouped by epoch
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EpochRangeBlocksResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
   # ========== RESTful Transaction Endpoints ==========
   /api/v1/transactions/{txHash}:
     get:
@@ -663,6 +727,91 @@ components:
             $ref: '#/components/schemas/BlockSummary'
         pagination:
           $ref: '#/components/schemas/PaginationInfo'
+
+    EpochBlocksResponse:
+      type: object
+      properties:
+        epoch:
+          type: integer
+          format: int64
+          description: The queried epoch number
+        blockCount:
+          type: integer
+          description: Total number of blocks in this epoch
+        blocks:
+          type: array
+          description: All blocks in the epoch, sorted by hash (winner first)
+          items:
+            $ref: '#/components/schemas/BlockSummary'
+      example:
+        epoch: 12345
+        blockCount: 3
+        blocks:
+          - hash: "0x00001234..."
+            height: "0x3039"
+            epoch: 12345
+            timestamp: 1700000000
+            difficulty: "1000000"
+            transactionCount: 2
+            state: "Main"
+            coinbase: "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi"
+          - hash: "0x00005678..."
+            height: "0x0"
+            epoch: 12345
+            timestamp: 1700000000
+            difficulty: "1000000"
+            transactionCount: 1
+            state: "Orphan"
+            coinbase: "5dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi"
+
+    EpochRangeBlocksResponse:
+      type: object
+      properties:
+        fromEpoch:
+          type: integer
+          format: int64
+          description: Start epoch of the range
+        toEpoch:
+          type: integer
+          format: int64
+          description: End epoch of the range
+        epochCount:
+          type: integer
+          description: Number of epochs with blocks
+        epochs:
+          type: array
+          description: Blocks grouped by epoch
+          items:
+            type: object
+            properties:
+              epoch:
+                type: integer
+                format: int64
+              blockCount:
+                type: integer
+              blocks:
+                type: array
+                items:
+                  $ref: '#/components/schemas/BlockSummary'
+      example:
+        fromEpoch: 12340
+        toEpoch: 12350
+        epochCount: 11
+        epochs:
+          - epoch: 12340
+            blockCount: 2
+            blocks:
+              - hash: "0x00001234..."
+                height: "0x3030"
+                epoch: 12340
+                state: "Main"
+          - epoch: 12341
+            blockCount: 1
+            blocks:
+              - hash: "0x00005678..."
+                height: "0x3031"
+                epoch: 12341
+                state: "Main"
 
     # ========== Transaction Schemas ==========
     TransactionDetailResponse:

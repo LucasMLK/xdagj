@@ -206,6 +206,95 @@ public class BlockApiService {
     }
 
     /**
+     * Get all blocks in a specific epoch (including main block and orphan blocks).
+     * This is useful for consensus verification and debugging epoch competition.
+     *
+     * @param epoch Epoch number to query
+     * @return List of all blocks in the epoch, sorted by hash (winner first)
+     */
+    public List<BlockSummary> getBlocksByEpoch(long epoch) {
+        try {
+            List<Block> blocks = dagKernel.getDagStore().getCandidateBlocksInEpoch(epoch);
+            if (CollectionUtils.isEmpty(blocks)) {
+                return new ArrayList<>();
+            }
+
+            // Sort by hash to show winner first (smallest hash wins)
+            blocks.sort((b1, b2) -> b1.getHash().compareTo(b2.getHash()));
+
+            List<BlockSummary> result = new ArrayList<>();
+            for (Block block : blocks) {
+                BlockSummary summary = buildBlockSummary(block);
+                if (summary != null) {
+                    result.add(summary);
+                }
+            }
+
+            return result;
+
+        } catch (Exception e) {
+            log.error("Failed to get blocks by epoch: {}", epoch, e);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * Get all blocks in an epoch range (including main blocks and orphan blocks).
+     * This is useful for analyzing consensus behavior across multiple epochs.
+     *
+     * @param fromEpoch Start epoch (inclusive)
+     * @param toEpoch End epoch (inclusive)
+     * @return List of all blocks grouped by epoch
+     */
+    public List<EpochBlocks> getBlocksByEpochRange(long fromEpoch, long toEpoch) {
+        try {
+            // Validate range
+            if (fromEpoch > toEpoch) {
+                log.warn("Invalid epoch range: fromEpoch={} > toEpoch={}", fromEpoch, toEpoch);
+                return new ArrayList<>();
+            }
+
+            // Limit range size to prevent memory issues
+            long rangeSize = toEpoch - fromEpoch + 1;
+            if (rangeSize > 1000) {
+                log.warn("Epoch range too large: {}, limiting to 1000", rangeSize);
+                toEpoch = fromEpoch + 999;
+            }
+
+            List<EpochBlocks> result = new ArrayList<>();
+
+            for (long epoch = fromEpoch; epoch <= toEpoch; epoch++) {
+                List<BlockSummary> epochBlocks = getBlocksByEpoch(epoch);
+
+                if (!epochBlocks.isEmpty()) {
+                    result.add(EpochBlocks.builder()
+                            .epoch(epoch)
+                            .blockCount(epochBlocks.size())
+                            .blocks(epochBlocks)
+                            .build());
+                }
+            }
+
+            return result;
+
+        } catch (Exception e) {
+            log.error("Failed to get blocks by epoch range: [{}, {}]", fromEpoch, toEpoch, e);
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * DTO for grouping blocks by epoch
+     */
+    @lombok.Builder
+    @lombok.Data
+    public static class EpochBlocks {
+        private long epoch;
+        private int blockCount;
+        private List<BlockSummary> blocks;
+    }
+
+    /**
      * Build BlockSummary from Block object
      */
     private BlockSummary buildBlockSummary(Block block) {

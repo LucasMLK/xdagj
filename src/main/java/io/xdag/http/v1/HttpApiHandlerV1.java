@@ -194,6 +194,17 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
             return handleGetBlockByHash(blockHash, fullTx);
         }
 
+        if (path.matches("/api/v1/blocks/epoch/[^/]+") && method == HttpMethod.GET) {
+            String epochStr = extractPathParam(path, 5);
+            return handleGetBlocksByEpoch(epochStr);
+        }
+
+        if (path.equals("/api/v1/blocks/epoch/range") && method == HttpMethod.GET) {
+            String fromEpochStr = params.get("fromEpoch");
+            String toEpochStr = params.get("toEpoch");
+            return handleGetBlocksByEpochRange(fromEpochStr, toEpochStr);
+        }
+
         if (path.equals("/api/v1/transactions") && method == HttpMethod.GET) {
             PageRequest pageRequest = PageRequest.parse(params.get("page"), params.get("size"));
             return handleGetTransactions(pageRequest);
@@ -376,6 +387,69 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
         }
 
         return convertBlockDetailToResponse(blockDetail, fullTransactions);
+    }
+
+    private Object handleGetBlocksByEpoch(String epochStr) {
+        try {
+            long epoch = Long.parseLong(epochStr);
+
+            List<BlockSummary> blocks = blockApiService.getBlocksByEpoch(epoch);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("epoch", epoch);
+            response.put("blockCount", blocks.size());
+
+            List<BlockSummaryResponse> blockResponses = new ArrayList<>();
+            for (BlockSummary summary : blocks) {
+                blockResponses.add(convertBlockSummary(summary));
+            }
+            response.put("blocks", blockResponses);
+
+            return response;
+
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid epoch number: " + epochStr);
+        }
+    }
+
+    private Object handleGetBlocksByEpochRange(String fromEpochStr, String toEpochStr) {
+        try {
+            if (fromEpochStr == null || toEpochStr == null) {
+                throw new IllegalArgumentException("Both fromEpoch and toEpoch parameters are required");
+            }
+
+            long fromEpoch = Long.parseLong(fromEpochStr);
+            long toEpoch = Long.parseLong(toEpochStr);
+
+            List<BlockApiService.EpochBlocks> epochBlocksList =
+                    blockApiService.getBlocksByEpochRange(fromEpoch, toEpoch);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("fromEpoch", fromEpoch);
+            response.put("toEpoch", toEpoch);
+            response.put("epochCount", epochBlocksList.size());
+
+            List<Map<String, Object>> epochs = new ArrayList<>();
+            for (BlockApiService.EpochBlocks epochBlocks : epochBlocksList) {
+                Map<String, Object> epochData = new HashMap<>();
+                epochData.put("epoch", epochBlocks.getEpoch());
+                epochData.put("blockCount", epochBlocks.getBlockCount());
+
+                List<BlockSummaryResponse> blockResponses = new ArrayList<>();
+                for (BlockSummary summary : epochBlocks.getBlocks()) {
+                    blockResponses.add(convertBlockSummary(summary));
+                }
+                epochData.put("blocks", blockResponses);
+
+                epochs.add(epochData);
+            }
+            response.put("epochs", epochs);
+
+            return response;
+
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid epoch number format");
+        }
     }
 
     private TransactionDetailResponse handleGetTransactionByHash(String transactionHash) {
