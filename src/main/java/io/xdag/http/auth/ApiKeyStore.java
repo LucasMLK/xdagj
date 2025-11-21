@@ -23,6 +23,7 @@
  */
 package io.xdag.http.auth;
 
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Map;
@@ -31,6 +32,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 public class ApiKeyStore {
     private final Map<String, Permission> apiKeys = new ConcurrentHashMap<>();
+    @Getter
     private final boolean authEnabled;
 
     public ApiKeyStore(boolean authEnabled) {
@@ -42,11 +44,7 @@ public class ApiKeyStore {
         log.info("Added API key with {} permission", permission);
     }
 
-    public boolean isAuthEnabled() {
-        return authEnabled;
-    }
-
-    public Permission validate(String apiKey) {
+  public Permission validate(String apiKey) {
         if (!authEnabled) {
             return Permission.WRITE;
         }

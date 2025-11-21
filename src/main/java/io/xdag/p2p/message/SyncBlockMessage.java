@@ -31,29 +31,29 @@ import lombok.Setter;
 
 /**
  * SyncBlockMessage - block synchronization message
- *
+ * <p>
  * Phase 3 - Network Layer Migration: This message enables Block synchronization over P2P network.
- *
+ * <p>
  * Design:
  * - Similar to SyncBlockMessage but uses Block instead of legacy Block
  * - Message format: [Block bytes] + [TTL (4 bytes)]
  * - Uses SYNC_BLOCK_V5 message code (0x1C)
- *
+ * <p>
  * Difference from NewBlockMessage:
  * - NewBlockMessage: Used for broadcasting new blocks (active propagation)
  * - SyncBlockMessage: Used for synchronization (request/response)
- *
+ * <p>
  * Usage:
  * ```java
  * // Sending a Block during synchronization
  * SyncBlockMessage msg = new SyncBlockMessage(Block, 1);
  * channel.sendMessage(msg);
- *
+ * <p>
  * // Receiving a Block during sync
  * SyncBlockMessage msg = new SyncBlockMessage(messageBody);
  * Block block = msg.getBlock();
  * ```
- *
+ * <p>
  * Protocol Compatibility:
  * - v1 nodes use SYNC_BLOCK (0x19) with legacy Block
  * - v2 nodes use SYNC_BLOCK_V5 (0x1C) with Block
@@ -80,7 +80,7 @@ public class SyncBlockMessage extends Message {
 
     /**
      * Constructor for receiving message from network
-     *
+     * <p>
      * Deserializes message body:
      * 1. Read Block bytes
      * 2. Deserialize Block using Block.fromBytes()
@@ -107,7 +107,7 @@ public class SyncBlockMessage extends Message {
 
     /**
      * Constructor for sending message to network
-     *
+     * <p>
      * Serializes message:
      * 1. Serialize Block using block.toBytes()
      * 2. Append TTL (int, 4 bytes)
@@ -129,7 +129,7 @@ public class SyncBlockMessage extends Message {
 
     /**
      * Encode message to bytes (implements Message.encode)
-     *
+     * <p>
      * Format:
      * [Block size (4 bytes)] + [Block bytes (variable)] + [TTL (4 bytes)]
      *

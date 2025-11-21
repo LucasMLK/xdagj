@@ -42,6 +42,7 @@ import io.xdag.crypto.randomx.RandomXTemplate;
 import io.xdag.utils.XdagTime;
 import java.util.Set;
 import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.encoders.Hex;
@@ -76,418 +77,421 @@ import org.bouncycastle.util.encoders.Hex;
 @Slf4j
 public class RandomXSeedManager {
 
-    // ========== Configuration ==========
+  // ========== Configuration ==========
 
-    private final Config config;
-    private final boolean isTestNet;
-    private final Set<RandomXFlag> flags;
+  private final Config config;
+  private final boolean isTestNet;
+  private final Set<RandomXFlag> flags;
 
-    /** Fork height where RandomX activated */
-    @Getter
-    private final long forkSeedHeight;
+  /**
+   * Fork height where RandomX activated
+   */
+  @Getter
+  private final long forkSeedHeight;
 
-    /** Lag period for seed calculation (blocks) */
-    @Getter
-    private final long forkLag;
+  /**
+   * Lag period for seed calculation (blocks)
+   */
+  @Getter
+  private final long forkLag;
 
-    /** Epoch size in blocks */
-    @Getter
-    private final long seedEpochBlocks;
+  /**
+   * Epoch size in blocks
+   */
+  @Getter
+  private final long seedEpochBlocks;
 
-    // ========== State ==========
+  // ========== State ==========
 
-    /** Dual-buffer memory slots for seamless seed rotation */
-    private final RandomXMemory[] memorySlots = new RandomXMemory[2];
+  /**
+   * Dual-buffer memory slots for seamless seed rotation
+   */
+  private final RandomXMemory[] memorySlots = new RandomXMemory[2];
 
-    /** Current epoch index (used for slot selection) */
-    @Getter
-    private long currentEpochIndex;
+  /**
+   * Current epoch index (used for slot selection)
+   */
+  @Getter
+  private long currentEpochIndex;
 
-    /** Pool memory index (for mining operations) */
-    @Getter
-    private long poolMemoryIndex;
+  /**
+   * Pool memory index (for mining operations)
+   */
+  @Getter
+  private long poolMemoryIndex;
 
-    /** Fork activation time (epoch timestamp) */
-    @Getter
-    private long forkTime = Long.MAX_VALUE;
+  /**
+   * Fork activation time (epoch timestamp)
+   */
+  @Getter
+  private long forkTime = Long.MAX_VALUE;
 
-    /** Reference to blockchain for seed derivation */
-    private DagChain dagChain;
 
-    // ========== Constructor ==========
+  @Setter
+  private DagChain dagChain;
 
-    /**
-     * Creates a new RandomX seed manager.
-     *
-     * @param config System configuration
-     * @param flags RandomX flags for template creation
-     */
-    public RandomXSeedManager(Config config, Set<RandomXFlag> flags) {
-        this.config = config;
-        this.flags = flags;
-        this.isTestNet = !(config instanceof MainnetConfig);
+  // ========== Constructor ==========
 
-        // Initialize configuration based on network type
-        if (isTestNet) {
-            this.forkSeedHeight = RANDOMX_TESTNET_FORK_HEIGHT;
-            this.forkLag = SEEDHASH_EPOCH_TESTNET_LAG;
-            this.seedEpochBlocks = SEEDHASH_EPOCH_TESTNET_BLOCKS;
-        } else {
-            this.forkSeedHeight = RANDOMX_FORK_HEIGHT;
-            this.forkLag = SEEDHASH_EPOCH_LAG;
-            this.seedEpochBlocks = SEEDHASH_EPOCH_BLOCKS;
-        }
+  /**
+   * Creates a new RandomX seed manager.
+   *
+   * @param config System configuration
+   * @param flags  RandomX flags for template creation
+   */
+  public RandomXSeedManager(Config config, Set<RandomXFlag> flags) {
+    this.config = config;
+    this.flags = flags;
+    this.isTestNet = !(config instanceof MainnetConfig);
 
-        log.info("RandomXSeedManager initialized: testnet={}, forkHeight={}, epochBlocks={}",
-                isTestNet, forkSeedHeight, seedEpochBlocks);
+    // Initialize configuration based on network type
+    if (isTestNet) {
+      this.forkSeedHeight = RANDOMX_TESTNET_FORK_HEIGHT;
+      this.forkLag = SEEDHASH_EPOCH_TESTNET_LAG;
+      this.seedEpochBlocks = SEEDHASH_EPOCH_TESTNET_BLOCKS;
+    } else {
+      this.forkSeedHeight = RANDOMX_FORK_HEIGHT;
+      this.forkLag = SEEDHASH_EPOCH_LAG;
+      this.seedEpochBlocks = SEEDHASH_EPOCH_BLOCKS;
     }
 
-    // ========== Lifecycle ==========
+    log.info("RandomXSeedManager initialized: testnet={}, forkHeight={}, epochBlocks={}",
+        isTestNet, forkSeedHeight, seedEpochBlocks);
+  }
 
-    /**
-     * Initialize the seed manager.
-     * Validates configuration and allocates memory slots.
-     *
-     * @throws IllegalStateException if fork height is not aligned with epoch size
-     */
-    public void initialize() {
-        // Validate fork height alignment
-        if ((forkSeedHeight & (seedEpochBlocks - 1)) != 0) {
-            String error = String.format(
-                    "RandomX fork height %d is not aligned with seed epoch %d",
-                    forkSeedHeight, seedEpochBlocks);
-            log.error(error);
-            throw new IllegalStateException(error);
-        }
+  // ========== Lifecycle ==========
 
-        // Initialize dual-buffer memory slots
-        for (int i = 0; i < 2; i++) {
-            memorySlots[i] = new RandomXMemory();
-        }
-
-        log.info("RandomXSeedManager initialized successfully");
+  /**
+   * Initialize the seed manager. Validates configuration and allocates memory slots.
+   *
+   * @throws IllegalStateException if fork height is not aligned with epoch size
+   */
+  public void initialize() {
+    // Validate fork height alignment
+    if ((forkSeedHeight & (seedEpochBlocks - 1)) != 0) {
+      String error = String.format(
+          "RandomX fork height %d is not aligned with seed epoch %d",
+          forkSeedHeight, seedEpochBlocks);
+      log.error(error);
+      throw new IllegalStateException(error);
     }
 
-    /**
-     * Set blockchain reference for seed derivation.
-     *
-     * @param dagChain Blockchain instance
-     */
-    public void setDagChain(DagChain dagChain) {
-        this.dagChain = dagChain;
+    // Initialize dual-buffer memory slots
+    for (int i = 0; i < 2; i++) {
+      memorySlots[i] = new RandomXMemory();
     }
 
-    /**
-     * Cleanup resources.
-     * Closes all RandomX templates in memory slots.
-     */
-    public void cleanup() {
-        for (RandomXMemory memory : memorySlots) {
-            if (memory != null) {
-                memory.cleanup();
-            }
-        }
-        log.info("RandomXSeedManager cleaned up");
+    log.info("RandomXSeedManager initialized successfully");
+  }
+
+  /**
+   * Cleanup resources. Closes all RandomX templates in memory slots.
+   */
+  public void cleanup() {
+    for (RandomXMemory memory : memorySlots) {
+      if (memory != null) {
+        memory.cleanup();
+      }
+    }
+    log.info("RandomXSeedManager cleaned up");
+  }
+
+  // ========== Fork Time Management ==========
+
+  /**
+   * Check if an epoch is after RandomX fork activation.
+   *
+   * @param epoch Epoch to check
+   * @return true if epoch is after fork
+   */
+  public boolean isAfterFork(long epoch) {
+    return epoch > forkTime;
+  }
+
+  /**
+   * Update seed for a new block (called during block processing). Manages fork time calculation and
+   * seed epoch transitions.
+   *
+   * @param block New block
+   */
+  public void updateSeedForBlock(Block block) {
+    long height = block.getInfo().getHeight();
+    long blockEpoch = block.getEpoch();
+
+    if (height < forkSeedHeight) {
+      return;
     }
 
-    // ========== Fork Time Management ==========
-
-    /**
-     * Check if an epoch is after RandomX fork activation.
-     *
-     * @param epoch Epoch to check
-     * @return true if epoch is after fork
-     */
-    public boolean isAfterFork(long epoch) {
-        return epoch > forkTime;
+    // Set fork time at fork height
+    if (height == forkSeedHeight) {
+      forkTime = blockEpoch + forkLag;
+      log.info("RandomX fork activated: height={}, epoch={}, forkTime={}",
+          height, blockEpoch, forkTime);
     }
 
-    /**
-     * Update seed for a new block (called during block processing).
-     * Manages fork time calculation and seed epoch transitions.
-     *
-     * @param block New block
-     */
-    public void updateSeedForBlock(Block block) {
-        long height = block.getInfo().getHeight();
-        long blockEpoch = block.getEpoch();
+    // Check if this is an epoch boundary
+    long epochMask = seedEpochBlocks - 1;
+    if ((height & epochMask) == 0) {
+      updateSeedAtEpochBoundary(block);
+    }
+  }
 
-        if (height < forkSeedHeight) {
-            return;
-        }
+  /**
+   * Revert seed changes for a block (called during block rollback).
+   *
+   * @param block Block being rolled back
+   */
+  public void revertSeedForBlock(Block block) {
+    long height = block.getInfo().getHeight();
 
-        // Set fork time at fork height
-        if (height == forkSeedHeight) {
-            forkTime = blockEpoch + forkLag;
-            log.info("RandomX fork activated: height={}, epoch={}, forkTime={}",
-                    height, blockEpoch, forkTime);
-        }
-
-        // Check if this is an epoch boundary
-        long epochMask = seedEpochBlocks - 1;
-        if ((height & epochMask) == 0) {
-            updateSeedAtEpochBoundary(block);
-        }
+    if (height < forkSeedHeight) {
+      return;
     }
 
-    /**
-     * Revert seed changes for a block (called during block rollback).
-     *
-     * @param block Block being rolled back
-     */
-    public void revertSeedForBlock(Block block) {
-        long height = block.getInfo().getHeight();
-
-        if (height < forkSeedHeight) {
-            return;
-        }
-
-        // Revert fork time
-        if (height == forkSeedHeight) {
-            forkTime = Long.MAX_VALUE;
-            log.debug("Reverted fork time for block at height {}", height);
-        }
-
-        // Revert epoch if at boundary
-        long epochMask = seedEpochBlocks - 1;
-        if ((height & epochMask) == 0) {
-            revertSeedAtEpochBoundary();
-        }
+    // Revert fork time
+    if (height == forkSeedHeight) {
+      forkTime = Long.MAX_VALUE;
+      log.debug("Reverted fork time for block at height {}", height);
     }
 
-    // ========== Memory Slot Management ==========
+    // Revert epoch if at boundary
+    long epochMask = seedEpochBlocks - 1;
+    if ((height & epochMask) == 0) {
+      revertSeedAtEpochBoundary();
+    }
+  }
 
-    /**
-     * Get the active memory slot for a given epoch.
-     * Handles automatic slot switching based on switchTime (epoch index).
-     *
-     * @param epoch epoch number to query
-     * @return Active memory slot for the epoch
-     */
-    public RandomXMemory getActiveMemory(long epoch) {
-        if (currentEpochIndex == 0) {
-            return null;  // No seed initialized yet
-        }
+  // ========== Memory Slot Management ==========
 
-        int currentSlot = (int) (currentEpochIndex & 1);
-        RandomXMemory memory = memorySlots[currentSlot];
-
-        // Check if we need to use previous slot
-        if (epoch < memory.getSwitchTime() && currentEpochIndex > 1) {
-            int previousSlot = (int) ((currentEpochIndex - 1) & 1);
-            return memorySlots[previousSlot];
-        }
-
-        return memory;
+  /**
+   * Get the active memory slot for a given epoch. Handles automatic slot switching based on
+   * switchTime (epoch index).
+   *
+   * @param epoch epoch number to query
+   * @return Active memory slot for the epoch
+   */
+  public RandomXMemory getActiveMemory(long epoch) {
+    if (currentEpochIndex == 0) {
+      return null;  // No seed initialized yet
     }
 
-    /**
-     * Get memory slot for pool mining operations.
-     *
-     * @param taskTime Mining task timestamp
-     * @return Memory slot for pool mining
-     */
-    public RandomXMemory getPoolMemory(long taskTime) {
-        if (poolMemoryIndex < 0) {
-            return null;
-        }
+    int currentSlot = (int) (currentEpochIndex & 1);
+    RandomXMemory memory = memorySlots[currentSlot];
 
-        int currentSlot = (int) (poolMemoryIndex & 1);
-        RandomXMemory memory = memorySlots[currentSlot];
-
-        // Check if task time is before switch time
-        if (taskTime < memory.getSwitchTime() && poolMemoryIndex > 0) {
-            int previousSlot = (int) ((poolMemoryIndex - 1) & 1);
-            return memorySlots[previousSlot];
-        }
-
-        return memory;
+    // Check if we need to use previous slot
+    if (epoch < memory.getSwitchTime() && currentEpochIndex > 1) {
+      int previousSlot = (int) ((currentEpochIndex - 1) & 1);
+      return memorySlots[previousSlot];
     }
 
-    // ========== Seed Update Operations ==========
+    return memory;
+  }
 
-    /**
-     * Update seed at epoch boundary.
-     * Prepares next memory slot with new seed and rotates buffers.
-     *
-     * @param block Block at epoch boundary
-     */
-    private void updateSeedAtEpochBoundary(Block block) {
-        long height = block.getInfo().getHeight();
-        long blockEpoch = block.getEpoch();
-        long nextEpochIndex = currentEpochIndex + 1;
-        int nextSlot = (int) (nextEpochIndex & 1);
-
-        RandomXMemory nextMemory = memorySlots[nextSlot];
-
-        // Calculate switch time
-        nextMemory.setSwitchTime(blockEpoch + forkLag + 1);
-        nextMemory.setSeedTime(XdagTime.epochNumberToMainTime(blockEpoch));
-        nextMemory.setSeedHeight(height);
-
-        log.debug("Epoch boundary: height={}, nextSlot={}, switchTime={}",
-                height, nextSlot, Long.toHexString(nextMemory.getSwitchTime()));
-
-        // Derive seed from block at (height - lag)
-        byte[] seedHash = deriveSeedHash(height - forkLag);
-        if (seedHash == null) {
-            log.warn("Failed to derive seed hash for height {}", height);
-            return;
-        }
-
-        // Update seed if changed
-        if (nextMemory.getSeed() == null || !equalBytes(nextMemory.getSeed(), seedHash)) {
-            nextMemory.setSeed(seedHash);
-            log.info("New seed: epoch={}, hash={}", nextEpochIndex, Hex.toHexString(seedHash));
-
-            // Update RandomX templates with new seed
-            updateTemplatesForMemory(nextMemory, nextEpochIndex);
-        }
-
-        // Rotate to next epoch
-        currentEpochIndex = nextEpochIndex;
-        nextMemory.setIsSwitched(0);  // 0 = not switched out yet
-
-        log.info("Epoch advanced: index={}, height={}", currentEpochIndex, height);
+  /**
+   * Get memory slot for pool mining operations.
+   *
+   * @param taskTime Mining task timestamp
+   * @return Memory slot for pool mining
+   */
+  public RandomXMemory getPoolMemory(long taskTime) {
+    if (poolMemoryIndex < 0) {
+      return null;
     }
 
-    /**
-     * Revert seed changes at epoch boundary (for block rollback).
-     */
-    private void revertSeedAtEpochBoundary() {
-        if (currentEpochIndex == 0) {
-            return;
-        }
+    int currentSlot = (int) (poolMemoryIndex & 1);
+    RandomXMemory memory = memorySlots[currentSlot];
 
-        int currentSlot = (int) (currentEpochIndex & 1);
-        RandomXMemory memory = memorySlots[currentSlot];
-
-        // Clear memory state
-        memory.setSeedTime(-1);
-        memory.setSeedHeight(-1);
-        memory.setSwitchTime(-1);
-        memory.setIsSwitched(1);  // 1 = switched out
-
-        // Revert to previous epoch
-        currentEpochIndex--;
-
-        log.debug("Reverted to epoch {}", currentEpochIndex);
+    // Check if task time is before switch time
+    if (taskTime < memory.getSwitchTime() && poolMemoryIndex > 0) {
+      int previousSlot = (int) ((poolMemoryIndex - 1) & 1);
+      return memorySlots[previousSlot];
     }
 
-    /**
-     * Derive seed hash from blockchain at specified height.
-     *
-     * @param seedHeight Height to derive seed from
-     * @return Seed hash (reversed), or null if block not available
-     */
-    private byte[] deriveSeedHash(long seedHeight) {
-        if (dagChain == null) {
-            log.warn("DagChain not set, cannot derive seed");
-            return null;
-        }
+    return memory;
+  }
 
-        Block seedBlock = dagChain.getMainBlockByHeight(seedHeight);
-        if (seedBlock == null || seedBlock.getInfo() == null) {
-            log.warn("Seed block not found at height {}", seedHeight);
-            return null;
-        }
+  // ========== Seed Update Operations ==========
 
-        // Reverse hash for RandomX compatibility
-        return Arrays.reverse(seedBlock.getInfo().getHash().toArray());
+  /**
+   * Update seed at epoch boundary. Prepares next memory slot with new seed and rotates buffers.
+   *
+   * @param block Block at epoch boundary
+   */
+  private void updateSeedAtEpochBoundary(Block block) {
+    long height = block.getInfo().getHeight();
+    long blockEpoch = block.getEpoch();
+    long nextEpochIndex = currentEpochIndex + 1;
+    int nextSlot = (int) (nextEpochIndex & 1);
+
+    RandomXMemory nextMemory = memorySlots[nextSlot];
+
+    // Calculate switch time
+    nextMemory.setSwitchTime(blockEpoch + forkLag + 1);
+    nextMemory.setSeedTime(XdagTime.epochNumberToMainTime(blockEpoch));
+    nextMemory.setSeedHeight(height);
+
+    log.debug("Epoch boundary: height={}, nextSlot={}, switchTime={}",
+        height, nextSlot, Long.toHexString(nextMemory.getSwitchTime()));
+
+    // Derive seed from block at (height - lag)
+    byte[] seedHash = deriveSeedHash(height - forkLag);
+    if (seedHash == null) {
+      log.warn("Failed to derive seed hash for height {}", height);
+      return;
     }
 
-    /**
-     * Update RandomX templates for a memory slot with new seed.
-     *
-     * @param memory Memory slot to update
-     * @param memoryIndex Memory slot index
-     */
-    private void updateTemplatesForMemory(RandomXMemory memory, long memoryIndex) {
-        try {
-            // Update pool template
-            updateOrCreateTemplate(
-                    memory,
-                    true,  // is pool template
-                    memoryIndex
-            );
+    // Update seed if changed
+    if (nextMemory.getSeed() == null || !equalBytes(nextMemory.getSeed(), seedHash)) {
+      nextMemory.setSeed(seedHash);
+      log.info("New seed: epoch={}, hash={}", nextEpochIndex, Hex.toHexString(seedHash));
 
-            // Update block template
-            updateOrCreateTemplate(
-                    memory,
-                    false, // is block template
-                    memoryIndex
-            );
-
-        } catch (Exception e) {
-            log.error("Failed to update RandomX templates for memory index " + memoryIndex, e);
-            throw new RuntimeException("Failed to update RandomX templates", e);
-        }
+      // Update RandomX templates with new seed
+      updateTemplatesForMemory(nextMemory, nextEpochIndex);
     }
 
-    /**
-     * Update or create a RandomX template.
-     *
-     * @param memory Memory slot
-     * @param isPoolTemplate true for pool template, false for block template
-     * @param memoryIndex Memory index for logging
-     */
-    private void updateOrCreateTemplate(
-            RandomXMemory memory,
-            boolean isPoolTemplate,
-            long memoryIndex) {
+    // Rotate to next epoch
+    currentEpochIndex = nextEpochIndex;
+    nextMemory.setIsSwitched(0);  // 0 = not switched out yet
 
-        RandomXTemplate existingTemplate = isPoolTemplate
-                ? memory.getPoolTemplate()
-                : memory.getBlockTemplate();
+    log.info("Epoch advanced: index={}, height={}", currentEpochIndex, height);
+  }
 
-        if (existingTemplate == null) {
-            // Create new template
-            RandomXCache cache = new RandomXCache(flags);
-            cache.init(memory.getSeed());
-
-            RandomXTemplate template = RandomXTemplate.builder()
-                    .cache(cache)
-                    .miningMode(config.getRandomxSpec().getRandomxFlag())
-                    .flags(flags)
-                    .build();
-
-            template.init();
-            template.changeKey(memory.getSeed());
-
-            if (isPoolTemplate) {
-                memory.setPoolTemplate(template);
-            } else {
-                memory.setBlockTemplate(template);
-            }
-
-            log.debug("Created new {} template for memory index {}",
-                    isPoolTemplate ? "pool" : "block", memoryIndex);
-
-        } else {
-            // Update existing template with new seed
-            existingTemplate.changeKey(memory.getSeed());
-            log.debug("Updated {} template for memory index {}",
-                    isPoolTemplate ? "pool" : "block", memoryIndex);
-        }
+  /**
+   * Revert seed changes at epoch boundary (for block rollback).
+   */
+  private void revertSeedAtEpochBoundary() {
+    if (currentEpochIndex == 0) {
+      return;
     }
 
-    /**
-     * Initialize seed from a preseed (for snapshot loading).
-     *
-     * @param preseed Preseed bytes
-     * @param memoryIndex Memory index to initialize
-     */
-    public void initializeFromPreseed(byte[] preseed, long memoryIndex) {
-        int slot = (int) (memoryIndex & 1);
-        RandomXMemory memory = memorySlots[slot];
+    int currentSlot = (int) (currentEpochIndex & 1);
+    RandomXMemory memory = memorySlots[currentSlot];
 
-        memory.setSeed(preseed);
-        updateTemplatesForMemory(memory, memoryIndex);
+    // Clear memory state
+    memory.setSeedTime(-1);
+    memory.setSeedHeight(-1);
+    memory.setSwitchTime(-1);
+    memory.setIsSwitched(1);  // 1 = switched out
 
-        this.currentEpochIndex = memoryIndex;
-        this.poolMemoryIndex = -1;
-        memory.setIsSwitched(0);  // 0 = active, not switched out
+    // Revert to previous epoch
+    currentEpochIndex--;
 
-        log.info("Initialized from preseed: memoryIndex={}", memoryIndex);
+    log.debug("Reverted to epoch {}", currentEpochIndex);
+  }
+
+  /**
+   * Derive seed hash from blockchain at specified height.
+   *
+   * @param seedHeight Height to derive seed from
+   * @return Seed hash (reversed), or null if block not available
+   */
+  private byte[] deriveSeedHash(long seedHeight) {
+    if (dagChain == null) {
+      log.warn("DagChain not set, cannot derive seed");
+      return null;
     }
+
+    Block seedBlock = dagChain.getMainBlockByHeight(seedHeight);
+    if (seedBlock == null || seedBlock.getInfo() == null) {
+      log.warn("Seed block not found at height {}", seedHeight);
+      return null;
+    }
+
+    // Reverse hash for RandomX compatibility
+    return Arrays.reverse(seedBlock.getInfo().getHash().toArray());
+  }
+
+  /**
+   * Update RandomX templates for a memory slot with new seed.
+   *
+   * @param memory      Memory slot to update
+   * @param memoryIndex Memory slot index
+   */
+  private void updateTemplatesForMemory(RandomXMemory memory, long memoryIndex) {
+    try {
+      // Update pool template
+      updateOrCreateTemplate(
+          memory,
+          true,  // is pool template
+          memoryIndex
+      );
+
+      // Update block template
+      updateOrCreateTemplate(
+          memory,
+          false, // is block template
+          memoryIndex
+      );
+
+    } catch (Exception e) {
+      log.error("Failed to update RandomX templates for memory index " + memoryIndex, e);
+      throw new RuntimeException("Failed to update RandomX templates", e);
+    }
+  }
+
+  /**
+   * Update or create a RandomX template.
+   *
+   * @param memory         Memory slot
+   * @param isPoolTemplate true for pool template, false for block template
+   * @param memoryIndex    Memory index for logging
+   */
+  private void updateOrCreateTemplate(
+      RandomXMemory memory,
+      boolean isPoolTemplate,
+      long memoryIndex) {
+
+    RandomXTemplate existingTemplate = isPoolTemplate
+        ? memory.getPoolTemplate()
+        : memory.getBlockTemplate();
+
+    if (existingTemplate == null) {
+      // Create new template
+      RandomXCache cache = new RandomXCache(flags);
+      cache.init(memory.getSeed());
+
+      RandomXTemplate template = RandomXTemplate.builder()
+          .cache(cache)
+          .miningMode(config.getRandomxSpec().getRandomxFlag())
+          .flags(flags)
+          .build();
+
+      template.init();
+      template.changeKey(memory.getSeed());
+
+      if (isPoolTemplate) {
+        memory.setPoolTemplate(template);
+      } else {
+        memory.setBlockTemplate(template);
+      }
+
+      log.debug("Created new {} template for memory index {}",
+          isPoolTemplate ? "pool" : "block", memoryIndex);
+
+    } else {
+      // Update existing template with new seed
+      existingTemplate.changeKey(memory.getSeed());
+      log.debug("Updated {} template for memory index {}",
+          isPoolTemplate ? "pool" : "block", memoryIndex);
+    }
+  }
+
+  /**
+   * Initialize seed from a preseed (for snapshot loading).
+   *
+   * @param preseed     Preseed bytes
+   * @param memoryIndex Memory index to initialize
+   */
+  public void initializeFromPreseed(byte[] preseed, long memoryIndex) {
+    int slot = (int) (memoryIndex & 1);
+    RandomXMemory memory = memorySlots[slot];
+
+    memory.setSeed(preseed);
+    updateTemplatesForMemory(memory, memoryIndex);
+
+    this.currentEpochIndex = memoryIndex;
+    this.poolMemoryIndex = -1;
+    memory.setIsSwitched(0);  // 0 = active, not switched out
+
+    log.info("Initialized from preseed: memoryIndex={}", memoryIndex);
+  }
 }

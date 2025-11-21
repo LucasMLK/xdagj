@@ -39,12 +39,10 @@ import io.xdag.listener.Listener;
 import io.xdag.utils.XdagTime;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
@@ -1458,42 +1456,12 @@ public class DagChainImpl implements DagChain {
         return chainStats.getMainBlockCount();
     }
 
-    @Override
-    public long getEpochOfMainBlock(long height) {
-        Block block = getMainBlockByHeight(height);
-        if (block == null) {
-            return -1;
-        }
-        return block.getEpoch();
-    }
-
-    @Override
+  @Override
     public List<Block> listMainBlocks(int count) {
         return dagStore.listMainBlocks(count);
     }
 
-    @Override
-    public List<Block> getMainChainPath(Bytes32 hash) {
-        List<Block> path = new ArrayList<>();
-        Block current = dagStore.getBlockByHash(hash, false);
-
-        if (current == null || current.getInfo() == null || current.getInfo().getHeight() == 0) {
-            throw new IllegalArgumentException("Block is not on main chain: " + hash.toHexString());
-        }
-
-        // Trace back to genesis
-        while (current != null && current.getInfo() != null && current.getInfo().getHeight() > 0) {
-            path.add(current);
-
-            // Find parent with maximum cumulative difficulty
-            Block parent = findMaxDifficultyParent(current);
-            current = parent;
-        }
-
-        return path;
-    }
-
-    /**
+  /**
      * Find parent block with maximum cumulative difficulty
      */
     private Block findMaxDifficultyParent(Block block) {
@@ -1602,16 +1570,7 @@ public class DagChainImpl implements DagChain {
         return winner;
     }
 
-    @Override
-    public long getWinnerBlockHeight(long epoch) {
-        Block winner = getWinnerBlockInEpoch(epoch);
-        if (winner == null || winner.getInfo() == null) {
-            return -1;
-        }
-        return winner.getInfo().getHeight();
-    }
-
-    @Override
+  @Override
     public EpochStats getEpochStats(long epoch) {
         List<Block> candidates = getCandidateBlocksInEpoch(epoch);
         Block winner = getWinnerBlockInEpoch(epoch);
@@ -1652,17 +1611,7 @@ public class DagChainImpl implements DagChain {
         return dagStore.getBlockByHash(hash, isRaw);
     }
 
-    @Override
-    public List<Block> listMinedBlocks(int count) {
-        throw new UnsupportedOperationException("listMinedBlocks() not yet implemented");
-    }
-
-    @Override
-    public Map<Bytes, Integer> getMemOurBlocks() {
-        throw new UnsupportedOperationException("getMemOurBlocks() not yet implemented");
-    }
-
-    // ==================== Cumulative Difficulty ====================
+  // ==================== Cumulative Difficulty ====================
 
     @Override
     public UInt256 calculateCumulativeDifficulty(Block block) {
@@ -2321,96 +2270,18 @@ public class DagChainImpl implements DagChain {
                 mainBlockCount);
     }
 
-    @Override
-    public void startCheckMain(long period) {
-        throw new UnsupportedOperationException("startCheckMain() not yet implemented");
-    }
-
-    @Override
-    public void stopCheckMain() {
-        throw new UnsupportedOperationException("stopCheckMain() not yet implemented");
-    }
-
-    // ==================== Statistics and State ====================
+  // ==================== Statistics and State ====================
 
     @Override
     public ChainStats getChainStats() {
         return this.chainStats;
     }
 
-    @Override
-    public void incrementWaitingSyncCount() {
-        synchronized (this) {
-            chainStats = chainStats.withWaitingSyncCount(chainStats.getWaitingSyncCount() + 1);
-            log.debug("Incremented waiting sync count to: {}", chainStats.getWaitingSyncCount());
-        }
-    }
+  // ==================== Economic Model ====================
 
-    @Override
-    public void decrementWaitingSyncCount() {
-        synchronized (this) {
-            chainStats = chainStats.withWaitingSyncCount(chainStats.getWaitingSyncCount() - 1);
-            log.debug("Decremented waiting sync count to: {}", chainStats.getWaitingSyncCount());
-        }
-    }
+  // ==================== Lifecycle Management ====================
 
-    @Override
-    public void updateStatsFromRemote(ChainStats remoteStats) {
-        synchronized (this) {
-            // Update total hosts (take maximum)
-            int maxHosts = Math.max(chainStats.getTotalHostCount(), remoteStats.getTotalHostCount());
-
-            // Update total blocks (take maximum)
-            long maxBlocks = Math.max(chainStats.getTotalBlockCount(), remoteStats.getTotalBlockCount());
-
-            // Update total main blocks (take maximum)
-            long maxMain = Math.max(chainStats.getTotalMainBlockCount(), remoteStats.getTotalMainBlockCount());
-
-            // Update max difficulty (take maximum)
-            UInt256 localMaxDiff = chainStats.getMaxDifficulty();
-            UInt256 remoteMaxDiff = remoteStats.getMaxDifficulty();
-            UInt256 newMaxDiff = localMaxDiff.compareTo(remoteMaxDiff) > 0 ? localMaxDiff : remoteMaxDiff;
-
-            // Apply updates
-            chainStats = chainStats
-                    .withTotalHostCount(maxHosts)
-                    .withTotalBlockCount(maxBlocks)
-                    .withTotalMainBlockCount(maxMain)
-                    .withMaxDifficulty(newMaxDiff);
-
-            log.debug("Updated stats from remote: hosts={}, blocks={}, main={}, maxDiff={}",
-                     maxHosts, maxBlocks, maxMain, newMaxDiff.toDecimalString());
-        }
-    }
-
-    // ==================== Economic Model ====================
-
-    @Override
-    public XAmount getReward(long nmain) {
-        throw new UnsupportedOperationException("getReward() not yet implemented");
-    }
-
-    @Override
-    public XAmount getSupply(long nmain) {
-        throw new UnsupportedOperationException("getSupply() not yet implemented");
-    }
-
-    // ==================== Lifecycle Management ====================
-
-    @Override
-    public void registerListener(Listener listener) {
-        synchronized (listeners) {
-            listeners.add(listener);
-            log.debug("Registered listener: {}", listener.getClass().getSimpleName());
-        }
-    }
-
-    @Override
-    public byte[] getPreSeed() {
-        throw new UnsupportedOperationException("getPreSeed() not yet implemented");
-    }
-
-    /**
+  /**
      * Retry orphan blocks that may now have satisfied dependencies
      *
      * <p>After successfully importing a block, some orphan blocks may now have all

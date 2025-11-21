@@ -186,17 +186,7 @@ public class DagAccountManager {
         return accountStore.decrementNonce(address);
     }
 
-    /**
-     * Set account nonce
-     *
-     * @param address account address (20 bytes)
-     * @param nonce new nonce value
-     */
-    public void setNonce(Bytes address, UInt64 nonce) {
-        accountStore.setNonce(address, nonce);
-    }
-
-    // ==================== Account Creation ====================
+  // ==================== Account Creation ====================
 
     /**
      * Ensure account exists, create if not
@@ -214,47 +204,9 @@ public class DagAccountManager {
         }
     }
 
-    /**
-     * Create a new account with initial balance
-     *
-     * @param address account address (20 bytes)
-     * @param initialBalance initial balance
-     */
-    public void createAccount(Bytes address, UInt256 initialBalance) {
-        Account account = Account.builder()
-                .address(address)
-                .balance(initialBalance)
-                .nonce(UInt64.ZERO)
-                .build();
-        accountStore.saveAccount(account);
-        log.debug("Created new account: {}, balance={}",
-                address.toHexString(), initialBalance.toDecimalString());
-    }
+  // ==================== Transactional Operations (NEW - Atomic Block Processing) ====================
 
-    // ==================== Transactional Operations (NEW - Atomic Block Processing) ====================
-
-    /**
-     * Set account balance in a transaction.
-     *
-     * <p>This operation is queued and will be executed atomically when the transaction commits.
-     * Uses the NEW AccountStore transactional methods.
-     *
-     * @param txId transaction ID from RocksDBTransactionManager
-     * @param address account address
-     * @param balance new balance
-     * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails
-     */
-    public void setBalanceInTransaction(String txId, Bytes address, UInt256 balance)
-            throws io.xdag.db.rocksdb.transaction.TransactionException {
-        accountStore.setBalanceInTransaction(txId, address, balance);
-
-        if (log.isDebugEnabled()) {
-            log.debug("Transaction {}: setBalance({}, {})",
-                    txId, address.toHexString().substring(0, 16), balance.toDecimalString());
-        }
-    }
-
-    /**
+  /**
      * Add to account balance in a transaction.
      *
      * @param txId transaction ID from RocksDBTransactionManager
@@ -327,35 +279,4 @@ public class DagAccountManager {
         }
     }
 
-    /**
-     * Decrement account nonce in a transaction.
-     *
-     * <p>Used during transaction rollback when restoring account state.
-     *
-     * @param txId transaction ID from RocksDBTransactionManager
-     * @param address account address
-     * @throws io.xdag.db.rocksdb.transaction.TransactionException if transaction operation fails or nonce is already zero
-     */
-    public void decrementNonceInTransaction(String txId, Bytes address)
-            throws io.xdag.db.rocksdb.transaction.TransactionException {
-        // Get current nonce
-        UInt64 currentNonce = getNonce(address);
-
-        if (currentNonce.equals(UInt64.ZERO)) {
-            throw new io.xdag.db.rocksdb.transaction.TransactionException(
-                    "Cannot decrement nonce: already at zero");
-        }
-
-        UInt64 newNonce = currentNonce.subtract(UInt64.ONE);
-
-        // Convert UInt64 to UInt256 for AccountStore method
-        UInt256 nonceAsUInt256 = UInt256.valueOf(newNonce.toBigInteger());
-        accountStore.setNonceInTransaction(txId, address, nonceAsUInt256);
-
-        if (log.isDebugEnabled()) {
-            log.debug("Transaction {}: decrementNonce({}) from {} to {}",
-                    txId, address.toHexString().substring(0, 16),
-                    currentNonce.toLong(), newNonce.toLong());
-        }
-    }
 }

@@ -39,7 +39,7 @@ import org.apache.tuweni.bytes.Bytes32;
 
 /**
  * Independent Transaction class for XDAG
- *
+ * <p>
  * Design principles:
  * 1. Independent existence: separate broadcast and storage from Block
  * 2. Account model: similar to Ethereum with from/to/nonce
@@ -135,7 +135,7 @@ public class Transaction implements Serializable {
 
     /**
      * Calculate transaction hash
-     *
+     * <p>
      * Hash calculation: tx_hash = Keccak256(from + to + amount + nonce + fee + data)
      * Signature (v/r/s) does NOT participate in hash calculation
      *
@@ -174,7 +174,7 @@ public class Transaction implements Serializable {
 
     /**
      * Sign this transaction with private key
-     *
+     * <p>
      * Signature process:
      * 1. Calculate transaction hash
      * 2. Sign hash with private key: (v, r, s) = ECDSA_Sign(hash, private_key)
@@ -203,7 +203,7 @@ public class Transaction implements Serializable {
 
     /**
      * Verify transaction signature
-     *
+     * <p>
      * Verification process:
      * 1. Recover public key from signature: recovered = ECRecover(hash, v, r, s)
      * 2. Derive address from recovered public key: SHA256 → RIPEMD160 (20 bytes)
@@ -236,7 +236,7 @@ public class Transaction implements Serializable {
 
     /**
      * Calculate total fee including data fee
-     *
+     * <p>
      * Formula: total_fee = fee + base_fee * (data_length / BASE_DATA_LENGTH)
      *
      * @param baseFee base transaction fee
@@ -262,7 +262,7 @@ public class Transaction implements Serializable {
 
     /**
      * Validate transaction basic rules
-     *
+     * <p>
      * Checks:
      * 1. data size <= MAX_DATA_LENGTH
      * 2. amount >= 0
@@ -391,7 +391,7 @@ public class Transaction implements Serializable {
 
     /**
      * Serialize transaction to bytes (for storage or network transmission)
-     *
+     * <p>
      * Format (minimum 132 bytes + data length):
      * [from - 20 bytes, hash160]
      * [to - 20 bytes, hash160]

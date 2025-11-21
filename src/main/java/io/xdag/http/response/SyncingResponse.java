@@ -29,7 +29,7 @@ import lombok.Data;
 
 /**
  * Response for xdag_syncing - follows RPC API v2 design
- *
+ * <p>
  * If syncing: returns object with sync details
  * If not syncing: returns false (handled at JSON-RPC serialization level)
  */

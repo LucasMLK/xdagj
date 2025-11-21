@@ -33,6 +33,7 @@ import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.utils.BytesUtils;
 import io.xdag.utils.XdagTime;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
 
@@ -59,150 +60,128 @@ import org.apache.tuweni.bytes.Bytes32;
  *
  * @since XDAGJ
  */
+@Getter
 @Slf4j
 public class BlockGenerator {
 
-    private final DagChain dagChain;
-    private final Wallet wallet;
-    private final PowAlgorithm powAlgorithm;
 
-    /**
-     * Create a new BlockGenerator
-     *
-     * @param dagChain DagChain for block creation
-     * @param wallet Wallet for coinbase key
-     * @param powAlgorithm PoW algorithm instance (can be null if not using RandomX)
-     */
-    public BlockGenerator(DagChain dagChain, Wallet wallet, PowAlgorithm powAlgorithm) {
-        if (dagChain == null) {
-            throw new IllegalArgumentException("DagChain cannot be null");
-        }
-        if (wallet == null) {
-            throw new IllegalArgumentException("Wallet cannot be null");
-        }
-        this.dagChain = dagChain;
-        this.wallet = wallet;
-        this.powAlgorithm = powAlgorithm;
+  private final DagChain dagChain;
+
+  private final Wallet wallet;
+
+  private final PowAlgorithm powAlgorithm;
+
+  /**
+   * Create a new BlockGenerator
+   *
+   * @param dagChain     DagChain for block creation
+   * @param wallet       Wallet for coinbase key
+   * @param powAlgorithm PoW algorithm instance (can be null if not using RandomX)
+   */
+  public BlockGenerator(DagChain dagChain, Wallet wallet, PowAlgorithm powAlgorithm) {
+    if (dagChain == null) {
+      throw new IllegalArgumentException("DagChain cannot be null");
+    }
+    if (wallet == null) {
+      throw new IllegalArgumentException("Wallet cannot be null");
+    }
+    this.dagChain = dagChain;
+    this.wallet = wallet;
+    this.powAlgorithm = powAlgorithm;
+  }
+
+  /**
+   * Generate a candidate block for mining
+   *
+   * <p>This method:
+   * <ol>
+   *   <li>Creates a candidate block via DagChain</li>
+   *   <li>Sets initial nonce (random 12 bytes + wallet address 20 bytes)</li>
+   *   <li>Returns immutable Block ready for mining</li>
+   * </ol>
+   *
+   * <p>The block generation differs based on RandomX fork status:
+   * <ul>
+   *   <li>RandomX: Uses RandomX pre-hash calculation</li>
+   *   <li>Non-RandomX: Uses SHA256 hash calculation</li>
+   * </ul>
+   *
+   * @return Block candidate block with initial nonce
+   * @throws IllegalStateException if wallet has no default key
+   */
+  public Block generateCandidate() {
+    // Get coinbase key
+    ECKeyPair coinbaseKey = wallet.getDefKey();
+    if (coinbaseKey == null) {
+      throw new IllegalStateException("Wallet has no default key for coinbase");
     }
 
-    /**
-     * Generate a candidate block for mining
-     *
-     * <p>This method:
-     * <ol>
-     *   <li>Creates a candidate block via DagChain</li>
-     *   <li>Sets initial nonce (random 12 bytes + wallet address 20 bytes)</li>
-     *   <li>Returns immutable Block ready for mining</li>
-     * </ol>
-     *
-     * <p>The block generation differs based on RandomX fork status:
-     * <ul>
-     *   <li>RandomX: Uses RandomX pre-hash calculation</li>
-     *   <li>Non-RandomX: Uses SHA256 hash calculation</li>
-     * </ul>
-     *
-     * @return Block candidate block with initial nonce
-     * @throws IllegalStateException if wallet has no default key
-     */
-    public Block generateCandidate() {
-        // Get coinbase key
-        ECKeyPair coinbaseKey = wallet.getDefKey();
-        if (coinbaseKey == null) {
-            throw new IllegalStateException("Wallet has no default key for coinbase");
-        }
+    // Get current time
+    long timestamp = XdagTime.getMainTime();
 
-        // Get current time
-        long timestamp = XdagTime.getMainTime();
+    // BUGFIX: Generate coinbase address (20 bytes, NOT 32 bytes)
+    // AddressUtils.toBytesAddress() returns exactly 20 bytes (Ethereum-style address)
+    // BlockHeader expects coinbase to be exactly 20 bytes (see BlockHeader.getSerializedSize())
+    org.apache.tuweni.bytes.Bytes coinbase =
+        io.xdag.crypto.keys.AddressUtils.toBytesAddress(coinbaseKey.getPublicKey());
 
-        // BUGFIX: Generate coinbase address (20 bytes, NOT 32 bytes)
-        // AddressUtils.toBytesAddress() returns exactly 20 bytes (Ethereum-style address)
-        // BlockHeader expects coinbase to be exactly 20 bytes (see BlockHeader.getSerializedSize())
-        org.apache.tuweni.bytes.Bytes coinbase =
-                io.xdag.crypto.keys.AddressUtils.toBytesAddress(coinbaseKey.getPublicKey());
-
-        // Validation: Ensure coinbase is exactly 20 bytes
-        if (coinbase.size() != 20) {
-            throw new IllegalStateException(String.format(
-                    "Wallet address must be 20 bytes, got %d bytes: %s",
-                    coinbase.size(), coinbase.toHexString()));
-        }
-
-        // Set mining coinbase address for DagChain
-        if (dagChain instanceof io.xdag.core.DagChainImpl) {
-            ((io.xdag.core.DagChainImpl) dagChain).setMiningCoinbase(coinbase);
-        }
-
-        // Create candidate block via DagChain (API)
-        Block candidate = dagChain.createCandidateBlock();
-
-        // Generate initial nonce
-        // Format: [12 bytes random] + [20 bytes wallet address]
-        Bytes32 initialNonce = generateInitialNonce(coinbaseKey);
-
-        // Set nonce (Block is immutable, returns new instance)
-        candidate = candidate.withNonce(initialNonce);
-
-        log.debug("Generated candidate block: hash={}, timestamp={}, randomX={}",
-                candidate.getHash().toHexString(),
-                timestamp,
-                isRandomXFork(timestamp));
-
-        return candidate;
+    // Validation: Ensure coinbase is exactly 20 bytes
+    if (coinbase.size() != 20) {
+      throw new IllegalStateException(String.format(
+          "Wallet address must be 20 bytes, got %d bytes: %s",
+          coinbase.size(), coinbase.toHexString()));
     }
 
-    /**
-     * Generate initial nonce for candidate block
-     *
-     * <p>Nonce format: [12 bytes random] + [20 bytes wallet address]
-     * This ensures that each node generates unique nonces.
-     *
-     * @param coinbaseKey Coinbase key for wallet address
-     * @return Bytes32 initial nonce
-     */
-    private Bytes32 generateInitialNonce(ECKeyPair coinbaseKey) {
-        byte[] randomBytes = CryptoProvider.nextBytes(12);
-        byte[] walletAddress = AddressUtils.toBytesAddress(coinbaseKey).toArray();
-        return Bytes32.wrap(BytesUtils.merge(randomBytes, walletAddress));
+    // Set mining coinbase address for DagChain
+    if (dagChain instanceof io.xdag.core.DagChainImpl) {
+      ((io.xdag.core.DagChainImpl) dagChain).setMiningCoinbase(coinbase);
     }
 
-    /**
-     * Check if current time is in RandomX fork
-     *
-     * @param timestamp Current timestamp
-     * @return true if RandomX fork is active
-     */
-    public boolean isRandomXFork(long timestamp) {
-        if (powAlgorithm == null) {
-            return false;
-        }
-        long epoch = XdagTime.getEpochNumber(timestamp);
-        return powAlgorithm.isActive(epoch);
-    }
+    // Create candidate block via DagChain (API)
+    Block candidate = dagChain.createCandidateBlock();
 
-    /**
-     * Get the DagChain instance
-     *
-     * @return DagChain instance
-     */
-    public DagChain getDagChain() {
-        return dagChain;
-    }
+    // Generate initial nonce
+    // Format: [12 bytes random] + [20 bytes wallet address]
+    Bytes32 initialNonce = generateInitialNonce(coinbaseKey);
 
-    /**
-     * Get the Wallet instance
-     *
-     * @return Wallet instance
-     */
-    public Wallet getWallet() {
-        return wallet;
-    }
+    // Set nonce (Block is immutable, returns new instance)
+    candidate = candidate.withNonce(initialNonce);
 
-    /**
-     * Get the PoW algorithm instance
-     *
-     * @return PoW algorithm instance (can be null)
-     */
-    public PowAlgorithm getPowAlgorithm() {
-        return powAlgorithm;
+    log.debug("Generated candidate block: hash={}, timestamp={}, randomX={}",
+        candidate.getHash().toHexString(),
+        timestamp,
+        isRandomXFork(timestamp));
+
+    return candidate;
+  }
+
+  /**
+   * Generate initial nonce for candidate block
+   *
+   * <p>Nonce format: [12 bytes random] + [20 bytes wallet address]
+   * This ensures that each node generates unique nonces.
+   *
+   * @param coinbaseKey Coinbase key for wallet address
+   * @return Bytes32 initial nonce
+   */
+  private Bytes32 generateInitialNonce(ECKeyPair coinbaseKey) {
+    byte[] randomBytes = CryptoProvider.nextBytes(12);
+    byte[] walletAddress = AddressUtils.toBytesAddress(coinbaseKey).toArray();
+    return Bytes32.wrap(BytesUtils.merge(randomBytes, walletAddress));
+  }
+
+  /**
+   * Check if current time is in RandomX fork
+   *
+   * @param timestamp Current timestamp
+   * @return true if RandomX fork is active
+   */
+  public boolean isRandomXFork(long timestamp) {
+    if (powAlgorithm == null) {
+      return false;
     }
+    long epoch = XdagTime.getEpochNumber(timestamp);
+    return powAlgorithm.isActive(epoch);
+  }
+
 }

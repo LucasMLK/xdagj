@@ -24,7 +24,6 @@
 package io.xdag.p2p.message;
 
 import io.xdag.core.Transaction;
-import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
 import lombok.Getter;
 
@@ -84,7 +83,6 @@ import lombok.Getter;
  *   <li>Broadcast is immediate (no batching) for low latency</li>
  * </ul>
  *
- * @see TransactionBroadcastManager for anti-loop mechanism
  * @see Transaction for transaction structure
  * @since Phase 3 - Network Propagation
  */

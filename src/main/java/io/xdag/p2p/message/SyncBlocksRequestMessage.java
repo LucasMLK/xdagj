@@ -175,7 +175,6 @@ public class SyncBlocksRequestMessage extends Message {
      * <p>Format:
      * [4 bytes hashCount] + [32 bytes per hash] + [1 byte isRaw]
      *
-     * @return encoder with serialized data
      */
     @Override
     public void encode(SimpleEncoder enc) {

@@ -35,13 +35,13 @@ import org.apache.tuweni.units.bigints.UInt256;
 
 /**
  * Immutable chain statistics for XDAG network (optimized)
- *
+ * <p>
  * This class replaces the mutable XdagStats with a type-safe, immutable implementation.
  * Uses UInt256 for difficulty values.
- *
+ * <p>
  * 3 Optimization: Removed 5 unused fields (blockCount, hostCount, mainBlockTime,
  * globalMinerHash, ourLastBlockHash) that were only used for legacy compatibility.
- *
+ * <p>
  * Optimized size: ~120 bytes (down from ~180 bytes, 33% reduction)
  */
 @Value
@@ -192,86 +192,9 @@ public class ChainStats implements Serializable {
                 .build();
     }
 
-    /**
-     * Update stats with data from remote node (returns new instance)
-     */
-    public ChainStats mergeWithRemote(ChainStats remote) {
-        return this.toBuilder()
-                .totalHostCount(Math.max(this.totalHostCount, remote.totalHostCount))
-                .totalBlockCount(Math.max(this.totalBlockCount, remote.totalBlockCount))
-                .totalMainBlockCount(Math.max(this.totalMainBlockCount, remote.totalMainBlockCount))
-                .maxDifficulty(this.maxDifficulty.compareTo(remote.maxDifficulty) > 0 ?
-                    this.maxDifficulty : remote.maxDifficulty)
-                .build();
-    }
+  // ========== Computed Properties ==========
 
-    /**
-     * Update maximum difficulty if new value is higher (returns new instance)
-     */
-    public ChainStats updateMaxDifficulty(UInt256 newMaxDifficulty) {
-        if (this.maxDifficulty.compareTo(newMaxDifficulty) < 0) {
-            return this.withMaxDifficulty(newMaxDifficulty);
-        }
-        return this;
-    }
-
-    /**
-     * Update current difficulty if new value is higher (returns new instance)
-     */
-    public ChainStats updateDifficulty(UInt256 newDifficulty) {
-        if (this.difficulty.compareTo(newDifficulty) < 0) {
-            return this.withDifficulty(newDifficulty);
-        }
-        return this;
-    }
-
-    /**
-     * Increment main block count (returns new instance)
-     */
-    public ChainStats incrementMainBlockCount() {
-        return this.toBuilder()
-                .mainBlockCount(this.mainBlockCount + 1)
-                .totalMainBlockCount(this.totalMainBlockCount + 1)
-                .build();
-    }
-
-    /**
-     * Update balance (returns new instance)
-     */
-    public ChainStats updateBalance(XAmount newBalance) {
-        return this.withBalance(newBalance);
-    }
-
-    // ========== Computed Properties ==========
-
-    /**
-     * Get orphan block percentage
-     */
-    public double getOrphanPercentage() {
-        if (totalBlockCount == 0) {
-            return 0.0;
-        }
-        return (double) noRefCount / totalBlockCount * 100.0;
-    }
-
-    /**
-     * Get main block percentage
-     */
-    public double getMainBlockPercentage() {
-        if (totalBlockCount == 0) {
-            return 0.0;
-        }
-        return (double) totalMainBlockCount / totalBlockCount * 100.0;
-    }
-
-    /**
-     * Check if syncing is needed
-     */
-    public boolean needsSync() {
-        return waitingSyncCount > 0;
-    }
-
-    /**
+  /**
      * Get sync completion percentage
      */
     public double getSyncProgress() {
@@ -299,7 +222,7 @@ public class ChainStats implements Serializable {
 
     /**
      * Serialize ChainStats to bytes for network transmission
-     *
+     * <p>
      * Format:
      * [32 bytes] difficulty
      * [32 bytes] maxDifficulty

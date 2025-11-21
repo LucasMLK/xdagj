@@ -78,10 +78,4 @@ public class EpochStats {
         return totalBlocks == 0;
     }
 
-    /**
-     * Get epoch duration in seconds (always 64 seconds)
-     */
-    public long getEpochDuration() {
-        return endTime - startTime;
-    }
 }

@@ -286,19 +286,7 @@ public class RandomXPow implements PowAlgorithm, DagchainListener {
 
     // ========== Diagnostic Methods ==========
 
-    /**
-     * Get diagnostic information about current state.
-     *
-     * @return Diagnostic string for debugging
-     */
-    public String getDiagnostics() {
-        if (!started) {
-            return "RandomXPow[NOT_STARTED]";
-        }
-        return hashService.getDiagnostics();
-    }
-
-    @Override
+  @Override
     public String toString() {
         return String.format("RandomXPow[started=%s, ready=%s, epoch=%d]",
                 started, isReady(), seedManager.getCurrentEpochIndex());

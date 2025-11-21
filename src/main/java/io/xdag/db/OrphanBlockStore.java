@@ -30,7 +30,7 @@ import org.bouncycastle.util.encoders.Hex;
 
 /**
  * OrphanBlockStore interface
- *
+ * <p>
  * Manages orphan blocks (blocks without parent reference yet).
  * Uses Bytes32 hash for block identification instead of Address.
  */

@@ -41,7 +41,7 @@ public class HttpApiHandler extends SimpleChannelInboundHandler<FullHttpRequest>
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) throws Exception {
+    protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
         String uri = request.uri();
 
         String version = ApiVersion.getVersionFromPath(uri);

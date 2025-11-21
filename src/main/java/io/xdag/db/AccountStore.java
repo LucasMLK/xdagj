@@ -27,12 +27,9 @@ package io.xdag.db;
 import io.xdag.core.Account;
 import io.xdag.core.XdagLifecycle;
 import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
 
-import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -111,18 +108,7 @@ public interface AccountStore extends XdagLifecycle {
      */
     boolean hasAccount(Bytes address);
 
-    /**
-     * Delete account
-     *
-     * <p>This removes the account from storage. Use with caution as this
-     * operation cannot be undone.
-     *
-     * @param address account address (20 bytes)
-     * @return true if account was deleted, false if it didn't exist
-     */
-    boolean deleteAccount(Bytes address);
-
-    // ==================== Balance Operations ====================
+  // ==================== Balance Operations ====================
 
     /**
      * Get account balance
@@ -214,60 +200,9 @@ public interface AccountStore extends XdagLifecycle {
 
     // ==================== Contract Operations ====================
 
-    /**
-     * Save contract code
-     *
-     * @param codeHash hash of contract code (used as key)
-     * @param code contract bytecode
-     */
-    void saveContractCode(Bytes32 codeHash, byte[] code);
+  // ==================== Batch Operations ====================
 
-    /**
-     * Get contract code by hash
-     *
-     * @param codeHash hash of contract code
-     * @return Optional containing code bytes if exists
-     */
-    Optional<byte[]> getContractCode(Bytes32 codeHash);
-
-    /**
-     * Check if contract code exists
-     *
-     * @param codeHash hash of contract code
-     * @return true if code exists
-     */
-    boolean hasContractCode(Bytes32 codeHash);
-
-    /**
-     * Create a new contract account
-     *
-     * @param address contract address (20 bytes)
-     * @param codeHash hash of contract code
-     * @param storageRoot root of contract storage
-     * @return created contract Account
-     */
-    Account createContractAccount(Bytes address, Bytes32 codeHash, Bytes32 storageRoot);
-
-    // ==================== Batch Operations ====================
-
-    /**
-     * Save multiple accounts atomically
-     *
-     * <p>All accounts are saved in a single WriteBatch for atomicity.
-     *
-     * @param accounts list of accounts to save
-     */
-    void saveAccounts(List<Account> accounts);
-
-    /**
-     * Get multiple accounts by addresses
-     *
-     * @param addresses list of account addresses (20 bytes each)
-     * @return map of address to Account (excludes non-existent accounts)
-     */
-    Map<Bytes, Account> getAccounts(List<Bytes> addresses);
-
-    // ==================== Statistics ====================
+  // ==================== Statistics ====================
 
     /**
      * Get total number of accounts
@@ -276,15 +211,7 @@ public interface AccountStore extends XdagLifecycle {
      */
     UInt64 getAccountCount();
 
-    /**
-     * Get all account addresses (use with caution on large datasets)
-     *
-     * @param limit maximum number of addresses to return
-     * @return list of account addresses (20 bytes each)
-     */
-    List<Bytes> getAllAddresses(int limit);
-
-    // ==================== Maintenance ====================
+  // ==================== Maintenance ====================
 
     /**
      * Reset all account data
@@ -294,30 +221,9 @@ public interface AccountStore extends XdagLifecycle {
      */
     void reset();
 
-    /**
-     * Get database size in bytes
-     *
-     * @return approximate size of AccountStore data on disk
-     */
-    long getDatabaseSize();
+  // ==================== Transactional Methods (Atomic Block Processing) ====================
 
-    // ==================== Transactional Methods (Atomic Block Processing) ====================
-
-    /**
-     * Save account within a transaction (includes balance and nonce updates)
-     *
-     * <p>This method buffers the account save operation in a transaction, including
-     * updates to account statistics (account count, total balance). The operations are
-     * NOT written to disk until the transaction is committed.
-     *
-     * @param txId transaction ID from RocksDBTransactionManager
-     * @param account account to save
-     * @throws io.xdag.db.rocksdb.transaction.TransactionException if operation fails
-     */
-    void saveAccountInTransaction(String txId, Account account)
-            throws io.xdag.db.rocksdb.transaction.TransactionException;
-
-    /**
+  /**
      * Update account balance within a transaction
      *
      * <p>This method buffers the balance update in a transaction. If the account doesn't

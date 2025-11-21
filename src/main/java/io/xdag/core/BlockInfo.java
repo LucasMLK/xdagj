@@ -31,18 +31,18 @@ import org.apache.tuweni.units.bigints.UInt256;
 
 /**
  * BlockInfo - Block metadata (极简设计)
- *
+ * <p>
  * Design principles (from CORE_DATA_STRUCTURES.md):
  * 1. 职责单一：只包含Block的元信息（索引、状态判断、PoW验证）
  * 2. 极简设计：只有4个必需字段
  * 3. DRY原则：所有可推导的数据都不存储
- *
+ * <p>
  * 4 core fields:
  * - hash: 区块哈希（唯一标识）
  * - height: 主链高度（height > 0 = 主块，= 0 = 孤块）
  * - difficulty: PoW难度
  * - epoch: XDAG epoch number (NOT Unix timestamp!)
- *
+ * <p>
  * DRY principle - DO NOT store:
  * - prevMainBlock → query via getBlockByHeight(height - 1)
  * - amount/fee → calculate from Block's Transactions
@@ -64,7 +64,7 @@ public class BlockInfo implements Serializable {
      * 主链高度
      * - height > 0: 主块（在main chain上）
      * - height = 0: 孤块（候选块，未被选为主块）
-     *
+     * <p>
      * This is the key field for determining if a block is on the main chain.
      */
     long height;
@@ -91,7 +91,12 @@ public class BlockInfo implements Serializable {
      *   Date date = new Date(unixMillis);
      * </pre>
      *
-     * @see io.xdag.utils.XdagTime#getEpoch(long)
+     *
+     * -- GETTER --
+     *  获取所属epoch
+     *  <p>Simply returns the epoch field. This method is kept for backward compatibility.
+     *
+     @see io.xdag.utils.XdagTime#getEpoch(long)
      * @see io.xdag.utils.XdagTime#epochToTimeMillis(long)
      */
     long epoch;
@@ -106,26 +111,7 @@ public class BlockInfo implements Serializable {
         return height > 0;
     }
 
-    /**
-     * 是否为孤块
-     *  Simply check height == 0
-     */
-    public boolean isOrphanBlock() {
-        return height == 0;
-    }
-
-    /**
-     * 获取所属epoch
-     *
-     * <p>Simply returns the epoch field. This method is kept for backward compatibility.
-     *
-     * @return XDAG epoch number
-     */
-    public long getEpoch() {
-        return epoch;
-    }
-
-    @Override
+  @Override
     public String toString() {
         return String.format(
             "BlockInfo{height=%d, hash=%s, epoch=%d, isMain=%b}",

@@ -29,8 +29,6 @@ import io.xdag.core.Transaction;
 import io.xdag.core.TransactionExecutionInfo;
 import io.xdag.db.TransactionStore;
 import io.xdag.db.rocksdb.base.KVSource;
-import io.xdag.db.rocksdb.transaction.TransactionException;
-import io.xdag.db.rocksdb.transaction.TransactionalStore;
 import io.xdag.utils.BytesUtils;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -40,12 +38,12 @@ import org.apache.tuweni.bytes.Bytes32;
 
 /**
  * RocksDB implementation of TransactionStore for XDAG
- *
+ * <p>
  * Storage architecture:
  * 1. Primary storage: TX_DATA prefix (0xe0) + txHash -> Transaction bytes
  * 2. Block index: TX_BLOCK_INDEX prefix (0xe1) + blockHash -> concatenated txHashes
  * 3. Address index: TX_ADDRESS_INDEX prefix (0xe2) + address -> concatenated txHashes
- *
+ * <p>
  * Performance characteristics:
  * - O(1) lookup by hash (RocksDB get)
  * - O(n) retrieval by block/address (where n = number of transactions)
@@ -71,12 +69,7 @@ public class TransactionStoreImpl implements TransactionStore {
      */
     private io.xdag.db.rocksdb.transaction.RocksDBTransactionManager transactionManager;
 
-    /**
-     * Optional transactional store for atomic operations (Phase 0.5)
-     */
-    private TransactionalStore transactionalStore;
-
-    /**
+  /**
      * Constructor
      *
      * @param txSource Primary transaction storage
@@ -106,22 +99,7 @@ public class TransactionStoreImpl implements TransactionStore {
         log.info("TransactionStoreImpl initialized with atomic operations support");
     }
 
-    /**
-     * Set the transactional store for atomic operations.
-     *
-     * <p>This must be called to enable transactional operations
-     * (xxxInTransaction methods). If not set, calling transactional
-     * methods will throw IllegalStateException.
-     *
-     * @param transactionalStore transactional store instance
-     * @since Phase 0.5 - Transaction Support Infrastructure
-     */
-    public void setTransactionalStore(TransactionalStore transactionalStore) {
-        this.transactionalStore = transactionalStore;
-        log.info("TransactionalStore configured for TransactionStoreImpl");
-    }
-
-    // ========== Lifecycle Methods ==========
+  // ========== Lifecycle Methods ==========
 
     @Override
     public void start() {
@@ -387,108 +365,7 @@ public class TransactionStoreImpl implements TransactionStore {
 
     // ==================== Transactional Operations (Phase 0.5) ====================
 
-    /**
-     * Check if transactional store is available.
-     *
-     * @throws IllegalStateException if transactional store not configured
-     */
-    private void ensureTransactionalStoreAvailable() {
-        if (transactionalStore == null) {
-            throw new IllegalStateException(
-                    "TransactionalStore not configured. Call setTransactionalStore() first.");
-        }
-    }
-
-    /**
-     * Save a transaction in a transaction.
-     *
-     * <p>This operation is queued and will be executed atomically when the transaction commits.
-     *
-     * @param txId transaction ID
-     * @param tx transaction to save
-     * @throws TransactionException if transaction operation fails
-     * @since Phase 0.5 - Transaction Support Infrastructure
-     */
-    public void saveTransactionInTransaction(String txId, Transaction tx)
-            throws TransactionException {
-        ensureTransactionalStoreAvailable();
-
-        // Serialize transaction
-        byte[] key = BytesUtils.merge(TX_DATA, tx.getHash().toArray());
-        byte[] value = tx.toBytes();
-        transactionalStore.putInTransaction(txId, key, value);
-
-        if (log.isDebugEnabled()) {
-            log.debug("Transaction {}: saveTransaction({})",
-                    txId, tx.getHash().toHexString().substring(0, 16));
-        }
-    }
-
-    /**
-     * Delete a transaction in a transaction.
-     *
-     * @param txId transaction ID
-     * @param hash transaction hash to delete
-     * @throws TransactionException if transaction operation fails
-     * @since Phase 0.5 - Transaction Support Infrastructure
-     */
-    public void deleteTransactionInTransaction(String txId, Bytes32 hash)
-            throws TransactionException {
-        ensureTransactionalStoreAvailable();
-
-        byte[] key = BytesUtils.merge(TX_DATA, hash.toArray());
-        transactionalStore.deleteInTransaction(txId, key);
-
-        if (log.isDebugEnabled()) {
-            log.debug("Transaction {}: deleteTransaction({})",
-                    txId, hash.toHexString().substring(0, 16));
-        }
-    }
-
-    /**
-     * Index a transaction to a block in a transaction.
-     *
-     * <p>This creates both forward index (blockHash -> txHash) and
-     * reverse index (txHash -> blockHash) atomically.
-     *
-     * @param txId transaction ID
-     * @param blockHash block hash
-     * @param txHash transaction hash
-     * @throws TransactionException if transaction operation fails
-     * @since Phase 0.5 - Transaction Support Infrastructure
-     */
-    public void indexTransactionToBlockInTransaction(String txId, Bytes32 blockHash, Bytes32 txHash)
-            throws TransactionException {
-        ensureTransactionalStoreAvailable();
-
-        // Forward index: blockHash -> List<txHash>
-        byte[] blockIndexKey = BytesUtils.merge(TX_BLOCK_INDEX, blockHash.toArray());
-        byte[] existingValue = indexSource.get(blockIndexKey);
-
-        byte[] newValue;
-        if (existingValue == null) {
-            // First transaction for this block
-            newValue = txHash.toArray();
-        } else {
-            // Append to existing list
-            newValue = BytesUtils.merge(existingValue, txHash.toArray());
-        }
-
-        transactionalStore.putInTransaction(txId, blockIndexKey, newValue);
-
-        // Reverse index: txHash -> blockHash
-        byte[] reverseKey = BytesUtils.merge(TRANSACTION_TO_BLOCK_INDEX, txHash.toArray());
-        transactionalStore.putInTransaction(txId, reverseKey, blockHash.toArray());
-
-        if (log.isDebugEnabled()) {
-            log.debug("Transaction {}: indexTransactionToBlock(block={}, tx={})",
-                    txId,
-                    blockHash.toHexString().substring(0, 16),
-                    txHash.toHexString().substring(0, 16));
-        }
-    }
-
-    // ==================== Transaction Execution Status Tracking (Phase 1 - Task 1.2) ====================
+  // ==================== Transaction Execution Status Tracking (Phase 1 - Task 1.2) ====================
 
     @Override
     public boolean isTransactionExecuted(Bytes32 txHash) {
@@ -531,28 +408,11 @@ public class TransactionStoreImpl implements TransactionStore {
         }
     }
 
-    @Override
-    public TransactionExecutionInfo getExecutionInfo(Bytes32 txHash) {
-        try {
-            byte[] key = BytesUtils.merge(TX_EXECUTION_STATUS, txHash.toArray());
-            byte[] value = indexSource.get(key);
-
-            if (value == null) {
-                return null;
-            }
-
-            return deserializeExecutionInfo(value);
-        } catch (Exception e) {
-            log.error("Failed to get execution info for transaction: {}", txHash.toHexString(), e);
-            return null;
-        }
-    }
-
-    // ========== Execution Info Serialization ==========
+  // ========== Execution Info Serialization ==========
 
     /**
      * Serialize TransactionExecutionInfo to bytes.
-     *
+     * <p>
      * Format (49 bytes total):
      * - executingBlockHash: 32 bytes
      * - executingBlockHeight: 8 bytes (long)
@@ -672,24 +532,4 @@ public class TransactionStoreImpl implements TransactionStore {
         }
     }
 
-    @Override
-    public void unmarkTransactionExecutedInTransaction(String txId, Bytes32 txHash)
-            throws io.xdag.db.rocksdb.transaction.TransactionException {
-        if (transactionManager == null) {
-            throw new io.xdag.db.rocksdb.transaction.TransactionException(
-                    "TransactionManager not initialized");
-        }
-
-        try {
-            byte[] key = BytesUtils.merge(TX_EXECUTION_STATUS, txHash.toArray());
-            transactionManager.deleteInTransaction(txId, key);
-
-            log.debug("Buffered tx execution unmark for {} in transaction {}",
-                    txHash.toHexString().substring(0, 16), txId);
-
-        } catch (Exception e) {
-            throw new io.xdag.db.rocksdb.transaction.TransactionException(
-                    "Failed to unmark transaction: " + e.getMessage(), e);
-        }
-    }
 }

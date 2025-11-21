@@ -37,7 +37,7 @@ import org.bouncycastle.util.encoders.Hex;
 
 /**
  * OrphanBlockStore implementation
- *
+ * <p>
  * Stores orphan blocks with their timestamps.
  * Returns Bytes32 hashes instead of Address objects.
  */
@@ -76,7 +76,7 @@ public class OrphanBlockStoreImpl implements OrphanBlockStore {
 
     /**
      * Get orphan block hashes
-     *
+     * <p>
      * Returns list of Bytes32 hashes instead of Address objects.
      * Filters by timestamp and returns up to 'num' orphans.
      */

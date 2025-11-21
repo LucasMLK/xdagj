@@ -226,21 +226,7 @@ public class TransactionValidatorImpl implements TransactionValidator {
         }
     }
 
-    @Override
-    public ValidationResult validateAt(Transaction tx, ValidationLevel level) {
-        switch (level) {
-            case SYNTAX:
-                return validateSyntax(tx);
-            case STATE:
-                return validateState(tx);
-            case ECONOMIC:
-                return validateEconomic(tx);
-            default:
-                throw new IllegalArgumentException("Unknown validation level: " + level);
-        }
-    }
-
-    // ========== Helper Methods ==========
+  // ========== Helper Methods ==========
 
     /**
      * Create a failure result.

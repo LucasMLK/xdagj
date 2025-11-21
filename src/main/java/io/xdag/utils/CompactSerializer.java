@@ -27,7 +27,6 @@ package io.xdag.utils;
 import io.xdag.core.BlockInfo;
 import io.xdag.core.ChainStats;
 import io.xdag.core.Snapshot;
-import io.xdag.core.SnapshotInfo;
 import io.xdag.core.XAmount;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -37,7 +36,7 @@ import org.apache.tuweni.units.bigints.UInt256;
 
 /**
  * Compact serializer for XDAG data structures
- *
+ * <p>
  * This serializer replaces Kryo with a custom, optimized implementation that:
  * - Uses variable-length integer encoding (VarInt)
  * - Implements bit-field compression for flags
@@ -105,73 +104,14 @@ public class CompactSerializer {
         return out.toByteArray();
     }
 
-    /**
-     * Deserialize BlockInfo from bytes
-     */
-    public static BlockInfo deserializeBlockInfo(byte[] data) throws IOException {
-        ByteReader reader = new ByteReader(data);
-
-        // hash: 32 bytes (full hash format)
-        Bytes32 fullHash = Bytes32.wrap(reader.readBytes(32));
-
-        // epoch: 8 bytes (XDAG epoch number)
-        long epoch = reader.readFixed64();
-
-        // height: variable
-        long height = reader.readVarLong();
-
-        //  BlockInfo type/flags deleted in minimal design (backward compatibility maintained)
-        // Reading placeholders for backward compatibility with v1 format
-        long type = reader.readFixed64(); // placeholder
-        int flags = reader.readFixed32(); // placeholder
-
-        // difficulty: 32 bytes
-        UInt256 difficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
-
-        //  BlockInfo.ref field deleted in minimal design (backward compatibility maintained)
-        // Reading placeholder for backward compatibility with v1 format
-        byte refFlag = reader.readByte(); // placeholder
-
-        //  BlockInfo.maxDiffLink field deleted in minimal design (backward compatibility maintained)
-        // Reading placeholder for backward compatibility with v1 format
-        byte maxDiffLinkFlag = reader.readByte(); // placeholder
-
-        //  BlockInfo.amount field deleted in minimal design (backward compatibility maintained)
-        // Reading placeholder for backward compatibility with v1 format
-        XAmount amount = deserializeXAmount(reader); // placeholder
-
-        //  BlockInfo.fee field deleted in minimal design (backward compatibility maintained)
-        // Reading placeholder for backward compatibility with v1 format
-        XAmount fee = deserializeXAmount(reader); // placeholder
-
-        //  BlockInfo.remark field deleted in minimal design (backward compatibility maintained)
-        // Reading placeholder for backward compatibility with v1 format
-        int remarkLen = reader.readVarInt(); // placeholder
-
-        //  BlockInfo.isSnapshot field deleted in minimal design (backward compatibility maintained)
-        // Reading placeholder for backward compatibility with v1 format
-        byte isSnapshotFlag = reader.readByte(); // placeholder
-
-        //  BlockInfo.snapshotInfo field deleted in minimal design (backward compatibility maintained)
-        // Reading placeholder for backward compatibility with v1 format
-        byte snapshotInfoFlag = reader.readByte(); // placeholder
-
-        return BlockInfo.builder()
-                .hash(fullHash)  // Use full hash format, not hash
-                .epoch(epoch)
-                .height(height)
-                .difficulty(difficulty)
-                .build();
-    }
-
-    // ========== ChainStats Serialization ==========
+  // ========== ChainStats Serialization ==========
 
     /**
      * Serialize ChainStats to bytes (optimized - removed 5 deprecated fields)
-     *
+     * <p>
      * 3 Optimization: Removed blockCount, hostCount, mainBlockTime,
      * globalMinerHash, ourLastBlockHash serialization for 33% size reduction.
-     *
+     * <p>
      * v2: Added new consensus fields (baseDifficultyTarget, adjustment epochs, top block info)
      */
     public static byte[] serialize(ChainStats stats) throws IOException {
@@ -240,10 +180,10 @@ public class CompactSerializer {
 
     /**
      * Deserialize ChainStats from bytes (optimized)
-     *
+     * <p>
      * 3 Optimization: Reads only the 10 core fields.
      * Deprecated fields are set to defaults in fromLegacy() if needed.
-     *
+     * <p>
      * v2: Reads new consensus fields with backward compatibility.
      * If reading old format data (no new fields), returns with defaults.
      */
@@ -351,24 +291,7 @@ public class CompactSerializer {
         return out.toByteArray();
     }
 
-    /**
-     * Deserialize Snapshot from bytes
-     */
-    public static Snapshot deserializeSnapshot(byte[] data) throws IOException {
-        ByteReader reader = new ByteReader(data);
-
-        Snapshot.SnapshotType type = Snapshot.SnapshotType.fromByte(reader.readByte());
-
-        int dataLen = reader.readVarInt();
-        Bytes snapshotData = dataLen > 0 ? Bytes.wrap(reader.readBytes(dataLen)) : Bytes.EMPTY;
-
-        return Snapshot.builder()
-                .type(type)
-                .data(snapshotData)
-                .build();
-    }
-
-    // ========== Helper Methods ==========
+  // ========== Helper Methods ==========
 
     /**
      * Write variable-length integer (VarInt encoding)
@@ -376,7 +299,7 @@ public class CompactSerializer {
      * - 2 bytes for 128-16383
      * - etc.
      */
-    private static void writeVarInt(ByteArrayOutputStream out, int value) throws IOException {
+    private static void writeVarInt(ByteArrayOutputStream out, int value) {
         while ((value & ~0x7F) != 0) {
             out.write((value & 0x7F) | 0x80);
             value >>>= 7;
@@ -387,7 +310,7 @@ public class CompactSerializer {
     /**
      * Write variable-length long
      */
-    private static void writeVarLong(ByteArrayOutputStream out, long value) throws IOException {
+    private static void writeVarLong(ByteArrayOutputStream out, long value) {
         while ((value & ~0x7FL) != 0) {
             out.write((int) ((value & 0x7F) | 0x80));
             value >>>= 7;
@@ -398,7 +321,7 @@ public class CompactSerializer {
     /**
      * Write fixed 32-bit integer (4 bytes, little-endian)
      */
-    private static void writeFixed32(ByteArrayOutputStream out, int value) throws IOException {
+    private static void writeFixed32(ByteArrayOutputStream out, int value) {
         out.write(value & 0xFF);
         out.write((value >> 8) & 0xFF);
         out.write((value >> 16) & 0xFF);
@@ -408,7 +331,7 @@ public class CompactSerializer {
     /**
      * Write fixed 64-bit long (8 bytes, little-endian)
      */
-    private static void writeFixed64(ByteArrayOutputStream out, long value) throws IOException {
+    private static void writeFixed64(ByteArrayOutputStream out, long value) {
         out.write((int) (value & 0xFF));
         out.write((int) ((value >> 8) & 0xFF));
         out.write((int) ((value >> 16) & 0xFF));
@@ -422,7 +345,7 @@ public class CompactSerializer {
     /**
      * Serialize XAmount
      */
-    private static void serializeXAmount(ByteArrayOutputStream out, XAmount amount) throws IOException {
+    private static void serializeXAmount(ByteArrayOutputStream out, XAmount amount) {
         if (amount != null) {
             out.write(1); // present
             writeFixed64(out, amount.toXAmount().toLong());
@@ -441,31 +364,7 @@ public class CompactSerializer {
         return null;
     }
 
-    /**
-     * Serialize SnapshotInfo (legacy)
-     */
-    private static byte[] serializeSnapshotInfo(SnapshotInfo info) throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream(40);
-        out.write(info.getType() ? 1 : 0);
-        byte[] data = info.getData() != null ? info.getData() : new byte[0];
-        writeVarInt(out, data.length);
-        if (data.length > 0) {
-            out.write(data);
-        }
-        return out.toByteArray();
-    }
-
-    /**
-     * Deserialize SnapshotInfo (legacy)
-     */
-    private static SnapshotInfo deserializeSnapshotInfo(ByteReader reader) throws IOException {
-        boolean type = reader.readByte() == 1;
-        int dataLen = reader.readVarInt();
-        byte[] data = dataLen > 0 ? reader.readBytes(dataLen) : new byte[0];
-        return new SnapshotInfo(type, data);
-    }
-
-    // ========== ByteReader Helper Class ==========
+  // ========== ByteReader Helper Class ==========
 
     /**
      * Helper class for reading bytes sequentially

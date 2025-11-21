@@ -129,7 +129,6 @@ public class SyncBlockRequestMessage extends Message {
      * <p>Format:
      * [32 bytes hash] + [variable chainStats]
      *
-     * @return encoder with serialized data
      */
 
     @Override

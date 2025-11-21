@@ -33,12 +33,10 @@ import io.xdag.db.DagStore;
 import io.xdag.db.cache.DagCache;
 import io.xdag.db.rocksdb.config.DagStoreRocksDBConfig;
 import io.xdag.utils.CompactSerializer;
-import io.xdag.utils.XdagTime;
 import java.io.File;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Comparator;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
@@ -657,64 +655,7 @@ public class DagStoreImpl implements DagStore {
         return candidates;
     }
 
-    @Override
-    public Block getWinnerBlockInEpoch(long epoch) {
-        // BUGFIX: Disable cache for epoch winner during import to ensure correct epoch competition
-        // The cache causes a race condition where block2 doesn't compete with block1 because
-        // block1 is cached as winner before block2 arrives. We need to re-scan the epoch index
-        // every time to find ALL blocks in the epoch for proper competition.
-        //
-        // Performance impact: Minimal - this method is only called during block import,
-        // not during queries. The epoch index scan is fast (indexed by epoch + hash).
-
-        // Log cache state for debugging
-        Bytes32 cachedWinnerHash = cache.getEpochWinner(epoch);
-        if (cachedWinnerHash != null) {
-            log.debug("getWinnerBlockInEpoch: Found cached winner {} for epoch {}, but re-scanning to ensure correctness",
-                    cachedWinnerHash.toHexString().substring(0, 16), epoch);
-        }
-
-        // ALWAYS get all candidates (don't trust cache during import)
-        List<Block> candidates = getCandidateBlocksInEpoch(epoch);
-        if (candidates.isEmpty()) {
-            return null;
-        }
-
-        // Find winner: smallest hash among ALL candidates
-        // IMPORTANT: Don't filter by height! During import, blocks may have height=0 (pending)
-        // but still need to participate in epoch competition. The height filter would cause
-        // a race condition where the second block doesn't see the first block as a competitor.
-        Block winner = null;
-        Bytes32 smallestHash = null;
-
-        for (Block candidate : candidates) {
-            if (candidate.getInfo() != null) {
-                // Consider ALL blocks in epoch, including those with height=0 (pending assignment)
-                if (smallestHash == null || candidate.getHash().compareTo(smallestHash) < 0) {
-                    smallestHash = candidate.getHash();
-                    winner = candidate;
-                }
-            }
-        }
-
-        // Cache winner
-        if (winner != null) {
-            cache.putEpochWinner(epoch, winner.getHash());
-        }
-
-        return winner;
-    }
-
-    @Override
-    public long getWinnerBlockHeight(long epoch) {
-        Block winner = getWinnerBlockInEpoch(epoch);
-        if (winner == null || winner.getInfo() == null) {
-            return -1;
-        }
-        return winner.getInfo().getHeight();
-    }
-
-    // ==================== BlockInfo Operations ====================
+  // ==================== BlockInfo Operations ====================
 
     @Override
     public void saveBlockInfo(BlockInfo blockInfo) {
@@ -767,27 +708,7 @@ public class DagStoreImpl implements DagStore {
         }
     }
 
-    @Override
-    public boolean hasBlockInfo(Bytes32 hash) {
-        if (hash == null) {
-            return false;
-        }
-
-        if (cache.getBlockInfo(hash) != null) {
-            return true;
-        }
-
-        try {
-            byte[] key = buildBlockInfoKey(hash);
-            byte[] data = db.get(readOptions, key);
-            return data != null;
-        } catch (RocksDBException e) {
-            log.error("Failed to check BlockInfo existence: {}", hash.toHexString(), e);
-            return false;
-        }
-    }
-
-    // ==================== ChainStats Operations ====================
+  // ==================== ChainStats Operations ====================
 
     @Override
     public void saveChainStats(ChainStats stats) {
@@ -883,89 +804,9 @@ public class DagStoreImpl implements DagStore {
         return references;
     }
 
-    @Override
-    public void indexBlockReference(Bytes32 referencingBlock, Bytes32 referencedBlock) {
-        if (referencingBlock == null || referencedBlock == null) {
-            return;
-        }
+  // ==================== Batch Operations ====================
 
-        try {
-            byte[] key = buildBlockRefsKey(referencedBlock);
-
-            // Read existing references
-            List<Bytes32> refs = getBlockReferences(referencedBlock);
-
-            // Add new reference if not exists
-            if (!refs.contains(referencingBlock)) {
-                refs.add(referencingBlock);
-
-                // Serialize list
-                ByteBuffer buffer = ByteBuffer.allocate(refs.size() * 32);
-                for (Bytes32 ref : refs) {
-                    buffer.put(ref.toArray());
-                }
-
-                db.put(writeOptions, key, buffer.array());
-            }
-
-        } catch (RocksDBException e) {
-            log.error("Failed to index block reference", e);
-        }
-    }
-
-    // ==================== Batch Operations ====================
-
-    @Override
-    public void saveBlocks(List<Block> blocks) {
-        if (blocks == null || blocks.isEmpty()) {
-            return;
-        }
-
-      try (WriteBatch batch = new WriteBatch()) {
-        for (Block block : blocks) {
-          if (block == null || block.getInfo() == null) {
-            continue;
-          }
-
-          Bytes32 hash = block.getHash();
-          BlockInfo info = block.getInfo();
-
-          // Add to batch
-          batch.put(buildBlockKey(hash), serializeBlock(block));
-          batch.put(buildBlockInfoKey(hash), serializeBlockInfo(info));
-          batch.put(buildEpochIndexKey(block.getEpoch(), hash), EMPTY_VALUE);
-
-          if (info.getHeight() > 0) {
-            batch.put(buildHeightIndexKey(info.getHeight()), hash.toArray());
-          }
-        }
-
-        db.write(writeOptions, batch);
-
-        log.debug("Batch saved {} blocks", blocks.size());
-
-      } catch (RocksDBException e) {
-        log.error("Failed to batch save blocks", e);
-        throw new RuntimeException("Failed to batch save blocks", e);
-      }
-    }
-
-    @Override
-    public List<Block> getBlocksByHashes(List<Bytes32> hashes) {
-        List<Block> blocks = new ArrayList<>();
-        if (hashes == null || hashes.isEmpty()) {
-            return blocks;
-        }
-
-        for (Bytes32 hash : hashes) {
-            Block block = getBlockByHash(hash, false);
-            blocks.add(block);  // Add null if not found
-        }
-
-        return blocks;
-    }
-
-    // ==================== Statistics ====================
+  // ==================== Statistics ====================
 
     @Override
     public long getBlockCount() {
@@ -1092,66 +933,7 @@ public class DagStoreImpl implements DagStore {
         }
     }
 
-    @Override
-    public void saveBlockInfoInTransaction(String txId, BlockInfo info)
-            throws io.xdag.db.rocksdb.transaction.TransactionException {
-        if (transactionManager == null) {
-            throw new io.xdag.db.rocksdb.transaction.TransactionException(
-                    "TransactionManager not initialized");
-        }
-
-        try {
-            byte[] infoKey = buildBlockInfoKey(info.getHash());
-            byte[] infoData = serializeBlockInfo(info);
-
-            transactionManager.putInTransaction(txId, infoKey, infoData);
-
-            log.debug("Buffered BlockInfo {} in transaction {}",
-                    info.getHash().toHexString().substring(0, 16), txId);
-
-        } catch (Exception e) {
-            throw new io.xdag.db.rocksdb.transaction.TransactionException(
-                    "Failed to save BlockInfo: " + e.getMessage(), e);
-        }
-    }
-
-    @Override
-    public void deleteHeightMappingInTransaction(String txId, long height)
-            throws io.xdag.db.rocksdb.transaction.TransactionException {
-        if (transactionManager == null) {
-            throw new io.xdag.db.rocksdb.transaction.TransactionException(
-                    "TransactionManager not initialized");
-        }
-
-        try {
-            byte[] heightKey = buildHeightIndexKey(height);
-            transactionManager.deleteInTransaction(txId, heightKey);
-
-            log.debug("Buffered height mapping deletion for height {} in transaction {}",
-                    height, txId);
-
-        } catch (Exception e) {
-            throw new io.xdag.db.rocksdb.transaction.TransactionException(
-                    "Failed to delete height mapping: " + e.getMessage(), e);
-        }
-    }
-
-    @Override
-    public void updateCacheAfterCommit(Block block) {
-        // Update L1 cache AFTER successful transaction commit
-        cache.putBlock(block.getHash(), block);
-        if (block.getInfo() != null) {
-            cache.putBlockInfo(block.getHash(), block.getInfo());
-            if (block.getInfo().getHeight() > 0) {
-                cache.putHashByHeight(block.getInfo().getHeight(), block.getHash());
-            }
-        }
-
-        log.debug("Cache updated for block {} after commit",
-                block.getHash().toHexString().substring(0, 16));
-    }
-
-    // ==================== Key Building Methods ====================
+  // ==================== Key Building Methods ====================
 
     private byte[] buildBlockKey(Bytes32 hash) {
         byte[] key = new byte[33];

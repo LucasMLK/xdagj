@@ -51,6 +51,7 @@ import io.xdag.db.cache.DagEntityResolver;
 import io.xdag.p2p.P2pConfigFactory;
 import io.xdag.p2p.P2pService;
 import io.xdag.p2p.config.P2pConfig;
+import java.math.BigInteger;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -118,6 +119,12 @@ public class DagKernel {
   private final TransactionStore transactionStore;
   private final AccountStore accountStore;
   private final OrphanBlockStore orphanBlockStore;
+  /**
+   * -- GETTER --
+   *  Get transaction manager for atomic operations
+   *
+   * @return RocksDBTransactionManager instance
+   */
   private final RocksDBTransactionManager transactionManager;
 
   private final DagCache dagCache;
@@ -146,7 +153,7 @@ public class DagKernel {
   private GenesisConfig genesisConfig;
 
   // Wallet for genesis block creation (optional)
-  private Wallet wallet;
+  private final Wallet wallet;
 
   private volatile boolean running = false;
   /**
@@ -377,9 +384,8 @@ public class DagKernel {
               log.info("✓ PoW Algorithm started: {}", powAlgorithm.getName());
 
               // Initialize RandomX seed from genesis config if available
-              if (powAlgorithm instanceof io.xdag.consensus.pow.RandomXPow) {
-                  io.xdag.consensus.pow.RandomXPow randomXPow = (io.xdag.consensus.pow.RandomXPow) powAlgorithm;
-                  if (genesisConfig.hasRandomXSeed()) {
+              if (powAlgorithm instanceof RandomXPow randomXPow) {
+                if (genesisConfig.hasRandomXSeed()) {
                       try {
                           byte[] genesisSeed = genesisConfig.getRandomXSeedBytes();
                           randomXPow.getSeedManager().initializeFromPreseed(genesisSeed, 1);
@@ -662,15 +668,18 @@ public class DagKernel {
       if (!genesisFile.exists()) {
           // CRITICAL: genesis-{network}.json is REQUIRED
           String errorMsg = String.format(
-              "genesis-%s.json not found! Searched:\n" +
-              "  1. %s/genesis-%s.json\n" +
-              "  2. %s/config/genesis-%s.json\n\n" +
-              "XDAG requires explicit genesis configuration (like Ethereum).\n" +
-              "Network-specific filenames are required for clarity.\n\n" +
-              "Please create genesis configuration for your network:\n" +
-              "  - Mainnet: cp ../config/genesis-mainnet.json ./genesis-mainnet.json\n" +
-              "  - Testnet: cp ../config/genesis-testnet.json ./genesis-testnet.json\n" +
-              "  - Devnet:  cp ../config/genesis-devnet.json ./genesis-devnet.json",
+              """
+                  genesis-%s.json not found! Searched:
+                    1. %s/genesis-%s.json
+                    2. %s/config/genesis-%s.json
+                  
+                  XDAG requires explicit genesis configuration (like Ethereum).
+                  Network-specific filenames are required for clarity.
+                  
+                  Please create genesis configuration for your network:
+                    - Mainnet: cp ../config/genesis-mainnet.json ./genesis-mainnet.json
+                    - Testnet: cp ../config/genesis-testnet.json ./genesis-testnet.json
+                    - Devnet:  cp ../config/genesis-devnet.json ./genesis-devnet.json""",
               network, rootDir, network, rootDir, network
           );
           log.error(errorMsg);
@@ -693,7 +702,7 @@ public class DagKernel {
           if (genesisConfig.hasAllocations()) {
               log.info("  Initial Allocations: {} addresses", genesisConfig.getAlloc().size());
               long totalAlloc = genesisConfig.getAlloc().values().stream()
-                      .map(s -> new java.math.BigInteger(s))
+                      .map(BigInteger::new)
                       .reduce(java.math.BigInteger.ZERO, java.math.BigInteger::add)
                       .divide(java.math.BigInteger.valueOf(1_000_000_000))
                       .longValue();
@@ -807,14 +816,17 @@ public class DagKernel {
 
       if (expectedEpoch != actualEpoch) {
           String error = String.format(
-              "Genesis block epoch mismatch!\n" +
-              "  Expected (from genesis.json): %d\n" +
-              "  Actual (from blockchain): %d\n\n" +
-              "This means you're trying to run a node with a different genesis.json\n" +
-              "than the one used to create this chain. This is not allowed.\n\n" +
-              "Solutions:\n" +
-              "  1. Use the correct genesis.json for this network\n" +
-              "  2. Delete the chain data and start fresh with current genesis.json",
+              """
+                  Genesis block epoch mismatch!
+                    Expected (from genesis.json): %d
+                    Actual (from blockchain): %d
+                  
+                  This means you're trying to run a node with a different genesis.json
+                  than the one used to create this chain. This is not allowed.
+                  
+                  Solutions:
+                    1. Use the correct genesis.json for this network
+                    2. Delete the chain data and start fresh with current genesis.json""",
               expectedEpoch, actualEpoch
           );
           log.error(error);
@@ -827,10 +839,12 @@ public class DagKernel {
 
       if (!expectedDifficulty.equals(actualDifficulty)) {
           String error = String.format(
-              "Genesis block difficulty mismatch!\n" +
-              "  Expected (from genesis.json): %s\n" +
-              "  Actual (from blockchain): %s\n\n" +
-              "Chain was created with different genesis configuration.",
+              """
+                  Genesis block difficulty mismatch!
+                    Expected (from genesis.json): %s
+                    Actual (from blockchain): %s
+                  
+                  Chain was created with different genesis configuration.""",
               expectedDifficulty.toHexString(), actualDifficulty.toHexString()
           );
           log.error(error);
@@ -861,13 +875,17 @@ public class DagKernel {
       // 5+: genesisCoinbase is REQUIRED for deterministic genesis (Bitcoin/Ethereum approach)
       if (!genesisConfig.hasGenesisCoinbase()) {
           throw new RuntimeException(
-              "genesisCoinbase is required in genesis.json!\n\n" +
-              "XDAG requires deterministic genesis block creation.\n" +
-              "All nodes must create IDENTICAL genesis blocks (Bitcoin/Ethereum approach).\n\n" +
-              "Please add to your genesis.json:\n" +
-              "  \"genesisCoinbase\": \"4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi\"\n\n" +
-              "Format: base58check encoded 20-byte XDAG address (recommended)\n" +
-              "Legacy: 0x-prefixed 32-byte hex (backward compatibility only)"
+              """
+                  genesisCoinbase is required in genesis.json!
+                  
+                  XDAG requires deterministic genesis block creation.
+                  All nodes must create IDENTICAL genesis blocks (Bitcoin/Ethereum approach).
+                  
+                  Please add to your genesis.json:
+                    "genesisCoinbase": "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi"
+                  
+                  Format: base58check encoded 20-byte XDAG address (recommended)
+                  Legacy: 0x-prefixed 32-byte hex (backward compatibility only)"""
           );
       }
 
@@ -950,15 +968,6 @@ public class DagKernel {
       }
 
       log.info("✓ Applied {} initial allocations", successCount);
-  }
-
-  /**
-   * Get transaction manager for atomic operations
-   *
-   * @return RocksDBTransactionManager instance
-   */
-  public RocksDBTransactionManager getTransactionManager() {
-      return transactionManager;
   }
 
 }

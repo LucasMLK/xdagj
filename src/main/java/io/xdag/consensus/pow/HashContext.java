@@ -137,16 +137,7 @@ public final class HashContext {
 
     // ========== Utility Methods ==========
 
-    /**
-     * Check if block height is available.
-     *
-     * @return true if height is set (not -1)
-     */
-    public boolean hasBlockHeight() {
-        return blockHeight >= 0;
-    }
-
-    @Override
+  @Override
     public String toString() {
         return String.format("HashContext[timestamp=%d, height=%d, epoch=%d]",
                 timestamp, blockHeight, epoch);

@@ -24,10 +24,7 @@
 
 package io.xdag.core;
 
-import io.xdag.crypto.keys.ECKeyPair;
-import io.xdag.listener.Listener;
 import java.util.List;
-import java.util.Map;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -44,7 +41,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  * <ul>
  *   <li><strong>Epoch</strong>: 64-second time window (epoch = timestamp / 64)</li>
  *   <li><strong>Competition</strong>: All blocks in same epoch compete</li>
- *   <li><strong>Winner Selection</strong>: Block with smallest hash wins</li>
+ *   <li><strong>Winner Selection</strong>: Block with the smallest hash wins</li>
  *   <li><strong>Main Block</strong>: Winning block becomes part of main chain</li>
  * </ul>
  *
@@ -83,7 +80,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  *
  * <h3>5. Block States</h3>
  * <ul>
- *   <li><strong>Main Block</strong>: BlockInfo.height &gt; 0 (on main chain)</li>
+ *   <li><strong>Main Block</strong>: BlockInfo. Height &gt; 0 (on main chain)</li>
  *   <li><strong>Orphan Block</strong>: BlockInfo.height = 0 (not on main chain)</li>
  *   <li><strong>Candidate Block</strong>: Competing in current epoch (not yet determined)</li>
  * </ul>
@@ -105,7 +102,7 @@ public interface DagChain {
      * <p>This method performs comprehensive validation and import of a block:
      * <ol>
      *   <li><strong>Basic Validation</strong>: Timestamp, structure, PoW difficulty</li>
-     *   <li><strong>Link Validation</strong>: Verify all Transaction and Block references exist and are valid</li>
+     *   <li><strong>Link Validation</strong>: Verify all Transaction and Block references to exist and are valid</li>
      *   <li><strong>DAG Rules Validation</strong>:
      *     <ul>
      *       <li>No cycles in DAG</li>
@@ -130,7 +127,7 @@ public interface DagChain {
      *   </li>
      *   <li><strong>Epoch Competition</strong>:
      *     <ul>
-     *       <li>Check if this block has smallest hash in its epoch</li>
+     *       <li>Check if this block has the smallest hash in its epoch</li>
      *       <li>If yes: mark as main block candidate</li>
      *       <li>If no: mark as failed candidate</li>
      *     </ul>
@@ -191,7 +188,7 @@ public interface DagChain {
      *   <li>Coinbase address (this node's mining address)</li>
      *   <li>Links to blocks:
      *     <ul>
-     *       <li>Previous main block (parent with highest cumulative difficulty)</li>
+     *       <li>Previous main block (parent with the highest cumulative difficulty)</li>
      *       <li>Recent orphan blocks (for network health and connectivity)</li>
      *     </ul>
      *   </li>
@@ -294,7 +291,6 @@ public interface DagChain {
      * @param height main chain height (1-based, height=1 is first main block after genesis)
      * @return main block at this height, or null if height is invalid
      * @see #getMainChainLength()
-     * @see #getEpochOfMainBlock(long)
      * @see #getWinnerBlockInEpoch(long)
      */
     Block getMainBlockByHeight(long height);
@@ -318,28 +314,7 @@ public interface DagChain {
      */
     long getMainChainLength();
 
-    /**
-     * Get the epoch number of a main block at given height
-     *
-     * <p>This method provides Height → Epoch mapping.
-     * Useful for understanding which time window a main block belongs to.
-     *
-     * <p><strong>Example</strong>:
-     * <pre>
-     * getEpochOfMainBlock(1) → 1000  (first main block is in Epoch 1000)
-     * getEpochOfMainBlock(2) → 1001  (second main block is in Epoch 1001)
-     * getEpochOfMainBlock(3) → 1003  (third main block is in Epoch 1003, skipped 1002)
-     * </pre>
-     *
-     * @param height main chain height (1-based)
-     * @return epoch number of the main block at this height, or -1 if height is invalid
-     * @throws IllegalArgumentException if height &lt;= 0
-     * @see #getMainBlockByHeight(long)
-     * @see #getWinnerBlockHeight(long)
-     */
-    long getEpochOfMainBlock(long height);
-
-    /**
+  /**
      * List recent main blocks
      *
      * <p>Returns the most recent main blocks in descending order (newest first).
@@ -358,27 +333,7 @@ public interface DagChain {
      */
     List<Block> listMainBlocks(int count);
 
-    /**
-     * Get main chain path from a block to genesis
-     *
-     * <p>Traces the main chain path backwards from the given block to the genesis block.
-     * Each step follows the parent with maximum cumulative difficulty.
-     *
-     * <p><strong>Example</strong>:
-     * <pre>
-     * Main chain: Genesis → Block_A → Block_B → Block_C
-     *
-     * getMainChainPath(Block_C.hash) → [Block_C, Block_B, Block_A, Genesis]
-     * </pre>
-     *
-     * @param hash starting block hash (must be a main block)
-     * @return list of blocks from hash to genesis (descending order)
-     * @throws IllegalArgumentException if block is not on main chain
-     * @see #isBlockInMainChain(Bytes32)
-     */
-    List<Block> getMainChainPath(Bytes32 hash);
-
-    // ==================== Epoch Queries (Time-Based) ====================
+  // ==================== Epoch Queries (Time-Based) ====================
 
     /**
      * Get current epoch number
@@ -479,37 +434,10 @@ public interface DagChain {
      * @param epoch epoch number (timestamp / 64)
      * @return winning block for this epoch, or null if no valid winner
      * @see #getCandidateBlocksInEpoch(long)
-     * @see #getWinnerBlockHeight(long)
      */
     Block getWinnerBlockInEpoch(long epoch);
 
-    /**
-     * Get the height of the winning block in a specific epoch
-     *
-     * <p>This method provides Epoch → Height mapping.
-     * Returns the main chain height of the epoch's winning block.
-     *
-     * <p><strong>Example</strong>:
-     * <pre>
-     * Epoch 1000 → Block_A wins → height=1
-     * Epoch 1001 → Block_B wins → height=2
-     * Epoch 1002 → (no blocks)  → height=-1
-     * Epoch 1003 → Block_C wins → height=3
-     *
-     * getWinnerBlockHeight(1000) → 1
-     * getWinnerBlockHeight(1001) → 2
-     * getWinnerBlockHeight(1002) → -1 (no winner)
-     * getWinnerBlockHeight(1003) → 3
-     * </pre>
-     *
-     * @param epoch epoch number
-     * @return main chain height of winning block, or -1 if epoch has no winning block
-     * @see #getWinnerBlockInEpoch(long)
-     * @see #getEpochOfMainBlock(long)
-     */
-    long getWinnerBlockHeight(long epoch);
-
-    /**
+  /**
      * Get statistics for a specific epoch
      *
      * <p>Returns detailed statistics for the given epoch:
@@ -542,25 +470,7 @@ public interface DagChain {
      */
     Block getBlockByHash(Bytes32 hash, boolean isRaw);
 
-    /**
-     * List blocks mined by this node
-     *
-     * @param count maximum number of mined blocks to retrieve
-     * @return list of blocks mined by this node (may be empty)
-     */
-    List<Block> listMinedBlocks(int count);
-
-    /**
-     * Get memory blocks created by current node
-     *
-     * <p>Returns blocks that were created locally but not yet finalized
-     * to persistent storage. Used for tracking pending block creation.
-     *
-     * @return map of block hash to creation count
-     */
-    Map<Bytes, Integer> getMemOurBlocks();
-
-    // ==================== Cumulative Difficulty ====================
+  // ==================== Cumulative Difficulty ====================
 
     /**
      * Calculate cumulative difficulty for a block
@@ -741,32 +651,10 @@ public interface DagChain {
      *
      * @see #tryToConnect(Block)
      * @see #calculateCumulativeDifficulty(Block)
-     * @see #startCheckMain(long)
      */
     void checkNewMain();
 
-    /**
-     * Start main chain check thread
-     *
-     * <p>Starts a background thread that periodically calls {@link #checkNewMain()}
-     * to identify and update the best chain.
-     *
-     * @param period check period in milliseconds (recommended: 1024ms)
-     * @see #checkNewMain()
-     * @see #stopCheckMain()
-     */
-    void startCheckMain(long period);
-
-    /**
-     * Stop main chain check thread
-     *
-     * <p>Stops the background thread started by {@link #startCheckMain(long)}.
-     *
-     * @see #startCheckMain(long)
-     */
-    void stopCheckMain();
-
-    // ==================== Statistics and State ====================
+  // ==================== Statistics and State ====================
 
     /**
      * Get current blockchain statistics
@@ -784,88 +672,11 @@ public interface DagChain {
      */
     ChainStats getChainStats();
 
-    /**
-     * Increment waiting sync count
-     *
-     * <p>Increments the counter of blocks waiting for parent blocks during sync.
-     * Used by SyncManager when adding blocks to the waiting queue.
-     *
-     * @see #decrementWaitingSyncCount()
-     */
-    void incrementWaitingSyncCount();
+  // ==================== Economic Model ====================
 
-    /**
-     * Decrement waiting sync count
-     *
-     * <p>Decrements the counter of blocks waiting for parent blocks during sync.
-     * Used by SyncManager when removing blocks from the waiting queue.
-     *
-     * @see #incrementWaitingSyncCount()
-     */
-    void decrementWaitingSyncCount();
+  // ==================== Lifecycle Management ====================
 
-    /**
-     * Update blockchain statistics from remote peer
-     *
-     * <p>Updates global network statistics based on data received from remote peers,
-     * including total network hosts, blocks, main blocks, and maximum difficulty.
-     * Values are updated to reflect the maximum seen across the network.
-     *
-     * @param remoteStats statistics received from remote peer
-     * @see ChainStats
-     */
-    void updateStatsFromRemote(ChainStats remoteStats);
-
-    // ==================== Economic Model ====================
-
-    /**
-     * Calculate block mining reward
-     *
-     * <p>Calculates the reward amount for a given main block based on
-     * the reward schedule defined in the protocol specification.
-     *
-     * @param nmain main block number (height in main chain)
-     * @return reward amount
-     * @see #getSupply(long)
-     */
-    XAmount getReward(long nmain);
-
-    /**
-     * Calculate total XDAG supply
-     *
-     * <p>Calculates the cumulative XDAG supply at a given main block,
-     * based on all rewards issued up to that block.
-     *
-     * @param nmain main block number (height in main chain)
-     * @return total supply
-     * @see #getReward(long)
-     */
-    XAmount getSupply(long nmain);
-
-    // ==================== Lifecycle Management ====================
-
-    /**
-     * Register blockchain event listener
-     *
-     * <p>Registers a listener to receive notifications about blockchain events
-     * such as new blocks, chain reorganizations, etc.
-     *
-     * @param listener event listener to register
-     * @see Listener
-     */
-    void registerListener(Listener listener);
-
-    /**
-     * Get pre-seed for snapshot initialization
-     *
-     * <p>The pre-seed is used during blockchain initialization from snapshot
-     * to ensure consistent state restoration.
-     *
-     * @return pre-seed bytes, or null if not available
-     */
-    byte[] getPreSeed();
-
-    // ==================== DAG Chain Event Listeners ====================
+  // ==================== DAG Chain Event Listeners ====================
 
     /**
      * Add DAG chain event listener

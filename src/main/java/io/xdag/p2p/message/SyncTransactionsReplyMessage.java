@@ -26,6 +26,7 @@ package io.xdag.p2p.message;
 import io.xdag.core.Transaction;
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
+import java.util.Objects;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.tuweni.bytes.Bytes32;
@@ -234,7 +235,7 @@ public class SyncTransactionsReplyMessage extends Message {
 
     @Override
     public String toString() {
-        long nonNullCount = transactions != null ? transactions.stream().filter(tx -> tx != null).count() : 0;
+        long nonNullCount = transactions != null ? transactions.stream().filter(Objects::nonNull).count() : 0;
         return String.format(
             "SyncTransactionsReplyMessage[total=%d, nonNull=%d, size=%d bytes]",
             transactions != null ? transactions.size() : 0,

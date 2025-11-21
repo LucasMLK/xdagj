@@ -67,9 +67,6 @@ import org.apache.tuweni.bytes.Bytes32;
  * </ul>
  *
  * @since XDAGJ
- * @see TransactionStore
- * @see io.xdag.db.store.DagCache
- * @see io.xdag.db.store.DagEntityResolver
  */
 public interface DagStore extends XdagLifecycle {
 
@@ -202,7 +199,7 @@ public interface DagStore extends XdagLifecycle {
     List<Block> getMainBlocksByHeightRange(long fromHeight, long toHeight, boolean isRaw);
 
     /**
-     * Check if main chain is continuous in height range
+     * Check if main chain is continuous range
      *
      * <p>Used by sync protocol to verify downloaded main chain integrity.
      *
@@ -220,31 +217,11 @@ public interface DagStore extends XdagLifecycle {
      * <p>Returns all blocks with timestamps in [epoch*64, (epoch+1)*64)
      *
      * @param epoch Epoch number (timestamp / 64)
-     * @return List of candidate blocks (may be empty)
+     * @return List of candidate blocks (maybe empty)
      */
     List<Block> getCandidateBlocksInEpoch(long epoch);
 
-    /**
-     * Get winning block for a specific epoch
-     *
-     * <p>Winner = block with smallest hash among all main block candidates in epoch
-     *
-     * @param epoch Epoch number
-     * @return Winning block, or null if epoch has no main blocks
-     */
-    Block getWinnerBlockInEpoch(long epoch);
-
-    /**
-     * Get height of winning block in a specific epoch
-     *
-     * <p>Provides Epoch → Height mapping
-     *
-     * @param epoch Epoch number
-     * @return Main chain height, or -1 if no winner
-     */
-    long getWinnerBlockHeight(long epoch);
-
-    // ==================== DAG Structure ====================
+  // ==================== DAG Structure ====================
 
     /**
      * Get all blocks that reference a specific block
@@ -256,17 +233,7 @@ public interface DagStore extends XdagLifecycle {
      */
     List<Bytes32> getBlockReferences(Bytes32 blockHash);
 
-    /**
-     * Index block reference relationship
-     *
-     * <p>Records that referencingBlock references referencedBlock
-     *
-     * @param referencingBlock Block that contains the reference
-     * @param referencedBlock Block being referenced
-     */
-    void indexBlockReference(Bytes32 referencingBlock, Bytes32 referencedBlock);
-
-    // ==================== BlockInfo & Metadata ====================
+  // ==================== BlockInfo & Metadata ====================
 
     /**
      * Save BlockInfo metadata
@@ -283,15 +250,7 @@ public interface DagStore extends XdagLifecycle {
      */
     BlockInfo getBlockInfo(Bytes32 hash);
 
-    /**
-     * Check if BlockInfo exists
-     *
-     * @param hash Block hash
-     * @return true if BlockInfo exists
-     */
-    boolean hasBlockInfo(Bytes32 hash);
-
-    // ==================== ChainStats ====================
+  // ==================== ChainStats ====================
 
     /**
      * Save chain statistics
@@ -330,59 +289,9 @@ public interface DagStore extends XdagLifecycle {
     void saveBlockInTransaction(String txId, BlockInfo info, Block block)
             throws io.xdag.db.rocksdb.transaction.TransactionException;
 
-    /**
-     * Save BlockInfo within a transaction context
-     *
-     * @param txId transaction ID
-     * @param info block metadata
-     * @throws io.xdag.db.rocksdb.transaction.TransactionException if operation fails
-     */
-    void saveBlockInfoInTransaction(String txId, BlockInfo info)
-            throws io.xdag.db.rocksdb.transaction.TransactionException;
+  // ==================== Batch Operations ====================
 
-    /**
-     * Delete height mapping within a transaction context
-     *
-     * <p>Used during chain reorganization to remove old height mappings atomically.
-     *
-     * @param txId transaction ID
-     * @param height block height to delete
-     * @throws io.xdag.db.rocksdb.transaction.TransactionException if operation fails
-     */
-    void deleteHeightMappingInTransaction(String txId, long height)
-            throws io.xdag.db.rocksdb.transaction.TransactionException;
-
-    /**
-     * Update cache after successful transaction commit
-     *
-     * <p>This must be called AFTER transaction is committed to disk.
-     * It updates in-memory caches with the newly committed block.
-     *
-     * @param block block to update in cache
-     */
-    void updateCacheAfterCommit(Block block);
-
-    // ==================== Batch Operations ====================
-
-    /**
-     * Batch save multiple blocks
-     *
-     * <p>More efficient than calling saveBlock() multiple times.
-     * Uses WriteBatch for atomic writes.
-     *
-     * @param blocks List of blocks to save
-     */
-    void saveBlocks(List<Block> blocks);
-
-    /**
-     * Batch get multiple blocks by hashes
-     *
-     * @param hashes List of block hashes
-     * @return List of Blocks (null entries for missing blocks)
-     */
-    List<Block> getBlocksByHashes(List<Bytes32> hashes);
-
-    // ==================== Statistics ====================
+  // ==================== Statistics ====================
 
     /**
      * Get total number of blocks in database

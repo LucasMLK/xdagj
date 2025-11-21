@@ -24,26 +24,17 @@
 
 package io.xdag.utils;
 
-import static io.xdag.config.Constants.HASH_RATE_LAST_MAX_TIME;
-import static io.xdag.crypto.keys.AddressUtils.toBytesAddress;
 import static io.xdag.utils.BytesUtils.equalBytes;
-import static io.xdag.utils.BytesUtils.long2UnsignedLong;
 
-import com.google.common.primitives.UnsignedLong;
-import io.xdag.core.XAmount;
 import io.xdag.crypto.encoding.Base58;
-import io.xdag.crypto.exception.AddressFormatException;
-import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.utils.exception.XdagOverFlowException;
 import java.math.BigDecimal;
-import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.CRC32;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-import org.apache.tuweni.bytes.MutableBytes;
 import org.apache.tuweni.bytes.MutableBytes32;
 import org.apache.tuweni.units.bigints.UInt64;
 
@@ -52,20 +43,7 @@ import org.apache.tuweni.units.bigints.UInt64;
  */
 public class BasicUtils {
 
-    /**
-     * Calculate difficulty from hash by shifting right 32 bits (4 bytes)
-     * @param hash Input hash value
-     * @return Calculated difficulty as BigInteger
-     */
-    public static BigInteger getDiffByHash(Bytes32 hash) {
-        MutableBytes data = MutableBytes.create(16);
-        data.set(4, hash.slice(0, 12));
-        BigInteger res = new BigInteger(data.toUnprefixedHexString(), 16);
-        BigInteger max = new BigInteger("ffffffffffffffffffffffffffffffff", 16);
-        return max.divide(res);
-    }
-
-    /**
+  /**
      * Convert hex string address to Bytes32 hash
      * @param address Hex string address
      * @return Bytes32 hash or null if address is null
@@ -78,18 +56,7 @@ public class BasicUtils {
         return hash;
     }
 
-    /**
-     * Convert string to double with 2 decimal places
-     * @param value String number value
-     * @return Double value rounded to 2 decimal places
-     */
-    public static double getDouble(String value) {
-        double num = Double.parseDouble(value);
-        BigDecimal bigDecimal = new BigDecimal(num);
-        return bigDecimal.setScale(2, RoundingMode.HALF_UP).doubleValue();
-    }
-
-    /**
+  /**
      * Convert 20-byte address to public address string
      * @param address 20-byte address (hash160)
      * @return Base58 encoded public address
@@ -161,20 +128,7 @@ public class BasicUtils {
         return bigDecimal.setScale(12, RoundingMode.HALF_UP).doubleValue();
     }
 
-    /**
-     * Convert internal amount to XDAG
-     * @param xdag Internal amount as UInt64
-     * @return XDAG amount as double
-     */
-    public static double amount2xdag(UInt64 xdag) {
-        UInt64 first = xdag.shiftRight(32);
-        UInt64 temp = xdag.subtract(first.shiftLeft(32));
-        double tem = 1.0*temp.toLong()/Math.pow(2, 32);
-        BigDecimal bigDecimal = new BigDecimal(first.toLong() + tem);
-        return bigDecimal.setScale(12, RoundingMode.HALF_UP).doubleValue();
-    }
-
-    /**
+  /**
      * Verify CRC32 checksum
      * @param src Source data
      * @param crc Expected CRC value
@@ -187,65 +141,7 @@ public class BasicUtils {
                 BytesUtils.intToBytes((int) crc32.getValue(), true), BytesUtils.intToBytes(crc, true));
     }
 
-    /**
-     * Calculate logarithm of difficulty
-     * @param diff Input difficulty
-     * @return Logarithm value or 0 if diff <= 0
-     */
-    public static double xdag_diff2log(BigInteger diff) {
-        if (diff.compareTo(BigInteger.ZERO) > 0) {
-            return Math.log(diff.doubleValue());
-        } else {
-            return 0.0;
-        }
-    }
-
-    /**
-     * Calculate hash rate from difficulties
-     * @param diffs Array of difficulties
-     * @return Calculated hash rate
-     */
-    public static double xdagHashRate(BigInteger[] diffs){
-        double sum = 0;
-        for (int i = 0; i < HASH_RATE_LAST_MAX_TIME; i++) {
-            sum += xdag_diff2log(diffs[i]);
-        }
-        sum /= HASH_RATE_LAST_MAX_TIME;
-        return Math.exp(sum) * Math.pow(2, -48);
-    }
-
-    /**
-     * Compare two amounts
-     * @param amount1 First amount
-     * @param amount2 Second amount
-     * @return Comparison result
-     */
-    public static int compareAmountTo(long amount1, long amount2) {
-        return long2UnsignedLong(amount1).compareTo(long2UnsignedLong(amount2));
-    }
-
-    /**
-     * Compare two XAmounts
-     */
-    public static int compareAmountTo(XAmount amount1, XAmount amount2) {
-        return amount1.compareTo(amount2);
-    }
-
-    /**
-     * Compare two UInt64 amounts
-     */
-    public static int compareAmountTo(UInt64 amount1, UInt64 amount2) {
-        return amount1.compareTo(amount2);
-    }
-
-    /**
-     * Compare two UnsignedLong amounts
-     */
-    public static int compareAmountTo(UnsignedLong amount1, UnsignedLong amount2) {
-        return amount1.compareTo(amount2);
-    }
-
-    /**
+  /**
      * Convert internal amount to XDAG with BigDecimal precision
      * @param xdag Internal amount
      * @return XDAG amount as BigDecimal
@@ -259,24 +155,7 @@ public class BasicUtils {
         return new BigDecimal(first + tem);
     }
 
-    /**
-     * Perform division with specified scale
-     * @param v1 dividend
-     * @param v2 divisor
-     * @param scale decimal places to round to
-     * @return Division result rounded to specified scale
-     * @throws IllegalArgumentException if scale is negative
-     */
-    public static double div(double v1, double v2, int scale) {
-        if (scale < 0) {
-            throw new IllegalArgumentException("The scale must be a positive integer or zero");
-        }
-        BigDecimal b1 = BigDecimal.valueOf(v1);
-        BigDecimal b2 = BigDecimal.valueOf(v2);
-        return b1.divide(b2, scale, RoundingMode.HALF_UP).doubleValue();
-    }
-
-    /**
+  /**
      * Extract IP address from address:port string
      * @param ipAddressAndPort String in format "/ip:port"
      * @return Extracted IP address or null if not found

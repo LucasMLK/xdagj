@@ -36,11 +36,9 @@ import org.rocksdb.*;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * AccountStoreImpl - RocksDB implementation of AccountStore
@@ -148,7 +146,7 @@ public class AccountStoreImpl implements AccountStore {
 
             List<ColumnFamilyHandle> cfHandles = new ArrayList<>();
             db = RocksDB.open(dbOptions, dbPath, cfDescriptors, cfHandles);
-            defaultHandle = cfHandles.get(0);
+            defaultHandle = cfHandles.getFirst();
 
             // Initialize metadata if first startup
             initializeMetadata();
@@ -354,37 +352,7 @@ public class AccountStoreImpl implements AccountStore {
         }
     }
 
-    @Override
-    public boolean deleteAccount(Bytes address) {
-        if (!running) {
-            throw new IllegalStateException("AccountStore is not running");
-        }
-
-        try {
-            if (!hasAccount(address)) {
-                return false;
-            }
-
-            // Get old balance for statistics
-            UInt256 oldBalance = getBalance(address);
-
-            byte[] key = makeAccountKey(address);
-            db.delete(defaultHandle, writeOptions, key);
-
-            // Update statistics
-            decrementAccountCount();
-            updateTotalBalance(oldBalance, UInt256.ZERO);
-
-            log.debug("Deleted account: {}", address.toHexString());
-            return true;
-
-        } catch (Exception e) {
-            log.error("Failed to delete account: {}", address.toHexString(), e);
-            throw new RuntimeException("Failed to delete account", e);
-        }
-    }
-
-    // ==================== Balance Operations ====================
+  // ==================== Balance Operations ====================
 
     @Override
     public UInt256 getBalance(Bytes address) {
@@ -513,111 +481,9 @@ public class AccountStoreImpl implements AccountStore {
 
     // ==================== Contract Operations ====================
 
-    @Override
-    public void saveContractCode(Bytes32 codeHash, byte[] code) {
-        if (!running) {
-            throw new IllegalStateException("AccountStore is not running");
-        }
+  // ==================== Batch Operations ====================
 
-        try {
-            byte[] key = makeCodeKey(codeHash);
-            db.put(defaultHandle, writeOptions, key, code);
-
-            log.debug("Saved contract code: codeHash={}, size={} bytes",
-                    codeHash.toHexString(), code.length);
-
-        } catch (Exception e) {
-            log.error("Failed to save contract code: {}", codeHash.toHexString(), e);
-            throw new RuntimeException("Failed to save contract code", e);
-        }
-    }
-
-    @Override
-    public Optional<byte[]> getContractCode(Bytes32 codeHash) {
-        if (!running) {
-            throw new IllegalStateException("AccountStore is not running");
-        }
-
-        try {
-            byte[] key = makeCodeKey(codeHash);
-            byte[] code = db.get(defaultHandle, readOptions, key);
-
-            return Optional.ofNullable(code);
-
-        } catch (Exception e) {
-            log.error("Failed to get contract code: {}", codeHash.toHexString(), e);
-            return Optional.empty();
-        }
-    }
-
-    @Override
-    public boolean hasContractCode(Bytes32 codeHash) {
-        if (!running) {
-            return false;
-        }
-
-        try {
-            byte[] key = makeCodeKey(codeHash);
-            return db.get(defaultHandle, readOptions, key) != null;
-
-        } catch (Exception e) {
-            log.error("Failed to check contract code existence: {}", codeHash.toHexString(), e);
-            return false;
-        }
-    }
-
-    @Override
-    public Account createContractAccount(Bytes address, Bytes32 codeHash, Bytes32 storageRoot) {
-        Account contract = Account.createContract(address, codeHash, storageRoot);
-        saveAccount(contract);
-        return contract;
-    }
-
-    // ==================== Batch Operations ====================
-
-    @Override
-    public void saveAccounts(List<Account> accounts) {
-        if (!running) {
-            throw new IllegalStateException("AccountStore is not running");
-        }
-
-        if (accounts.isEmpty()) {
-            return;
-        }
-
-        try (WriteBatch batch = new WriteBatch()) {
-            for (Account account : accounts) {
-                byte[] key = makeAccountKey(account.getAddress());
-                byte[] value = account.toBytes();
-                batch.put(defaultHandle, key, value);
-            }
-
-            db.write(writeOptions, batch);
-
-            log.debug("Saved {} accounts in batch", accounts.size());
-
-        } catch (Exception e) {
-            log.error("Failed to save accounts batch", e);
-            throw new RuntimeException("Failed to save accounts batch", e);
-        }
-    }
-
-    @Override
-    public Map<Bytes, Account> getAccounts(List<Bytes> addresses) {
-        if (!running) {
-            throw new IllegalStateException("AccountStore is not running");
-        }
-
-        Map<Bytes, Account> result = new HashMap<>();
-
-        for (Bytes address : addresses) {
-            getAccount(address).ifPresent(account -> result.put(address, account));
-        }
-
-        return result;
-    }
-
-    // ==================== Statistics ====================
+  // ==================== Statistics ====================
 
     @Override
     public UInt64 getAccountCount() {
@@ -641,45 +507,7 @@ public class AccountStoreImpl implements AccountStore {
         }
     }
 
-    @Override
-    public List<Bytes> getAllAddresses(int limit) {
-        if (!running) {
-            throw new IllegalStateException("AccountStore is not running");
-        }
-
-        List<Bytes> addresses = new ArrayList<>();
-
-        try (RocksIterator iterator = db.newIterator(defaultHandle, readOptions)) {
-            // Seek to first account key
-            byte[] startKey = new byte[]{PREFIX_ACCOUNT};
-            iterator.seek(startKey);
-
-            int count = 0;
-            while (iterator.isValid() && count < limit) {
-                byte[] key = iterator.key();
-
-                // Check if still in account range
-                if (key[0] != PREFIX_ACCOUNT) {
-                    break;
-                }
-
-                // Extract address from key (skip prefix byte, get 20 bytes)
-                // Key format: [PREFIX:1 byte] + [ADDRESS:20 bytes]
-                byte[] addressBytes = Arrays.copyOfRange(key, 1, 21);
-                addresses.add(Bytes.wrap(addressBytes));
-
-                iterator.next();
-                count++;
-            }
-
-        } catch (Exception e) {
-            log.error("Failed to get all addresses", e);
-        }
-
-        return addresses;
-    }
-
-    // ==================== Maintenance ====================
+  // ==================== Maintenance ====================
 
     @Override
     public void reset() {
@@ -711,17 +539,7 @@ public class AccountStoreImpl implements AccountStore {
         }
     }
 
-    @Override
-    public long getDatabaseSize() {
-        if (!running) {
-            return 0;
-        }
-
-        File dbDir = new File(dbPath);
-        return calculateDirectorySize(dbDir);
-    }
-
-    // ==================== Helper Methods ====================
+  // ==================== Helper Methods ====================
 
     /**
      * Make account key: PREFIX_ACCOUNT + address
@@ -835,38 +653,7 @@ public class AccountStoreImpl implements AccountStore {
 
     // ==================== Transactional Methods (Atomic Block Processing) ====================
 
-    @Override
-    public void saveAccountInTransaction(String txId, Account account)
-            throws io.xdag.db.rocksdb.transaction.TransactionException {
-        if (transactionManager == null) {
-            throw new io.xdag.db.rocksdb.transaction.TransactionException(
-                    "TransactionManager not initialized");
-        }
-
-        try {
-            byte[] key = makeAccountKey(account.getAddress());
-            byte[] value = account.toBytes();
-
-            // Buffer account save in transaction
-            transactionManager.putInTransaction(txId, key, value);
-
-            // Note: Statistics updates (account count, total balance) are handled
-            // by the caller after all operations succeed. This prevents partial
-            // statistics updates in case of rollback.
-
-            log.debug("Buffered account save for {} in transaction {} (balance={}, nonce={})",
-                    account.getAddress().toHexString().substring(0, 16),
-                    txId,
-                    account.getBalance().toDecimalString(),
-                    account.getNonce().toLong());
-
-        } catch (Exception e) {
-            throw new io.xdag.db.rocksdb.transaction.TransactionException(
-                    "Failed to save account in transaction: " + e.getMessage(), e);
-        }
-    }
-
-    @Override
+  @Override
     public void setBalanceInTransaction(String txId, Bytes address, UInt256 newBalance)
             throws io.xdag.db.rocksdb.transaction.TransactionException {
         // WORKAROUND: AccountStore has its own separate RocksDB instance (accountstore/)

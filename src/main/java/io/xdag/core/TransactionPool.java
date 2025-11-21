@@ -25,6 +25,7 @@
 package io.xdag.core;
 
 import java.util.List;
+import lombok.Getter;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 
@@ -132,7 +133,7 @@ public interface TransactionPool {
      * <p>Only transactions with valid nonce sequences are selected.
      *
      * @param maxCount maximum number of transactions to select
-     * @return list of selected transactions (may be less than maxCount)
+     * @return list of selected transactions (maybe less than maxCount)
      */
     List<Transaction> selectTransactions(int maxCount);
 
@@ -144,16 +145,7 @@ public interface TransactionPool {
      */
     List<Transaction> getTransactionsByAccount(Bytes address);
 
-    /**
-     * Get all pending transactions.
-     *
-     * <p>Warning: This can be expensive for large pools. Use with caution.
-     *
-     * @return all pending transactions
-     */
-    List<Transaction> getAllTransactions();
-
-    /**
+  /**
      * Get the number of pending transactions in the pool.
      *
      * @return transaction count
@@ -177,6 +169,7 @@ public interface TransactionPool {
     /**
      * Pool statistics for monitoring.
      */
+    @Getter
     class PoolStatistics {
         private final int currentSize;
         private final long totalAdded;
@@ -203,35 +196,7 @@ public interface TransactionPool {
             this.hitRate = hitRate;
         }
 
-        public int getCurrentSize() {
-            return currentSize;
-        }
-
-        public long getTotalAdded() {
-            return totalAdded;
-        }
-
-        public long getTotalRemoved() {
-            return totalRemoved;
-        }
-
-        public long getTotalRejected() {
-            return totalRejected;
-        }
-
-        public long getCacheHits() {
-            return cacheHits;
-        }
-
-        public long getCacheMisses() {
-            return cacheMisses;
-        }
-
-        public double getHitRate() {
-            return hitRate;
-        }
-
-        @Override
+      @Override
         public String toString() {
             return String.format(
                     "PoolStatistics{size=%d, added=%d, removed=%d, rejected=%d, hitRate=%.2f%%}",

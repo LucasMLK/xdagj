@@ -81,263 +81,244 @@ import java.nio.ByteBuffer;
 @Builder(toBuilder = true)
 public class Account {
 
-    /**
-     * Account address (20 bytes, SHA256+RIPEMD160)
-     */
-    Bytes address;
+  /**
+   * Account address (20 bytes, SHA256+RIPEMD160)
+   */
+  Bytes address;
 
-    /**
-     * Account balance (256-bit unsigned integer)
-     */
-    @Builder.Default
-    UInt256 balance = UInt256.ZERO;
+  /**
+   * Account balance (256-bit unsigned integer)
+   */
+  @Builder.Default
+  UInt256 balance = UInt256.ZERO;
 
-    /**
-     * Transaction nonce (64-bit unsigned integer)
-     * <p>Used for replay protection and ordering transactions
-     */
-    @Builder.Default
-    UInt64 nonce = UInt64.ZERO;
+  /**
+   * Transaction nonce (64-bit unsigned integer)
+   * <p>Used for replay protection and ordering transactions
+   */
+  @Builder.Default
+  UInt64 nonce = UInt64.ZERO;
 
-    /**
-     * Code hash for contract accounts (optional)
-     * <p>If null, this is an EOA account. If non-null, this is a contract account.
-     */
-    Bytes32 codeHash;
+  /**
+   * Code hash for contract accounts (optional)
+   * <p>If null, this is an EOA account. If non-null, this is a contract account.
+   */
+  Bytes32 codeHash;
 
-    /**
-     * Storage root hash for contract accounts (optional)
-     * <p>Root of the Merkle Patricia Trie for contract storage
-     */
-    Bytes32 storageRoot;
+  /**
+   * Storage root hash for contract accounts (optional)
+   * <p>Root of the Merkle Patricia Trie for contract storage
+   */
+  Bytes32 storageRoot;
 
-    /**
-     * Check if this is an EOA (Externally Owned Account)
-     *
-     * @return true if EOA, false if contract account
-     */
-    public boolean isEOA() {
-        return codeHash == null;
+  /**
+   * Check if this is a contract account
+   *
+   * @return true if contract, false if EOA
+   */
+  public boolean isContract() {
+    return codeHash != null;
+  }
+
+  /**
+   * Check if account is empty (zero balance, zero nonce, no code)
+   *
+   * @return true if empty according to EIP-161
+   */
+  public boolean isEmpty() {
+    return balance.equals(UInt256.ZERO)
+        && nonce.equals(UInt64.ZERO)
+        && codeHash == null;
+  }
+
+  /**
+   * Create a new account with updated balance
+   *
+   * @param newBalance new balance
+   * @return new Account instance with updated balance
+   */
+  public Account withBalance(UInt256 newBalance) {
+    return toBuilder().balance(newBalance).build();
+  }
+
+  /**
+   * Create a new account with incremented nonce
+   *
+   * @return new Account instance with nonce + 1
+   */
+  public Account withIncrementedNonce() {
+    return toBuilder().nonce(nonce.add(UInt64.ONE)).build();
+  }
+
+  /**
+   * Create a new account with updated nonce
+   *
+   * @param newNonce new nonce value
+   * @return new Account instance with updated nonce
+   */
+  public Account withNonce(UInt64 newNonce) {
+    return toBuilder().nonce(newNonce).build();
+  }
+
+  // ==================== Serialization ====================
+
+  /**
+   * Serialize account to bytes for RocksDB storage
+   *
+   * <p>Format (variable size):
+   * - address: 20 bytes (Bytes - hash160) - balance: 32 bytes (UInt256) - nonce: 8 bytes (UInt64) -
+   * has_code: 1 byte (0 = EOA, 1 = contract) - [optional] codeHash: 32 bytes (if has_code = 1) -
+   * [optional] storageRoot: 32 bytes (if has_code = 1)
+   *
+   * <p>Total size:
+   * - EOA: 61 bytes (20 + 32 + 8 + 1) - Contract: 125 bytes (61 + 64)
+   *
+   * @return serialized bytes
+   */
+  public byte[] toBytes() {
+    int size = 20 + 32 + 8 + 1;
+    if (isContract()) {
+      size += 64;  // codeHash + storageRoot
     }
 
-    /**
-     * Check if this is a contract account
-     *
-     * @return true if contract, false if EOA
-     */
-    public boolean isContract() {
-        return codeHash != null;
+    ByteBuffer buffer = ByteBuffer.allocate(size);
+
+    // Address (20 bytes)
+    if (address.size() != 20) {
+      throw new IllegalStateException("Address must be exactly 20 bytes, got: " + address.size());
+    }
+    buffer.put(address.toArray());
+
+    // Balance (32 bytes)
+    buffer.put(balance.toBytes().toArray());
+
+    // Nonce (8 bytes)
+    buffer.put(nonce.toBytes().toArray());
+
+    // Contract flag
+    buffer.put((byte) (isContract() ? 1 : 0));
+
+    // Contract data (if present)
+    if (isContract()) {
+      buffer.put(codeHash.toArray());
+      buffer.put(storageRoot.toArray());
     }
 
-    /**
-     * Check if account is empty (zero balance, zero nonce, no code)
-     *
-     * @return true if empty according to EIP-161
-     */
-    public boolean isEmpty() {
-        return balance.equals(UInt256.ZERO)
-            && nonce.equals(UInt64.ZERO)
-            && codeHash == null;
+    return buffer.array();
+  }
+
+  /**
+   * Deserialize account from bytes
+   *
+   * @param data serialized account data
+   * @return Account instance
+   * @throws IllegalArgumentException if data is invalid
+   */
+  public static Account fromBytes(byte[] data) {
+    if (data == null || data.length < 61) {
+      throw new IllegalArgumentException(
+          "Invalid account data: too short (minimum 61 bytes for EOA)");
     }
 
-    /**
-     * Create a new account with updated balance
-     *
-     * @param newBalance new balance
-     * @return new Account instance with updated balance
-     */
-    public Account withBalance(UInt256 newBalance) {
-        return toBuilder().balance(newBalance).build();
+    ByteBuffer buffer = ByteBuffer.wrap(data);
+
+    // Read address (20 bytes)
+    byte[] addressBytes = new byte[20];
+    buffer.get(addressBytes);
+    Bytes address = Bytes.wrap(addressBytes);
+
+    // Read balance
+    byte[] balanceBytes = new byte[32];
+    buffer.get(balanceBytes);
+    UInt256 balance = UInt256.fromBytes(Bytes.wrap(balanceBytes));
+
+    // Read nonce
+    byte[] nonceBytes = new byte[8];
+    buffer.get(nonceBytes);
+    UInt64 nonce = UInt64.fromBytes(Bytes.wrap(nonceBytes));
+
+    // Read contract flag
+    boolean isContract = buffer.get() == 1;
+
+    // Build account
+    AccountBuilder builder = Account.builder()
+        .address(address)
+        .balance(balance)
+        .nonce(nonce);
+
+    // Read contract data if present
+    if (isContract) {
+      byte[] codeHashBytes = new byte[32];
+      buffer.get(codeHashBytes);
+      Bytes32 codeHash = Bytes32.wrap(codeHashBytes);
+
+      byte[] storageRootBytes = new byte[32];
+      buffer.get(storageRootBytes);
+      Bytes32 storageRoot = Bytes32.wrap(storageRootBytes);
+
+      builder.codeHash(codeHash).storageRoot(storageRoot);
     }
 
-    /**
-     * Create a new account with incremented nonce
-     *
-     * @return new Account instance with nonce + 1
-     */
-    public Account withIncrementedNonce() {
-        return toBuilder().nonce(nonce.add(UInt64.ONE)).build();
+    return builder.build();
+  }
+
+  // ==================== Factory Methods ====================
+
+  /**
+   * Create a new empty EOA account
+   *
+   * @param address account address (20 bytes, hash160)
+   * @return new Account with zero balance and nonce
+   * @throws IllegalArgumentException if address is not exactly 20 bytes
+   */
+  public static Account createEOA(Bytes address) {
+    if (address.size() != 20) {
+      throw new IllegalArgumentException(
+          "Address must be exactly 20 bytes, got: " + address.size());
     }
+    return Account.builder()
+        .address(address)
+        .balance(UInt256.ZERO)
+        .nonce(UInt64.ZERO)
+        .build();
+  }
 
-    /**
-     * Create a new account with updated nonce
-     *
-     * @param newNonce new nonce value
-     * @return new Account instance with updated nonce
-     */
-    public Account withNonce(UInt64 newNonce) {
-        return toBuilder().nonce(newNonce).build();
+  /**
+   * Create a new contract account
+   *
+   * @param address     account address (20 bytes, hash160)
+   * @param codeHash    hash of contract code
+   * @param storageRoot root of contract storage
+   * @return new contract Account
+   * @throws IllegalArgumentException if address is not exactly 20 bytes
+   */
+  public static Account createContract(Bytes address, Bytes32 codeHash, Bytes32 storageRoot) {
+    if (address.size() != 20) {
+      throw new IllegalArgumentException(
+          "Address must be exactly 20 bytes, got: " + address.size());
     }
+    return Account.builder()
+        .address(address)
+        .balance(UInt256.ZERO)
+        .nonce(UInt64.ONE)  // Contract nonce starts at 1
+        .codeHash(codeHash)
+        .storageRoot(storageRoot)
+        .build();
+  }
 
-    // ==================== Serialization ====================
-
-    /**
-     * Serialize account to bytes for RocksDB storage
-     *
-     * <p>Format (variable size):
-     * - address: 20 bytes (Bytes - hash160)
-     * - balance: 32 bytes (UInt256)
-     * - nonce: 8 bytes (UInt64)
-     * - has_code: 1 byte (0 = EOA, 1 = contract)
-     * - [optional] codeHash: 32 bytes (if has_code = 1)
-     * - [optional] storageRoot: 32 bytes (if has_code = 1)
-     *
-     * <p>Total size:
-     * - EOA: 61 bytes (20 + 32 + 8 + 1)
-     * - Contract: 125 bytes (61 + 64)
-     *
-     * @return serialized bytes
-     */
-    public byte[] toBytes() {
-        int size = 20 + 32 + 8 + 1;
-        if (isContract()) {
-            size += 64;  // codeHash + storageRoot
-        }
-
-        ByteBuffer buffer = ByteBuffer.allocate(size);
-
-        // Address (20 bytes)
-        if (address.size() != 20) {
-            throw new IllegalStateException("Address must be exactly 20 bytes, got: " + address.size());
-        }
-        buffer.put(address.toArray());
-
-        // Balance (32 bytes)
-        buffer.put(balance.toBytes().toArray());
-
-        // Nonce (8 bytes)
-        buffer.put(nonce.toBytes().toArray());
-
-        // Contract flag
-        buffer.put((byte) (isContract() ? 1 : 0));
-
-        // Contract data (if present)
-        if (isContract()) {
-            buffer.put(codeHash.toArray());
-            buffer.put(storageRoot.toArray());
-        }
-
-        return buffer.array();
+  @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Account{");
+    sb.append("address=").append(address.toHexString());
+    sb.append(", balance=").append(balance.toDecimalString());
+    sb.append(", nonce=").append(nonce.toLong());
+    if (isContract()) {
+      sb.append(", codeHash=").append(codeHash.toHexString());
+      sb.append(", storageRoot=").append(storageRoot.toHexString());
     }
-
-    /**
-     * Deserialize account from bytes
-     *
-     * @param data serialized account data
-     * @return Account instance
-     * @throws IllegalArgumentException if data is invalid
-     */
-    public static Account fromBytes(byte[] data) {
-        if (data == null || data.length < 61) {
-            throw new IllegalArgumentException("Invalid account data: too short (minimum 61 bytes for EOA)");
-        }
-
-        ByteBuffer buffer = ByteBuffer.wrap(data);
-
-        // Read address (20 bytes)
-        byte[] addressBytes = new byte[20];
-        buffer.get(addressBytes);
-        Bytes address = Bytes.wrap(addressBytes);
-
-        // Read balance
-        byte[] balanceBytes = new byte[32];
-        buffer.get(balanceBytes);
-        UInt256 balance = UInt256.fromBytes(Bytes.wrap(balanceBytes));
-
-        // Read nonce
-        byte[] nonceBytes = new byte[8];
-        buffer.get(nonceBytes);
-        UInt64 nonce = UInt64.fromBytes(Bytes.wrap(nonceBytes));
-
-        // Read contract flag
-        boolean isContract = buffer.get() == 1;
-
-        // Build account
-        AccountBuilder builder = Account.builder()
-                .address(address)
-                .balance(balance)
-                .nonce(nonce);
-
-        // Read contract data if present
-        if (isContract) {
-            byte[] codeHashBytes = new byte[32];
-            buffer.get(codeHashBytes);
-            Bytes32 codeHash = Bytes32.wrap(codeHashBytes);
-
-            byte[] storageRootBytes = new byte[32];
-            buffer.get(storageRootBytes);
-            Bytes32 storageRoot = Bytes32.wrap(storageRootBytes);
-
-            builder.codeHash(codeHash).storageRoot(storageRoot);
-        }
-
-        return builder.build();
-    }
-
-    /**
-     * Get size of serialized account
-     *
-     * @return size in bytes (61 for EOA, 125 for contract)
-     */
-    public int getSerializedSize() {
-        return isContract() ? 125 : 61;
-    }
-
-    // ==================== Factory Methods ====================
-
-    /**
-     * Create a new empty EOA account
-     *
-     * @param address account address (20 bytes, hash160)
-     * @return new Account with zero balance and nonce
-     * @throws IllegalArgumentException if address is not exactly 20 bytes
-     */
-    public static Account createEOA(Bytes address) {
-        if (address.size() != 20) {
-            throw new IllegalArgumentException("Address must be exactly 20 bytes, got: " + address.size());
-        }
-        return Account.builder()
-                .address(address)
-                .balance(UInt256.ZERO)
-                .nonce(UInt64.ZERO)
-                .build();
-    }
-
-    /**
-     * Create a new contract account
-     *
-     * @param address account address (20 bytes, hash160)
-     * @param codeHash hash of contract code
-     * @param storageRoot root of contract storage
-     * @return new contract Account
-     * @throws IllegalArgumentException if address is not exactly 20 bytes
-     */
-    public static Account createContract(Bytes address, Bytes32 codeHash, Bytes32 storageRoot) {
-        if (address.size() != 20) {
-            throw new IllegalArgumentException("Address must be exactly 20 bytes, got: " + address.size());
-        }
-        return Account.builder()
-                .address(address)
-                .balance(UInt256.ZERO)
-                .nonce(UInt64.ONE)  // Contract nonce starts at 1
-                .codeHash(codeHash)
-                .storageRoot(storageRoot)
-                .build();
-    }
-
-    @Override
-    public String toString() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Account{");
-        sb.append("address=").append(address.toHexString());
-        sb.append(", balance=").append(balance.toDecimalString());
-        sb.append(", nonce=").append(nonce.toLong());
-        if (isContract()) {
-            sb.append(", codeHash=").append(codeHash.toHexString());
-            sb.append(", storageRoot=").append(storageRoot.toHexString());
-        }
-        sb.append(", type=").append(isContract() ? "CONTRACT" : "EOA");
-        sb.append("}");
-        return sb.toString();
-    }
+    sb.append(", type=").append(isContract() ? "CONTRACT" : "EOA");
+    sb.append("}");
+    return sb.toString();
+  }
 }

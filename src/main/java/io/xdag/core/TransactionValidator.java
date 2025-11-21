@@ -24,8 +24,6 @@
 
 package io.xdag.core;
 
-import io.xdag.core.ValidationResult.ValidationLevel;
-
 /**
  * Transaction validation interface for XDAG.
  *
@@ -119,12 +117,4 @@ public interface TransactionValidator {
      */
     ValidationResult validateEconomic(Transaction tx);
 
-    /**
-     * Validate transaction at a specific level only.
-     *
-     * @param tx transaction to validate
-     * @param level validation level
-     * @return validation result
-     */
-    ValidationResult validateAt(Transaction tx, ValidationLevel level);
 }

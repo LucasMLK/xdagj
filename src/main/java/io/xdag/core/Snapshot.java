@@ -32,9 +32,9 @@ import org.apache.tuweni.bytes.Bytes;
 
 /**
  * Immutable snapshot information for block state
- *
+ * <p>
  * This class replaces the mutable SnapshotInfo with a compact, type-safe implementation.
- *
+ * <p>
  * Target size: ~34 bytes (compared to ~50 bytes in SnapshotInfo)
  * - 1 byte: type flag
  * - 1 byte: data length

@@ -24,7 +24,6 @@
 package io.xdag.p2p.message;
 
 import io.xdag.core.Block;
-import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
 import lombok.Getter;
 import lombok.Setter;

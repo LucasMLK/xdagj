@@ -367,19 +367,7 @@ public class TransactionPoolImpl implements TransactionPool {
         }
     }
 
-    @Override
-    public List<Transaction> getAllTransactions() {
-        poolLock.readLock().lock();
-        try {
-            return txCache.asMap().values().stream()
-                    .map(PendingTransaction::getTransaction)
-                    .collect(Collectors.toList());
-        } finally {
-            poolLock.readLock().unlock();
-        }
-    }
-
-    @Override
+  @Override
     public int size() {
         return (int) txCache.estimatedSize();
     }

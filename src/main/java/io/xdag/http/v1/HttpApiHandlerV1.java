@@ -87,7 +87,7 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
     }
 
     @Override
-    public void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) throws Exception {
+    public void channelRead0(ChannelHandlerContext ctx, FullHttpRequest request) {
         String uri = request.uri();
         HttpMethod method = request.method();
 
@@ -141,7 +141,7 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
         Map<String, String> params = new HashMap<>();
         decoder.parameters().forEach((key, values) -> {
             if (!values.isEmpty()) {
-                params.put(key, values.get(0));
+                params.put(key, values.getFirst());
             }
         });
 

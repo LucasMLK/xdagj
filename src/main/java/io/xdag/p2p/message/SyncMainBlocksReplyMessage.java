@@ -26,6 +26,7 @@ package io.xdag.p2p.message;
 import io.xdag.core.Block;
 import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
+import java.util.Objects;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -214,7 +215,7 @@ public class SyncMainBlocksReplyMessage extends Message {
 
     @Override
     public String toString() {
-        long nonNullCount = blocks != null ? blocks.stream().filter(b -> b != null).count() : 0;
+        long nonNullCount = blocks != null ? blocks.stream().filter(Objects::nonNull).count() : 0;
         return String.format(
             "SyncMainBlocksReplyMessage[total=%d, nonNull=%d, size=%d bytes]",
             blocks != null ? blocks.size() : 0,

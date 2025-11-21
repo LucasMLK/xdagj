@@ -42,7 +42,7 @@ import org.apache.tuweni.bytes.Bytes32;
  *
  * <h2>Implementations</h2>
  * <ul>
- *   <li>{@link RandomXPoW} - RandomX algorithm (XDAG standard)</li>
+ *   <li>{@link RandomXPow} - RandomX algorithm (XDAG standard)</li>
  * </ul>
  *
  * <h2>Thread Safety</h2>

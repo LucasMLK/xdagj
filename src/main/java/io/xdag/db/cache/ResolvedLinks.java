@@ -69,16 +69,7 @@ public class ResolvedLinks {
         return missingReferences.isEmpty();
     }
 
-    /**
-     * Get total number of resolved entities
-     *
-     * @return Count of resolved blocks + transactions
-     */
-    public int getResolvedCount() {
-        return referencedBlocks.size() + referencedTransactions.size();
-    }
-
-    /**
+  /**
      * Get total number of missing references
      *
      * @return Count of missing links
@@ -87,12 +78,4 @@ public class ResolvedLinks {
         return missingReferences.size();
     }
 
-    /**
-     * Check if there are any resolved entities
-     *
-     * @return true if at least one entity was resolved
-     */
-    public boolean hasResolvedEntities() {
-        return !referencedBlocks.isEmpty() || !referencedTransactions.isEmpty();
-    }
 }

@@ -31,17 +31,17 @@ import org.apache.tuweni.bytes.Bytes32;
 
 /**
  * TransactionStore for XDAG
- *
+ * <p>
  * Storage layer for Transaction objects. In architecture, Transactions are:
  * 1. Independent objects (not embedded in blocks)
  * 2. Broadcast and stored separately from blocks
  * 3. Referenced by blocks via Link (only hash reference)
- *
+ * <p>
  * This store enables:
  * - Transaction lookup by hash (for block validation)
  * - Transaction retrieval for display/verification
  * - Support for mempool (pending transactions)
- *
+ * <p>
  * Design principles:
  * - Simple key-value storage: hash -> Transaction
  * - Fast lookup by hash (O(1) with RocksDB)
@@ -126,7 +126,7 @@ public interface TransactionStore extends XdagLifecycle {
 
     /**
      * Get all transactions referenced by a block
-     *
+     * <p>
      * This method uses the TX_BLOCK_INDEX to efficiently retrieve
      * all transaction hashes associated with a specific block.
      *
@@ -154,7 +154,7 @@ public interface TransactionStore extends XdagLifecycle {
 
     /**
      * Get the block hash that contains a specific transaction (1)
-     *
+     * <p>
      * This method uses the reverse index built by indexTransactionToBlock()
      * to find which block contains a given transaction. This enables:
      * - Transaction timestamp lookup (block.getTimestamp())
@@ -169,7 +169,7 @@ public interface TransactionStore extends XdagLifecycle {
 
     /**
      * Get all transactions involving a specific address (from or to)
-     *
+     * <p>
      * This method uses the TX_ADDRESS_INDEX to retrieve transaction history.
      *
      * @param address The address (from or to) - 20 bytes
@@ -252,15 +252,7 @@ public interface TransactionStore extends XdagLifecycle {
      */
     void unmarkTransactionExecuted(Bytes32 txHash);
 
-    /**
-     * Get execution information for a transaction.
-     *
-     * @param txHash transaction hash
-     * @return execution info, or null if not executed
-     */
-    io.xdag.core.TransactionExecutionInfo getExecutionInfo(Bytes32 txHash);
-
-    // ==================== Transactional Methods (Atomic Block Processing) ====================
+  // ==================== Transactional Methods (Atomic Block Processing) ====================
 
     /**
      * Index transaction to block mapping within a transaction
@@ -289,17 +281,4 @@ public interface TransactionStore extends XdagLifecycle {
     void markTransactionExecutedInTransaction(String txId, Bytes32 txHash)
             throws io.xdag.db.rocksdb.transaction.TransactionException;
 
-    /**
-     * Unmark transaction as executed within a transaction
-     *
-     * <p>This method buffers the transaction execution unmark operation in a transaction.
-     * Used during chain reorganization rollback to allow re-execution.
-     * The operation is NOT written to disk until the transaction is committed.
-     *
-     * @param txId transaction ID from RocksDBTransactionManager
-     * @param txHash transaction hash
-     * @throws io.xdag.db.rocksdb.transaction.TransactionException if operation fails
-     */
-    void unmarkTransactionExecutedInTransaction(String txId, Bytes32 txHash)
-            throws io.xdag.db.rocksdb.transaction.TransactionException;
 }

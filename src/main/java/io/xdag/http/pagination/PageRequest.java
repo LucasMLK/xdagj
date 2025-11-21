@@ -45,11 +45,7 @@ public class PageRequest {
         return new PageRequest(page, size);
     }
 
-    public static PageRequest ofDefault() {
-        return new PageRequest(DEFAULT_PAGE, DEFAULT_SIZE);
-    }
-
-    public static PageRequest parse(String pageStr, String sizeStr) {
+  public static PageRequest parse(String pageStr, String sizeStr) {
         int page = parseIntOrDefault(pageStr, DEFAULT_PAGE);
         int size = parseIntOrDefault(sizeStr, DEFAULT_SIZE);
         return new PageRequest(page, size);

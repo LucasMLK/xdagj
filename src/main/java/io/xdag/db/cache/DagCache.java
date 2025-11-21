@@ -219,30 +219,7 @@ public class DagCache {
         return transactionCache.getIfPresent(hash);
     }
 
-    /**
-     * Put transaction into cache
-     *
-     * @param hash Transaction hash
-     * @param transaction Transaction object
-     */
-    public void putTransaction(Bytes32 hash, Transaction transaction) {
-        if (hash != null && transaction != null) {
-            transactionCache.put(hash, transaction);
-        }
-    }
-
-    /**
-     * Invalidate transaction from cache
-     *
-     * @param hash Transaction hash
-     */
-    public void invalidateTransaction(Bytes32 hash) {
-        if (hash != null) {
-            transactionCache.invalidate(hash);
-        }
-    }
-
-    // ==================== Height-to-Hash Cache Operations ====================
+  // ==================== Height-to-Hash Cache Operations ====================
 
     /**
      * Get block hash by main chain height
@@ -299,16 +276,7 @@ public class DagCache {
         }
     }
 
-    /**
-     * Invalidate epoch winner from cache
-     *
-     * @param epoch Epoch number
-     */
-    public void invalidateEpochWinner(long epoch) {
-        epochWinnerCache.invalidate(epoch);
-    }
-
-    // ==================== Cache Management ====================
+  // ==================== Cache Management ====================
 
     /**
      * Clear all caches
@@ -323,65 +291,9 @@ public class DagCache {
         log.info("All caches invalidated");
     }
 
-    /**
-     * Cleanup expired entries in all caches
-     */
-    public void cleanUp() {
-        blockCache.cleanUp();
-        blockInfoCache.cleanUp();
-        transactionCache.cleanUp();
-        heightToHashCache.cleanUp();
-        epochWinnerCache.cleanUp();
-    }
+  // ==================== Statistics ====================
 
-    // ==================== Statistics ====================
-
-    /**
-     * Get block cache statistics
-     *
-     * @return CacheStats
-     */
-    public CacheStats getBlockCacheStats() {
-        return blockCache.stats();
-    }
-
-    /**
-     * Get BlockInfo cache statistics
-     *
-     * @return CacheStats
-     */
-    public CacheStats getBlockInfoCacheStats() {
-        return blockInfoCache.stats();
-    }
-
-    /**
-     * Get transaction cache statistics
-     *
-     * @return CacheStats
-     */
-    public CacheStats getTransactionCacheStats() {
-        return transactionCache.stats();
-    }
-
-    /**
-     * Get height-to-hash cache statistics
-     *
-     * @return CacheStats
-     */
-    public CacheStats getHeightCacheStats() {
-        return heightToHashCache.stats();
-    }
-
-    /**
-     * Get epoch winner cache statistics
-     *
-     * @return CacheStats
-     */
-    public CacheStats getEpochWinnerCacheStats() {
-        return epochWinnerCache.stats();
-    }
-
-    /**
+  /**
      * Calculate overall cache hit rate
      *
      * @return Hit rate (0.0 to 1.0)

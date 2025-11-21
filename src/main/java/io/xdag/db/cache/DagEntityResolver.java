@@ -30,10 +30,7 @@ import io.xdag.core.Transaction;
 import io.xdag.db.DagStore;
 import io.xdag.db.TransactionStore;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
 
@@ -100,51 +97,7 @@ public class DagEntityResolver {
 
     // ==================== Single Link Resolution ====================
 
-    /**
-     * Resolve a single link to its target entity
-     *
-     * <p>This method determines the link type and queries the appropriate store.
-     *
-     * @param link Link to resolve
-     * @return ResolvedEntity containing the target (Block or Transaction)
-     */
-    public ResolvedEntity resolveLink(Link link) {
-        if (link == null) {
-            return ResolvedEntity.notFound();
-        }
-
-        if (link.isTransaction()) {
-            // Query TransactionStore
-            Transaction tx = transactionStore.getTransaction(link.getTargetHash());
-            return ResolvedEntity.transaction(tx);
-        } else {
-            // Query DagStore
-            Block block = dagStore.getBlockByHash(link.getTargetHash(), false);
-            return ResolvedEntity.block(block);
-        }
-    }
-
-    /**
-     * Check if a link target exists
-     *
-     * <p>Fast existence check without loading full entity data.
-     *
-     * @param link Link to check
-     * @return true if target exists
-     */
-    public boolean linkExists(Link link) {
-        if (link == null) {
-            return false;
-        }
-
-        if (link.isTransaction()) {
-            return transactionStore.hasTransaction(link.getTargetHash());
-        } else {
-            return dagStore.hasBlock(link.getTargetHash());
-        }
-    }
-
-    // ==================== Batch Link Resolution ====================
+  // ==================== Batch Link Resolution ====================
 
     /**
      * Resolve all links in a block
@@ -210,120 +163,6 @@ public class DagEntityResolver {
                 .build();
     }
 
-    /**
-     * Batch check link existence
-     *
-     * <p>Efficiently checks if multiple links exist without loading entity data.
-     *
-     * @param links List of links to check
-     * @return Map of Link → exists
-     */
-    public Map<Link, Boolean> checkLinksExist(List<Link> links) {
-        if (links == null || links.isEmpty()) {
-            return new HashMap<>();
-        }
+  // ==================== Validation Helpers ====================
 
-        Map<Link, Boolean> result = new HashMap<>();
-
-        // Separate by type
-        List<Bytes32> blockHashes = links.stream()
-                .filter(link -> !link.isTransaction())
-                .map(Link::getTargetHash)
-                .collect(Collectors.toList());
-
-        List<Bytes32> txHashes = links.stream()
-                .filter(Link::isTransaction)
-                .map(Link::getTargetHash)
-                .collect(Collectors.toList());
-
-        // Batch check blocks
-        Map<Bytes32, Boolean> blockExists = checkBlocksExist(blockHashes);
-
-        // Batch check transactions
-        Map<Bytes32, Boolean> txExists = checkTransactionsExist(txHashes);
-
-        // Combine results
-        for (Link link : links) {
-            boolean exists = link.isTransaction()
-                    ? txExists.getOrDefault(link.getTargetHash(), false)
-                    : blockExists.getOrDefault(link.getTargetHash(), false);
-            result.put(link, exists);
-        }
-
-        return result;
-    }
-
-    /**
-     * Batch check if blocks exist
-     *
-     * @param hashes List of block hashes
-     * @return Map of hash → exists
-     */
-    private Map<Bytes32, Boolean> checkBlocksExist(List<Bytes32> hashes) {
-        Map<Bytes32, Boolean> result = new HashMap<>();
-        for (Bytes32 hash : hashes) {
-            result.put(hash, dagStore.hasBlock(hash));
-        }
-        return result;
-    }
-
-    /**
-     * Batch check if transactions exist
-     *
-     * @param hashes List of transaction hashes
-     * @return Map of hash → exists
-     */
-    private Map<Bytes32, Boolean> checkTransactionsExist(List<Bytes32> hashes) {
-        Map<Bytes32, Boolean> result = new HashMap<>();
-        for (Bytes32 hash : hashes) {
-            result.put(hash, transactionStore.hasTransaction(hash));
-        }
-        return result;
-    }
-
-    // ==================== Validation Helpers ====================
-
-    /**
-     * Validate all links in a block
-     *
-     * <p>This method performs complete link validation:
-     * <ol>
-     *   <li>Resolves all links</li>
-     *   <li>Checks for missing dependencies</li>
-     *   <li>Returns validation result with details</li>
-     * </ol>
-     *
-     * @param block Block to validate
-     * @return true if all links are valid
-     */
-    public boolean validateAllLinks(Block block) {
-        if (block == null || block.getLinks() == null || block.getLinks().isEmpty()) {
-            // Genesis block or blocks without links are valid
-            return true;
-        }
-
-        ResolvedLinks resolved = resolveAllLinks(block);
-        return resolved.hasAllReferences();
-    }
-
-    /**
-     * Get statistics about link resolution
-     *
-     * @param block Block to analyze
-     * @return Human-readable statistics string
-     */
-    public String getLinkResolutionStats(Block block) {
-        if (block == null || block.getLinks() == null || block.getLinks().isEmpty()) {
-            return "No links";
-        }
-
-        ResolvedLinks resolved = resolveAllLinks(block);
-        return String.format(
-                "Links[Total:%d, Blocks:%d, Txs:%d, Missing:%d]",
-                block.getLinks().size(),
-                resolved.getReferencedBlocks().size(),
-                resolved.getReferencedTransactions().size(),
-                resolved.getMissingCount()
-        );
-    }
 }

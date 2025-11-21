@@ -25,13 +25,10 @@
 package io.xdag.utils;
 
 import com.google.common.io.BaseEncoding;
-import com.google.common.primitives.UnsignedLong;
-import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.MutableBytes32;
-import org.apache.tuweni.units.bigints.UInt64;
 
 /**
  * Utility class for byte array operations and conversions
@@ -98,52 +95,7 @@ public class BytesUtils {
         return buffer.getLong();
     }
 
-    /**
-     * Converts a short to a byte array
-     * @param value The short value to convert
-     * @param littleEndian If true, uses little-endian byte order
-     * @return Byte array representation of the short
-     */
-    public static byte[] shortToBytes(short value, boolean littleEndian) {
-        ByteBuffer buffer = ByteBuffer.allocate(2);
-        if (littleEndian) {
-            buffer.order(ByteOrder.LITTLE_ENDIAN);
-        }
-        buffer.putShort(value);
-        return buffer.array();
-    }
-
-    /**
-     * Converts a byte to a byte array
-     * @param value The byte value to convert
-     * @param littleEndian If true, uses little-endian byte order
-     * @return Single element byte array
-     */
-    public static byte[] byteToBytes(byte value, boolean littleEndian) {
-        ByteBuffer buffer = ByteBuffer.allocate(1);
-        if (littleEndian) {
-            buffer.order(ByteOrder.LITTLE_ENDIAN);
-        }
-        buffer.put(value);
-        return buffer.array();
-    }
-
-    /**
-     * Converts 2 bytes from a byte array to a short
-     * @param input Source byte array
-     * @param offset Starting height in the array
-     * @param littleEndian If true, uses little-endian byte order
-     * @return The short value
-     */
-    public static short bytesToShort(byte[] input, int offset, boolean littleEndian) {
-        ByteBuffer buffer = ByteBuffer.wrap(input, offset, 2);
-        if (littleEndian) {
-            buffer.order(ByteOrder.LITTLE_ENDIAN);
-        }
-        return buffer.getShort();
-    }
-
-    /**
+  /**
      * Converts a byte array to a hex string
      * @param data The byte array to convert
      * @return Lowercase hex string representation
@@ -152,58 +104,7 @@ public class BytesUtils {
         return data == null ? "" : BaseEncoding.base16().lowerCase().encode(data);
     }
 
-    /**
-     * Converts a BigInteger to a byte array of specified length
-     * @param b The BigInteger to convert
-     * @param numBytes Desired length of resulting byte array
-     * @return Byte array representation of the BigInteger
-     */
-    public static byte[] bigIntegerToBytes(BigInteger b, int numBytes) {
-        if (b == null) {
-            return null;
-        }
-        byte[] bytes = new byte[numBytes];
-        byte[] biBytes = b.toByteArray();
-        int start = (biBytes.length == numBytes + 1) ? 1 : 0;
-        int length = Math.min(biBytes.length, numBytes);
-        System.arraycopy(biBytes, start, bytes, numBytes - length, length);
-        return bytes;
-    }
-
-    /**
-     * Converts a UInt64 to a byte array of specified length
-     * @param b The UInt64 to convert
-     * @param numBytes Desired length of resulting byte array
-     * @return Byte array representation of the UInt64
-     */
-    public static byte[] bigIntegerToBytes(UInt64 b, int numBytes) {
-        if (b == null) {
-            return null;
-        }
-        byte[] bytes = new byte[numBytes];
-        byte[] biBytes = b.toBytes().toArray();
-        int start = (biBytes.length == numBytes + 1) ? 1 : 0;
-        int length = Math.min(biBytes.length, numBytes);
-        System.arraycopy(biBytes, start, bytes, numBytes - length, length);
-        return bytes;
-    }
-
-    /**
-     * Converts a BigInteger to a byte array with endianness control
-     * @param b The BigInteger to convert
-     * @param numBytes Desired length of resulting byte array
-     * @param littleEndian If true, returns array in little-endian order
-     * @return Byte array representation of the BigInteger
-     */
-    public static byte[] bigIntegerToBytes(BigInteger b, int numBytes, boolean littleEndian) {
-        byte[] bytes = bigIntegerToBytes(b, numBytes);
-        if (littleEndian) {
-            arrayReverse(bytes);
-        }
-        return bytes;
-    }
-
-    /**
+  /**
      * Merges multiple byte arrays into one
      * @param arrays Arrays to merge
      * @return Combined byte array
@@ -282,20 +183,7 @@ public class BytesUtils {
         return (byte) "0123456789ABCDEF".indexOf(c);
     }
 
-    /**
-     * Reverses a byte array in place
-     * @param origin Array to reverse
-     */
-    public static void arrayReverse(byte[] origin) {
-        byte temp;
-        for (int i = 0; i < origin.length / 2; i++) {
-            temp = origin[i];
-            origin[i] = origin[origin.length - i - 1];
-            origin[origin.length - i - 1] = temp;
-        }
-    }
-
-    /**
+  /**
      * Creates a single-element byte array
      * @param b Byte value
      * @return Single-element byte array
@@ -304,16 +192,7 @@ public class BytesUtils {
         return new byte[]{b};
     }
 
-    /**
-     * Gets first byte from a byte array
-     * @param bytes Source array
-     * @return First byte
-     */
-    public static byte toByte(byte[] bytes) {
-        return bytes[0];
-    }
-
-    /**
+  /**
      * Checks if a byte array starts with another byte array
      * @param key Full array
      * @param part Prefix to check
@@ -331,21 +210,7 @@ public class BytesUtils {
         return true;
     }
 
-    /**
-     * Checks if a byte array contains only zeros
-     * @param input Array to check
-     * @return True if array contains only zeros
-     */
-    public static boolean isFullZero(byte[] input) {
-        for (byte b : input) {
-            if (b != 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    /**
+  /**
      * Checks if two byte arrays are equal
      * @param b1 First array
      * @param b2 Second array
@@ -438,12 +303,4 @@ public class BytesUtils {
         return value.mutableCopy().slice(8,20);
     }
 
-    /**
-     * Converts a long to UnsignedLong
-     * @param number Source long value
-     * @return UnsignedLong representation
-     */
-    public static UnsignedLong long2UnsignedLong(long number) {
-        return UnsignedLong.valueOf(toHexString((ByteBuffer.allocate(8).putLong(number).array())),16);
-    }
 }
