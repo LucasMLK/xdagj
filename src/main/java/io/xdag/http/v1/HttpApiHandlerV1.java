@@ -390,7 +390,7 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
         return convertBlockDetailToResponse(blockDetail, fullTransactions);
     }
 
-    private Object handleGetBlocksByEpoch(String epochStr, PageRequest pageRequest) {
+    private EpochBlocksResponse handleGetBlocksByEpoch(String epochStr, PageRequest pageRequest) {
         try {
             long epoch = Long.parseLong(epochStr);
 
@@ -402,22 +402,8 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
                 blockResponses.add(convertBlockSummary(summary));
             }
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("epoch", epoch);
-            response.put("blockCount", pagedBlocks.getTotal());
-
-            // Add pagination info
             PaginationInfo pagination = PaginationInfo.of(pageRequest, pagedBlocks.getTotal());
-            response.put("pagination", Map.of(
-                    "page", pagination.getPage(),
-                    "size", pagination.getSize(),
-                    "total", pagination.getTotal(),
-                    "totalPages", pagination.getTotalPages()
-            ));
-
-            response.put("blocks", blockResponses);
-
-            return response;
+            return EpochBlocksResponse.of(epoch, blockResponses, pagination, pagedBlocks.getTotal());
 
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid epoch number: " + epochStr);
