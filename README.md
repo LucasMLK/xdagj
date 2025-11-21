@@ -7,7 +7,7 @@ XDAGJ is the Java reference implementation of the XDAG 1.0b protocol. It bundles
 - **XDAG 1.0b Consensus** – Epoch-based DAG where smallest hash wins each 64-second epoch (primary consensus), with sequential height indexing for querying and cumulative difficulty for fork resolution.
 - **Hybrid Synchronization** – Height negotiation + finalized main-chain download + DAG solidification driven by `HybridSyncManager`.
 - **Typed Storage** – RocksDB-backed stores for blocks, transactions, accounts, and orphan metadata with crash-safe batching.
-- **Modern APIs** – REST + JSON-RPC served over Netty; OpenAPI spec published in YAML and JSON for SDK generation.
+- **Modern APIs** – REST + JSON-RPC served over Netty for wallet management, block/transaction queries, and mining.
 
 For a deep dive, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -26,10 +26,8 @@ mvn -Dtest=BlockApiServiceTest,TransactionApiServiceTest test
 
 ## HTTP API & SDKs
 
-- OpenAPI spec: `http://<host>:<port>/openapi.yaml` (JSON mirror at `/openapi.json`).
-- Local copy: [docs/api/openapi.yaml](docs/api/openapi.yaml)
+- API documentation: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (Section 6: HTTP API Overview)
 - Test scripts: `bash test-rpc.sh`, `bash test-epoch-api.sh`
-- Generate SDKs: `./generate-sdk.sh`
 
 Key REST endpoints:
 

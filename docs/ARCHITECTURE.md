@@ -17,8 +17,8 @@ This document condenses everything you need to understand the XDAGJ 1.0 release 
 |          v                       v                 v       |
 |  OrphanBlockStore        HybridSyncManager    Stratum/Pool |
 |  DagStore (blocks)       P2P Adapter          HTTP v1      |
-|  TransactionStore        RandomX POW          OpenAPI spec |
-|  AccountStore                                       |
+|  TransactionStore        RandomX POW                       |
+|  AccountStore                                              |
 +-----------------------------------------------------------+
 ```
 
@@ -287,7 +287,7 @@ All stores are initialized/stopped by `DagKernel` and share a `DagCache` layer f
 
 ## 6. HTTP API Overview
 
-The REST API lives under `/api/v1`. JSON schemas are synchronized with `docs/api/openapi.yaml` (also served by `/openapi.yaml`). Highlights:
+The REST API lives under `/api/v1`. Highlights:
 
 ### 6.1 Accounts
 | Endpoint | Description |
@@ -337,7 +337,7 @@ The REST API lives under `/api/v1`. JSON schemas are synchronized with `docs/api
 
 ### 7.2 Communication
 * **P2P**: Node handshake, then alternating `NewBlock` gossip and on-demand sync messages. Replay protected via message IDs and height tracking.
-* **HTTP**: Single Netty pipeline serving JSON; YAML OpenAPI served at `/openapi.yaml` (JSON mirror at `/openapi.json`).
+* **HTTP**: Single Netty pipeline serving JSON at `/api/v1/*`.
 * **Mining**: HTTP endpoints plus local stratum server reused by pools.
 
 ### 7.3 Synchronization
@@ -355,7 +355,6 @@ The REST API lives under `/api/v1`. JSON schemas are synchronized with `docs/api
 1. Build with `mvn clean package -DskipTests` (JDK 21).
 2. Run API tests: `mvn -Dtest=BlockApiServiceTest,TransactionApiServiceTest test`.
 3. Sanity-check HTTP endpoints via `bash test-rpc.sh`.
-4. Ensure `/openapi.yaml` is accessible for SDK generation (`generate-sdk.sh`).
-5. Package `target/xdagj-<version>-executable.jar` alongside `docs/ARCHITECTURE.md` and `docs/api/openapi.yaml`.
+4. Package `target/xdagj-<version>-executable.jar` alongside `docs/ARCHITECTURE.md`.
 
-This document + the OpenAPI spec are the only docs you need to ship with the release.
+This document is the primary reference for the release.

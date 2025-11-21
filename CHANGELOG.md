@@ -37,7 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Main/orphan block classification
 
 #### Documentation
-- ✅ OpenAPI specification updated with new endpoint schemas
 - ✅ Test script: `test-epoch-api.sh` for API validation
 - ✅ Comprehensive unit tests with 100% pass rate
 

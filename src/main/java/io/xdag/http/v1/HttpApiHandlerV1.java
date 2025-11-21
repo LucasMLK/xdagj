@@ -24,7 +24,6 @@
 package io.xdag.http.v1;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.ChannelFutureListener;
 import io.netty.channel.ChannelHandlerContext;
@@ -55,7 +54,6 @@ import io.xdag.utils.BasicUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
 
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -97,12 +95,6 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
 
         if (uri.startsWith("/api/v1/")) {
             handleApiRequest(ctx, request, uri, method);
-        } else if (uri.equals("/openapi.yaml") || uri.equals("/openapi.yml")) {
-            serveOpenApiSpec(ctx, false);
-        } else if (uri.equals("/openapi.json") || uri.equals("/api-docs") || uri.startsWith("/openapi")) {
-            serveOpenApiSpec(ctx, true);
-        } else if (uri.startsWith("/swagger-ui") || uri.equals("/docs")) {
-            serveSwaggerUI(ctx);
         } else {
             sendJsonResponse(ctx, NOT_FOUND, createError("Endpoint not found", 404));
         }
@@ -943,37 +935,6 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
         }
 
         return builder.build();
-    }
-
-    private void serveOpenApiSpec(ChannelHandlerContext ctx, boolean asJson) {
-        try {
-            InputStream is = getClass().getClassLoader().getResourceAsStream("api/openapi.yaml");
-
-            if (is != null) {
-                byte[] yamlContent = is.readAllBytes();
-                if (asJson) {
-                    Object yamlTree = new ObjectMapper(new YAMLFactory()).readTree(yamlContent);
-                    byte[] jsonContent = objectMapper.writerWithDefaultPrettyPrinter()
-                            .writeValueAsBytes(yamlTree);
-                    sendResponse(ctx, OK, "application/json", jsonContent);
-                } else {
-                    sendResponse(ctx, OK, "application/x-yaml", yamlContent);
-                }
-            } else {
-                sendJsonResponse(ctx, NOT_FOUND, createError("OpenAPI spec not found", 404));
-            }
-        } catch (Exception e) {
-            log.error("Error serving OpenAPI spec", e);
-            sendJsonResponse(ctx, INTERNAL_SERVER_ERROR, createError("Failed to load OpenAPI spec", 500));
-        }
-    }
-
-    private void serveSwaggerUI(ChannelHandlerContext ctx) {
-        String redirectUrl = "https://petstore.swagger.io/?url=http://localhost:10001/openapi.yaml";
-        FullHttpResponse response = new DefaultFullHttpResponse(HTTP_1_1, FOUND);
-        response.headers().set(HttpHeaderNames.LOCATION, redirectUrl);
-        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0);
-        ctx.writeAndFlush(response).addListener(ChannelFutureListener.CLOSE);
     }
 
     private void sendJsonResponse(ChannelHandlerContext ctx, HttpResponseStatus status, Object data) {
