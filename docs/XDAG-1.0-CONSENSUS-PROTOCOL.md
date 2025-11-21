@@ -12,25 +12,85 @@ XDAG 1.0 is an epoch-based Directed Acyclic Graph (DAG) blockchain that combines
 
 ## 1. Core Concepts
 
-### 1.1 Epoch
+### 1.1 Time System and Epoch
 
-An **epoch** is a fixed 64-second time window that serves as the fundamental unit of time in XDAG.
+XDAG uses a unique time representation system:
 
-- **Duration**: 64 seconds
-- **Epoch Number**: `timestamp / 64` (integer division)
-- **Purpose**: Groups blocks into time-based competition rounds
-- **Genesis Epoch**: Defined by network configuration (mainnet/testnet/devnet)
+#### Time Units
 
-### 1.2 Block Types
+**Base Time Unit**: XDAG uses **1/1024 second** as its base time precision (not the standard 1/1000 second millisecond)
+
+**XDAG Epoch (Full Timestamp)**:
+- Time value with 1/1024 second precision
+- Example: 1552800481279
+- Conversion formula: `xdag_epoch = (milliseconds * 1024) / 1000`
+- This is the complete timestamp used internally by XDAG
+
+**Epoch Number (Time Period ID)**:
+- Represents a 64-second period number
+- Example: 23693854
+- Calculation formula: `epoch_number = xdag_epoch >> 16` (right shift 16 bits)
+- This is the epoch number used for block storage and competition
+
+#### Epoch Characteristics
+
+**Duration of One Epoch Number**:
+```
+Duration = 2^16 * (1/1024 second) = 65536 / 1024 = 64 seconds
+```
+
+**Key Calculations**:
+- Get current epoch number from milliseconds: `(ms * 1024 / 1000) >> 16`
+- Get start time from epoch number: `epoch_number << 16`
+- Get end time from epoch number: `(epoch_number << 16) | 0xffff`
+
+**Purpose**:
+- Groups blocks into 64-second competition rounds
+- All candidate blocks within an epoch number compete
+- Genesis epoch number defined by network configuration (mainnet/testnet/devnet)
+
+**Example**:
+```
+Millisecond timestamp:  1552800481279
+↓ (ms * 1024 / 1000)
+XDAG Epoch:             1590068716382
+↓ (>> 16)
+Epoch Number:           24261
+```
+
+### 1.2 Block Production and Types
+
+#### Block Production Timing
+
+**Key Rule**: XDAG block production occurs at the **end of each epoch**
+
+- **Production Moment**: When the epoch time slice reaches its end moment (`epoch | 0xffff`), all nodes connected to the network can start producing blocks
+- **Epoch Uniformity**: Within the same epoch period, all blocks produced by all nodes have the **exact same epoch number**
+- **Concurrent Competition**: Multiple nodes can simultaneously produce blocks at the same epoch end moment, and these blocks enter epoch competition
+
+**Example**:
+```
+Epoch 23693854 end moment: XdagTime.epochNumberToMainTime(23693854)
+- Node A produces block: epoch = 23693854, hash = 0x0000012345...
+- Node B produces block: epoch = 23693854, hash = 0x0000056789...
+- Node C produces block: epoch = 23693854, hash = 0x0000098765...
+
+All three blocks have identical epoch numbers and will compete
+```
+
+#### Block Types
 
 All blocks in XDAG 1.0 are **candidate blocks** that participate in epoch competition:
 
-- **Candidate Block**: Any block mined within an epoch
-- **Main Block (Winner)**: The candidate with the smallest hash in an epoch
+- **Candidate Block**: Any block mined at an epoch end moment
+- **Main Block (Winner)**: The candidate with smallest hash (most hashpower) in the epoch
 - **Orphan Block (Loser)**: All other candidates in the epoch
 - **Genesis Block**: The first block (epoch 0, difficulty = 1)
 
-**Important**: There is no structural difference between block types. The distinction is determined by consensus rules during block processing.
+**Important Notes**:
+1. There is no structural difference between block types; the distinction is determined by consensus rules
+2. To prevent 1000 nodes from storing 1000 candidate blocks, each epoch period **retains only the top 16 candidates by hashpower**
+3. The candidate with highest hashpower (smallest hash) becomes the main block
 
 ### 1.3 Block Structure
 
@@ -114,22 +174,52 @@ baseDifficultyTarget = 2^256 - 1 (MAX)
 
 ### 3.1 Within-Epoch Competition
 
-**Multiple Candidates per Epoch**:
-- Any number of miners can submit candidate blocks in the same epoch
-- All candidates with `hash ≤ baseDifficultyTarget` are valid
-- Candidates compete for the winner position
+#### Block Production Rules
 
-**Winner Selection**:
+**Production Timing**: At the end of each epoch
+- All mining nodes connected to the network can produce blocks at the epoch end moment
+- All blocks produced within the same epoch have **identical epoch numbers**
+- Multiple nodes' blocks concurrently produced enter the same epoch's competition pool
+
+**Validation**:
+- All candidate blocks satisfying `hash ≤ baseDifficultyTarget` are valid
+- PoW validation ensures each block has sufficient computational work
+
+#### Candidate Block Storage Strategy
+
+**Storage Limit**: To prevent unbounded storage growth (e.g., 1000 nodes producing 1000 candidate blocks)
+- Each epoch period **retains only the top 16 candidates by hashpower**
+- Hashpower calculation: `work = MAX_UINT256 / hash` (smaller hash = more hashpower)
+- Candidates beyond the top 16 are discarded
+
+**Retention Policy**:
+1. Collect all valid candidate blocks in the epoch
+2. Sort by hashpower (work) in descending order
+3. Retain the top 16 highest-hashpower candidates
+4. Discard remaining candidates
+
+#### Winner Selection
+
+**Main Block Determination Rule**:
 ```
-Winner = candidate with minimum(hash) in the epoch
+Main Block (Winner) = highest-hashpower candidate in epoch
+                    = smallest-hash candidate in epoch
 ```
+
+**Rationale**: `work = MAX_UINT256 / hash`, therefore smaller hash = more hashpower
 
 **Example**:
 ```
-Epoch 1000:
-  - Block A: hash = 0x0000012345... (winner - smallest hash)
-  - Block B: hash = 0x0000056789... (orphan)
-  - Block C: hash = 0x0000098765... (orphan)
+Epoch 23693854 end moment, 1000 nodes simultaneously produce blocks:
+  - Block A: hash = 0x0000012345... work = 1.23e+73 (winner - smallest hash, most hashpower)
+  - Block B: hash = 0x0000056789... work = 1.18e+73 (orphan, Top 16)
+  - Block C: hash = 0x0000098765... work = 1.15e+73 (orphan, Top 16)
+  ...
+  - Block P: hash = 0x0000999999... work = 1.02e+73 (orphan, Top 16)
+  - Block Q, R, ..., Z: (discarded, not in Top 16)
+
+Retained: Blocks A-P (16 highest-hashpower blocks)
+Discarded: Blocks Q-Z and others (984 lower-hashpower blocks)
 ```
 
 ### 3.2 Main Chain Selection
@@ -176,28 +266,29 @@ Epoch    Main Block    Height
 
 ### 4.1 Reference Selection
 
-When creating a new candidate block, miners must reference:
+When creating a new candidate block (at epoch end moment), miners must reference:
 
 **1. Previous Epoch's Top 16 Candidates** (`MAX_BLOCK_LINKS`):
 - Get the previous main block's epoch
-- Collect all candidates in that epoch
-- Sort by work (difficulty) in descending order
-- Select top 16 candidates
-- Add 16 block links to the new candidate
+- Collect all candidates retained in that epoch
+- Sort by hashpower (work = MAX_UINT256 / hash) in descending order
+- Select top 16 candidates (or all if fewer than 16)
+- Add block links to these 16 blocks to the new candidate
 
 **Rationale**:
-- Ensures connection to previous epoch
-- Gives orphan blocks a chance to be referenced
-- Prevents "orphan accumulation" problem
+- Ensures new blocks connect to the previous epoch's strongest candidates
+- Since each epoch only retains Top 16 candidates, these are all highest-hashpower blocks
+- The main block (highest hashpower) is necessarily among these 16
+- Gives high-ranking orphan blocks a chance to be referenced
 - Maintains DAG structure integrity
 
 **2. Pending Transactions from Pool** (up to 1,024):
 - Query transaction pool for pending transactions
 - Sort by transaction fee (highest first)
 - Select up to 1,024 transactions
-- Add transaction links to the candidate
+- Add transaction links to the candidate block
 
-**Total Links**: 16 block links + up to 1,024 transaction links = 1,040 links per block
+**Total Links**: 16 block links + up to 1,024 transaction links = up to 1,040 links per block
 
 ### 4.2 Mining Restrictions
 
@@ -215,17 +306,29 @@ current_epoch - previous_main_block_epoch ≤ MINING_MAX_REFERENCE_DEPTH (16 epo
 
 ### 4.3 Orphan Block Retention
 
-**Retention Window**: 16,384 epochs (~12 days)
+**Immediate Storage Strategy** (Epoch Level):
+- Each epoch only retains the top **16 highest-hashpower candidates**
+- Candidates ranked 17+ are **immediately discarded**
+- Among these 16 candidates: 1 becomes main block, 15 become orphan blocks
+
+**Long-Term Retention Window** (Time Level): 16,384 epochs (~12 days)
 
 **Rationale**:
-- XDAG protocol allows referencing blocks within 12-day window
-- Older orphan blocks cannot become main blocks
+- XDAG protocol allows referencing blocks within a 12-day window
+- The 15 retained orphan blocks can be referenced by future blocks within 12 days
+- Orphan blocks older than 12 days cannot be referenced by new blocks and can be safely deleted
 - Periodic cleanup prevents unbounded storage growth
 
 **Cleanup Policy**:
 - Runs every 100 epochs (`ORPHAN_CLEANUP_INTERVAL`)
 - Deletes orphan blocks older than 16,384 epochs
 - Main blocks are never deleted
+
+**Storage Effect**:
+- Assumption: 1000 nodes produce blocks per epoch → 1000 candidate blocks generated
+- Immediate filtering: Only retain Top 16 (discard 984)
+- After 12 days cleanup: Delete expired orphan blocks (retain main blocks)
+- Storage growth: Controlled and predictable
 
 ---
 
@@ -235,8 +338,11 @@ current_epoch - previous_main_block_epoch ≤ MINING_MAX_REFERENCE_DEPTH (16 epo
 
 Maintain optimal block production rate:
 - **Target**: 150 qualifying blocks per epoch
-- **Accept**: Top 100 blocks per epoch (to manage storage)
-- **Effect**: Controls orphan block growth
+- **Retain**: Only top 16 highest-hashpower candidates per epoch
+- **Effect**:
+  - Controls storage growth (1000 nodes → only retain 16)
+  - Ensures sufficient competition (150 qualifying → select Top 16)
+  - Maintains network decentralization (allows multiple nodes to participate)
 
 ### 5.2 Adjustment Algorithm
 
@@ -416,10 +522,22 @@ Cost to rewrite N epochs = network_hashrate * N * 64 seconds
 **Attack Vector**: Flood network with low-quality orphan blocks
 
 **Defense**:
-- PoW requirement (`baseDifficultyTarget`) limits block production
-- Orphan retention window limits storage impact
-- Periodic cleanup removes old orphans
-- Only top 16 candidates referenced per epoch
+- **PoW Requirement** (`baseDifficultyTarget`) limits block production
+  - Each block must satisfy `hash ≤ baseDifficultyTarget`
+  - Computational cost limits attacker's ability to produce many blocks
+- **Top 16 Storage Strategy** (strongest defense)
+  - Each epoch only retains the top 16 highest-hashpower candidates
+  - Even if attacker produces 10,000 low-quality blocks, only Top 16 are retained
+  - Blocks ranked 17+ are immediately discarded
+- **Orphan Retention Window** limits long-term storage impact
+  - Orphan blocks older than 12 days (16,384 epochs) are automatically cleaned up
+- **Only reference Top 16 per epoch**
+  - New blocks only reference previous epoch's Top 16
+  - Low-quality orphan blocks cannot be referenced by future blocks
+
+**Effect**:
+- Attacker must have hashpower exceeding Top 16 to impact storage
+- Storage growth fully controlled: maximum 16 blocks per epoch
 
 ---
 
@@ -429,13 +547,20 @@ Cost to rewrite N epochs = network_hashrate * N * 64 seconds
 
 **Block Production**:
 - Epoch duration: 64 seconds
-- Blocks per epoch: ~150 (target), ~100 (accepted)
-- Block rate: ~1.56 blocks/second
+- Target candidate blocks: ~150 per epoch (maintained through difficulty adjustment)
+- Retained candidate blocks: Top 16 per epoch (highest hashpower)
+- Main blocks: 1 per epoch (Top 16 with smallest hash)
+- Effective block rate: 1 main block / 64 seconds = 0.016 blocks/second
 
 **Transaction Throughput**:
 - Transactions per block: 1,024 (current limit)
-- Blocks per epoch: 1 main block
+- Main blocks per epoch: 1
 - **Current TPS**: 1,024 / 64 = **16 TPS**
+
+**Storage Efficiency**:
+- 1000 nodes produce blocks: 1000 candidate blocks generated
+- Storage filtering: Only retain Top 16 (99.84% discarded)
+- Net increase per epoch: 1 main block + 15 orphan blocks = 16 blocks
 
 ### 10.2 Future Scaling
 
@@ -617,10 +742,18 @@ DEVNET_DIFFICULTY_TARGET = 2^256 - 1 (no PoW)
 MINING_MAX_REFERENCE_DEPTH = 16 epochs (~17 minutes)
 ORPHAN_RETENTION_WINDOW = 16,384 epochs (~12 days)
 TARGET_BLOCKS_PER_EPOCH = 150
-MAX_BLOCKS_PER_EPOCH = 100
+TOP_CANDIDATES_PER_EPOCH = 16
 DIFFICULTY_ADJUSTMENT_INTERVAL = 1,000 epochs
 ORPHAN_CLEANUP_INTERVAL = 100 epochs
 ```
+
+**Storage Strategy Explanation**:
+- `TOP_CANDIDATES_PER_EPOCH = 16`: Each epoch only retains the top 16 highest-hashpower candidates
+  - 1 becomes main block (smallest hash)
+  - 15 become orphan blocks (hashpower ranks 2-16)
+  - Remaining candidates are immediately discarded
+- `TARGET_BLOCKS_PER_EPOCH = 150`: Difficulty adjustment target, ensures sufficient competition
+  - 150 candidates compete → select Top 16 → ensures fairness
 
 ---
 
