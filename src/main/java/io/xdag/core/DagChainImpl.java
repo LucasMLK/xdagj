@@ -731,16 +731,16 @@ public class DagChainImpl implements DagChain {
     long epoch = block.getEpoch();
     List<Block> candidates = getCandidateBlocksInEpoch(epoch);
 
-    // Filter out only non-orphan blocks (height > 0) for counting
-    List<Block> nonOrphanBlocks = candidates.stream()
-        .filter(b -> b.getInfo() != null && b.getInfo().getHeight() > 0)
-        .toList();
+    // Count ALL candidate blocks in this epoch (both main and orphan blocks)
+    // Each epoch should have at most MAX_BLOCKS_PER_EPOCH candidate blocks
+    // (1 winner with height > 0, and up to 15 losers with height = 0)
+    int candidateCount = candidates.size();
 
     // If under limit, accept
-    if (nonOrphanBlocks.size() < MAX_BLOCKS_PER_EPOCH) {
-      log.debug("Block {} accepted: epoch {} has {} < {} non-orphan blocks",
+    if (candidateCount < MAX_BLOCKS_PER_EPOCH) {
+      log.debug("Block {} accepted: epoch {} has {} < {} candidate blocks",
           block.getHash().toHexString().substring(0, 16),
-          epoch, nonOrphanBlocks.size(), MAX_BLOCKS_PER_EPOCH);
+          epoch, candidateCount, MAX_BLOCKS_PER_EPOCH);
       return null;  // Accept
     }
 
@@ -751,7 +751,7 @@ public class DagChainImpl implements DagChain {
     Block worstBlock = null;
     UInt256 worstWork = UInt256.MAX_VALUE;
 
-    for (Block candidate : nonOrphanBlocks) {
+    for (Block candidate : candidates) {
       UInt256 candidateWork = calculateBlockWork(candidate.getHash());
       if (candidateWork.compareTo(worstWork) < 0) {
         worstWork = candidateWork;
