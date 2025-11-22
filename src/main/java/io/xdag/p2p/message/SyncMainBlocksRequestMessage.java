@@ -128,11 +128,20 @@ public class SyncMainBlocksRequestMessage extends Message {
    *   <li>Read isRaw (boolean, 1 byte)</li>
    * </ol>
    *
-   * @param body serialized message body
-   * @throws IllegalArgumentException if deserialization fails
+   * @param body serialized message body (must be at least 21 bytes)
+   * @throws IllegalArgumentException if deserialization fails or body is too short
    */
   public SyncMainBlocksRequestMessage(byte[] body) {
     super(XdagMessageCode.SYNC_MAIN_BLOCKS_REQUEST, SyncMainBlocksReplyMessage.class);
+
+    // BUGFIX (BUG-051): Add message length validation
+    // Previously: Would throw unclear exception from SimpleDecoder
+    // Now: Validate input and provide clear error message
+    if (body == null || body.length < 21) {
+      throw new IllegalArgumentException(
+          "Message body must be at least 21 bytes (8+8+4+1), got: " +
+          (body == null ? "null" : body.length));
+    }
 
     SimpleDecoder dec = new SimpleDecoder(body);
 
@@ -157,18 +166,34 @@ public class SyncMainBlocksRequestMessage extends Message {
    *   <li>Write isRaw (boolean, 1 byte)</li>
    * </ol>
    *
-   * @param fromHeight start height (inclusive)
-   * @param toHeight   end height (inclusive)
-   * @param maxBlocks  maximum blocks to return
+   * @param fromHeight start height (inclusive, must be >= 0)
+   * @param toHeight   end height (inclusive, must be >= fromHeight)
+   * @param maxBlocks  maximum blocks to return (capped at 10000)
    * @param isRaw      true = full block data, false = BlockInfo only
+   * @throws IllegalArgumentException if parameters are invalid
    */
   public SyncMainBlocksRequestMessage(long fromHeight, long toHeight, int maxBlocks,
       boolean isRaw) {
     super(XdagMessageCode.SYNC_MAIN_BLOCKS_REQUEST, SyncMainBlocksReplyMessage.class);
 
+    // BUGFIX (BUG-052): Add parameter validation as documented in JavaDoc
+    // Previously: No validation, could send invalid requests
+    // Now: Validate parameters according to documented rules (line 56-73)
+    if (fromHeight < 0) {
+      throw new IllegalArgumentException("fromHeight must be >= 0, got: " + fromHeight);
+    }
+    if (toHeight < fromHeight) {
+      throw new IllegalArgumentException(
+          String.format("toHeight (%d) must be >= fromHeight (%d)", toHeight, fromHeight));
+    }
+    if (maxBlocks <= 0) {
+      throw new IllegalArgumentException("maxBlocks must be > 0, got: " + maxBlocks);
+    }
+
     this.fromHeight = fromHeight;
     this.toHeight = toHeight;
-    this.maxBlocks = maxBlocks;
+    // Apply hard limit of 10000 blocks as documented
+    this.maxBlocks = Math.min(maxBlocks, 10000);
     this.isRaw = isRaw;
 
     // Serialize message body
