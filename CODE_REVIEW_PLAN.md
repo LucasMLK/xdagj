@@ -376,7 +376,28 @@
 
 | ID | File/Method | Issue | Impact | Plan |
 |----|-------------|-------|--------|------|
-| *(none yet)* | - | - | - | - |
+| DEBT-002 | DagAccountManager transaction methods | Non-transactional reads in transaction methods | Concurrency safety (future risk) | Add transactional read support or atomic operations |
+
+**DEBT-002 Details**:
+- **Location**: `DagAccountManager.java:216-280`
+- **Methods Affected**:
+  - `addBalanceInTransaction()` - line 216
+  - `subtractBalanceInTransaction()` - line 238
+  - `incrementNonceInTransaction()` - line 264
+- **Problem**: Read-modify-write pattern with non-transactional reads
+  ```java
+  UInt256 currentBalance = getBalance(address);  // Non-transactional read
+  UInt256 newBalance = currentBalance.add(amount);
+  accountStore.setBalanceInTransaction(txId, address, newBalance);  // Transactional write
+  ```
+- **Current Safety**: Protected by `DagChainImpl.tryToConnect()` synchronized block
+- **Future Risk**: HIGH - Will cause data inconsistency if parallel block processing is added
+- **Impact**: Could lead to balance loss or nonce desync in concurrent scenarios
+- **Refactoring Strategy**:
+  1. Option A: Add `getBalanceInTransaction()` / `getNonceInTransaction()` to AccountStore
+  2. Option B: Implement atomic `addBalanceInTransaction()` directly in AccountStore
+  3. Add documentation warning about current thread-safety assumptions
+- **Timeline**: Phase 10 or before enabling parallel processing
 
 ### Low Priority
 

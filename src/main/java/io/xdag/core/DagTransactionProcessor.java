@@ -278,15 +278,28 @@ public class DagTransactionProcessor {
   /**
    * Validate transaction signature
    *
-   * <p>TODO: Implement actual signature verification logic
+   * <p>Verifies ECDSA signature (secp256k1) using transaction's v/r/s components.
+   * The signature proves that the transaction was created by the owner of the "from" address.
+   *
+   * <p>Verification process (implemented in Transaction.verifySignature()):
+   * <ol>
+   *   <li>Reconstruct Signature from v/r/s components</li>
+   *   <li>Recover public key from signature using tx hash</li>
+   *   <li>Derive address from public key (SHA256 → RIPEMD160)</li>
+   *   <li>Compare derived address with "from" address</li>
+   * </ol>
    *
    * @param tx transaction to validate
-   * @return true if signature is valid
+   * @return true if signature is valid and matches the "from" address
    */
   private boolean validateSignature(Transaction tx) {
-    // TODO: Implement signature verification
-    // For now, assume all signatures are valid
-    return true;
+    try {
+      return tx.verifySignature();
+    } catch (Exception e) {
+      log.error("Signature verification exception for tx {}: {}",
+          tx.getHash().toHexString().substring(0, 16), e.getMessage());
+      return false;
+    }
   }
 
   /**
@@ -297,6 +310,7 @@ public class DagTransactionProcessor {
    *   <li>Sender account exists</li>
    *   <li>Sender has sufficient balance</li>
    *   <li>Transaction nonce matches sender nonce</li>
+   *   <li>Transaction has not already been executed (double-spend protection)</li>
    * </ul>
    *
    * @param tx transaction to validate
@@ -335,6 +349,16 @@ public class DagTransactionProcessor {
               tx.getFrom().toHexString(),
               expectedNonce.toLong(),
               txNonce.toLong())
+      );
+    }
+
+    // 4. Check double-spend: ensure transaction has not already been executed
+    // This prevents the same transaction from being included in multiple blocks
+    // and executed multiple times (double-spending protection)
+    if (transactionStore.isTransactionExecuted(tx.getHash())) {
+      return ValidationResult.error(
+          String.format("Transaction already executed (double-spend attempt): %s",
+              tx.getHash().toHexString())
       );
     }
 
