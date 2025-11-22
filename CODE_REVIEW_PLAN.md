@@ -322,13 +322,7 @@
 | ID | File:Line | Description | Status | Fix Commit |
 |----|-----------|-------------|--------|------------|
 | BUG-001 | DagKernel.java:805 | Genesis height=0 should be 1 | ✅ Fixed | 55e93216 |
-| BUG-005 | DagChainImpl.java:734 | validateEpochLimit() filters wrong blocks | 🔴 Open | - |
-
-**BUG-005 Details**:
-- **Location**: `DagChainImpl.java:734-737`
-- **Problem**: Filters `height > 0` (main blocks only), should filter all candidate blocks
-- **Impact**: MAX_BLOCKS_PER_EPOCH limit ineffective, allows unlimited orphan blocks
-- **Fix**: Remove height filter or change to include orphan blocks (height >= 0)
+| BUG-005 | DagChainImpl.java:734 | validateEpochLimit() filters wrong blocks | ✅ Fixed | 6ce1720b |
 
 ### Major Bugs (🟡 Medium Priority)
 
@@ -371,12 +365,14 @@
 - **Bugs Found**: 0
 - **Dead Code Lines**: 0
 
-### Current Progress (2025-11-22 17:45)
+### Current Progress (2025-11-22 17:50)
 - **Files Reviewed**: 9 / ~200 (4.5%)
-- **Bugs Found**: 7 (1 critical, 2 major, 4 minor)
-- **Bugs Fixed**: 4 (BUG-001,002,003,004)
-- **Bugs Open**: 3 (BUG-005 critical, BUG-006,007 minor/major)
+- **Bugs Found**: 7 total
+  - Critical: 2 found, 2 fixed ✅
+  - Major: 2 found, 0 fixed
+  - Minor: 3 found, 2 fixed ✅
 - **Dead Code Removed**: ~1,496 lines (config cleanup)
+- **Next**: Continue Phase 3 or move to next phase
 
 ### Code Quality Improvements
 - Added JavaDoc comments: 10 methods
