@@ -1351,11 +1351,15 @@ public class DagChainImpl implements DagChain {
     Bytes coinbase = Bytes.wrap(new byte[20]);
     log.info("  - Using zero coinbase (genesis block)");
 
+    // Get difficulty from genesis config (not hardcoded)
+    UInt256 difficulty = dagKernel.getGenesisConfig().getDifficultyUInt256();
+    log.info("  - Genesis difficulty: {}", difficulty.toHexString());
+
     // Create genesis block with epoch number (NOT timestamp)
     // Block.getTimestamp() uses TimeUtils helper to derive display timestamp
     Block genesisBlock = Block.createWithNonce(
         epoch,  // Pass epoch number, Block will convert to timestamp
-        UInt256.ONE,
+        difficulty,  // Use configured difficulty from genesis.json
         Bytes32.ZERO,
         coinbase,
         List.of()

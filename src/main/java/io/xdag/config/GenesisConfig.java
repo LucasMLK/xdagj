@@ -56,8 +56,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  *   "networkId": "mainnet",
  *   "chainId": 1,
  *   "epoch": 23694000,
- *   "initialDifficulty": "0x1",
- *   "genesisCoinbase": "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi",
+ *   "difficulty": "0x1",
  *   "alloc": {
  *     "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi": "1000000000000000000000",
  *     "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2": "500000000000000000000"
@@ -109,10 +108,14 @@ public class GenesisConfig {
   // ========== Consensus Parameters ==========
 
   /**
-   * Initial difficulty (hex string) Default: 1 (minimal difficulty for genesis)
+   * Genesis block difficulty (hex string)
+   * Default: "0x1" (minimal difficulty for genesis)
+   *
+   * <p>This is the starting point for cumulative difficulty calculation.
+   * Not to be confused with baseDifficultyTarget (PoW validation threshold).
    */
-  @JsonProperty("initialDifficulty")
-  private String initialDifficulty = "0x1";
+  @JsonProperty("difficulty")
+  private String difficulty = "0x1";
 
   /**
    * RandomX initial seed (32-byte hex string)
@@ -198,7 +201,7 @@ public class GenesisConfig {
         long mainnetTimestamp = TimeUtils.timeMillisToEpoch(mainnetMs);
         long mainnetEpoch = TimeUtils.getEpoch(mainnetTimestamp);
         config.setEpoch(mainnetEpoch);
-        config.setInitialDifficulty("0x1");
+        config.setDifficulty("0x1");
         break;
 
       case "testnet":
@@ -207,7 +210,7 @@ public class GenesisConfig {
         long testnetTimestamp = TimeUtils.getCurrentEpoch();
         long testnetEpoch = TimeUtils.getEpoch(testnetTimestamp);
         config.setEpoch(testnetEpoch);
-        config.setInitialDifficulty("0x1");
+        config.setDifficulty("0x1");
         break;
 
       case "devnet":
@@ -215,7 +218,7 @@ public class GenesisConfig {
         long devnetTimestamp = TimeUtils.getCurrentEpoch();
         long devnetEpoch = TimeUtils.getEpoch(devnetTimestamp);
         config.setEpoch(devnetEpoch);
-        config.setInitialDifficulty("0x1");
+        config.setDifficulty("0x1");
         // Add some test allocations for devnet (using base58check addresses)
         config.getAlloc().put(
             "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi",
@@ -235,14 +238,14 @@ public class GenesisConfig {
   }
 
   /**
-   * Get initial difficulty as UInt256
+   * Get genesis block difficulty as UInt256
    *
-   * @return initial difficulty
+   * @return genesis block difficulty
    */
-  public UInt256 getInitialDifficultyUInt256() {
-    String hex = initialDifficulty.startsWith("0x")
-        ? initialDifficulty.substring(2)
-        : initialDifficulty;
+  public UInt256 getDifficultyUInt256() {
+    String hex = difficulty.startsWith("0x")
+        ? difficulty.substring(2)
+        : difficulty;
     return UInt256.fromHexString(hex);
   }
 
@@ -362,9 +365,9 @@ public class GenesisConfig {
 
     // Validate difficulty format
     try {
-      getInitialDifficultyUInt256();
+      getDifficultyUInt256();
     } catch (Exception e) {
-      throw new IllegalArgumentException("Invalid difficulty format: " + initialDifficulty, e);
+      throw new IllegalArgumentException("Invalid difficulty format: " + difficulty, e);
     }
 
     // Validate allocations

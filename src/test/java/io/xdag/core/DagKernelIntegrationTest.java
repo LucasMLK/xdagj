@@ -103,7 +103,7 @@ public class DagKernelIntegrationTest {
                 "  \"networkId\": \"test\",\n" +
                 "  \"chainId\": 999,\n" +
                 "  \"epoch\": " + epochNumber + ",\n" +
-                "  \"initialDifficulty\": \"0x1000\",\n" +
+                "  \"difficulty\": \"0x1\",\n" +
                 "  \"alloc\": {}\n" +
                 "}";
 

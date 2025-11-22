@@ -110,23 +110,10 @@ public class DagChainConsensusTest {
         String genesisJson = "{\n" +
                 "  \"networkId\": \"test\",\n" +
                 "  \"chainId\": 999,\n" +
-                "  \"timestamp\": 1516406400,\n" +
-                "  \"initialDifficulty\": \"0x1000\",\n" +
-                "  \"epochLength\": 64,\n" +
-                "  \"extraData\": \"XDAG Consensus Test\",\n" +
-                "  \"genesisCoinbase\": \"0x0000000000000000000000001111111111111111111111111111111111111111\",\n" +
-                "  \"alloc\": {},\n" +
-                "  \"snapshot\": {\n" +
-                "    \"enabled\": false,\n" +
-                "    \"height\": 0,\n" +
-                "    \"hash\": \"0x0000000000000000000000000000000000000000000000000000000000000000\",\n" +
-                "    \"timestamp\": 0,\n" +
-                "    \"dataFile\": \"\",\n" +
-                "    \"verify\": false,\n" +
-                "    \"format\": \"v1\",\n" +
-                "    \"expectedAccounts\": 0,\n" +
-                "    \"expectedBlocks\": 0\n" +
-                "  }\n" +
+                "  \"epoch\": 23694000,\n" +
+                "  \"difficulty\": \"0x1\",\n" +
+                "  \"randomXSeed\": \"0x0000000000000000000000000000000000000000000000000000000000000001\",\n" +
+                "  \"alloc\": {}\n" +
                 "}";
 
         // Create genesis-devnet.json file (DevnetConfig expects this filename)

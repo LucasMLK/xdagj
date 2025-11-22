@@ -714,14 +714,14 @@ public class DagKernel {
     log.info("  Network: {}", genesisConfig.getNetworkId());
     log.info("  Chain ID: {}", genesisConfig.getChainId());
     log.info("  Genesis Epoch: {}", genesisConfig.getEpoch());
-    log.info("  Initial Difficulty: {}", genesisConfig.getInitialDifficulty());
+    log.info("  Difficulty: {}", genesisConfig.getDifficulty());
 
     if (genesisConfig.hasAllocations()) {
       log.info("  Initial Allocations: {} addresses", genesisConfig.getAlloc().size());
       long totalAlloc = genesisConfig.getAlloc().values().stream()
           .map(BigInteger::new)
-          .reduce(java.math.BigInteger.ZERO, java.math.BigInteger::add)
-          .divide(java.math.BigInteger.valueOf(1_000_000_000))
+          .reduce(BigInteger.ZERO, BigInteger::add)
+          .divide(BigInteger.valueOf(1_000_000_000))
           .longValue();
       log.info("  Total Allocated: {} XDAG", totalAlloc);
     }
@@ -836,7 +836,7 @@ public class DagKernel {
     }
 
     // Verify difficulty
-    UInt256 expectedDifficulty = genesisConfig.getInitialDifficultyUInt256();
+    UInt256 expectedDifficulty = genesisConfig.getDifficultyUInt256();
     UInt256 actualDifficulty = genesisBlock.getHeader().getDifficulty();
 
     if (!expectedDifficulty.equals(actualDifficulty)) {
