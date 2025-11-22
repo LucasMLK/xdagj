@@ -74,14 +74,30 @@ public class BasicUtils {
   /**
    * Convert hex public address to legacy 24-byte truncated hash format
    *
-   * @param hexPubAddress Hex string public address
+   * @param hexPubAddress Hex string public address (must not be null)
    * @return Legacy hash format as MutableBytes32
+   * @throws IllegalArgumentException if hex string is invalid or null
    */
   public static MutableBytes32 hexPubAddress2Hash(String hexPubAddress) {
-    Bytes hash = Bytes.fromHexString(hexPubAddress);
-    MutableBytes32 legacyHash = MutableBytes32.create();
-    legacyHash.set(8, hash);
-    return legacyHash;
+    // BUGFIX (BUG-034): Add input validation for defensive programming
+    // Previously: Would throw obscure exception from Bytes.fromHexString()
+    // Now: Validate input and provide clear error messages
+    if (hexPubAddress == null) {
+      throw new IllegalArgumentException("Hex public address cannot be null");
+    }
+    if (hexPubAddress.isEmpty()) {
+      throw new IllegalArgumentException("Hex public address cannot be empty");
+    }
+
+    try {
+      Bytes hash = Bytes.fromHexString(hexPubAddress);
+      MutableBytes32 legacyHash = MutableBytes32.create();
+      legacyHash.set(8, hash);
+      return legacyHash;
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException(
+          "Invalid hex public address: " + hexPubAddress, e);
+    }
   }
 
   /**
@@ -136,13 +152,28 @@ public class BasicUtils {
   }
 
   /**
-   * Verify CRC32 checksum
+   * Verify CRC32 checksum for XDAG block (512 bytes)
    *
-   * @param src Source data
+   * <p>XDAG blocks are fixed at 512 bytes. This method verifies the CRC32
+   * checksum of the first 512 bytes of the input data.
+   *
+   * @param src Source data (must be at least 512 bytes)
    * @param crc Expected CRC value
    * @return true if checksum matches
+   * @throws IllegalArgumentException if src is null or less than 512 bytes
    */
   public static boolean crc32Verify(byte[] src, int crc) {
+    // BUGFIX (BUG-033): Add input validation for array bounds
+    // Previously: Would throw ArrayIndexOutOfBoundsException if src.length < 512
+    // Now: Validate input and provide clear error message
+    if (src == null) {
+      throw new IllegalArgumentException("Source data cannot be null");
+    }
+    if (src.length < 512) {
+      throw new IllegalArgumentException(
+          "Source data must be at least 512 bytes, got: " + src.length);
+    }
+
     CRC32 crc32 = new CRC32();
     crc32.update(src, 0, 512);
     return equalBytes(
