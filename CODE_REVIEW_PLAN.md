@@ -150,13 +150,13 @@
 |-----------|------|----------|--------|
 | Account manager | `DagAccountManager.java` | HIGH | ✅ Completed |
 | Transaction processor | `DagTransactionProcessor.java` | HIGH | ✅ Completed |
-| Account store | `AccountStoreImpl.java` | MEDIUM | 📋 Planned |
+| Account store | `AccountStoreImpl.java` | MEDIUM | ✅ Completed |
 
 **Focus Areas**:
 - [x] Balance calculations
 - [x] Nonce management
 - [x] Double-spend prevention
-- [ ] State consistency
+- [x] State consistency (noted concurrency concerns)
 
 **Issues Found** (DagAccountManager.java):
 1. DEBT-002: Transaction methods use non-transactional reads (line 216-280) - Recorded in Technical Debt
@@ -164,6 +164,18 @@
 **Issues Found** (DagTransactionProcessor.java):
 1. ✅ BUG-012: Signature validation not implemented (line 286) - Fixed in f86d3d0c
 2. ✅ BUG-013: Missing double-spend protection (line 305) - Fixed in f86d3d0c
+
+**Issues Found** (AccountStoreImpl.java):
+1. DEBT-003: All modification methods have concurrency issues (line 306-627) - Recorded in Technical Debt
+2. NOTE: setBalanceInTransaction() workaround (line 682) - Known architectural limitation, documented
+
+**Phase 3.3 Summary**:
+- All files reviewed ✅
+- 2 critical security bugs fixed (BUG-012, BUG-013)
+- 2 technical debt items recorded (DEBT-002, DEBT-003)
+- Both debt items share same root cause: non-atomic read-modify-write
+- Current safety: protected by DagChainImpl.tryToConnect() synchronized block
+- Future risk: HIGH if parallel block processing is enabled
 
 ---
 
@@ -384,6 +396,7 @@
 | ID | File/Method | Issue | Impact | Plan |
 |----|-------------|-------|--------|------|
 | DEBT-002 | DagAccountManager transaction methods | Non-transactional reads in transaction methods | Concurrency safety (future risk) | Add transactional read support or atomic operations |
+| DEBT-003 | AccountStoreImpl modification methods | Read-modify-write pattern without atomicity | Concurrency safety (future risk) | Add RocksDB transactions or Java synchronization |
 
 **DEBT-002 Details**:
 - **Location**: `DagAccountManager.java:216-280`
@@ -405,6 +418,50 @@
   2. Option B: Implement atomic `addBalanceInTransaction()` directly in AccountStore
   3. Add documentation warning about current thread-safety assumptions
 - **Timeline**: Phase 10 or before enabling parallel processing
+
+**DEBT-003 Details**:
+- **Location**: `AccountStoreImpl.java:306-627`
+- **Methods Affected**:
+  - `addBalance()` - line 403
+  - `subtractBalance()` - line 411
+  - `incrementNonce()` - line 471
+  - `decrementNonce()` - line 486
+  - `saveAccount()` - line 306 (statistics update)
+  - `updateTotalBalance()` - line 621
+- **Problem**: All modification methods use read-modify-write pattern without atomicity
+  ```java
+  public UInt256 addBalance(Bytes address, UInt256 amount) {
+      UInt256 currentBalance = getBalance(address);  // Non-atomic read
+      UInt256 newBalance = currentBalance.add(amount);
+      setBalance(address, newBalance);  // Non-atomic write
+      return newBalance;
+  }
+  ```
+- **Concurrency Scenario**:
+  ```
+  Thread 1: balance = getBalance(addr)  // 100
+  Thread 2: balance = getBalance(addr)  // 100
+  Thread 1: newBalance = 100 + 50 = 150
+  Thread 2: newBalance = 100 + 30 = 130
+  Thread 1: setBalance(addr, 150)
+  Thread 2: setBalance(addr, 130)
+  Result: Balance is 130, Thread 1's +50 is lost!
+  ```
+- **Current Safety**: Protected by `DagChainImpl.tryToConnect()` synchronized block
+- **Future Risk**: HIGH - Will cause data inconsistency if parallel block processing is added
+- **Impact**: Could lead to balance loss, incorrect nonce, wrong account statistics
+- **Root Cause**: Same as DEBT-002 - non-atomic read-modify-write operations
+- **Refactoring Strategy**:
+  1. Option A: Use RocksDB Transactions (requires shared RocksDB instance with TransactionManager)
+  2. Option B: Add Java `synchronized` methods or use `ReadWriteLock`
+  3. Option C: Implement atomic operations directly in RocksDB (merge operators)
+  4. Note: setBalanceInTransaction() already documents this limitation (line 682-692)
+- **Timeline**: Phase 10 or before enabling parallel processing
+
+**NOTE**: AccountStoreImpl.setBalanceInTransaction() (line 682) documents a known architectural limitation:
+- AccountStore uses separate RocksDB instance (accountstore/)
+- Cannot achieve cross-database atomicity with TransactionManager (index/)
+- Future refactoring needed to share same RocksDB instance
 
 ### Low Priority
 
@@ -513,20 +570,20 @@
 - **Bugs Found**: 0
 - **Dead Code Lines**: 0
 
-### Current Progress (2025-11-22 19:00)
-- **Files Reviewed**: 15 / ~200 (7.5%)
+### Current Progress (2025-11-22 19:30)
+- **Files Reviewed**: 16 / ~200 (8.0%)
   - Phase 1: 3 files (Bootstrap, XdagCli, Launcher, Config)
   - Phase 2: 1 file (DagKernel)
-  - Phase 3: 7 files (DagChainImpl, DagBlockProcessor, Block, BlockHeader, Transaction, DagAccountManager, DagTransactionProcessor)
+  - Phase 3: 8 files (DagChainImpl, DagBlockProcessor, Block, BlockHeader, Transaction, DagAccountManager, DagTransactionProcessor, AccountStoreImpl)
 - **Bugs Found**: 14 total
   - Critical: 5 found, 5 fixed ✅ (100%)
   - Major: 3 found, 2 fixed, 1 documented ✅ (100%)
   - Minor: 4 found, 3 fixed, 1 deferred ✅ (75%)
   - Security: 2 found, 2 fixed ✅ (100%)
-- **Technical Debt**: 2 items registered (DEBT-001, DEBT-002)
+- **Technical Debt**: 3 items registered (DEBT-001, DEBT-002, DEBT-003)
 - **Dead Code Removed**: ~1,496 lines (config cleanup)
-- **Status**: Phase 3.3 (Account Management) NEARLY COMPLETE ✅
-- **Next**: Phase 3.3 - AccountStoreImpl (last file) or Phase 4 (Storage Layer)
+- **Status**: Phase 3 (Core Consensus Layer) COMPLETED ✅
+- **Next**: Phase 4 (Storage Layer)
 
 ### Code Quality Improvements
 - Added JavaDoc comments: 10 methods
