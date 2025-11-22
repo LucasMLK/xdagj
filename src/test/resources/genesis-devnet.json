@@ -1,0 +1,13 @@
+{
+  "networkId": "devnet",
+  "chainId": 3,
+  "epoch": 27555273,
+  "initialDifficulty": "0x1",
+  "genesisCoinbase": "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi",
+  "randomXSeed": "0x0000000000000000000000000000000000000000000000000000000000000001",
+  "alloc": {
+    "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi": "10000000000000000000000",
+    "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2": "5000000000000000000000",
+    "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa": "1000000000000000000000"
+  }
+}

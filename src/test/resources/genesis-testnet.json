@@ -1,0 +1,12 @@
+{
+  "networkId": "testnet",
+  "chainId": 2,
+  "epoch": 27555273,
+  "initialDifficulty": "0x1",
+  "genesisCoinbase": "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+  "randomXSeed": "0x0000000000000000000000000000000000000000000000000000000000000002",
+  "alloc": {
+    "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2": "1000000000000000000000",
+    "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa": "500000000000000000000"
+  }
+}

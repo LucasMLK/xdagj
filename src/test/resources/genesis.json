@@ -1,7 +1,0 @@
-{
-  "networkId": "test",
-  "chainId": 999,
-  "epoch": 27555273,
-  "initialDifficulty": "0x1",
-  "alloc": {}
-}
