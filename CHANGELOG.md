@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed - Configuration and Snapshot Cleanup (2025-11-22)
+
+#### Configuration Cleanup
+**Removed unused configuration parameters** (~30 parameters, 722 lines):
+- **Network parameters**: `netMaxOutboundConnections`, `netMaxInboundConnections`, `netMaxInboundConnectionsPerIp`, `netMaxPacketSize`, `netRelayRedundancy`, `netHandshakeExpiry`, `netChannelIdleTimeout`, `netPrioritizedMessages`, `TTL`
+- **Pool/WebSocket parameters**: `websocketServerPort`, `maxShareCountPerChannel`, `awardEpoch`, `waitEpoch` (partial - only unused ones)
+- **Node parameters**: `connectionTimeout`, `connectionReadTimeout`
+- **Storage parameters**: `whiteListDir`, `rejectAddress`, `netDBDir`, `originStoreDir`
+- **Feature flags**: `enableTxHistory`, `enableGenerateBlock`, `txPageSizeLimit`
+
+**Kept essential parameters** (still in use):
+- `maxConnections`, `netMaxFrameBodySize` (used by P2pConfigFactory)
+- `storeMaxOpenFiles`, `storeMaxThreads`, `isStoreFromBackup` (used by RocksdbKVSource)
+- `walletKeyFile`, `waitEpoch` (used by network configs)
+- `rpcHttpEnabled` (used by XdagCli)
+
+#### Snapshot System Removal
+**Replaced with genesis alloc approach** (774 lines removed):
+- **Deleted classes**:
+  - `SnapshotSpec` interface - Configuration specification
+  - `SnapshotConfig` class - Snapshot import configuration (~250 lines)
+  - `Snapshot` class - Immutable snapshot data (~180 lines)
+  - `SnapshotInfo` class - Legacy snapshot info (~95 lines)
+- **Deleted methods**: `getSnapshotSpec()`, `isSnapshotEnabled()`, `setSnapshotJ()`, `snapshotEnable()`, etc.
+- **Deleted CLI options**: `--enablesnapshot`, `--makesnapshot`
+
+**Migration path**: Old XDAG networks should export account state to genesis alloc format instead of using snapshot import.
+
+#### Files Modified
+- `AbstractConfig.java`: Removed 28 unused parameters and snapshot fields
+- `Config.java`: Removed unused method declarations
+- `NodeSpec.java`: Cleaned up interface (removed 19+ unused methods)
+- `HttpSpec.java`: Removed obsolete `isRpcHttpEnabled()` declaration
+- `XdagCli.java`: Removed snapshot command handling
+- `XdagOption.java`: Removed snapshot enum values
+
+#### Impact
+- **Total code removed**: ~1,496 lines
+- **Files deleted**: 4 classes
+- **Cleaner configuration**: More focused, maintainable config system
+- **Better migration**: Genesis alloc is more standard than custom snapshot format
+
 ### Removed - Obsolete Code Cleanup (2025-11-21)
 
 #### Deleted Classes

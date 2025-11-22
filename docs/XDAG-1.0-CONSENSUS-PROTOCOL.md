@@ -683,12 +683,18 @@ Cost to rewrite N epochs = network_hashrate * N * 64 seconds
 - Competitive with centralized payment systems
 - Maintains decentralization
 
-### 13.2 Fast Sync
+### 13.2 Fast Sync / Network Bootstrap
 
-**Snapshot-Based Sync**:
-- Periodic state snapshots
-- New nodes download recent snapshot + recent blocks
-- Reduces initial sync time from days to hours
+**Genesis Alloc Approach** (current implementation):
+- Initial account state configured in `genesis.json` `alloc` field
+- Genesis block created with all account balances
+- Standard approach used by Ethereum and other blockchains
+- Old XDAG networks export state to genesis alloc format
+
+**Future Optimizations**:
+- Checkpoint-based sync for faster initial sync
+- Download verified state at specific heights
+- Reduces sync time for new nodes joining established networks
 
 ### 13.3 Layer 2 Solutions
 
