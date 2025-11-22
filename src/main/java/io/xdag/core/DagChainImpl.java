@@ -1440,14 +1440,24 @@ public class DagChainImpl implements DagChain {
 
     // FALLBACK: If time-range query returns empty, scan recent main blocks manually
     // This works around potential DagStore indexing/caching issues
+    //
+    // LIMITATION: Fallback only scans main blocks (height > 0), not orphan blocks (height = 0)
+    // Rationale:
+    //   1. This is an exception path - epoch index should always work
+    //   2. getWinnerBlockInEpoch() only needs the winner, which should be a main block
+    //   3. Scanning all orphan blocks would be expensive and complex
+    //   4. If epoch index is broken, fix the index instead of relying on fallback
+    //
+    // Impact: If epoch index fails AND winner hasn't been promoted to main block yet,
+    // fallback will return null instead of the pending winner (rare edge case)
     if (candidates.isEmpty() && chainStats.getMainBlockCount() > 0) {
-      log.debug("Time-range query returned 0 blocks for epoch {}, using fallback scan", epoch);
+      log.debug("Time-range query returned 0 blocks for epoch {}, using fallback scan (main blocks only)", epoch);
       candidates = new ArrayList<>();
 
       // Scan last 100 main blocks for blocks in this epoch
       long scanStart = Math.max(1, chainStats.getMainBlockCount() - 100);
-      log.debug("  Fallback scan range: height {} to {}", scanStart,
-          chainStats.getMainBlockCount());
+      log.debug("  Fallback scan range: height {} to {} (main blocks only)",
+          scanStart, chainStats.getMainBlockCount());
 
       for (long height = chainStats.getMainBlockCount(); height >= scanStart; height--) {
         Block block = dagStore.getMainBlockByHeight(height, false);
@@ -1461,17 +1471,18 @@ public class DagChainImpl implements DagChain {
 
           if (blockEpoch == epoch) {
             candidates.add(block);
-            log.debug("  ✓ Found block at height {} in epoch {} via fallback scan", height, epoch);
+            log.debug("  ✓ Found main block at height {} in epoch {} via fallback scan", height, epoch);
           }
         }
       }
 
       if (!candidates.isEmpty()) {
-        log.info("Fallback scan found {} blocks in epoch {} (time-range query failed)",
+        log.info("Fallback scan found {} main block(s) in epoch {} (time-range query failed)",
             candidates.size(), epoch);
       } else {
-        log.warn("Fallback scan found NO blocks in epoch {} (scanned heights {} to {})",
+        log.warn("Fallback scan found NO blocks in epoch {} (scanned main blocks heights {} to {})",
             epoch, scanStart, chainStats.getMainBlockCount());
+        log.warn("If epoch {} should have blocks, the epoch index may be corrupted", epoch);
       }
     }
 
