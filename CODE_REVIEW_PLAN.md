@@ -424,22 +424,42 @@
 
 ---
 
-## Phase 9: Utilities & Helpers (📋 Planned)
+## Phase 9: Utilities & Helpers (🔄 In Progress)
 
 ### 9.1 Cryptography
 
 | Component | File | Priority | Status |
 |-----------|------|----------|--------|
-| Key management | `ECKeyPair.java` | LOW | 📋 |
-| Address utils | `AddressUtils.java` | LOW | 📋 |
-| Signature utils | Various | LOW | 📋 |
+| Key management | `ECKeyPair.java` | LOW | 📋 Planned |
+| Address utils | `AddressUtils.java` | LOW | 📋 Planned |
+| Signature utils | Various | LOW | 📋 Planned |
 
 ### 9.2 Utilities
 
 | Component | File | Priority | Status |
 |-----------|------|----------|--------|
-| Bytes utils | `BytesUtils.java` | LOW | 📋 |
-| Time utils | `XdagTime.java` | MEDIUM | 📋 |
+| Bytes utils | `BytesUtils.java` | LOW | ✅ Completed |
+| Time utils | `TimeUtils.java` | MEDIUM | ✅ Completed |
+
+**Focus Areas**:
+- [x] Time conversion - Verified (epoch/millisecond conversions correct)
+- [x] Byte array operations - 3 bugs fixed (bounds checking, input validation)
+- [ ] Cryptographic operations - Not yet reviewed
+- [ ] Address generation - Not yet reviewed
+
+**Issues Found** (TimeUtils.java):
+- ✅ BUG-029: Missing null check in format() method (FIXED)
+
+**Issues Found** (BytesUtils.java):
+- ✅ BUG-030: subArray() missing bounds checking (FIXED)
+- ✅ BUG-031: hexStringToBytes() silently truncated odd-length strings (FIXED)
+- ✅ BUG-032: charToByte() didn't validate hex characters (FIXED)
+
+**Phase 9 Summary** (2/N files reviewed):
+- 2 files reviewed ✅
+- 4 bugs found and fixed
+- Code quality: Mixed (TimeUtils excellent, BytesUtils had validation issues)
+- Remaining: ECKeyPair, AddressUtils, and other crypto utilities
 
 ---
 
@@ -824,6 +844,10 @@
 | BUG-020 | DagCache.java:228 | Transaction cache missing put/invalidate methods | ✅ Fixed | 1cf3c3da |
 | BUG-027 | TransactionApiService.java:196 | Unsafe UTF-8 decoding in transaction remark field | ✅ Fixed | 691daa5e |
 | BUG-028 | MiningApiService.java:244 | Incorrect default difficulty target on error (returned MAX_VALUE) | ✅ Fixed | 81401d6f |
+| BUG-029 | TimeUtils.java:219 | Missing null check in format() method | ✅ Fixed | 67725deb |
+| BUG-030 | BytesUtils.java:157 | subArray() missing bounds checking (ArrayIndexOutOfBoundsException risk) | ✅ Fixed | 4b5a04b0 |
+| BUG-031 | BytesUtils.java:189 | hexStringToBytes() silently truncated odd-length strings | ✅ Fixed | 4b5a04b0 |
+| BUG-032 | BytesUtils.java:221 | charToByte() didn't validate hex characters (returned -1 for invalid) | ✅ Fixed | 4b5a04b0 |
 
 **BUG-006 Details**:
 - **Location**: `DagChainImpl.java:238-562`
@@ -853,8 +877,8 @@
 - **Bugs Found**: 0
 - **Dead Code Lines**: 0
 
-### Current Progress (2025-11-23 00:15)
-- **Files Reviewed**: 33 / ~200 (16.5%)
+### Current Progress (2025-11-23 01:00)
+- **Files Reviewed**: 35 / ~200 (17.5%)
   - Phase 1: 3 files (Bootstrap, XdagCli, Launcher, Config)
   - Phase 2: 1 file (DagKernel)
   - Phase 3: 8 files (DagChainImpl, DagBlockProcessor, Block, BlockHeader, Transaction, DagAccountManager, DagTransactionProcessor, AccountStoreImpl)
@@ -863,16 +887,17 @@
   - Phase 6: 3 files (BlockGenerator, RandomXPow, RandomXSeedManager)
   - Phase 7: 2 files (TransactionPoolImpl, TransactionBroadcastManager)
   - Phase 8: 4 files (HttpApiServer, BlockApiService, TransactionApiService, MiningApiService)
-  - Additional: 4 files (ApiKeyStore, P2pConfigFactory, CorsHandler, HttpApiHandler)
-- **Bugs Found**: 25 total (BUG-025 skipped as DEBT-005)
+  - Phase 9: 2 files (TimeUtils, BytesUtils)
+  - Additional: 4 files (ApiKeyStore, etc.)
+- **Bugs Found**: 29 total (BUG-025 skipped as DEBT-005)
   - Critical: 6 found, 6 fixed ✅ (100%)
-  - Major: 9 found, 6 fixed, 1 documented, 2 deferred ✅ (78%)
-  - Minor: 8 found, 7 fixed, 1 deferred ✅ (88%)
+  - Major: 10 found, 7 fixed, 1 documented, 2 deferred ✅ (80%)
+  - Minor: 11 found, 10 fixed, 1 deferred ✅ (91%)
   - Security: 2 found, 2 fixed ✅ (100%)
 - **Technical Debt**: 6 items registered (DEBT-001 through DEBT-006)
 - **Dead Code Removed**: ~1,496 lines (config cleanup)
-- **Status**: Phase 8 (API Layer) COMPLETED ✅
-- **Next**: Phase 9 (Utilities & Helpers)
+- **Status**: Phase 9 (Utilities & Helpers) IN PROGRESS 🔄
+- **Next**: Continue Phase 9 (ECKeyPair, AddressUtils)
 
 ### Code Quality Improvements
 - Added JavaDoc comments: 10 methods
