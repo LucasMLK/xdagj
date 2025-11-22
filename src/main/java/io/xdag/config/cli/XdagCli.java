@@ -119,22 +119,6 @@ public class XdagCli extends Launcher {
         .hasArg(true).optionalArg(false).argName("filename").type(String.class)
         .build();
     addOption(convertOldWalletOption);
-
-    Option bootSnapshotOption = Option.builder()
-        .longOpt(XdagOption.ENABLE_SNAPSHOT.toString()).desc("enable snapshot")
-        .hasArg(true).numberOfArgs(3).optionalArg(false)
-        .argName("isSnapshotJ").type(Boolean.class)
-        .argName("snapshotheight").type(Integer.class)
-        .argName("snapshottime").type(Integer.class)
-        .desc("the parameter snapshottime uses hexadecimal")
-        .build();
-    addOption(bootSnapshotOption);
-
-    Option makeSnapshotOption = Option.builder()
-        .longOpt(XdagOption.MAKE_SNAPSHOT.toString()).desc("make snapshot")
-        .hasArg(true).optionalArg(true).argName("covertuint").type(String.class)
-        .build();
-    addOption(makeSnapshotOption);
   }
 
   public static void main(String[] args, XdagCli cli) throws Exception {
@@ -191,25 +175,7 @@ public class XdagCli extends Launcher {
       importPrivateKey(cmd.getOptionValue(XdagOption.IMPORT_PRIVATE_KEY.toString()).trim());
     } else if (cmd.hasOption(XdagOption.IMPORT_MNEMONIC.toString())) {
       importMnemonic(cmd.getOptionValue(XdagOption.IMPORT_MNEMONIC.toString()).trim());
-    } else if (cmd.hasOption(XdagOption.MAKE_SNAPSHOT.toString())) {
-      //  Removed convertXAmount parameter - always use LegacyBlockInfo
-      makeSnapshot();
     } else {
-      if (cmd.hasOption(XdagOption.ENABLE_SNAPSHOT.toString())) {
-        String[] values = cmd.getOptionValues(XdagOption.ENABLE_SNAPSHOT.toString().trim());
-        try {
-          boolean isSnapshotJ = Boolean.parseBoolean(values[0]);
-          long height = Long.parseLong(values[1]);
-          long time = Long.parseLong(values[2], 16);
-          config.getSnapshotSpec().setSnapshotJ(isSnapshotJ);
-          config.getSnapshotSpec().setSnapshotHeight(height);
-          config.getSnapshotSpec().setSnapshotTime(time);
-          config.getSnapshotSpec().snapshotEnable();
-          System.out.println("enable snapshot:" + config.getSnapshotSpec().isSnapshotEnabled());
-        } catch (NumberFormatException e) {
-          System.out.println("params error");
-        }
-      }
       start();
     }
   }

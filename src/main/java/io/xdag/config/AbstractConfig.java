@@ -32,7 +32,6 @@ import io.xdag.config.spec.FundSpec;
 import io.xdag.config.spec.HttpSpec;
 import io.xdag.config.spec.NodeSpec;
 import io.xdag.config.spec.RandomxSpec;
-import io.xdag.config.spec.SnapshotSpec;
 import io.xdag.config.spec.WalletSpec;
 import io.xdag.core.XAmount;
 import java.net.InetSocketAddress;
@@ -47,7 +46,7 @@ import org.apache.commons.lang3.SystemUtils;
 @Getter
 @Setter
 public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, HttpSpec,
-    SnapshotSpec, RandomxSpec, FundSpec {
+    RandomxSpec, FundSpec {
 
   protected String configName;
 
@@ -108,13 +107,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
   protected int rpcHttpBossThreads = 1;
   protected int rpcHttpWorkerThreads = 4; // 0 means use Netty default (2 * CPU cores)
 
-
-  // Snapshot configuration
-  protected boolean snapshotEnabled = false;
-  protected long snapshotHeight;
-  protected long snapshotTime;
-  protected boolean isSnapshotJ;
-
   // RandomX configuration
   protected boolean flag;
 
@@ -135,11 +127,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
 
   @Override
   public HttpSpec getHttpSpec() {
-    return this;
-  }
-
-  @Override
-  public SnapshotSpec getSnapshotSpec() {
     return this;
   }
 
@@ -369,21 +356,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
   }
 
   @Override
-  public boolean isSnapshotEnabled() {
-    return snapshotEnabled;
-  }
-
-  @Override
-  public boolean isSnapshotJ() {
-    return isSnapshotJ;
-  }
-
-  @Override
-  public long getSnapshotHeight() {
-    return snapshotHeight;
-  }
-
-  @Override
   public boolean getRandomxFlag() {
     return flag;
   }
@@ -406,20 +378,5 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
   @Override
   public XAmount getApolloForkAmount() {
     return apolloForkAmount;
-  }
-
-  @Override
-  public void setSnapshotJ(boolean isSnapshot) {
-    this.isSnapshotJ = isSnapshot;
-  }
-
-  @Override
-  public void snapshotEnable() {
-    snapshotEnabled = true;
-  }
-
-  @Override
-  public long getSnapshotTime() {
-    return snapshotTime;
   }
 }

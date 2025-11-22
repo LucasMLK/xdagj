@@ -72,17 +72,7 @@ public enum XdagOption {
   /**
    * Convert wallet from old format
    */
-  CONVERT_OLD_WALLET("convertoldwallet"),
-
-  /**
-   * Enable snapshot functionality
-   */
-  ENABLE_SNAPSHOT("enablesnapshot"),
-
-  /**
-   * Create a new snapshot
-   */
-  MAKE_SNAPSHOT("makesnapshot");
+  CONVERT_OLD_WALLET("convertoldwallet");
 
   private final String name;
 

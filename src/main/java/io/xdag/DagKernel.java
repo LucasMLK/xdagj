@@ -744,7 +744,6 @@ public class DagKernel {
    *   <li>Timestamp from config (not current time)</li>
    *   <li>Difficulty from config</li>
    *   <li>Initial allocations from config</li>
-   *   <li>Snapshot import if configured</li>
    * </ul>
    *
    * @throws RuntimeException if genesis creation fails or validation fails

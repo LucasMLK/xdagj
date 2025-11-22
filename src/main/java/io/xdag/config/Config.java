@@ -29,7 +29,6 @@ import io.xdag.config.spec.FundSpec;
 import io.xdag.config.spec.HttpSpec;
 import io.xdag.config.spec.NodeSpec;
 import io.xdag.config.spec.RandomxSpec;
-import io.xdag.config.spec.SnapshotSpec;
 import io.xdag.config.spec.WalletSpec;
 import io.xdag.core.XAmount;
 import java.util.List;
@@ -109,11 +108,6 @@ public interface Config {
    * Get the HTTP API specification configuration
    */
   HttpSpec getHttpSpec();
-
-  /**
-   * Get the snapshot specification configuration
-   */
-  SnapshotSpec getSnapshotSpec();
 
   /**
    * Get the RandomX specification configuration

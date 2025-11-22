@@ -26,7 +26,6 @@ package io.xdag.utils;
 
 import io.xdag.core.BlockInfo;
 import io.xdag.core.ChainStats;
-import io.xdag.core.Snapshot;
 import io.xdag.core.XAmount;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -230,30 +229,6 @@ public class CompactSerializer {
                 .lastDifficultyAdjustmentEpoch(lastDifficultyAdjustmentEpoch)
                 .lastOrphanCleanupEpoch(lastOrphanCleanupEpoch)
                 .build();
-    }
-
-    // ========== Snapshot Serialization ==========
-
-    /**
-     * Serialize Snapshot to bytes
-     * Target: ~34 bytes for 32-byte data
-     */
-    public static byte[] serialize(Snapshot snapshot) throws IOException {
-        ByteArrayOutputStream out = new ByteArrayOutputStream(40);
-
-        // type: 1 byte
-        out.write(snapshot.getType().toByte());
-
-        // data length: variable
-        byte[] dataBytes = snapshot.getData() != null ? snapshot.getData().toArray() : new byte[0];
-        writeVarInt(out, dataBytes.length);
-
-        // data
-        if (dataBytes.length > 0) {
-            out.write(dataBytes);
-        }
-
-        return out.toByteArray();
     }
 
   // ========== Helper Methods ==========
