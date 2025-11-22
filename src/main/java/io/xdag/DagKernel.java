@@ -48,7 +48,6 @@ import io.xdag.p2p.P2pService;
 import io.xdag.p2p.config.P2pConfig;
 import io.xdag.store.AccountStore;
 import io.xdag.store.DagStore;
-import io.xdag.store.OrphanBlockStore;
 import io.xdag.store.TransactionStore;
 import io.xdag.store.cache.DagCache;
 import io.xdag.store.cache.DagEntityResolver;
@@ -58,7 +57,6 @@ import io.xdag.store.rocksdb.config.DatabaseName;
 import io.xdag.store.rocksdb.config.RocksdbFactory;
 import io.xdag.store.rocksdb.impl.AccountStoreImpl;
 import io.xdag.store.rocksdb.impl.DagStoreImpl;
-import io.xdag.store.rocksdb.impl.OrphanBlockStoreImpl;
 import io.xdag.store.rocksdb.impl.TransactionStoreImpl;
 import io.xdag.store.rocksdb.transaction.RocksDBTransactionManager;
 import java.io.File;
@@ -79,10 +77,9 @@ import org.rocksdb.RocksDB;
  * <pre>
  * DagKernel (Standalone Complete Kernel)
  *   ├── Storage Layer
- *   │   ├── DagStore (Block persistence)
+ *   │   ├── DagStore (Block persistence with pending block management)
  *   │   ├── TransactionStore (Transaction persistence)
- *   │   ├── AccountStore (Account state - EVM compatible)
- *   │   └── OrphanBlockStore (Orphan block management)
+ *   │   └── AccountStore (Account state - EVM compatible)
  *   │
  *   ├── Cache Layer
  *   │   ├── DagCache (L1 Caffeine cache)
@@ -128,7 +125,6 @@ public class DagKernel {
   private final DagStore dagStore;
   private final TransactionStore transactionStore;
   private final AccountStore accountStore;
-  private final OrphanBlockStore orphanBlockStore;
 
   private final RocksDBTransactionManager transactionManager;
 
@@ -231,12 +227,6 @@ public class DagKernel {
         transactionManager
     );
     log.info("   ✓ TransactionStore initialized (atomic operations enabled)");
-
-    // OrphanBlockStore for orphan block management
-    this.orphanBlockStore = new OrphanBlockStoreImpl(
-        dbFactory.getDB(DatabaseName.ORPHANIND)
-    );
-    log.info("   ✓ OrphanBlockStore initialized");
 
     // AccountStore for account state (EVM compatible, with atomic operation support)
     this.accountStore = new AccountStoreImpl(config, transactionManager);
@@ -343,10 +333,6 @@ public class DagKernel {
     log.info("========================================");
 
     try {
-      // Start OrphanBlockStore first
-      orphanBlockStore.start();
-      log.info("✓ OrphanBlockStore started");
-
       // Start DagStore (Block persistence layer)
       dagStore.start();
       log.info("✓ DagStore started");
@@ -409,7 +395,7 @@ public class DagKernel {
       running = true;
       log.info("========================================");
       log.info("✓ DagKernel started successfully");
-      log.info("  - Storage: DagStore + TransactionStore + AccountStore + OrphanBlockStore");
+      log.info("  - Storage: DagStore + TransactionStore + AccountStore");
       log.info("  - Cache: DagCache (13.8 MB L1) + DagEntityResolver");
       log.info("  - Consensus: DagChain + HybridSyncManager");
       log.info("  - Main Chain Height: {}", dagChain.getMainChainLength());
@@ -475,10 +461,6 @@ public class DagKernel {
       // Stop DagStore
       dagStore.stop();
       log.info("✓ DagStore stopped");
-
-      // Stop OrphanBlockStore
-      orphanBlockStore.stop();
-      log.info("✓ OrphanBlockStore stopped");
 
       // Stop AccountStore
       accountStore.stop();

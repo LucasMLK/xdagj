@@ -60,6 +60,7 @@ import io.xdag.api.http.pagination.PageRequest;
 import io.xdag.api.http.pagination.PaginationInfo;
 import io.xdag.api.http.response.*;
 import io.xdag.utils.BasicUtils;
+import io.xdag.utils.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
@@ -676,7 +677,7 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
             // Convert Block to response format
             Map<String, Object> response = new HashMap<>();
             long epochNumber = block.getEpoch();
-            long timestamp = io.xdag.utils.XdagTime.epochNumberToMainTime(epochNumber);
+            long timestamp = TimeUtils.epochNumberToMainTime(epochNumber);
             response.put("hash", block.getHash().toHexString());
             response.put("timestamp", timestamp);
             response.put("epoch", epochNumber);

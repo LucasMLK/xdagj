@@ -25,7 +25,7 @@
 package io.xdag.consensus.pow;
 
 import io.xdag.core.Block;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import lombok.Getter;
 
 /**
@@ -105,7 +105,7 @@ public final class HashContext {
       throw new IllegalArgumentException("Block and block info cannot be null");
     }
 
-    long timestamp = XdagTime.epochNumberToMainTime(block.getEpoch());
+    long timestamp = TimeUtils.epochNumberToMainTime(block.getEpoch());
     long height = block.getInfo().getHeight();
     long epoch = block.getEpoch();
 
@@ -122,7 +122,7 @@ public final class HashContext {
    * @return Hash context for pool mining
    */
   public static HashContext forMining(long timestamp) {
-    long epoch = XdagTime.getEpochNumber(timestamp);
+    long epoch = TimeUtils.getEpochNumber(timestamp);
     return new HashContext(timestamp, -1, epoch);
   }
 
@@ -136,7 +136,7 @@ public final class HashContext {
    * @return Hash context
    */
   public static HashContext of(long timestamp, long blockHeight) {
-    long epoch = XdagTime.getEpochNumber(timestamp);
+    long epoch = TimeUtils.getEpochNumber(timestamp);
     return new HashContext(timestamp, blockHeight, epoch);
   }
 

@@ -39,7 +39,7 @@ import io.xdag.core.DagChain;
 import io.xdag.crypto.randomx.RandomXCache;
 import io.xdag.crypto.randomx.RandomXFlag;
 import io.xdag.crypto.randomx.RandomXTemplate;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
@@ -326,7 +326,7 @@ public class RandomXSeedManager {
 
     // Calculate switch time
     nextMemory.setSwitchTime(blockEpoch + forkLag + 1);
-    nextMemory.setSeedTime(XdagTime.epochNumberToMainTime(blockEpoch));
+    nextMemory.setSeedTime(TimeUtils.epochNumberToMainTime(blockEpoch));
     nextMemory.setSeedHeight(height);
 
     log.debug("Epoch boundary: height={}, nextSlot={}, switchTime={}",

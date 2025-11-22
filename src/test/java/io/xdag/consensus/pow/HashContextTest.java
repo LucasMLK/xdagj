@@ -27,7 +27,7 @@ package io.xdag.consensus.pow;
 import io.xdag.core.Block;
 import io.xdag.core.BlockHeader;
 import io.xdag.core.BlockInfo;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import org.junit.Test;
 import org.mockito.Mockito;
 
@@ -52,7 +52,7 @@ public class HashContextTest {
         BlockInfo info = Mockito.mock(BlockInfo.class);
 
         long epoch = 256L;
-        long timestamp = XdagTime.epochNumberToMainTime(epoch);
+        long timestamp = TimeUtils.epochNumberToMainTime(epoch);
         long height = 12345L;
         long expectedEpoch = epoch;
 
@@ -77,7 +77,7 @@ public class HashContextTest {
     @Test
     public void testForMining() {
         long timestamp = 1700000064L;
-        long expectedEpoch = XdagTime.getEpochNumber(timestamp);
+        long expectedEpoch = TimeUtils.getEpochNumber(timestamp);
 
         // Create context for mining
         HashContext context = HashContext.forMining(timestamp);
@@ -127,10 +127,10 @@ public class HashContextTest {
 
         for (long timestamp : timestamps) {
             HashContext context = HashContext.forMining(timestamp);
-            long expectedEpoch = XdagTime.getEpoch(timestamp);
+            long expectedEpoch = TimeUtils.getEpoch(timestamp);
 
             assertEquals(
-                "Epoch calculation should match XdagTime.getEpoch() for timestamp " + timestamp,
+                "Epoch calculation should match TimeUtils.getEpoch() for timestamp " + timestamp,
                 expectedEpoch,
                 context.getEpoch()
             );
@@ -216,7 +216,7 @@ public class HashContextTest {
         BlockHeader header = Mockito.mock(BlockHeader.class);
 
         long epochNumber = 300L;
-        long timestamp = XdagTime.epochNumberToMainTime(epochNumber);
+        long timestamp = TimeUtils.epochNumberToMainTime(epochNumber);
         long height = 100L;
 
         when(block.getEpoch()).thenReturn(epochNumber);

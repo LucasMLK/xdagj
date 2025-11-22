@@ -28,7 +28,7 @@ import io.xdag.DagKernel;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -215,7 +215,7 @@ public class AtomicBlockProcessingTest {
         List<Link> links = new ArrayList<>();
         links.add(Link.toTransaction(tx.getHash()));
 
-        long currentEpoch = XdagTime.getCurrentEpochNumber();
+        long currentEpoch = TimeUtils.getCurrentEpochNumber();
         Block blockWithTx = Block.createCandidate(
                 currentEpoch,
                 dagChain.getChainStats().getBaseDifficultyTarget(),
@@ -318,7 +318,7 @@ public class AtomicBlockProcessingTest {
         // IMPORTANT:
         // 1. Use different coinbase addresses so blocks have different hashes
         // 2. Must reference genesis block (all blocks must have 1-16 block links)
-        long currentEpoch = XdagTime.getCurrentEpochNumber();
+        long currentEpoch = TimeUtils.getCurrentEpochNumber();
 
         // Get genesis block to reference
         Block genesis = dagChain.getMainBlockByHeight(1);
@@ -493,7 +493,7 @@ public class AtomicBlockProcessingTest {
             links.add(Link.toTransaction(tx.getHash()));
         }
 
-        long currentEpoch = XdagTime.getCurrentEpochNumber();
+        long currentEpoch = TimeUtils.getCurrentEpochNumber();
         Block blockWithMultipleTx = Block.createCandidate(
                 currentEpoch,
                 dagChain.getChainStats().getBaseDifficultyTarget(),

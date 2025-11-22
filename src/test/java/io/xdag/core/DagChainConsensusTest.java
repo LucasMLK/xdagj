@@ -28,7 +28,7 @@ import io.xdag.DagKernel;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -212,7 +212,7 @@ public class DagChainConsensusTest {
         }
 
         // Create block manually with this high hash
-        long timestamp = XdagTime.getCurrentEpoch();
+        long timestamp = TimeUtils.getCurrentEpoch();
         UInt256 difficulty = dagChain.getChainStats().getBaseDifficultyTarget();
         Bytes coinbase = Bytes.random(20);
 
@@ -418,10 +418,10 @@ public class DagChainConsensusTest {
         assertNotNull("Time range should not be null", timeRange);
         assertEquals("Time range should have 2 elements", 2, timeRange.length);
 
-        // IMPORTANT: Use XdagTime.epochNumberToEpoch() for correct XDAG timestamp format
+        // IMPORTANT: Use TimeUtils.epochNumberToEpoch() for correct XDAG timestamp format
         // XDAG timestamps use 1/1024 second precision, so epoch duration = 64 * 1024 = 65536 ticks
-        long expectedStart = XdagTime.epochNumberToEpoch(testEpoch);
-        long expectedEnd = XdagTime.epochNumberToEpoch(testEpoch + 1);
+        long expectedStart = TimeUtils.epochNumberToEpoch(testEpoch);
+        long expectedEnd = TimeUtils.epochNumberToEpoch(testEpoch + 1);
 
         assertEquals("Start time should match", expectedStart, timeRange[0]);
         assertEquals("End time should match", expectedEnd, timeRange[1]);
@@ -544,7 +544,7 @@ public class DagChainConsensusTest {
 
         // Create and import genesis block at current epoch
         Bytes coinbase = Bytes.random(20);
-        long currentEpoch = XdagTime.getCurrentEpochNumber();
+        long currentEpoch = TimeUtils.getCurrentEpochNumber();
         Block genesisBlock = dagChain.createGenesisBlock(coinbase, currentEpoch);
 
         DagImportResult result = dagChain.tryToConnect(genesisBlock);
@@ -576,7 +576,7 @@ public class DagChainConsensusTest {
 
         // Create genesis block at an old epoch (simulate node behind)
         Bytes coinbase = Bytes.random(20);
-        long currentEpoch = XdagTime.getCurrentEpochNumber();
+        long currentEpoch = TimeUtils.getCurrentEpochNumber();
         long oldEpoch = currentEpoch - 200;  // 200 epochs behind (> MINING_MAX_REFERENCE_DEPTH = 16)
 
         Block genesisBlock = dagChain.createGenesisBlock(coinbase, oldEpoch);
@@ -614,7 +614,7 @@ public class DagChainConsensusTest {
 
         // Create genesis block at current epoch
         Bytes coinbase = Bytes.random(20);
-        long currentEpoch = XdagTime.getCurrentEpochNumber();
+        long currentEpoch = TimeUtils.getCurrentEpochNumber();
         Block genesisBlock = dagChain.createGenesisBlock(coinbase, currentEpoch);
 
         DagImportResult result = dagChain.tryToConnect(genesisBlock);
@@ -634,11 +634,11 @@ public class DagChainConsensusTest {
             Block candidate = dagChain.createCandidateBlock();
 
             System.out.println("\nCandidate block:");
-            System.out.println("  Current epoch: " + XdagTime.getCurrentEpochNumber());
+            System.out.println("  Current epoch: " + TimeUtils.getCurrentEpochNumber());
             System.out.println("  Genesis epoch: " + genesisBlock.getEpoch());
             System.out.println("  Links: " + candidate.getLinks().size());
 
-            long epochGap = XdagTime.getCurrentEpochNumber() - genesisBlock.getEpoch();
+            long epochGap = TimeUtils.getCurrentEpochNumber() - genesisBlock.getEpoch();
             System.out.println("  Epoch gap: " + epochGap);
 
             // When node is up-to-date and gap < 16 epochs, should collect links
@@ -667,7 +667,7 @@ public class DagChainConsensusTest {
 
         // Create two blocks with moderate epoch gap
         Bytes coinbase = Bytes.random(20);
-        long currentEpoch = XdagTime.getCurrentEpochNumber();
+        long currentEpoch = TimeUtils.getCurrentEpochNumber();
 
         // Block 1 at current epoch
         Block block1 = dagChain.createGenesisBlock(coinbase, currentEpoch);

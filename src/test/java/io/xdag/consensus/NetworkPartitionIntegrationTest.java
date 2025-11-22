@@ -33,7 +33,7 @@ import io.xdag.core.ChainStats;
 import io.xdag.core.DagChainImpl;
 import io.xdag.core.DagImportResult;
 import io.xdag.core.Link;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -164,9 +164,17 @@ public class NetworkPartitionIntegrationTest {
 
     private void createTestGenesisFile(Path dir) throws IOException {
         long timestampSeconds = genesisTime / 1000;
+
+        // Calculate epoch number from timestamp using TimeUtils
+        // Step 1: Convert Unix millis to XDAG epoch (1/1024 second precision)
+        long xdagEpoch = TimeUtils.timeMillisToEpoch(genesisTime);
+        // Step 2: Convert XDAG epoch to epoch number (64-second period)
+        long epochNumber = TimeUtils.getEpochNumber(xdagEpoch);
+
         String genesisJson = "{\n" +
                 "  \"networkId\": \"test\",\n" +
                 "  \"chainId\": 999,\n" +
+                "  \"epoch\": " + epochNumber + ",\n" +
                 "  \"timestamp\": " + timestampSeconds + ",\n" +
                 "  \"initialDifficulty\": \"0x1000\",\n" +
                 "  \"epochLength\": 64,\n" +
@@ -366,7 +374,7 @@ public class NetworkPartitionIntegrationTest {
 
         // Note: DagKernel already loaded genesis from genesis-devnet.json during start()
         // We'll check the existing chain state
-        long currentEpoch = XdagTime.getCurrentEpochNumber();
+        long currentEpoch = TimeUtils.getCurrentEpochNumber();
 
         // Get the existing genesis epoch from loaded chain
         Block existingGenesis = chainA.getMainBlockByHeight(1);
@@ -559,7 +567,7 @@ public class NetworkPartitionIntegrationTest {
         Block genesisA = chainA.getMainBlockByHeight(1);
         Block genesisB = chainB.getMainBlockByHeight(1);
 
-        long currentEpoch = XdagTime.getCurrentEpochNumber();
+        long currentEpoch = TimeUtils.getCurrentEpochNumber();
 
         // Scenario 1: Check genesis epoch gap
         long genesisEpochA = genesisA.getEpoch();
@@ -655,7 +663,7 @@ public class NetworkPartitionIntegrationTest {
         assertEquals("Chain should be at height 2", 2, chainA.getMainChainLength());
 
         long genesisEpoch = genesis.getEpoch();
-        long currentEpoch = XdagTime.getCurrentEpochNumber();
+        long currentEpoch = TimeUtils.getCurrentEpochNumber();
         long referenceDepth = currentEpoch - genesisEpoch;
 
         System.out.println("Mining reference depth test:");

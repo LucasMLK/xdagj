@@ -32,7 +32,7 @@ import io.xdag.p2p.message.SyncEpochBlocksReplyMessage;
 import io.xdag.p2p.message.SyncHeightReplyMessage;
 import io.xdag.p2p.message.SyncMainBlocksReplyMessage;
 import io.xdag.p2p.message.SyncTransactionsReplyMessage;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -447,7 +447,7 @@ public class HybridSyncManagerIntegrationTest {
 
             when(mockBlock.getHash()).thenReturn(hash);
             when(mockBlock.getEpoch()).thenReturn(height);
-            when(mockBlock.getTimestamp()).thenReturn(XdagTime.epochNumberToMainTime(height));
+            when(mockBlock.getTimestamp()).thenReturn(TimeUtils.epochNumberToMainTime(height));
             when(mockBlock.getLinks()).thenReturn(new ArrayList<>());
             // Mock toBytes() to return valid data (512 bytes for XDAG block)
             when(mockBlock.toBytes()).thenReturn(new byte[512]);

@@ -35,7 +35,7 @@ import io.xdag.consensus.pow.PowAlgorithm;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
 import io.xdag.core.DagImportResult;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import java.time.Duration;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -252,7 +252,7 @@ public class MiningApiService {
    */
   public RandomXInfo getRandomXInfo() {
     try {
-      long currentEpoch = XdagTime.getCurrentEpochNumber();
+      long currentEpoch = TimeUtils.getCurrentEpochNumber();
 
       // Check if RandomX is enabled
       if (powAlgorithm == null) {
@@ -279,7 +279,7 @@ public class MiningApiService {
     } catch (Exception e) {
       log.error("Error getting RandomX info", e);
       // Return safe default
-      long currentEpoch = XdagTime.getCurrentEpochNumber();
+      long currentEpoch = TimeUtils.getCurrentEpochNumber();
       return RandomXInfo.disabled(currentEpoch);
     }
   }

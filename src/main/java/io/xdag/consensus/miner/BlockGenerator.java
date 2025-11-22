@@ -33,7 +33,7 @@ import io.xdag.crypto.core.CryptoProvider;
 import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.utils.BytesUtils;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
@@ -119,7 +119,7 @@ public class BlockGenerator {
     }
 
     // Get current time
-    long timestamp = XdagTime.getMainTime();
+    long timestamp = TimeUtils.getMainTime();
 
     // BUGFIX: Generate coinbase address (20 bytes, NOT 32 bytes)
     // AddressUtils.toBytesAddress() returns exactly 20 bytes (Ethereum-style address)
@@ -181,7 +181,7 @@ public class BlockGenerator {
     if (powAlgorithm == null) {
       return false;
     }
-    long epoch = XdagTime.getEpochNumber(timestamp);
+    long epoch = TimeUtils.getEpochNumber(timestamp);
     return powAlgorithm.isActive(epoch);
   }
 

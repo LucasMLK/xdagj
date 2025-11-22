@@ -28,7 +28,7 @@ import io.xdag.DagKernel;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -39,7 +39,6 @@ import org.junit.Test;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
@@ -219,7 +218,7 @@ public class DagChainReorganizationTest {
      */
     @SuppressWarnings("unused")
     private Block createBlockWithParent(Block parent, int epochOffset) {
-        long timestamp = XdagTime.getMainTime() + (epochOffset * 0x10000L);
+        long timestamp = TimeUtils.getMainTime() + (epochOffset * 0x10000L);
         List<Link> links = List.of(Link.toBlock(parent.getHash()));
 
         Block block = Block.createWithNonce(

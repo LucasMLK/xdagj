@@ -35,6 +35,7 @@ import io.xdag.p2p.message.SyncEpochBlocksReplyMessage;
 import io.xdag.p2p.message.SyncHeightReplyMessage;
 import io.xdag.p2p.message.SyncMainBlocksReplyMessage;
 import io.xdag.p2p.message.SyncTransactionsReplyMessage;
+import io.xdag.utils.TimeUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -731,8 +732,8 @@ public class HybridSyncManager {
     log.info("Height gap is large ({}), using epoch-based sync", heightGap);
 
     // Get current system epoch (full timestamp) and convert to epoch NUMBER
-    long currentEpochTimestamp = io.xdag.utils.XdagTime.getCurrentEpoch();
-    long currentEpochNumber = io.xdag.utils.XdagTime.getEpochNumber(currentEpochTimestamp);
+    long currentEpochTimestamp = TimeUtils.getCurrentEpoch();
+    long currentEpochNumber = TimeUtils.getEpochNumber(currentEpochTimestamp);
 
     // IMPORTANT: Active DAG sync should only scan recent epochs within finality boundary
     // Finality boundary = FINALITY_EPOCHS (16384 epochs ≈ 12.14 days)
@@ -1028,36 +1029,33 @@ public class HybridSyncManager {
     Set<Bytes32> missingHashes = new HashSet<>();
 
     try {
-      // Get orphan blocks from OrphanBlockStore (up to 1000)
-      long[] sendTime = new long[2];
-      sendTime[0] = Long.MAX_VALUE;  // No timestamp filtering
-      List<Bytes32> orphanHashes = dagKernel.getOrphanBlockStore().getOrphan(1000, sendTime);
+      // Get pending blocks (height=0) from DagStore (up to 1000)
+      List<Bytes32> pendingHashes = dagKernel.getDagStore().getPendingBlocks(1000, 0);
 
-      if (orphanHashes == null || orphanHashes.isEmpty()) {
-        log.debug("No orphan blocks found in OrphanBlockStore");
+      if (pendingHashes == null || pendingHashes.isEmpty()) {
+        log.debug("No pending blocks found in DagStore");
         return missingHashes;
       }
 
-      log.info("Found {} orphan blocks awaiting dependencies", orphanHashes.size());
+      log.info("Found {} pending blocks awaiting dependencies", pendingHashes.size());
 
-      // For each orphan block, identify its missing dependencies
-      int orphansProcessed = 0;
-      for (Bytes32 orphanHash : orphanHashes) {
+      // For each pending block, identify its missing dependencies
+      int blocksProcessed = 0;
+      for (Bytes32 pendingHash : pendingHashes) {
         try {
-          // Load the orphan block from DagStore
-          Block orphanBlock = dagKernel.getDagStore().getBlockByHash(orphanHash, true);
-          if (orphanBlock == null) {
-            log.warn("Orphan block {} not found in DagStore, removing from orphan store",
-                orphanHash.toHexString().substring(0, 16));
-            dagKernel.getOrphanBlockStore().deleteByHash(orphanHash.toArray());
+          // Load the pending block from DagStore
+          Block pendingBlock = dagKernel.getDagStore().getBlockByHash(pendingHash, true);
+          if (pendingBlock == null) {
+            log.warn("Pending block {} not found in DagStore",
+                pendingHash.toHexString().substring(0, 16));
             continue;
           }
 
           // Resolve the block's links to find missing dependencies
-          var resolved = dagKernel.getEntityResolver().resolveAllLinks(orphanBlock);
+          var resolved = dagKernel.getEntityResolver().resolveAllLinks(pendingBlock);
 
-          log.info("DEBUG: Orphan {} resolution: hasAll={}, missingCount={}",
-              orphanHash.toHexString().substring(0, 16),
+          log.info("DEBUG: Pending block {} resolution: hasAll={}, missingCount={}",
+              pendingHash.toHexString().substring(0, 16),
               resolved.hasAllReferences(),
               resolved.getMissingReferences().size());
 
@@ -1067,8 +1065,8 @@ public class HybridSyncManager {
             missingHashes.addAll(missing);
 
             if (log.isDebugEnabled()) {
-              log.debug("Orphan block {} has {} missing dependencies",
-                  orphanHash.toHexString().substring(0, 16),
+              log.debug("Pending block {} has {} missing dependencies",
+                  pendingHash.toHexString().substring(0, 16),
                   missing.size());
             }
             for (Bytes32 m : missing) {
@@ -1076,16 +1074,16 @@ public class HybridSyncManager {
             }
           }
 
-          orphansProcessed++;
+          blocksProcessed++;
 
         } catch (Exception e) {
-          log.error("Error processing orphan block {}: {}",
-              orphanHash.toHexString().substring(0, 16), e.getMessage());
+          log.error("Error processing pending block {}: {}",
+              pendingHash.toHexString().substring(0, 16), e.getMessage());
         }
       }
 
-      log.info("Processed {} orphan blocks, identified {} unique missing dependencies",
-          orphansProcessed, missingHashes.size());
+      log.info("Processed {} pending blocks, identified {} unique missing dependencies",
+          blocksProcessed, missingHashes.size());
 
     } catch (Exception e) {
       log.error("Error identifying missing blocks", e);

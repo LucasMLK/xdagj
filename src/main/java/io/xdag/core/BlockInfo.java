@@ -23,6 +23,7 @@
  */
 package io.xdag.core;
 
+import io.xdag.utils.TimeUtils;
 import java.io.Serializable;
 import lombok.Builder;
 import lombok.Value;
@@ -78,7 +79,7 @@ public class BlockInfo implements Serializable {
    *
    * <p>To convert epoch to Unix time for display:
    * <pre>
-   *   long unixMillis = XdagTime.epochToMs(epoch);
+   *   long unixMillis = TimeUtils.epochToMs(epoch);
    *   Date date = new Date(unixMillis);
    * </pre>
    * <p>
@@ -87,8 +88,8 @@ public class BlockInfo implements Serializable {
    *  获取所属epoch
    *  <p>Simply returns the epoch field. This method is kept for backward compatibility.
    *
-   * @see io.xdag.utils.XdagTime#getEpoch(long)
-   * @see io.xdag.utils.XdagTime#epochToTimeMillis(long)
+   * @see TimeUtils#getEpoch(long)
+   * @see TimeUtils#epochToTimeMillis(long)
    */
   long epoch;
 

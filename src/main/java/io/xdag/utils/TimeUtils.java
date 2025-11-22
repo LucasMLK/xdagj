@@ -38,7 +38,7 @@ import org.apache.commons.lang3.time.FastDateFormat;
  *
  * <p>Block stores only epoch number. Use this utility to convert between representations.
  */
-public class XdagTime {
+public class TimeUtils {
 
   // ==================== Current Time ====================
 

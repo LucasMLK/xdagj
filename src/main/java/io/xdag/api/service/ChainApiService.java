@@ -32,7 +32,7 @@ import io.xdag.core.Block;
 import io.xdag.core.ChainStats;
 import io.xdag.core.DagChainImpl;
 import io.xdag.core.XAmount;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
@@ -73,23 +73,23 @@ public class ChainApiService {
         }
       }
 
-      // Get orphan block count from OrphanBlockStore
-      long orphanCount = 0;
+      // Get pending block count from DagStore (blocks with height=0)
+      long pendingCount = 0;
       try {
-        orphanCount = dagKernel.getOrphanBlockStore().getOrphanSize();
+        pendingCount = dagKernel.getDagStore().getPendingBlockCount();
       } catch (Exception e) {
-        log.warn("Failed to get orphan count: {}", e.getMessage());
+        log.warn("Failed to get pending block count: {}", e.getMessage());
       }
 
-      // Total block count = main blocks + orphan blocks
-      long totalBlockCount = chainStats.getMainBlockCount() + orphanCount;
+      // Total block count = main blocks + pending blocks
+      long totalBlockCount = chainStats.getMainBlockCount() + pendingCount;
 
-      // Sync progress: 100% if orphan count is low, otherwise estimate
+      // Sync progress: 100% if pending count is low, otherwise estimate
       double syncProgress = 100.0;
-      long waitingSyncCount = orphanCount;  // Orphan blocks are waiting for parent blocks
-      if (orphanCount > 100) {
-        // If many orphans, likely still syncing
-        syncProgress = Math.max(0, 100.0 - (orphanCount / 10.0));
+      long waitingSyncCount = pendingCount;  // Pending blocks are waiting for dependencies or lost epoch competition
+      if (pendingCount > 100) {
+        // If many pending blocks, likely still syncing
+        syncProgress = Math.max(0, 100.0 - (pendingCount / 10.0));
       }
 
       // Get wallet statistics
@@ -111,7 +111,7 @@ public class ChainApiService {
           .currentEpoch(dagKernel.getDagChain().getCurrentEpoch())
           .currentDifficulty(chainStats.getDifficulty())
           .maxDifficulty(chainStats.getDifficulty())  // Same as current difficulty (heaviest chain)
-          .orphanCount(orphanCount)
+          .orphanCount(pendingCount)  // Use pending block count (blocks with height=0)
           .waitingSyncCount(waitingSyncCount)
           .syncProgress(syncProgress)
           .connectedPeers(connectedPeers)
@@ -159,7 +159,7 @@ public class ChainApiService {
       Double progress = null;
       Long timeToNext = null;
       if (isCurrent) {
-        long currentTime = XdagTime.getCurrentEpoch();
+        long currentTime = TimeUtils.getCurrentEpoch();
         elapsed = currentTime - startTime;
         progress = (double) elapsed / duration * 100.0;
         timeToNext = duration - elapsed;

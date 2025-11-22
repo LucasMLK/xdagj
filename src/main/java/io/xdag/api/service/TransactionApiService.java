@@ -32,7 +32,7 @@ import io.xdag.api.service.dto.TransactionInfo;
 import io.xdag.core.Block;
 import io.xdag.core.BlockInfo;
 import io.xdag.core.Transaction;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -213,7 +213,7 @@ public class TransactionApiService {
 
       Block block = dagKernel.getDagChain().getBlockByHash(blockHash, false);
       if (block != null) {
-        long timestamp = XdagTime.epochNumberToTimeMillis(block.getEpoch());
+        long timestamp = TimeUtils.epochNumberToTimeMillis(block.getEpoch());
         builder.timestamp(timestamp);
 
         BlockInfo blockInfo = block.getInfo();

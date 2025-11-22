@@ -29,13 +29,12 @@ import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.crypto.keys.ECKeyPair;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -221,7 +220,7 @@ public class DagChainIntegrationTest {
 
         // Create block with transaction link
         List<Link> links = List.of(Link.toTransaction(signedTx.getHash()));
-        long mainTime = XdagTime.getMainTime(); // Use XDAG main block time (低16位必须为0xffff)
+        long mainTime = TimeUtils.getMainTime(); // Use XDAG main block time (低16位必须为0xffff)
         Block block = Block.createWithNonce(
                 mainTime,
                 UInt256.ONE,
@@ -330,7 +329,7 @@ public class DagChainIntegrationTest {
 
         // Create block with transaction link
         List<Link> links = List.of(Link.toTransaction(signedTx.getHash()));
-        long mainTime = XdagTime.getMainTime(); // Use XDAG main block time (低16位必须为0xffff)
+        long mainTime = TimeUtils.getMainTime(); // Use XDAG main block time (低16位必须为0xffff)
         Block block = Block.createWithNonce(
                 mainTime,
                 UInt256.ONE,

@@ -25,7 +25,7 @@
 package io.xdag.core;
 
 import io.xdag.crypto.hash.HashUtils;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -250,7 +250,7 @@ public class Block implements Serializable {
    * @return XDAG timestamp at end of epoch (1/1024s units)
    */
   public long getTimestamp() {
-    return XdagTime.epochNumberToMainTime(header.getEpoch());
+    return TimeUtils.epochNumberToMainTime(header.getEpoch());
   }
 
   /**

@@ -24,6 +24,7 @@
 
 package io.xdag.core;
 
+import io.xdag.utils.TimeUtils;
 import java.io.Serializable;
 import lombok.Builder;
 import lombok.Value;
@@ -61,9 +62,9 @@ public class BlockHeader implements Serializable {
    *
    * <p>To convert epoch to Unix time for display:
    * <pre>
-   *   long xdagTimestamp = XdagTime.epochNumberToEpoch(epoch);
-   *   long unixMillis = XdagTime.epochToTimeMillis(xdagTimestamp);
-   *   // Or use: XdagTime.epochNumberToTimeMillis(epoch)
+   *   long xdagTimestamp = TimeUtils.epochNumberToEpoch(epoch);
+   *   long unixMillis = TimeUtils.epochToTimeMillis(xdagTimestamp);
+   *   // Or use: TimeUtils.epochNumberToTimeMillis(epoch)
    * </pre>
    * <p>
    * <p>
@@ -73,8 +74,8 @@ public class BlockHeader implements Serializable {
    *  and to match the DRY principle (don't store what can be derived).
    *
    * @return XDAG epoch number
-   * @see io.xdag.utils.XdagTime#getEpoch(long)
-   * @see io.xdag.utils.XdagTime#getCurrentEpoch()
+   * @see TimeUtils#getEpoch(long)
+   * @see TimeUtils#getCurrentEpoch()
    */
   long epoch;
 

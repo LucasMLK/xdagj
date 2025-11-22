@@ -15,8 +15,8 @@ This document condenses everything you need to understand the XDAGJ 1.0 release 
 |  +----------------+    +-----------------+    +----------+ |
 |          |                       |                 |       |
 |          v                       v                 v       |
-|  OrphanBlockStore        HybridSyncManager    Stratum/Pool |
-|  DagStore (blocks)       P2P Adapter          HTTP v1      |
+|  DagStore (blocks        HybridSyncManager    Stratum/Pool |
+|   + pending mgmt)        P2P Adapter          HTTP v1      |
 |  TransactionStore        RandomX POW                       |
 |  AccountStore                                              |
 +-----------------------------------------------------------+
@@ -35,7 +35,7 @@ This document condenses everything you need to understand the XDAGJ 1.0 release 
 | Networking / HTTP | `io.netty` pipeline, `HttpApiServer`, `HttpApiHandlerV1` | Netty 4, Jackson (JSON/YAML) |
 | P2P & Sync | `HybridSyncManager`, `HybridSyncP2pAdapter`, message classes | Netty, Tuweni Bytes, CompletableFuture |
 | Consensus & DAG | `DagChainImpl`, `DagBlockProcessor`, `RandomXPow` | Apache Tuweni UInt256, BouncyCastle, RandomX JNI |
-| Storage | `DagStoreImpl`, `TransactionStoreImpl`, `AccountStoreImpl`, `OrphanBlockStoreImpl` | RocksDB JNI, Snappy, Typesafe Config |
+| Storage | `DagStoreImpl`, `TransactionStoreImpl`, `AccountStoreImpl` | RocksDB JNI, Snappy, Typesafe Config |
 | Crypto | `io.xdag.crypto.*` | BouncyCastle, Tuweni |
 
 All modules live in this repo; there are no external `xdagj-*` sibling libraries. If you embed XDAGJ, reuse `DagKernel` as the entry point and link to the provided services.
@@ -51,7 +51,7 @@ XDAG uses an epoch-based DAG where every 64 seconds all miners compete to produc
 
 ### 2.1 Consensus Rules
 
-1. **Epoch Competition (PRIMARY)** – Within each epoch, blocks compete via **hash comparison**. Smallest hash wins and becomes the epoch winner (main block). Losers become orphan blocks but remain valid and referenceable. Only 100 non-orphan blocks are kept per epoch (see `MAX_BLOCKS_PER_EPOCH`). Extra blocks must beat the weakest block's hash to stay on the main chain.
+1. **Epoch Competition (PRIMARY)** – Within each epoch, blocks compete via **hash comparison**. Smallest hash wins and becomes the epoch winner (main block). Losers become orphan blocks but remain valid and referenceable. Only 16 non-orphan blocks are kept per epoch (see `MAX_BLOCKS_PER_EPOCH` = 16). Extra blocks must beat the weakest block's hash to stay on the main chain.
 
 2. **Height Assignment (SECONDARY)** – After epoch competition, heights are assigned to epoch winners based on epoch order (not cumulative difficulty). This is done by `checkNewMain()` which scans all epoch winners and assigns continuous heights: 1, 2, 3, 4...
 
@@ -61,7 +61,7 @@ XDAG uses an epoch-based DAG where every 64 seconds all miners compete to produc
 
 5. **Reference depth rules** – When fully synced, blocks may reference parents only within the last 16 epochs. During sync that limit loosens to 1,000 to allow historical imports.
 
-6. **Orphan pipeline** – Any block missing dependencies is persisted via `OrphanBlockStore` and retried once parents arrive. This keeps DAG links intact and enables out-of-order sync.
+6. **Pending block management** – Any block missing dependencies or losing epoch competition is marked as pending (height=0) in DagStore and retried once parents arrive. This keeps DAG links intact and enables out-of-order sync. Pending blocks are queried via `DagStore.getPendingBlocks()` without requiring separate storage.
 
 7. **PoW** – Devnet/testing uses a relaxed difficulty (accept-all). Mainnet/testnet rely on RandomX (`RandomXPow`) to validate the 32-byte nonce.
 
@@ -270,8 +270,8 @@ All codecs rely on Apache Tuweni Bytes32 for determinism and share the same seri
 
 1. **Height negotiation** – Query remote height/finality to decide if we are behind.
 2. **Finalized main chain sync** – Batch download 1,000-block ranges via `requestMainBlocks`, import sequentially.
-3. **Active DAG sync** – Pull recent epochs’ block hash sets and fill missing bodies.
-4. **Solidification** – Scan `OrphanBlockStore`, resolve missing references, request parents/transactions, and retry imports.
+3. **Active DAG sync** – Pull recent epochs' block hash sets and fill missing bodies.
+4. **Solidification** – Scan pending blocks (height=0) via `DagStore.getPendingBlocks()`, resolve missing references, request parents/transactions, and retry imports.
 5. **Transaction solidification** – (future) fetch missing transactions referenced by blocks once block dependencies are satisfied.
 
 Progress is exposed through `HybridSyncManager#getProgress()` and the HTTP `/api/v1/network/syncing` endpoint.

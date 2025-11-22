@@ -32,6 +32,8 @@ import io.xdag.core.ChainStats;
 import io.xdag.store.DagStore;
 import io.xdag.store.cache.DagCache;
 import io.xdag.store.rocksdb.config.DagStoreRocksDBConfig;
+import io.xdag.store.rocksdb.transaction.RocksDBTransactionManager;
+import io.xdag.store.rocksdb.transaction.TransactionException;
 import io.xdag.utils.CompactSerializer;
 import java.io.File;
 import java.nio.ByteBuffer;
@@ -96,7 +98,7 @@ public class DagStoreImpl implements DagStore {
   private final DagCache cache;
 
   // Transaction manager for atomic operations (NEW - atomic block processing)
-  private io.xdag.store.rocksdb.transaction.RocksDBTransactionManager transactionManager;
+  private RocksDBTransactionManager transactionManager;
 
   private volatile boolean closed = false;
 
@@ -117,7 +119,7 @@ public class DagStoreImpl implements DagStore {
    * @param transactionManager RocksDB transaction manager for atomic operations
    */
   public DagStoreImpl(Config config,
-      io.xdag.store.rocksdb.transaction.RocksDBTransactionManager transactionManager) {
+      RocksDBTransactionManager transactionManager) {
     this(config, transactionManager, new DagCache());
   }
 
@@ -129,7 +131,7 @@ public class DagStoreImpl implements DagStore {
    * @param sharedCache        Shared DagCache instance (from DagKernel)
    */
   public DagStoreImpl(Config config,
-      io.xdag.store.rocksdb.transaction.RocksDBTransactionManager transactionManager,
+      RocksDBTransactionManager transactionManager,
       DagCache sharedCache) {
     this.config = config;
     this.transactionManager = transactionManager;
@@ -906,11 +908,9 @@ public class DagStoreImpl implements DagStore {
   // ==================== Transactional Methods (Atomic Block Processing) ====================
 
   @Override
-  public void saveBlockInTransaction(String txId, BlockInfo info, Block block)
-      throws io.xdag.store.rocksdb.transaction.TransactionException {
+  public void saveBlockInTransaction(String txId, BlockInfo info, Block block) throws TransactionException {
     if (transactionManager == null) {
-      throw new io.xdag.store.rocksdb.transaction.TransactionException(
-          "TransactionManager not initialized");
+      throw new TransactionException("TransactionManager not initialized");
     }
 
     Bytes32 hash = block.getHash();
@@ -943,7 +943,7 @@ public class DagStoreImpl implements DagStore {
 
     } catch (Exception e) {
       log.error("Failed to save block in transaction {}: {}", txId, e.getMessage());
-      throw new io.xdag.store.rocksdb.transaction.TransactionException(
+      throw new TransactionException(
           "Failed to save block: " + e.getMessage(), e);
     }
   }
@@ -1118,6 +1118,116 @@ public class DagStoreImpl implements DagStore {
     } catch (Exception e) {
       log.error("Failed to deserialize ChainStats", e);
       return null;
+    }
+  }
+
+  // ==================== Pending Blocks (Orphan Management) ====================
+
+  @Override
+  public List<Bytes32> getPendingBlocks(int maxCount, long fromEpoch) {
+    List<Bytes32> result = new ArrayList<>();
+
+    if (maxCount <= 0) {
+      return result;
+    }
+
+    try {
+      // Strategy: Scan BLOCK_INFO (0xa1) entries for blocks with height=0
+      // Filter by epoch >= fromEpoch, sort by epoch, limit to maxCount
+      byte[] prefix = new byte[]{BLOCK_INFO};
+
+      // Use RocksDB iterator to scan all BLOCK_INFO entries
+      List<BlockInfo> pendingInfos = new ArrayList<>();
+
+      try (RocksIterator iterator = db.newIterator(scanReadOptions)) {
+        iterator.seek(prefix);
+
+        while (iterator.isValid()) {
+          byte[] key = iterator.key();
+
+          // Check if still in BLOCK_INFO prefix
+          if (key.length < 1 || key[0] != BLOCK_INFO) {
+            break;  // Moved past BLOCK_INFO entries
+          }
+
+          // Get value and deserialize
+          byte[] value = iterator.value();
+          if (value != null && value.length > 0) {
+            try {
+              BlockInfo info = deserializeBlockInfo(value);
+              // Filter: height=0 and epoch >= fromEpoch
+              if (info != null && info.getHeight() == 0 && info.getEpoch() >= fromEpoch) {
+                pendingInfos.add(info);
+              }
+            } catch (Exception e) {
+              log.warn("Failed to deserialize BlockInfo for pending block query", e);
+            }
+          }
+
+          iterator.next();
+        }
+      }
+
+      // Sort by epoch (oldest first) and limit
+      pendingInfos.stream()
+          .sorted(java.util.Comparator.comparingLong(BlockInfo::getEpoch))
+          .limit(maxCount)
+          .forEach(info -> result.add(info.getHash()));
+
+      log.debug("Found {} pending blocks (from epoch {}, limit {})",
+          result.size(), fromEpoch, maxCount);
+
+      return result;
+
+    } catch (Exception e) {
+      log.error("Failed to query pending blocks", e);
+      return result;
+    }
+  }
+
+  @Override
+  public long getPendingBlockCount() {
+    long count = 0;
+
+    try {
+      // Strategy: Scan BLOCK_INFO (0xa1) entries for all height=0 blocks
+      byte[] prefix = new byte[]{BLOCK_INFO};
+
+      // Use RocksDB iterator to count height=0 blocks
+      try (RocksIterator iterator = db.newIterator(scanReadOptions)) {
+        iterator.seek(prefix);
+
+        while (iterator.isValid()) {
+          byte[] key = iterator.key();
+
+          // Check if still in BLOCK_INFO prefix
+          if (key.length < 1 || key[0] != BLOCK_INFO) {
+            break;  // Moved past BLOCK_INFO entries
+          }
+
+          // Get value and deserialize
+          byte[] value = iterator.value();
+          if (value != null && value.length > 0) {
+            try {
+              BlockInfo info = deserializeBlockInfo(value);
+              if (info != null && info.getHeight() == 0) {
+                count++;
+              }
+            } catch (Exception e) {
+              // Skip invalid entries
+            }
+          }
+
+          iterator.next();
+        }
+      }
+
+      log.debug("Total pending block count: {}", count);
+      return count;
+
+    } catch (Exception e) {
+      log.error("Failed to count pending blocks", e);
+      return 0;
     }
   }
 }

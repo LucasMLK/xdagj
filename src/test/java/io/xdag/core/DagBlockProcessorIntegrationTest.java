@@ -28,7 +28,7 @@ import io.xdag.DagKernel;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import java.util.List;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
@@ -254,7 +254,7 @@ public class DagBlockProcessorIntegrationTest {
                 .hash(Bytes32.random())
                 .height(1L)
                 .difficulty(UInt256.ONE)
-                .epoch(XdagTime.getCurrentEpoch())
+                .epoch(TimeUtils.getCurrentEpoch())
                 .build();
 
         Block block = Block.builder()
@@ -280,7 +280,7 @@ public class DagBlockProcessorIntegrationTest {
     @Test
     public void testProcessValidBlockNoTransactions() {
         // Create valid block using factory method
-        long timestamp = XdagTime.getMainTime(); // Use XDAG main block time
+        long timestamp = TimeUtils.getMainTime(); // Use XDAG main block time
         Block block = Block.createWithNonce(
                 timestamp,
                 org.apache.tuweni.units.bigints.UInt256.ONE,
@@ -326,7 +326,7 @@ public class DagBlockProcessorIntegrationTest {
 
         for (int i = 0; i < blockCount; i++) {
             // Create block - each in a different epoch to avoid timestamp collision
-            long timestamp = XdagTime.getMainTime() + (i * 0x10000L); // Offset by epochs
+            long timestamp = TimeUtils.getMainTime() + (i * 0x10000L); // Offset by epochs
             Block block = Block.createWithNonce(
                     timestamp,
                     UInt256.ONE,
@@ -365,7 +365,7 @@ public class DagBlockProcessorIntegrationTest {
     @Test
     public void testGetBlockWithAndWithoutLinks() {
         // Create and process a valid block
-        long timestamp = XdagTime.getMainTime(); // Use XDAG main block time
+        long timestamp = TimeUtils.getMainTime(); // Use XDAG main block time
         Block block = Block.createWithNonce(
                 timestamp,
                 UInt256.ONE,
@@ -409,7 +409,7 @@ public class DagBlockProcessorIntegrationTest {
     @Test
     public void testProcessDuplicateBlock() {
         // Create block
-        long timestamp = XdagTime.getMainTime(); // Use XDAG main block time
+        long timestamp = TimeUtils.getMainTime(); // Use XDAG main block time
         Block block = Block.createWithNonce(
                 timestamp,
                 UInt256.ONE,

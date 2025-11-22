@@ -3,6 +3,7 @@ package io.xdag.consensus.sync;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,7 +15,6 @@ import io.xdag.core.BlockHeader;
 import io.xdag.core.DagChain;
 import io.xdag.core.Link;
 import io.xdag.store.DagStore;
-import io.xdag.store.OrphanBlockStore;
 import io.xdag.store.cache.DagEntityResolver;
 import io.xdag.store.cache.ResolvedLinks;
 import java.lang.reflect.Method;
@@ -38,7 +38,6 @@ public class HybridSyncManagerTest {
     @Mock private DagKernel dagKernel;
     @Mock private DagChain dagChain;
     @Mock private HybridSyncP2pAdapter p2pAdapter;
-    @Mock private OrphanBlockStore orphanBlockStore;
     @Mock private DagStore dagStore;
     @Mock private DagEntityResolver entityResolver;
 
@@ -46,7 +45,6 @@ public class HybridSyncManagerTest {
 
     @Before
     public void setUp() {
-        when(dagKernel.getOrphanBlockStore()).thenReturn(orphanBlockStore);
         when(dagKernel.getDagStore()).thenReturn(dagStore);
         when(dagKernel.getEntityResolver()).thenReturn(entityResolver);
         hybridSyncManager = new HybridSyncManager(dagKernel, dagChain, p2pAdapter);
@@ -54,10 +52,10 @@ public class HybridSyncManagerTest {
 
     @Test
     public void identifyMissingBlocksLoadsRawBlockData() throws Exception {
-        Bytes32 orphanHash = filledBytes((byte) 1);
+        Bytes32 pendingHash = filledBytes((byte) 1);
         Bytes32 missingHash = filledBytes((byte) 2);
 
-        Block orphanBlock = Block.builder()
+        Block pendingBlock = Block.builder()
                 .header(BlockHeader.builder()
                         .epoch(100L)
                         .difficulty(UInt256.valueOf(1))
@@ -67,16 +65,17 @@ public class HybridSyncManagerTest {
                 .links(List.of(Link.toBlock(missingHash)))
                 .build();
 
-        when(orphanBlockStore.getOrphan(anyLong(), any(long[].class)))
-                .thenReturn(Collections.singletonList(orphanHash));
-        when(dagStore.getBlockByHash(orphanHash, true)).thenReturn(orphanBlock);
+        // Mock DagStore.getPendingBlocks() to return pending block hashes
+        when(dagStore.getPendingBlocks(anyInt(), anyLong()))
+                .thenReturn(Collections.singletonList(pendingHash));
+        when(dagStore.getBlockByHash(pendingHash, true)).thenReturn(pendingBlock);
 
         ResolvedLinks resolvedLinks = ResolvedLinks.builder()
                 .referencedBlocks(new ArrayList<>())
                 .referencedTransactions(new ArrayList<>())
                 .missingReferences(new ArrayList<>(Collections.singletonList(missingHash)))
                 .build();
-        when(entityResolver.resolveAllLinks(orphanBlock)).thenReturn(resolvedLinks);
+        when(entityResolver.resolveAllLinks(pendingBlock)).thenReturn(resolvedLinks);
 
         Method method = HybridSyncManager.class.getDeclaredMethod("identifyMissingBlocks");
         method.setAccessible(true);
@@ -85,8 +84,8 @@ public class HybridSyncManagerTest {
 
         assertEquals(1, result.size());
         assertTrue(result.contains(missingHash));
-        verify(dagStore).getBlockByHash(orphanHash, true);
-        verify(dagStore, never()).getBlockByHash(orphanHash, false);
+        verify(dagStore).getBlockByHash(pendingHash, true);
+        verify(dagStore, never()).getBlockByHash(pendingHash, false);
     }
 
     private static Bytes32 filledBytes(byte value) {

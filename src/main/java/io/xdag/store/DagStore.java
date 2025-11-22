@@ -88,11 +88,6 @@ public interface DagStore extends XdagLifecycle {
   byte CHAIN_STATS = (byte) 0xa2;
 
   /**
-   * Time index: timestamp → List&lt;blockHash&gt;
-   */
-  byte TIME_INDEX = (byte) 0xb0;
-
-  /**
    * Epoch index: epoch → List&lt;blockHash&gt;
    */
   byte EPOCH_INDEX = (byte) 0xb1;
@@ -116,7 +111,6 @@ public interface DagStore extends XdagLifecycle {
    * <ul>
    *   <li>Block raw data (BLOCK_DATA)</li>
    *   <li>BlockInfo metadata (BLOCK_INFO)</li>
-   *   <li>Time index (TIME_INDEX)</li>
    *   <li>Epoch index (EPOCH_INDEX)</li>
    *   <li>Height index (HEIGHT_INDEX, if main block)</li>
    * </ul>
@@ -304,6 +298,41 @@ public interface DagStore extends XdagLifecycle {
       throws io.xdag.store.rocksdb.transaction.TransactionException;
 
   // ==================== Batch Operations ====================
+
+  // ==================== Pending Blocks (Orphan Management) ====================
+
+  /**
+   * Get pending blocks (height=0) for retry
+   *
+   * <p>Returns blocks that are waiting to be connected to main chain, ordered by epoch.
+   * These blocks are either:
+   * <ul>
+   *   <li>Blocks with missing dependencies (waiting for parent blocks)</li>
+   *   <li>Epoch competition losers (candidates that may be promoted during reorganization)</li>
+   *   <li>Demoted blocks (blocks removed from main chain during reorganization)</li>
+   * </ul>
+   *
+   * <p>Use this for:
+   * <ul>
+   *   <li>Retrying block imports after new blocks arrive</li>
+   *   <li>Identifying missing dependencies during sync</li>
+   *   <li>Chain reorganization fork detection</li>
+   * </ul>
+   *
+   * @param maxCount maximum number of blocks to return
+   * @param fromEpoch start from this epoch (inclusive), use 0 to start from beginning
+   * @return list of block hashes ordered by epoch (oldest first), may be empty
+   */
+  List<Bytes32> getPendingBlocks(int maxCount, long fromEpoch);
+
+  /**
+   * Get total count of pending blocks (height=0)
+   *
+   * <p>This is more efficient than getPendingBlocks().size() for large datasets.
+   *
+   * @return number of pending blocks
+   */
+  long getPendingBlockCount();
 
   // ==================== Statistics ====================
 

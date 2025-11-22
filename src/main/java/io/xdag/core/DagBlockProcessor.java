@@ -26,6 +26,7 @@ package io.xdag.core;
 
 import io.xdag.store.DagStore;
 import io.xdag.store.TransactionStore;
+import io.xdag.utils.TimeUtils;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Value;
@@ -273,8 +274,8 @@ public class DagBlockProcessor {
       return false;
     }
 
-    // Convert epoch number to XDAG timestamp (end of epoch) using XdagTime utility
-    long timestamp = io.xdag.utils.XdagTime.epochNumberToMainTime(block.getEpoch());
+    // Convert epoch number to XDAG timestamp (end of epoch) using TimeUtils utility
+    long timestamp = TimeUtils.epochNumberToMainTime(block.getEpoch());
 
     if (timestamp <= 0) {
       log.warn("Block has invalid timestamp: {}", timestamp);

@@ -327,7 +327,7 @@ Generate genesis.json programmatically:
 GenesisConfig genesis = new GenesisConfig();
 genesis.setNetworkId("testnet");
 genesis.setChainId(2);
-// Set epoch using XdagTime utilities
+// Set epoch using TimeUtils utilities
 long currentTimestamp = XdagTime.getCurrentTimestamp();
 long currentEpoch = XdagTime.getEpoch(currentTimestamp);
 genesis.setEpoch(currentEpoch);

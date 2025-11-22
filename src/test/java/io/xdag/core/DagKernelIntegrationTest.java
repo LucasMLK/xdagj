@@ -173,7 +173,6 @@ public class DagKernelIntegrationTest {
         assertNotNull("DagStore should be initialized", dagKernel.getDagStore());
         assertNotNull("TransactionStore should be initialized", dagKernel.getTransactionStore());
         assertNotNull("AccountStore should be initialized", dagKernel.getAccountStore());
-        assertNotNull("OrphanBlockStore should be initialized", dagKernel.getOrphanBlockStore());
 
         // Verify cache layer components (initialized in constructor)
         assertNotNull("DagCache should be initialized", dagKernel.getDagCache());

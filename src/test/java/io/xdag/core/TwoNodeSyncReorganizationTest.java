@@ -28,9 +28,8 @@ import io.xdag.DagKernel;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.After;
 import org.junit.Before;
@@ -225,7 +224,7 @@ public class TwoNodeSyncReorganizationTest {
         System.out.println("========================================\n");
 
         // Get base epoch (should be after genesis)
-        long baseEpoch = XdagTime.getCurrentEpochNumber();
+        long baseEpoch = TimeUtils.getCurrentEpochNumber();
         System.out.println("Base epoch: " + baseEpoch);
 
         // Create first block with link to ensure it's not mistaken for genesis
@@ -295,7 +294,7 @@ public class TwoNodeSyncReorganizationTest {
         System.out.println("========================================\n");
 
         // Base epoch for both nodes
-        long baseEpoch = XdagTime.getCurrentEpochNumber();
+        long baseEpoch = TimeUtils.getCurrentEpochNumber();
         System.out.println("Base epoch: " + baseEpoch);
 
         // Get genesis/first block for linking
@@ -382,7 +381,7 @@ public class TwoNodeSyncReorganizationTest {
         System.out.println("========================================\n");
 
         // Base epoch
-        long baseEpoch = XdagTime.getCurrentEpochNumber();
+        long baseEpoch = TimeUtils.getCurrentEpochNumber();
 
         // Get genesis/first block for linking
         Block node1Genesis = node1Chain.getMainChainLength() > 0 ?
@@ -400,7 +399,7 @@ public class TwoNodeSyncReorganizationTest {
         }
         node1Chain.checkNewMain();
 
-        UInt256 node1Difficulty = node1Chain.getChainStats().getMaxDifficulty();
+        UInt256 node1Difficulty = node1Chain.getChainStats().getDifficulty();
         System.out.println("Node1 cumulative difficulty: " + node1Difficulty.toDecimalString());
 
         System.out.println("\n--- Phase 2: Node2 builds a weaker fork (epochs 101, 105) ---");
@@ -414,7 +413,7 @@ public class TwoNodeSyncReorganizationTest {
         }
         node2Chain.checkNewMain();
 
-        UInt256 node2DifficultyBefore = node2Chain.getChainStats().getMaxDifficulty();
+        UInt256 node2DifficultyBefore = node2Chain.getChainStats().getDifficulty();
         System.out.println("Node2 cumulative difficulty (before sync): " +
                 node2DifficultyBefore.toDecimalString());
 
@@ -435,7 +434,7 @@ public class TwoNodeSyncReorganizationTest {
         // Trigger height reassignment
         node2Chain.checkNewMain();
 
-        UInt256 node2DifficultyAfter = node2Chain.getChainStats().getMaxDifficulty();
+        UInt256 node2DifficultyAfter = node2Chain.getChainStats().getDifficulty();
         long node2LengthAfter = node2Chain.getMainChainLength();
 
         System.out.println("\n--- Phase 4: Verify reorganization results ---");
@@ -483,7 +482,7 @@ public class TwoNodeSyncReorganizationTest {
      */
     private Block createBlockForEpoch(long epoch, Block parent) {
         // Convert epoch to XDAG timestamp
-        long timestamp = XdagTime.epochNumberToMainTime(epoch);
+        long timestamp = TimeUtils.epochNumberToMainTime(epoch);
 
         // Create links (reference parent if exists)
         List<Link> links = new ArrayList<>();

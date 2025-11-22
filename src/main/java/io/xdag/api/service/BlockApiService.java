@@ -37,7 +37,7 @@ import io.xdag.core.BlockInfo;
 import io.xdag.core.Link;
 import io.xdag.core.XAmount;
 import io.xdag.crypto.keys.ECKeyPair;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -357,7 +357,7 @@ public class BlockApiService {
       return null;
     }
 
-    long timestamp = XdagTime.epochNumberToTimeMillis(block.getEpoch());
+    long timestamp = TimeUtils.epochNumberToTimeMillis(block.getEpoch());
     String state = info.isMainBlock() ? MAIN_STATE : "Orphan";
 
     // Get transaction count
@@ -391,7 +391,7 @@ public class BlockApiService {
       return null;
     }
 
-    long timestamp = XdagTime.epochNumberToTimeMillis(block.getEpoch());
+    long timestamp = TimeUtils.epochNumberToTimeMillis(block.getEpoch());
     String state = info.isMainBlock() ? MAIN_STATE : "Orphan";
 
     // Get coinbase address

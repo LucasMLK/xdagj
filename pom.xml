@@ -21,13 +21,11 @@
         <xdagj-p2p.version>0.1.6</xdagj-p2p.version>
         <netty.version>4.2.1.Final</netty.version>
         <jackson.version>2.18.2</jackson.version>
-        <kryo.version>5.5.0</kryo.version>
         <lombok.version>1.18.38</lombok.version>
         <caffeine.version>3.2.0</caffeine.version>
         <jline.version>3.30.0</jline.version>
         <junit.version>4.13.2</junit.version>
         <mockito.version>5.17.0</mockito.version>
-        <system-stubs-jupiter.version>2.1.8</system-stubs-jupiter.version>
         <log4j.version>2.24.3</log4j.version>
         <commons-lang3.version>3.18.0</commons-lang3.version>
         <commons-rng.version>1.6</commons-rng.version>
@@ -40,9 +38,6 @@
         <jws-api.version>2.1.0</jws-api.version>
         <config.version>1.4.3</config.version>
         <snappy-java.version>1.1.10.7</snappy-java.version>
-        <druid.version>1.2.24</druid.version>
-        <mysql-connector.version>8.4.0</mysql-connector.version>
-        <h2.version>2.3.232</h2.version>
         <gson.version>2.13.1</gson.version>
         <byte-buddy-agent.version>1.15.11</byte-buddy-agent.version>
     </properties>
@@ -383,12 +378,6 @@
         </dependency>
 
         <dependency>
-            <groupId>com.esotericsoftware</groupId>
-            <artifactId>kryo</artifactId>
-            <version>${kryo.version}</version>
-        </dependency>
-
-        <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
             <version>${lombok.version}</version>
@@ -446,30 +435,6 @@
         </dependency>
 
         <dependency>
-            <groupId>uk.org.webcompere</groupId>
-            <artifactId>system-stubs-jupiter</artifactId>
-            <version>${system-stubs-jupiter.version}</version>
-            <scope>test</scope>
-            <exclusions>
-                <exclusion>
-                    <artifactId>byte-buddy</artifactId>
-                    <groupId>net.bytebuddy</groupId>
-                </exclusion>
-                <exclusion>
-                    <artifactId>byte-buddy-agent</artifactId>
-                    <groupId>net.bytebuddy</groupId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <version>${h2.version}</version>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.version}</version>
@@ -515,24 +480,6 @@
             <groupId>org.xerial.snappy</groupId>
             <artifactId>snappy-java</artifactId>
             <version>${snappy-java.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>com.mysql</groupId>
-            <artifactId>mysql-connector-j</artifactId>
-            <version>${mysql-connector.version}</version>
-            <exclusions>
-                <exclusion>
-                    <artifactId>protobuf-java</artifactId>
-                    <groupId>com.google.protobuf</groupId>
-                </exclusion>
-            </exclusions>
-        </dependency>
-
-        <dependency>
-            <groupId>com.alibaba</groupId>
-            <artifactId>druid</artifactId>
-            <version>${druid.version}</version>
         </dependency>
 
         <dependency>

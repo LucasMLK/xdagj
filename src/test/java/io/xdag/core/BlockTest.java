@@ -29,9 +29,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
+import io.xdag.utils.TimeUtils;
 import java.util.ArrayList;
 import java.util.List;
-import io.xdag.utils.XdagTime;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -61,7 +61,7 @@ public class BlockTest {
         assertNotNull(block);
         assertEquals(epoch, block.getEpoch());
         assertEquals(2, block.getLinks().size());
-        assertEquals(XdagTime.epochNumberToMainTime(epoch), block.getTimestamp());
+        assertEquals(TimeUtils.epochNumberToMainTime(epoch), block.getTimestamp());
     }
 
     @Test

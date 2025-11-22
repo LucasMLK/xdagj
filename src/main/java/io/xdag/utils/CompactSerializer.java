@@ -35,17 +35,8 @@ import org.apache.tuweni.units.bigints.UInt256;
 
 /**
  * Compact serializer for XDAG data structures
- * <p>
- * This serializer replaces Kryo with a custom, optimized implementation that:
- * - Uses variable-length integer encoding (VarInt)
- * - Implements bit-field compression for flags
- * - Minimizes overhead
- * - Targets 3-4x performance improvement over Kryo
- * - Achieves ~180 bytes for BlockInfo (vs ~220 bytes with Kryo)
  */
 public class CompactSerializer {
-
-    // ========== BlockInfo Serialization ==========
 
     /**
      * Serialize BlockInfo to bytes
@@ -106,12 +97,7 @@ public class CompactSerializer {
   // ========== ChainStats Serialization ==========
 
     /**
-     * Serialize ChainStats to bytes (optimized - removed 5 deprecated fields)
-     * <p>
-     * 3 Optimization: Removed blockCount, hostCount, mainBlockTime,
-     * globalMinerHash, ourLastBlockHash serialization for 33% size reduction.
-     * <p>
-     * v2: Added new consensus fields (baseDifficultyTarget, adjustment epochs, top block info)
+     * Serialize ChainStats to bytes
      */
     public static byte[] serialize(ChainStats stats) throws IOException {
         ByteArrayOutputStream out = new ByteArrayOutputStream(200);

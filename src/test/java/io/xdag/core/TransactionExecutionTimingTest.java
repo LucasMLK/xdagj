@@ -29,7 +29,7 @@ import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
 import io.xdag.crypto.keys.ECKeyPair;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
@@ -240,7 +240,7 @@ public class TransactionExecutionTimingTest {
 
         // Create block with transaction link (use XDAG main block time format)
         List<Link> links = List.of(Link.toTransaction(signedTx.getHash()));
-        long mainTime = XdagTime.getMainTime(); // 低16位为0xffff
+        long mainTime = TimeUtils.getMainTime(); // 低16位为0xffff
         Block orphanBlock = Block.createWithNonce(
                 mainTime,
                 UInt256.ONE, // Very low difficulty, will be orphan
@@ -352,7 +352,7 @@ public class TransactionExecutionTimingTest {
                 Link.toBlock(genesisBlock.getHash()),
                 Link.toTransaction(signedTx.getHash())
         );
-        long mainTime = XdagTime.getMainTime(); // 低16位为0xffff
+        long mainTime = TimeUtils.getMainTime(); // 低16位为0xffff
         Block mainBlock = Block.createWithNonce(
                 mainTime,
                 UInt256.MAX_VALUE, // High difficulty, will be main block

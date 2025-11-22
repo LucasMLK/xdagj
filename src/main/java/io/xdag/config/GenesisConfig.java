@@ -28,7 +28,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.xdag.crypto.exception.AddressFormatException;
 import io.xdag.crypto.keys.AddressUtils;
-import io.xdag.utils.XdagTime;
+import io.xdag.utils.TimeUtils;
 import java.io.File;
 import java.io.IOException;
 import java.math.BigInteger;
@@ -104,11 +104,11 @@ public class GenesisConfig {
   /**
    * Genesis block epoch number (XDAG epoch) Default: 23694000 (XDAG_ERA: 2018-01-20 00:00:00 UTC)
    *
-   * <p>Conversion from Unix timestamp to epoch using XdagTime:
+   * <p>Conversion from Unix timestamp to epoch using TimeUtils:
    * <pre>
    * long ms = unixSeconds * 1000;
-   * long xdagTimestamp = XdagTime.msToXdagtimestamp(ms);
-   * long epoch = XdagTime.getEpoch(xdagTimestamp);
+   * long xdagTimestamp = TimeUtils.msToXdagtimestamp(ms);
+   * long epoch = TimeUtils.getEpoch(xdagTimestamp);
    * </pre>
    */
   @JsonProperty("epoch")
@@ -256,25 +256,25 @@ public class GenesisConfig {
         config.setChainId(1);
         // XDAG_ERA: 2018-01-20 00:00:00 UTC (Unix: 1516406400)
         long mainnetMs = 1516406400L * 1000;
-        long mainnetTimestamp = XdagTime.timeMillisToEpoch(mainnetMs);
-        long mainnetEpoch = XdagTime.getEpoch(mainnetTimestamp);
+        long mainnetTimestamp = TimeUtils.timeMillisToEpoch(mainnetMs);
+        long mainnetEpoch = TimeUtils.getEpoch(mainnetTimestamp);
         config.setEpoch(mainnetEpoch);
         config.setInitialDifficulty("0x1");
         break;
 
       case "testnet":
         config.setChainId(2);
-        // Current time to epoch using XdagTime
-        long testnetTimestamp = XdagTime.getCurrentEpoch();
-        long testnetEpoch = XdagTime.getEpoch(testnetTimestamp);
+        // Current time to epoch using TimeUtils
+        long testnetTimestamp = TimeUtils.getCurrentEpoch();
+        long testnetEpoch = TimeUtils.getEpoch(testnetTimestamp);
         config.setEpoch(testnetEpoch);
         config.setInitialDifficulty("0x1");
         break;
 
       case "devnet":
         config.setChainId(3);
-        long devnetTimestamp = XdagTime.getCurrentEpoch();
-        long devnetEpoch = XdagTime.getEpoch(devnetTimestamp);
+        long devnetTimestamp = TimeUtils.getCurrentEpoch();
+        long devnetEpoch = TimeUtils.getEpoch(devnetTimestamp);
         config.setEpoch(devnetEpoch);
         config.setInitialDifficulty("0x1");
         // Add some test allocations for devnet
