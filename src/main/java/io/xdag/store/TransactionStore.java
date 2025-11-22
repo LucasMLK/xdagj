@@ -258,11 +258,14 @@ public interface TransactionStore extends XdagLifecycle {
    * <p>This method buffers the transaction execution mark in a transaction.
    * The operation is NOT written to disk until the transaction is committed.
    *
-   * @param txId   transaction ID from RocksDBTransactionManager
-   * @param txHash transaction hash
+   * @param txId        transaction ID from RocksDBTransactionManager
+   * @param txHash      transaction hash
+   * @param blockHash   executing block hash
+   * @param blockHeight executing block height
    * @throws io.xdag.store.rocksdb.transaction.TransactionException if operation fails
    */
-  void markTransactionExecutedInTransaction(String txId, Bytes32 txHash)
+  void markTransactionExecutedInTransaction(String txId, Bytes32 txHash,
+      Bytes32 blockHash, long blockHeight)
       throws io.xdag.store.rocksdb.transaction.TransactionException;
 
 }

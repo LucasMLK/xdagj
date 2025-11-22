@@ -307,7 +307,12 @@ public class TransactionStoreImpl implements TransactionStore {
     List<Transaction> result = Lists.newArrayList();
     for (Bytes32 hash : hashes) {
       Transaction tx = getTransaction(hash);
-      result.add(tx);  // null entries for missing transactions
+      if (tx != null) {
+        // Skip missing transactions to avoid null elements in list
+        result.add(tx);
+      } else {
+        log.debug("Transaction not found: {}", hash.toHexString().substring(0, 16));
+      }
     }
     return result;
   }
@@ -504,7 +509,8 @@ public class TransactionStoreImpl implements TransactionStore {
   }
 
   @Override
-  public void markTransactionExecutedInTransaction(String txId, Bytes32 txHash)
+  public void markTransactionExecutedInTransaction(String txId, Bytes32 txHash,
+      Bytes32 blockHash, long blockHeight)
       throws io.xdag.store.rocksdb.transaction.TransactionException {
     if (transactionManager == null) {
       throw new io.xdag.store.rocksdb.transaction.TransactionException(
@@ -512,13 +518,19 @@ public class TransactionStoreImpl implements TransactionStore {
     }
 
     try {
+      // BUGFIX: Use same 49-byte format as non-transactional method
+      // to ensure data consistency
+      TransactionExecutionInfo info = TransactionExecutionInfo.create(blockHash, blockHeight);
       byte[] key = BytesUtils.merge(TX_EXECUTION_STATUS, txHash.toArray());
-      byte[] value = new byte[]{1};  // Mark as executed (simplified format)
+      byte[] value = serializeExecutionInfo(info);
 
       transactionManager.putInTransaction(txId, key, value);
 
-      log.debug("Buffered tx execution mark for {} in transaction {}",
-          txHash.toHexString().substring(0, 16), txId);
+      log.debug("Buffered tx execution mark for {} (block={}, height={}) in transaction {}",
+          txHash.toHexString().substring(0, 16),
+          blockHash.toHexString().substring(0, 16),
+          blockHeight,
+          txId);
 
     } catch (Exception e) {
       throw new io.xdag.store.rocksdb.transaction.TransactionException(

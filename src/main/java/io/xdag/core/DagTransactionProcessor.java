@@ -254,7 +254,8 @@ public class DagTransactionProcessor {
         updateAccountStatesInTransaction(txId, tx);
 
         // 2.3 Mark transaction as executed IN TRANSACTION
-        transactionStore.markTransactionExecutedInTransaction(txId, tx.getHash());
+        transactionStore.markTransactionExecutedInTransaction(txId, tx.getHash(),
+            block.getHash(), block.getInfo().getHeight());
 
         log.debug("Buffered transaction processing for {} in transaction {}",
             tx.getHash().toHexString().substring(0, 16), txId);
