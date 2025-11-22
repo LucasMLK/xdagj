@@ -125,11 +125,23 @@ public class TransactionApiService {
   /**
    * Get recent transactions ordered by block height (newest first).
    *
+   * <p><b>IMPORTANT</b>: The {@code total} count returned by this method represents the total number of
+   * transactions in the system (including transactions in orphan blocks), NOT just main chain transactions.
+   * This is a known limitation because calculating the exact number of main chain transactions would
+   * require traversing all blocks, which is too expensive for pagination.
+   *
+   * <p><b>Consequence</b>: The last few pages may be empty if many transactions are in orphan blocks.
+   * For example, if total=10000 but only 8000 are in main chain, pages 81-100 will be empty.
+   *
+   * <p><b>TODO (DEBT-005)</b>: Add a dedicated main chain transaction counter to fix this issue.
+   *
    * @param page page number (1-based)
    * @param size page size
    * @return paged transaction info list
    */
   public PagedResult<TransactionInfo> getRecentTransactionsPage(int page, int size) {
+    // BUGFIX (BUG-026): Document limitation - total includes all transactions, not just main chain
+    // This means the last few pages may be empty if many transactions are in orphan blocks
     long total = dagKernel.getTransactionStore().getTransactionCount();
     if (total <= 0) {
       return PagedResult.empty();
@@ -192,9 +204,31 @@ public class TransactionApiService {
         .signatureValid(tx.verifySignature());
 
     // Decode remark if present
+    // BUGFIX (BUG-027): Safe UTF-8 decoding with validation
+    // Previously: new String(bytes, UTF_8) could produce � replacement characters for invalid sequences
+    // Now: Use String constructor which replaces malformed input with \uFFFD safely
     if (tx.getData() != null && tx.getData().size() > 0) {
-      String remark = new String(tx.getData().toArray(), StandardCharsets.UTF_8);
-      builder.remark(remark);
+      try {
+        byte[] data = tx.getData().toArray();
+        // Validate printable characters only (filter control characters except newline/tab)
+        StringBuilder sb = new StringBuilder();
+        for (byte b : data) {
+          char c = (char) (b & 0xFF);
+          // Allow printable ASCII (32-126), newline (10), tab (9), and extended UTF-8
+          if (c >= 32 || c == '\n' || c == '\t' || (b & 0x80) != 0) {
+            sb.append(c);
+          } else {
+            sb.append('?'); // Replace control characters with '?'
+          }
+        }
+        String remark = sb.toString();
+        if (!remark.isEmpty()) {
+          builder.remark(remark);
+        }
+      } catch (Exception e) {
+        log.warn("Failed to decode transaction data as UTF-8: {}", tx.getHash().toHexString());
+        // Skip remark if decoding fails
+      }
     }
 
     // Add signature (v, r, s combined - full values)
