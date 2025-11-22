@@ -227,7 +227,7 @@ public class MiningApiService {
   /**
    * Get current network difficulty target
    *
-   * @return Current difficulty target as UInt256
+   * @return Current difficulty target as UInt256, or null if unable to retrieve
    */
   public UInt256 getCurrentDifficultyTarget() {
     try {
@@ -239,9 +239,12 @@ public class MiningApiService {
       return difficulty;
 
     } catch (Exception e) {
-      log.error("Error getting current difficulty", e);
-      // Return a default high difficulty on error
-      return UInt256.MAX_VALUE;
+      // BUGFIX (BUG-028): Return null instead of UInt256.MAX_VALUE on error
+      // Previously: Returned MAX_VALUE (lowest difficulty = easiest mining) which is wrong
+      // Now: Return null to signal error - callers must handle null case
+      // MAX_VALUE would allow any hash to pass difficulty check, causing invalid mining
+      log.error("Error getting current difficulty, returning null", e);
+      return null;
     }
   }
 
