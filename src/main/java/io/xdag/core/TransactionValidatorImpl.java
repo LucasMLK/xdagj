@@ -31,6 +31,7 @@ import static io.xdag.core.XUnit.NANO_XDAG;
 
 import io.xdag.core.ValidationResult.ValidationLevel;
 import io.xdag.store.TransactionStore;
+import java.math.BigDecimal;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
@@ -209,13 +210,24 @@ public class TransactionValidatorImpl implements TransactionValidator {
       UInt256 balance = accountManager.getBalance(tx.getFrom());
       XAmount required = tx.getAmount().add(tx.getFee());
 
-      // Convert XAmount to UInt256 (nano units)
-      UInt256 requiredUInt256 = UInt256.valueOf(required.toDecimal(0, NANO_XDAG).longValue());
+      // BUGFIX BUG-080: Convert XAmount to UInt256 safely (avoid longValue() overflow)
+      // XAmount stores nano units as long, which is always safe to convert to BigInteger
+      BigDecimal requiredNano = required.toDecimal(0, NANO_XDAG);
+      UInt256 requiredUInt256 = UInt256.valueOf(requiredNano.toBigInteger());
 
       if (balance.compareTo(requiredUInt256) < 0) {
+        // BUGFIX BUG-080: Safe balance display (avoid toLong() overflow)
+        String balanceStr;
+        try {
+          balanceStr = XAmount.of(balance.toLong(), NANO_XDAG).toDecimal(9, XUnit.XDAG);
+        } catch (ArithmeticException e) {
+          // Balance too large for long, display raw UInt256
+          balanceStr = balance.toDecimalString() + " nano";
+        }
+
         return failure(ECONOMIC, String.format(
             "Insufficient balance: have %s, need %s (amount + fee)",
-            XAmount.of(balance.toLong(), NANO_XDAG).toDecimal(9, XUnit.XDAG),
+            balanceStr,
             required.toDecimal(9, XUnit.XDAG)));
       }
 

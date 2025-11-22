@@ -199,6 +199,11 @@ public class Account {
 
     // Contract data (if present)
     if (isContract()) {
+      // BUGFIX BUG-079: Validate contract account has both codeHash and storageRoot
+      if (storageRoot == null) {
+        throw new IllegalStateException(
+            "Contract account must have both codeHash and storageRoot");
+      }
       buffer.put(codeHash.toArray());
       buffer.put(storageRoot.toArray());
     }
@@ -245,8 +250,13 @@ public class Account {
         .balance(balance)
         .nonce(nonce);
 
-    // Read contract data if present
+    // Read contract data if present (BUGFIX BUG-078: validate length before reading)
     if (isContract) {
+      if (data.length < 125) {
+        throw new IllegalArgumentException(
+            "Invalid contract account data: expected 125 bytes, got " + data.length);
+      }
+
       byte[] codeHashBytes = new byte[32];
       buffer.get(codeHashBytes);
       Bytes32 codeHash = Bytes32.wrap(codeHashBytes);
@@ -295,6 +305,13 @@ public class Account {
     if (address.size() != 20) {
       throw new IllegalArgumentException(
           "Address must be exactly 20 bytes, got: " + address.size());
+    }
+    // BUGFIX BUG-079: Validate contract parameters
+    if (codeHash == null) {
+      throw new IllegalArgumentException("Contract codeHash cannot be null");
+    }
+    if (storageRoot == null) {
+      throw new IllegalArgumentException("Contract storageRoot cannot be null");
     }
     return Account.builder()
         .address(address)
