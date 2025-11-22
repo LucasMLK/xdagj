@@ -146,15 +146,19 @@ public class XdagCli extends Launcher {
       }
     }
     String[] newArgs = argsList.toArray(new String[0]);
-    // parse common options
-    CommandLine cmd = null;
+
+    // Parse command line options
+    CommandLine cmd;
     try {
       cmd = parseOptions(newArgs);
     } catch (ParseException exception) {
-      System.err.println("Parsing Failed:" + exception.getMessage());
+      System.err.println("Failed to parse command line options: " + exception.getMessage());
+      printHelp();
+      exit(-1);
+      return;
     }
 
-    assert cmd != null;
+    // Handle command line options
     if (cmd.hasOption(XdagOption.HELP.toString())) {
       printHelp();
     } else if (cmd.hasOption(XdagOption.VERSION.toString())) {
@@ -285,12 +289,17 @@ public class XdagCli extends Launcher {
     }
   }
 
+  /**
+   * Create a new account in the wallet using HD wallet derivation
+   */
   protected void createAccount() {
     Wallet wallet = loadAndUnlockWallet();
-    if (Objects.nonNull(wallet) && !wallet.isHdWalletInitialized()) {
+
+    if (!wallet.isHdWalletInitialized()) {
       System.out.println("Please init HD Wallet account first!");
       return;
     }
+
     ECKeyPair key = wallet.addAccountWithNextHdKey();
     if (wallet.flush()) {
       System.out.println("New Address:" + AddressUtils.toBase58Address(key));
@@ -298,6 +307,9 @@ public class XdagCli extends Launcher {
     }
   }
 
+  /**
+   * List all accounts in the wallet
+   */
   protected void listAccounts() {
     Wallet wallet = loadAndUnlockWallet();
     List<ECKeyPair> accounts = wallet.getAccounts();
@@ -311,51 +323,71 @@ public class XdagCli extends Launcher {
     }
   }
 
+  /**
+   * Change wallet password
+   */
   protected void changePassword() {
     Wallet wallet = loadAndUnlockWallet();
-    if (wallet.isUnlocked()) {
-      String newPassword = readNewPassword("EnterNewPassword:", "ReEnterNewPassword:");
-      if (newPassword == null) {
-        return;
-      }
-      wallet.changePassword(newPassword);
-      boolean isFlushed = wallet.flush();
-      if (!isFlushed) {
-        System.out.println("Wallet File Cannot Be Updated");
-        return;
-      }
-      System.out.println("Password Changed Successfully!");
+
+    // Note: loadAndUnlockWallet() already ensures wallet is unlocked,
+    // but we keep this defensive check for safety
+    if (!wallet.isUnlocked()) {
+      System.err.println("Wallet is not unlocked");
+      return;
     }
+
+    String newPassword = readNewPassword("EnterNewPassword:", "ReEnterNewPassword:");
+    if (newPassword == null) {
+      return;
+    }
+
+    wallet.changePassword(newPassword);
+    if (!wallet.flush()) {
+      System.out.println("Wallet File Cannot Be Updated");
+      return;
+    }
+
+    System.out.println("Password Changed Successfully!");
   }
 
   protected void exit(int code) {
     System.exit(code);
   }
 
+  /**
+   * Dump private key for a given address
+   *
+   * @param address Hex string address
+   */
   protected void dumpPrivateKey(String address) {
     Wallet wallet = loadAndUnlockWallet();
     byte[] addressBytes = BytesUtils.hexStringToBytes(address);
     ECKeyPair account = wallet.getAccount(addressBytes);
+
     if (account == null) {
       System.out.println("Address Not In Wallet");
     } else {
       System.out.println("Private:" + account.getPrivateKey().toUnprefixedHex());
+      System.out.println("Private Key Dumped Successfully!");
     }
-    System.out.println("Private Dump Successfully!");
   }
 
+  /**
+   * Import a private key into the wallet
+   *
+   * @param key Hex string private key
+   * @return true if import succeeded, false otherwise
+   */
   protected boolean importPrivateKey(String key) {
     Wallet wallet = loadWallet().exists() ? loadAndUnlockWallet() : createNewWallet();
     ECKeyPair account = ECKeyPair.fromHex(key);
 
-    boolean accountAdded = wallet.addAccount(account);
-    if (!accountAdded) {
+    if (!wallet.addAccount(account)) {
       System.out.println("Private Key Already In Wallet");
       return false;
     }
 
-    boolean walletFlushed = wallet.flush();
-    if (!walletFlushed) {
+    if (!wallet.flush()) {
       System.out.println("Wallet File Cannot Be Updated");
       return false;
     }
@@ -366,6 +398,12 @@ public class XdagCli extends Launcher {
     return true;
   }
 
+  /**
+   * Import HD wallet from mnemonic phrase
+   *
+   * @param mnemonic BIP39 mnemonic phrase
+   * @return true if import succeeded, false otherwise
+   */
   protected boolean importMnemonic(String mnemonic) {
     Wallet wallet = loadWallet().exists() ? loadAndUnlockWallet() : createNewWallet();
 
@@ -396,18 +434,29 @@ public class XdagCli extends Launcher {
     return new Wallet(getConfig());
   }
 
+  /**
+   * Load and unlock wallet. This method ensures the wallet is unlocked before returning.
+   * If unlocking fails, the application exits.
+   *
+   * @return Unlocked wallet (never null, never locked)
+   */
   public Wallet loadAndUnlockWallet() {
     Wallet wallet = loadWallet();
+
+    // Try empty password first if no password provided
     if (getPassword() == null) {
       if (wallet.unlock("")) {
         setPassword("");
-      } else {
-        setPassword(readPassword(WALLET_PASSWORD_PROMPT));
+        return wallet;
       }
+      // Empty password failed, prompt for password
+      setPassword(readPassword(WALLET_PASSWORD_PROMPT));
     }
 
+    // Unlock with provided password
     if (!wallet.unlock(getPassword())) {
       System.err.println("Invalid password");
+      exit(-1);
     }
 
     return wallet;
