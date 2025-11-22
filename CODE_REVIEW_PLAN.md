@@ -148,15 +148,22 @@
 
 | Component | File | Priority | Status |
 |-----------|------|----------|--------|
-| Account manager | `DagAccountManager.java` | HIGH | 📋 Planned |
-| Transaction processor | `DagTransactionProcessor.java` | HIGH | 📋 Planned |
+| Account manager | `DagAccountManager.java` | HIGH | ✅ Completed |
+| Transaction processor | `DagTransactionProcessor.java` | HIGH | ✅ Completed |
 | Account store | `AccountStoreImpl.java` | MEDIUM | 📋 Planned |
 
 **Focus Areas**:
-- [ ] Balance calculations
-- [ ] Nonce management
-- [ ] Double-spend prevention
+- [x] Balance calculations
+- [x] Nonce management
+- [x] Double-spend prevention
 - [ ] State consistency
+
+**Issues Found** (DagAccountManager.java):
+1. DEBT-002: Transaction methods use non-transactional reads (line 216-280) - Recorded in Technical Debt
+
+**Issues Found** (DagTransactionProcessor.java):
+1. ✅ BUG-012: Signature validation not implemented (line 286) - Fixed in f86d3d0c
+2. ✅ BUG-013: Missing double-spend protection (line 305) - Fixed in f86d3d0c
 
 ---
 
@@ -416,6 +423,41 @@
 | BUG-001 | DagKernel.java:805 | Genesis height=0 should be 1 | ✅ Fixed | 55e93216 |
 | BUG-005 | DagChainImpl.java:734 | validateEpochLimit() filters wrong blocks | ✅ Fixed | 6ce1720b |
 | BUG-008 | DagChainImpl.java:1024 | checkAndAdjustDifficulty() only counts main blocks | ✅ Fixed | 3e3a2e6f |
+| BUG-012 | DagTransactionProcessor.java:286 | Signature validation not implemented (SECURITY) | ✅ Fixed | f86d3d0c |
+| BUG-013 | DagTransactionProcessor.java:305 | Missing double-spend protection (SECURITY) | ✅ Fixed | f86d3d0c |
+
+**BUG-012 Details** (CRITICAL SECURITY):
+- **Location**: `DagTransactionProcessor.java:286-303`
+- **Problem**: validateSignature() always returned true (TODO comment)
+- **Impact**: **ASSET THEFT VULNERABILITY**
+  - Anyone could forge transactions without private keys
+  - Attacker could construct: `from=victim_address, to=attacker_address`
+  - No cryptographic protection against unauthorized transfers
+- **Root Cause**: Method not implemented, placeholder returning true
+- **Fix**: Call `tx.verifySignature()` which implements full ECDSA verification:
+  1. Reconstruct Signature from v/r/s components
+  2. Recover public key from signature using tx hash
+  3. Derive address from public key (SHA256 → RIPEMD160)
+  4. Compare derived address with "from" address
+- **Commit**: f86d3d0c
+
+**BUG-013 Details** (CRITICAL SECURITY):
+- **Location**: `DagTransactionProcessor.java:355-363`
+- **Problem**: validateAccountState() didn't check if transaction already executed
+- **Impact**: **DOUBLE-SPENDING VULNERABILITY**
+  - Same transaction could be referenced by multiple blocks
+  - Each block execution would deduct sender's balance again
+  - Receiver would get credited multiple times
+  - Example: Transaction T1 (100 XDAG) executed twice → 200 XDAG total
+- **Attack Scenario**:
+  ```
+  Block A references Transaction T1 → processes, marks executed
+  Block B also references Transaction T1 → should reject, but didn't
+  Result: T1 executed twice, double-spend successful
+  ```
+- **Root Cause**: Missing check in validation logic
+- **Fix**: Added check `transactionStore.isTransactionExecuted(tx.getHash())`
+- **Commit**: f86d3d0c
 
 ### Major Bugs (🟡 Medium Priority)
 
@@ -471,19 +513,20 @@
 - **Bugs Found**: 0
 - **Dead Code Lines**: 0
 
-### Current Progress (2025-11-22 18:30)
-- **Files Reviewed**: 13 / ~200 (6.5%)
+### Current Progress (2025-11-22 19:00)
+- **Files Reviewed**: 15 / ~200 (7.5%)
   - Phase 1: 3 files (Bootstrap, XdagCli, Launcher, Config)
   - Phase 2: 1 file (DagKernel)
-  - Phase 3: 5 files (DagChainImpl, DagBlockProcessor, Block, BlockHeader, Transaction)
-- **Bugs Found**: 10 total
-  - Critical: 3 found, 3 fixed ✅ (100%)
+  - Phase 3: 7 files (DagChainImpl, DagBlockProcessor, Block, BlockHeader, Transaction, DagAccountManager, DagTransactionProcessor)
+- **Bugs Found**: 14 total
+  - Critical: 5 found, 5 fixed ✅ (100%)
   - Major: 3 found, 2 fixed, 1 documented ✅ (100%)
   - Minor: 4 found, 3 fixed, 1 deferred ✅ (75%)
-- **Technical Debt**: 1 item registered (DEBT-001)
+  - Security: 2 found, 2 fixed ✅ (100%)
+- **Technical Debt**: 2 items registered (DEBT-001, DEBT-002)
 - **Dead Code Removed**: ~1,496 lines (config cleanup)
-- **Status**: Phase 3 (Core Consensus Layer) COMPLETED ✅
-- **Next**: Phase 3.3 (Account Management) or Phase 4 (Storage Layer)
+- **Status**: Phase 3.3 (Account Management) NEARLY COMPLETE ✅
+- **Next**: Phase 3.3 - AccountStoreImpl (last file) or Phase 4 (Storage Layer)
 
 ### Code Quality Improvements
 - Added JavaDoc comments: 10 methods
