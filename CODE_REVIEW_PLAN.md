@@ -186,7 +186,7 @@
 | Component | File | Priority | Status |
 |-----------|------|----------|--------|
 | DAG store | `DagStoreImpl.java` | HIGH | ✅ Completed |
-| Transaction store | `TransactionStoreImpl.java` | HIGH | 📋 |
+| Transaction store | `TransactionStoreImpl.java` | HIGH | ✅ Completed |
 | Account store | `AccountStoreImpl.java` | HIGH | ✅ (Phase 3.3) |
 
 **Focus Areas**:
@@ -199,6 +199,11 @@
 - No bugs found ✅
 - Code quality: Excellent
 - Performance optimization: Appropriate (3-tier cache, deferred index cleanup)
+
+**Issues Found** (TransactionStoreImpl.java):
+- ✅ BUG-015: getTransactionsByHashes() returned null elements (FIXED)
+- ✅ BUG-018: Data format inconsistency in transactional method (FIXED)
+- 📝 DEBT-004: indexTransactionToBlock/Address() concurrency issues (recorded)
 
 ### 4.2 Cache Layer
 
@@ -402,6 +407,7 @@
 |----|-------------|-------|--------|------|
 | DEBT-002 | DagAccountManager transaction methods | Non-transactional reads in transaction methods | Concurrency safety (future risk) | Add transactional read support or atomic operations |
 | DEBT-003 | AccountStoreImpl modification methods | Read-modify-write pattern without atomicity | Concurrency safety (future risk) | Add RocksDB transactions or Java synchronization |
+| DEBT-004 | TransactionStoreImpl index methods | Read-modify-write pattern in indexTransactionToBlock/Address | Concurrency safety (future risk) | Add atomic append operations or synchronization |
 
 **DEBT-002 Details**:
 - **Location**: `DagAccountManager.java:216-280`
@@ -463,6 +469,37 @@
   4. Note: setBalanceInTransaction() already documents this limitation (line 682-692)
 - **Timeline**: Phase 10 or before enabling parallel processing
 
+**DEBT-004 Details**:
+- **Location**: `TransactionStoreImpl.java:208-234, 272-293`
+- **Methods Affected**:
+  - `indexTransactionToBlock()` - line 208
+  - `indexTransactionToAddress()` - line 272
+- **Problem**: Both methods use read-modify-write pattern without atomicity
+  ```java
+  public void indexTransactionToBlock(Bytes32 blockHash, Bytes32 txHash) {
+      byte[] existingValue = indexSource.get(key);  // Non-atomic read
+      byte[] newValue = BytesUtils.merge(existingValue, txHash.toArray());  // Non-atomic merge
+      indexSource.put(key, newValue);  // Non-atomic write
+  }
+  ```
+- **Concurrency Scenario**:
+  ```
+  Thread 1: existing = get(block1) → [tx1]
+  Thread 2: existing = get(block1) → [tx1]
+  Thread 1: put(block1, [tx1, tx2])
+  Thread 2: put(block1, [tx1, tx3])
+  Result: Index only has [tx1, tx3], tx2 lost!
+  ```
+- **Current Safety**: Protected by `DagChainImpl.tryToConnect()` synchronized block
+- **Future Risk**: HIGH - Will cause index corruption if parallel block processing is enabled
+- **Impact**: Missing transaction indexes, failed queries
+- **Root Cause**: Same as DEBT-002 and DEBT-003 - non-atomic read-modify-write operations
+- **Refactoring Strategy**:
+  1. Option A: Use RocksDB Merge operator for atomic append
+  2. Option B: Add synchronized blocks around index operations
+  3. Option C: Use separate index table with append-only semantics
+- **Timeline**: Phase 10 or before enabling parallel processing
+
 **NOTE**: AccountStoreImpl.setBalanceInTransaction() (line 682) documents a known architectural limitation:
 - AccountStore uses separate RocksDB instance (accountstore/)
 - Cannot achieve cross-database atomicity with TransactionManager (index/)
@@ -487,6 +524,7 @@
 | BUG-008 | DagChainImpl.java:1024 | checkAndAdjustDifficulty() only counts main blocks | ✅ Fixed | 3e3a2e6f |
 | BUG-012 | DagTransactionProcessor.java:286 | Signature validation not implemented (SECURITY) | ✅ Fixed | f86d3d0c |
 | BUG-013 | DagTransactionProcessor.java:305 | Missing double-spend protection (SECURITY) | ✅ Fixed | f86d3d0c |
+| BUG-018 | TransactionStoreImpl.java:512 | Data format inconsistency in transactional method | ✅ Fixed | 29c4553c |
 
 **BUG-012 Details** (CRITICAL SECURITY):
 - **Location**: `DagTransactionProcessor.java:286-303`
@@ -521,6 +559,21 @@
 - **Fix**: Added check `transactionStore.isTransactionExecuted(tx.getHash())`
 - **Commit**: f86d3d0c
 
+**BUG-018 Details** (CRITICAL - Data Consistency):
+- **Location**: `TransactionStoreImpl.java:512-539`
+- **Problem**: markTransactionExecutedInTransaction() used 1-byte format while non-transactional method used 49-byte format
+- **Impact**: **DATA INCONSISTENCY**
+  - Transactional method: `byte[] value = new byte[]{1};` (1 byte only)
+  - Non-transactional method: `serializeExecutionInfo(info)` (49 bytes: blockHash + height + timestamp)
+  - Cannot query execution info for transactions marked via transactional method
+  - Breaking: isTransactionExecuted() works, but cannot get blockHash/height
+- **Root Cause**: Missing parameters in transactional method signature
+- **Fix**:
+  1. Added blockHash and blockHeight parameters to method signature
+  2. Use same 49-byte serialization format as non-transactional method
+  3. Updated TransactionStore interface and DagTransactionProcessor caller
+- **Commit**: 29c4553c
+
 ### Major Bugs (🟡 Medium Priority)
 
 | ID | File:Line | Description | Status | Fix Commit |
@@ -528,6 +581,7 @@
 | BUG-002 | XdagCli.java:157 | ParseException NPE risk | ✅ Fixed | af4bccee |
 | BUG-003 | XdagCli.java:409 | Unlocked wallet contract | ✅ Fixed | af4bccee |
 | BUG-007 | DagChainImpl.java:1452 | getWinnerBlockInEpoch() fallback only scans main blocks | ✅ Documented | d3d1402b |
+| BUG-015 | TransactionStoreImpl.java:306 | getTransactionsByHashes() returned null elements | ✅ Fixed | 29c4553c |
 
 **BUG-007 Resolution**:
 - **Status**: Resolved via comprehensive documentation
@@ -537,6 +591,16 @@
   - Fixing the limitation would add complexity to exception handling
   - Impact is minimal (rare edge case)
 - **Commit**: d3d1402b
+
+**BUG-015 Details** (MEDIUM - API Design):
+- **Location**: `TransactionStoreImpl.java:306-318`
+- **Problem**: getTransactionsByHashes() added null elements to result list for missing transactions
+- **Impact**:
+  - Violates Java best practices (avoid null in collections)
+  - Callers must defensively check for null in list
+  - Potential NPE risk when iterating without null check
+- **Fix**: Skip missing transactions instead of adding null
+- **Commit**: 29c4553c
 
 ### Minor Issues (🟢 Low Priority)
 
@@ -575,21 +639,21 @@
 - **Bugs Found**: 0
 - **Dead Code Lines**: 0
 
-### Current Progress (2025-11-22 20:15)
-- **Files Reviewed**: 17 / ~200 (8.5%)
+### Current Progress (2025-11-22 21:00)
+- **Files Reviewed**: 18 / ~200 (9.0%)
   - Phase 1: 3 files (Bootstrap, XdagCli, Launcher, Config)
   - Phase 2: 1 file (DagKernel)
   - Phase 3: 8 files (DagChainImpl, DagBlockProcessor, Block, BlockHeader, Transaction, DagAccountManager, DagTransactionProcessor, AccountStoreImpl)
-  - Phase 4: 1 file (DagStoreImpl)
-- **Bugs Found**: 13 total
-  - Critical: 5 found, 5 fixed ✅ (100%)
-  - Major: 3 found, 2 fixed, 1 documented ✅ (100%)
+  - Phase 4: 2 files (DagStoreImpl, TransactionStoreImpl)
+- **Bugs Found**: 15 total
+  - Critical: 6 found, 6 fixed ✅ (100%)
+  - Major: 4 found, 3 fixed, 1 documented ✅ (100%)
   - Minor: 4 found, 3 fixed, 1 deferred ✅ (75%)
   - Security: 2 found, 2 fixed ✅ (100%)
-- **Technical Debt**: 3 items registered (DEBT-001, DEBT-002, DEBT-003)
+- **Technical Debt**: 4 items registered (DEBT-001, DEBT-002, DEBT-003, DEBT-004)
 - **Dead Code Removed**: ~1,496 lines (config cleanup)
-- **Status**: Phase 4.1 (Core Storage) IN PROGRESS 🔄
-- **Next**: TransactionStoreImpl.java
+- **Status**: Phase 4.1 (Core Storage) COMPLETED ✅
+- **Next**: Phase 4.2 (Cache Layer)
 
 ### Code Quality Improvements
 - Added JavaDoc comments: 10 methods
