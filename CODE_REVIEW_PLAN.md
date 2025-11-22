@@ -209,13 +209,21 @@
 
 | Component | File | Priority | Status |
 |-----------|------|----------|--------|
-| DAG cache | `DagCache.java` | MEDIUM | 📋 |
-| Entity resolver | `DagEntityResolver.java` | MEDIUM | 📋 |
+| DAG cache | `DagCache.java` | MEDIUM | ✅ Completed |
+| Entity resolver | `DagEntityResolver.java` | MEDIUM | ✅ Completed |
 
 **Focus Areas**:
-- [ ] Cache invalidation
-- [ ] Memory limits
-- [ ] Hit rate optimization
+- [x] Cache invalidation - Verified correct (manual invalidate methods)
+- [x] Memory limits - Verified correct (Caffeine maximumSize)
+- [x] Hit rate optimization - Verified correct (statistics enabled)
+
+**Issues Found** (DagCache.java):
+- ✅ BUG-019: logStats() format string error (FIXED)
+- ✅ BUG-020: Transaction cache API incomplete (FIXED)
+
+**Issues Found** (DagEntityResolver.java):
+- No bugs found ✅
+- Code quality: Excellent
 
 ---
 
@@ -610,6 +618,8 @@
 | BUG-006 | DagChainImpl.java:238 | tryToConnect() too long (~325 lines) | ⏸️ Deferred | - |
 | BUG-009 | BlockHeader.java:43 | Incorrect size documentation (said 104 bytes, actually 92) | ✅ Fixed | 6e160035 |
 | BUG-010 | Transaction.java:230 | calculateTotalFee() formula documentation mismatch | ✅ Fixed | 6e160035 |
+| BUG-019 | DagCache.java:377 | logStats() used Python format {:.2f} instead of Java | ✅ Fixed | 1cf3c3da |
+| BUG-020 | DagCache.java:228 | Transaction cache missing put/invalidate methods | ✅ Fixed | 1cf3c3da |
 
 **BUG-006 Details**:
 - **Location**: `DagChainImpl.java:238-562`
@@ -639,21 +649,21 @@
 - **Bugs Found**: 0
 - **Dead Code Lines**: 0
 
-### Current Progress (2025-11-22 21:00)
-- **Files Reviewed**: 18 / ~200 (9.0%)
+### Current Progress (2025-11-22 21:30)
+- **Files Reviewed**: 20 / ~200 (10.0%)
   - Phase 1: 3 files (Bootstrap, XdagCli, Launcher, Config)
   - Phase 2: 1 file (DagKernel)
   - Phase 3: 8 files (DagChainImpl, DagBlockProcessor, Block, BlockHeader, Transaction, DagAccountManager, DagTransactionProcessor, AccountStoreImpl)
-  - Phase 4: 2 files (DagStoreImpl, TransactionStoreImpl)
-- **Bugs Found**: 15 total
+  - Phase 4: 4 files (DagStoreImpl, TransactionStoreImpl, DagCache, DagEntityResolver)
+- **Bugs Found**: 17 total
   - Critical: 6 found, 6 fixed ✅ (100%)
   - Major: 4 found, 3 fixed, 1 documented ✅ (100%)
-  - Minor: 4 found, 3 fixed, 1 deferred ✅ (75%)
+  - Minor: 6 found, 5 fixed, 1 deferred ✅ (83%)
   - Security: 2 found, 2 fixed ✅ (100%)
 - **Technical Debt**: 4 items registered (DEBT-001, DEBT-002, DEBT-003, DEBT-004)
 - **Dead Code Removed**: ~1,496 lines (config cleanup)
-- **Status**: Phase 4.1 (Core Storage) COMPLETED ✅
-- **Next**: Phase 4.2 (Cache Layer)
+- **Status**: Phase 4 (Storage Layer) COMPLETED ✅
+- **Next**: Phase 5 (Network & Synchronization)
 
 ### Code Quality Improvements
 - Added JavaDoc comments: 10 methods
