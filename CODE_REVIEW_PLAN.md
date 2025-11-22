@@ -493,23 +493,101 @@
 
 ---
 
-## Phase 10: Technical Debt Cleanup (📋 Planned)
+## Phase 10: P2P Message Protocol (🔄 In Progress)
+
+### 10.1 Message Infrastructure
+
+| Component | File | Priority | Status |
+|-----------|------|----------|--------|
+| Message codes | `XdagMessageCode.java` | HIGH | ✅ Completed |
+| Message factory | `XdagMessageFactory.java` | HIGH | ✅ Completed |
+| Message exception | `MessageException.java` | MEDIUM | ✅ Completed |
+
+### 10.2 Block Messages
+
+| Component | File | Priority | Status |
+|-----------|------|----------|--------|
+| Block request | `BlockRequestMessage.java` | HIGH | 📋 Planned |
+| New block | `NewBlockMessage.java` | HIGH | ✅ Completed |
+| Sync block | `SyncBlockMessage.java` | HIGH | 📋 Planned |
+
+### 10.3 Sync Protocol Messages
+
+| Component | File | Priority | Status |
+|-----------|------|----------|--------|
+| Height request | `SyncHeightRequestMessage.java` | HIGH | ✅ Completed |
+| Height reply | `SyncHeightReplyMessage.java` | HIGH | ✅ Completed |
+| Main blocks request | `SyncMainBlocksRequestMessage.java` | HIGH | 📋 Planned |
+| Main blocks reply | `SyncMainBlocksReplyMessage.java` | HIGH | 📋 Planned |
+| Epoch blocks request | `SyncEpochBlocksRequestMessage.java` | HIGH | 📋 Planned |
+| Epoch blocks reply | `SyncEpochBlocksReplyMessage.java` | HIGH | 📋 Planned |
+| Blocks request | `SyncBlocksRequestMessage.java` | HIGH | 📋 Planned |
+| Blocks reply | `SyncBlocksReplyMessage.java` | HIGH | 📋 Planned |
+| Block request | `SyncBlockRequestMessage.java` | HIGH | 📋 Planned |
+
+### 10.4 Transaction Messages
+
+| Component | File | Priority | Status |
+|-----------|------|----------|--------|
+| New transaction | `NewTransactionMessage.java` | HIGH | 📋 Planned |
+| Transactions request | `SyncTransactionsRequestMessage.java` | MEDIUM | 📋 Planned |
+| Transactions reply | `SyncTransactionsReplyMessage.java` | MEDIUM | 📋 Planned |
+
+**Focus Areas**:
+- [x] Message serialization/deserialization - Verified correct
+- [ ] Protocol versioning - Not reviewed yet
+- [x] Input validation - 6 bugs fixed (null checks, length validation)
+- [x] Error handling - Improved with clear error messages
+- [ ] Message size limits - Not reviewed yet
+
+**Issues Found** (XdagMessageCode.java):
+- ✅ BUG-045: Node protocol range check incomplete (0x15 → 0x1F) (FIXED)
+
+**Issues Found** (XdagMessageFactory.java):
+- ✅ BUG-046: create() missing body null check (FIXED)
+- ✅ BUG-047: JavaDoc error "not unknown" → "unknown" (FIXED)
+
+**Issues Found** (MessageException.java):
+- No bugs found ✅
+
+**Issues Found** (NewBlockMessage.java):
+- ✅ BUG-048: Constructors missing block null check (FIXED)
+
+**Issues Found** (SyncHeightRequestMessage.java):
+- No bugs found ✅
+
+**Issues Found** (SyncHeightReplyMessage.java):
+- ✅ BUG-049: Constructor missing mainBlockHash null check (FIXED)
+- ✅ BUG-050: Constructor missing body length validation (FIXED)
+
+**Phase 10 Summary** (6/18 files reviewed):
+- Files reviewed: 6 infrastructure + core message files ✅
+- 6 bugs found: 6 fixed (100%)
+- Pattern identified: Message constructors need defensive programming
+  * Validate reference-type parameters for null
+  * Validate message body length
+  * Provide clear error messages
+- Remaining: 12 sync/transaction message files (similar pattern expected)
+
+---
+
+## Phase 11: Technical Debt Cleanup (📋 Planned)
 
 **Purpose**: Address deferred code quality issues after all functional reviews complete
 
-### 10.1 Refactoring Tasks
+### 11.1 Refactoring Tasks
 
 | Task | Priority | Estimated Effort | Prerequisites |
 |------|----------|------------------|---------------|
 | DEBT-001: Refactor tryToConnect() | HIGH | 2-3 days | Complete test coverage |
 
-### 10.2 Dead Code Removal
+### 11.2 Dead Code Removal
 
 - Remove identified dead code from registry
 - Verify no references exist
 - Run full test suite
 
-### 10.3 Documentation Updates
+### 11.3 Documentation Updates
 
 - Update architecture diagrams
 - Document refactored components
@@ -890,6 +968,12 @@
 | BUG-042 | CompactSerializer.java:316 | ByteReader constructor missing null check | ✅ Fixed | 44076795 |
 | BUG-043 | CompactSerializer.java:342 | readVarInt() missing overflow protection (DoS risk) | ✅ Fixed | 44076795 |
 | BUG-044 | CompactSerializer.java:354 | readVarLong() missing overflow protection (DoS risk) | ✅ Fixed | 44076795 |
+| BUG-045 | XdagMessageCode.java:191 | Node protocol range check incomplete (0x15 → 0x1F) | ✅ Fixed | e31d5726 |
+| BUG-046 | XdagMessageFactory.java:46 | create() missing body null check | ✅ Fixed | e31d5726 |
+| BUG-047 | XdagMessageFactory.java:43 | JavaDoc error "not unknown" → "unknown" | ✅ Fixed | e31d5726 |
+| BUG-048 | NewBlockMessage.java:122,134 | Constructors missing block null check | ✅ Fixed | f178d4df |
+| BUG-049 | SyncHeightReplyMessage.java:140 | Constructor missing mainBlockHash null check | ✅ Fixed | f178d4df |
+| BUG-050 | SyncHeightReplyMessage.java:108 | Constructor missing body length validation (48 bytes) | ✅ Fixed | f178d4df |
 
 **BUG-006 Details**:
 - **Location**: `DagChainImpl.java:238-562`
@@ -919,8 +1003,8 @@
 - **Bugs Found**: 0
 - **Dead Code Lines**: 0
 
-### Current Progress (2025-11-22 18:00)
-- **Files Reviewed**: 41 / ~200 (20.5%)
+### Current Progress (2025-11-22 19:00)
+- **Files Reviewed**: 47 / ~200 (23.5%)
   - Phase 1: 3 files (Bootstrap, XdagCli, Launcher, Config)
   - Phase 2: 1 file (DagKernel)
   - Phase 3: 8 files (DagChainImpl, DagBlockProcessor, Block, BlockHeader, Transaction, DagAccountManager, DagTransactionProcessor, AccountStoreImpl)
@@ -930,16 +1014,17 @@
   - Phase 7: 2 files (TransactionPoolImpl, TransactionBroadcastManager)
   - Phase 8: 4 files (HttpApiServer, BlockApiService, TransactionApiService, MiningApiService)
   - Phase 9: 6 files (TimeUtils, BytesUtils, BasicUtils, WalletUtils, Numeric, CompactSerializer)
+  - Phase 10: 6 files (XdagMessageCode, XdagMessageFactory, MessageException, NewBlockMessage, SyncHeightRequestMessage, SyncHeightReplyMessage)
   - Additional: 6 files (ApiKeyStore, etc.)
-- **Bugs Found**: 44 total (BUG-025 skipped as DEBT-005)
+- **Bugs Found**: 50 total (BUG-025 skipped as DEBT-005)
   - Critical: 6 found, 6 fixed ✅ (100%)
   - Major: 10 found, 7 fixed, 1 documented, 2 deferred ✅ (80%)
-  - Minor: 26 found, 24 fixed, 1 documented, 1 deferred ✅ (92%)
+  - Minor: 32 found, 30 fixed, 1 documented, 1 deferred ✅ (94%)
   - Security: 4 found, 4 fixed ✅ (100% - includes BUG-012, BUG-013, BUG-043, BUG-044)
 - **Technical Debt**: 6 items registered (DEBT-001 through DEBT-006)
 - **Dead Code Removed**: ~1,496 lines (config cleanup)
-- **Status**: Phase 9 (Utilities & Helpers) COMPLETED ✅
-- **Next**: Phase 10 (Technical Debt Cleanup) or continue with remaining modules
+- **Status**: Phase 10 (P2P Message Protocol) IN PROGRESS 🔄 (6/18 files)
+- **Next**: Continue Phase 10 (remaining 12 message files) or move to other modules
 
 ### Code Quality Improvements
 - Added JavaDoc comments: 10 methods
