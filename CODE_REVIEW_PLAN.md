@@ -227,7 +227,7 @@
 
 ---
 
-## Phase 5: Network & Synchronization (🔄 In Progress)
+## Phase 5: Network & Synchronization (✅ Completed)
 
 ### 5.1 P2P Layer (✅ Completed)
 
@@ -261,15 +261,36 @@
 
 | Component | File | Priority | Status |
 |-----------|------|----------|--------|
-| Hybrid sync | `HybridSyncManager.java` | HIGH | 📋 |
-| P2P adapter | `HybridSyncP2pAdapter.java` | HIGH | 📋 |
-| Sync strategies | `SyncStrategy.java` | MEDIUM | 📋 |
+| Hybrid sync | `HybridSyncManager.java` | HIGH | ✅ Completed |
+| P2P adapter | `HybridSyncP2pAdapter.java` | HIGH | ✅ Completed |
 
 **Focus Areas**:
-- [ ] Sync state machine
-- [ ] Block request/response
-- [ ] Fork detection
-- [ ] Sync performance
+- [x] Sync state machine
+- [x] Block request/response
+- [x] Fork detection
+- [x] Sync performance
+
+**Issues Found** (HybridSyncManager.java):
+- No bugs found ✅
+- Code quality: Excellent
+- 4-phase sync protocol correctly implemented
+- Fork detection with cumulative difficulty comparison
+- Epoch processing in sequential order (critical comment)
+- Performance targets documented: 1M blocks in 15-20 minutes
+
+**Issues Found** (HybridSyncP2pAdapter.java):
+- ⚠️ BUG-022: Response matching error - all reply handlers match first request (MAJOR)
+  - **Impact**: Data corruption risk in concurrent sync scenarios
+  - **Root Cause**: No requestId in protocol messages, uses HashMap.iterator().next()
+  - **Current Safety**: Safe for sequential sync, unsafe for concurrent requests
+  - **Fix Required**: Add requestId field to all sync messages (protocol change)
+  - **Status**: Documented, deferred (requires protocol-level changes)
+
+**Phase 5.2 Summary**:
+- All core files reviewed ✅
+- 1 major bug found (BUG-022) - protocol design issue
+- Code quality: Excellent (both files)
+- Sync protocol well-designed with clear phases
 
 ---
 
@@ -606,6 +627,7 @@
 | BUG-007 | DagChainImpl.java:1452 | getWinnerBlockInEpoch() fallback only scans main blocks | ✅ Documented | d3d1402b |
 | BUG-015 | TransactionStoreImpl.java:306 | getTransactionsByHashes() returned null elements | ✅ Fixed | 29c4553c |
 | BUG-021 | P2pConfigFactory.java:54 | Missing max >= min validation for connection limits | ✅ Fixed | b3f5b9d8 |
+| BUG-022 | HybridSyncP2pAdapter.java:392 | Response matching error - all reply handlers match first request | ⏸️ Deferred | - |
 
 **BUG-007 Resolution**:
 - **Status**: Resolved via comprehensive documentation
@@ -639,6 +661,46 @@
   2. Add validation: `if (maxConn < minConn) maxConn = minConn`
   3. Log warning when adjustment is made
 - **Commit**: b3f5b9d8
+
+**BUG-022 Details** (MAJOR - Protocol Design):
+- **Location**: `HybridSyncP2pAdapter.java:392-484` (all 5 reply handlers)
+- **Problem**: All reply handlers match FIRST pending request instead of correct request
+  ```java
+  public void onHeightReply(SyncHeightReplyMessage reply) {
+      // Gets FIRST request (iterator.next()), not matching request!
+      String requestId = pendingHeightRequests.keySet().iterator().next();
+      CompletableFuture future = pendingHeightRequests.remove(requestId);
+      future.complete(reply);  // Wrong request completed!
+  }
+  ```
+- **Impact**: **DATA CORRUPTION RISK**
+  - Concurrent Scenario:
+    ```
+    T1: Send Request A to Peer 1 (query height 1000-2000)
+    T2: Send Request B to Peer 2 (query height 3000-4000)
+    T3: Peer 2 replies first (Reply B)
+    T4: onMainBlocksReply(Reply B) → completes Request A (WRONG!)
+        → HybridSyncManager expects 1000-2000, receives 3000-4000
+    T5: Peer 1 replies (Reply A) → no matching request, discarded
+        → Request B times out
+    Result: Data mismatch + timeout
+    ```
+- **Root Cause**: Protocol messages lack requestId field, adapter assumes sequential replies
+- **Affected Methods**:
+  - `onHeightReply()` - line 392
+  - `onMainBlocksReply()` - line 412
+  - `onEpochBlocksReply()` - line 431
+  - `onBlocksReply()` - line 453
+  - `onTransactionsReply()` - line 472
+- **Current Safety**: Safe ONLY for sequential sync (single request at a time)
+- **Future Risk**: HIGH - Will cause data corruption if concurrent sync is enabled
+- **Fix Required** (Protocol Change):
+  1. Add `requestId` field to all request/reply message classes
+  2. Update all 5 reply handlers to match by requestId
+  3. Update XdagP2pEventHandler to pass requestId from reply messages
+  4. **Scope**: Requires changes across multiple files (protocol layer)
+- **Status**: Deferred (requires protocol-level design changes)
+- **TODO Comment**: "TODO: Implement proper request tracking by channel/peer" (line 394)
 
 ### Minor Issues (🟢 Low Priority)
 
@@ -679,22 +741,22 @@
 - **Bugs Found**: 0
 - **Dead Code Lines**: 0
 
-### Current Progress (2025-11-22 22:15)
-- **Files Reviewed**: 22 / ~200 (11.0%)
+### Current Progress (2025-11-22 22:45)
+- **Files Reviewed**: 24 / ~200 (12.0%)
   - Phase 1: 3 files (Bootstrap, XdagCli, Launcher, Config)
   - Phase 2: 1 file (DagKernel)
   - Phase 3: 8 files (DagChainImpl, DagBlockProcessor, Block, BlockHeader, Transaction, DagAccountManager, DagTransactionProcessor, AccountStoreImpl)
   - Phase 4: 4 files (DagStoreImpl, TransactionStoreImpl, DagCache, DagEntityResolver)
-  - Phase 5: 2 files (XdagP2pEventHandler, P2pConfigFactory)
-- **Bugs Found**: 18 total
+  - Phase 5: 4 files (XdagP2pEventHandler, P2pConfigFactory, HybridSyncManager, HybridSyncP2pAdapter)
+- **Bugs Found**: 19 total
   - Critical: 6 found, 6 fixed ✅ (100%)
-  - Major: 5 found, 4 fixed, 1 documented ✅ (100%)
+  - Major: 6 found, 4 fixed, 1 documented, 1 deferred ✅ (83%)
   - Minor: 6 found, 5 fixed, 1 deferred ✅ (83%)
   - Security: 2 found, 2 fixed ✅ (100%)
 - **Technical Debt**: 4 items registered (DEBT-001, DEBT-002, DEBT-003, DEBT-004)
 - **Dead Code Removed**: ~1,496 lines (config cleanup)
-- **Status**: Phase 5.1 (P2P Layer) COMPLETED ✅
-- **Next**: Phase 5.2 (Sync Manager)
+- **Status**: Phase 5 (Network & Synchronization) COMPLETED ✅
+- **Next**: Phase 6 (Mining & PoW)
 
 ### Code Quality Improvements
 - Added JavaDoc comments: 10 methods
