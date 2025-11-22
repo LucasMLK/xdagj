@@ -117,7 +117,8 @@ public class NewBlockMessage extends Message {
    *
    * <p>Creates message with default TTL.
    *
-   * @param block the block to broadcast
+   * @param block the block to broadcast (must not be null)
+   * @throws IllegalArgumentException if block is null
    */
   public NewBlockMessage(Block block) {
     this(block, DEFAULT_TTL);
@@ -128,11 +129,19 @@ public class NewBlockMessage extends Message {
    *
    * <p>Used when forwarding received blocks with decremented TTL.
    *
-   * @param block the block to broadcast
+   * @param block the block to broadcast (must not be null)
    * @param ttl   Time-To-Live (hop count)
+   * @throws IllegalArgumentException if block is null
    */
   public NewBlockMessage(Block block, int ttl) {
     super(XdagMessageCode.NEW_BLOCK, null);
+
+    // BUGFIX (BUG-048): Add null check for block parameter
+    // Previously: Would throw NPE in encode() when calling block.toBytes()
+    // Now: Validate input and provide clear error message
+    if (block == null) {
+      throw new IllegalArgumentException("Block cannot be null");
+    }
 
     this.block = block;
     this.ttl = Math.max(0, Math.min(ttl, DEFAULT_TTL));  // Clamp to [0, DEFAULT_TTL]

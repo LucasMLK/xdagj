@@ -102,11 +102,20 @@ public class SyncHeightReplyMessage extends Message {
    *   <li>Read mainBlockHash (Bytes32, 32 bytes)</li>
    * </ol>
    *
-   * @param body serialized message body
-   * @throws IllegalArgumentException if deserialization fails
+   * @param body serialized message body (must be at least 48 bytes)
+   * @throws IllegalArgumentException if deserialization fails or body is too short
    */
   public SyncHeightReplyMessage(byte[] body) {
     super(XdagMessageCode.SYNC_HEIGHT_REPLY, null);
+
+    // BUGFIX (BUG-050): Add message length validation
+    // Previously: Would throw unclear exception from SimpleDecoder
+    // Now: Validate input and provide clear error message
+    if (body == null || body.length < 48) {
+      throw new IllegalArgumentException(
+          "Message body must be at least 48 bytes (8+8+32), got: " +
+          (body == null ? "null" : body.length));
+    }
 
     SimpleDecoder dec = new SimpleDecoder(body);
 
@@ -135,10 +144,18 @@ public class SyncHeightReplyMessage extends Message {
    *
    * @param mainHeight      current main chain height
    * @param finalizedHeight finalized boundary height
-   * @param mainBlockHash   hash of main chain tip block
+   * @param mainBlockHash   hash of main chain tip block (must not be null)
+   * @throws IllegalArgumentException if mainBlockHash is null
    */
   public SyncHeightReplyMessage(long mainHeight, long finalizedHeight, Bytes32 mainBlockHash) {
     super(XdagMessageCode.SYNC_HEIGHT_REPLY, null);
+
+    // BUGFIX (BUG-049): Add null check for mainBlockHash parameter
+    // Previously: Would throw NPE in encode() when calling mainBlockHash.toArray()
+    // Now: Validate input and provide clear error message
+    if (mainBlockHash == null) {
+      throw new IllegalArgumentException("Main block hash cannot be null");
+    }
 
     this.mainHeight = mainHeight;
     this.finalizedHeight = finalizedHeight;
