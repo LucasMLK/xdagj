@@ -141,7 +141,8 @@ public class NewTransactionMessage extends Message {
    *
    * <p>Creates message with default TTL.
    *
-   * @param transaction the transaction to broadcast
+   * @param transaction the transaction to broadcast (must not be null)
+   * @throws IllegalArgumentException if transaction is null
    */
   public NewTransactionMessage(Transaction transaction) {
     this(transaction, DEFAULT_TTL);
@@ -152,11 +153,19 @@ public class NewTransactionMessage extends Message {
    *
    * <p>Used when forwarding received transaction with decremented TTL.
    *
-   * @param transaction the transaction to broadcast
+   * @param transaction the transaction to broadcast (must not be null)
    * @param ttl         Time-To-Live (hop count)
+   * @throws IllegalArgumentException if transaction is null
    */
   public NewTransactionMessage(Transaction transaction, int ttl) {
     super(XdagMessageCode.NEW_TRANSACTION, null);
+
+    // BUGFIX (BUG-055): Add null check for transaction parameter
+    // Previously: Would throw NPE in encode() when calling transaction.toBytes()
+    // Now: Validate input and provide clear error message
+    if (transaction == null) {
+      throw new IllegalArgumentException("Transaction cannot be null");
+    }
 
     this.transaction = transaction;
     this.ttl = Math.max(0, Math.min(ttl, DEFAULT_TTL));  // Clamp to [0, DEFAULT_TTL]

@@ -124,11 +124,20 @@ public class SyncMainBlocksReplyMessage extends Message {
    *   </li>
    * </ol>
    *
-   * @param body serialized message body
-   * @throws IllegalArgumentException if deserialization fails
+   * @param body serialized message body (must be at least 4 bytes)
+   * @throws IllegalArgumentException if deserialization fails or body is too short
    */
   public SyncMainBlocksReplyMessage(byte[] body) {
     super(XdagMessageCode.SYNC_MAIN_BLOCKS_REPLY, null);
+
+    // BUGFIX (BUG-053): Add message length validation
+    // Previously: Would throw unclear exception from SimpleDecoder
+    // Now: Validate input and provide clear error message
+    if (body == null || body.length < 4) {
+      throw new IllegalArgumentException(
+          "Message body must be at least 4 bytes (blockCount), got: " +
+          (body == null ? "null" : body.length));
+    }
 
     SimpleDecoder dec = new SimpleDecoder(body);
 
@@ -175,10 +184,18 @@ public class SyncMainBlocksReplyMessage extends Message {
    *   </li>
    * </ol>
    *
-   * @param blocks list of main blocks (may contain nulls)
+   * @param blocks list of main blocks (may contain nulls, but list itself must not be null)
+   * @throws IllegalArgumentException if blocks list is null
    */
   public SyncMainBlocksReplyMessage(List<Block> blocks) {
     super(XdagMessageCode.SYNC_MAIN_BLOCKS_REPLY, null);
+
+    // BUGFIX (BUG-054): Add null check for blocks parameter
+    // Previously: Would throw NPE in encode() when calling blocks.size()
+    // Now: Validate input and provide clear error message
+    if (blocks == null) {
+      throw new IllegalArgumentException("Blocks list cannot be null");
+    }
 
     this.blocks = blocks;
 
