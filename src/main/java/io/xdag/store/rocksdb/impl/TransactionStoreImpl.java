@@ -204,6 +204,26 @@ public class TransactionStoreImpl implements TransactionStore {
     }
   }
 
+  @Override
+  public int getTransactionCountByBlock(Bytes32 blockHash) {
+    try {
+      byte[] key = BytesUtils.merge(TX_BLOCK_INDEX, blockHash.toArray());
+      byte[] value = indexSource.get(key);
+
+      if (value == null || value.length == 0) {
+        return 0;
+      }
+
+      // Each transaction hash is 32 bytes
+      // No need to parse individual hashes, just calculate count from length
+      return value.length / 32;
+
+    } catch (Exception e) {
+      log.error("Failed to get transaction count by block: {}", blockHash.toHexString(), e);
+      return 0;
+    }
+  }
+
   /**
    * Index transaction to block (bidirectional).
    *

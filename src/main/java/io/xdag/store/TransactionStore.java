@@ -125,6 +125,26 @@ public interface TransactionStore extends XdagLifecycle {
   List<Transaction> getTransactionsByBlock(Bytes32 blockHash);
 
   /**
+   * Get the count of transactions in a block (efficient version)
+   * <p>
+   * This method is more efficient than calling {@code getTransactionsByBlock().size()} as it only
+   * counts the transaction hashes without loading the full Transaction objects from storage.
+   * <p>
+   * <strong>Performance</strong>: O(1) index lookup + O(n) hash counting, where n is the number of
+   * transaction hashes. No deserialization of Transaction objects required.
+   * <p>
+   * <strong>Use Case</strong>: Use this method when only the transaction count is needed, such as
+   * for API responses or statistics. This is significantly faster and uses less memory than loading
+   * all transactions just to count them.
+   *
+   * @param blockHash The block hash
+   * @return Number of transactions in the block (0 if none found)
+   * @see #getTransactionsByBlock(Bytes32) for full transaction retrieval
+   * @since DEBT-005 Performance Optimization
+   */
+  int getTransactionCountByBlock(Bytes32 blockHash);
+
+  /**
    * Get transaction hashes associated with a block (without loading full transactions)
    *
    * @param blockHash The block hash
