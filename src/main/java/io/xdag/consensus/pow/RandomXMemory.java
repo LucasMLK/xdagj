@@ -27,12 +27,14 @@ package io.xdag.consensus.pow;
 import io.xdag.crypto.randomx.RandomXTemplate;
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Represents the memory state for RandomX, holding relevant parameters for the computation.
  */
 @Getter
 @Setter
+@Slf4j
 public class RandomXMemory {
 
   protected byte[] seed; // The seed used for RandomX
@@ -60,7 +62,9 @@ public class RandomXMemory {
       try {
         poolTemplate.close();
       } catch (Exception e) {
-        // Log and continue - best effort cleanup
+        // BUGFIX BUG-083: Log cleanup failures for diagnostics
+        log.warn("Failed to close poolTemplate (seed height={}): {}",
+            seedHeight, e.getMessage(), e);
       }
       poolTemplate = null;
     }
@@ -69,7 +73,9 @@ public class RandomXMemory {
       try {
         blockTemplate.close();
       } catch (Exception e) {
-        // Log and continue - best effort cleanup
+        // BUGFIX BUG-083: Log cleanup failures for diagnostics
+        log.warn("Failed to close blockTemplate (seed height={}): {}",
+            seedHeight, e.getMessage(), e);
       }
       blockTemplate = null;
     }
