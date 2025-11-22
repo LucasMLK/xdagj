@@ -121,29 +121,9 @@ public interface Config {
   RandomxSpec getRandomxSpec();
 
   /**
-   * Check if transaction history is enabled
-   */
-  boolean getEnableTxHistory();
-
-  /**
-   * Check if block generation is enabled
-   */
-  boolean getEnableGenerateBlock();
-
-  /**
-   * Get the transaction page size limit
-   */
-  long getTxPageSizeLimit();
-
-  /**
    * Get the pool whitelist IP addresses
    */
   List<String> getPoolWhiteIPList();
-
-  /**
-   * Get the websocket server port
-   */
-  int getWebsocketServerPort();
 
   /**
    * Get the fund specification configuration

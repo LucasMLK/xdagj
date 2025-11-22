@@ -25,14 +25,12 @@
 package io.xdag.config.spec;
 
 import io.xdag.Network;
-import io.xdag.p2p.message.XdagMessageCode;
 import java.net.InetSocketAddress;
 import java.util.List;
-import java.util.Set;
 
 /**
- * Interface for node configuration specifications Defines methods to access node parameters and
- * network settings
+ * Interface for node configuration specifications
+ * Defines methods to access node parameters and network settings
  */
 public interface NodeSpec {
 
@@ -43,39 +41,20 @@ public interface NodeSpec {
 
   String getNodeTag();
 
-  int getWaitEpoch();
-
-  // Commented out as appears deprecated
-  // int getNetMaxMessageQueueSize();
-
-  // Network handshake and messaging
-  int getNetHandshakeExpiry();
-
-  Set<XdagMessageCode> getNetPrioritizedMessages();
-
-  int getNetMaxInboundConnectionsPerIp();
-
-  int getNetMaxInboundConnections();
-
-  int getNetChannelIdleTimeout();
-
   // Node connection settings
   String getNodeIp();
 
   int getNodePort();
 
-  int getMaxConnections();
-
   int getMaxInboundConnectionsPerIp();
-
-  int getConnectionReadTimeout();
-
-  int getConnectionTimeout();
 
   // Node operation parameters
   int getTTL();
 
-  int getAwardEpoch();
+  // Connection parameters
+  int getMaxConnections();
+
+  int getNetMaxFrameBodySize();
 
   // Whitelist management
   List<InetSocketAddress> getWhiteIPList();
@@ -91,24 +70,14 @@ public interface NodeSpec {
 
   void setStoreBackupDir(String dir);
 
-  String getWhiteListDir();
-
-  String getNetDBDir();
-
+  // Storage operation parameters
   int getStoreMaxOpenFiles();
 
   int getStoreMaxThreads();
 
   boolean isStoreFromBackup();
 
-  // Network packet settings
-  int getNetMaxFrameBodySize();
-
-  int getNetMaxPacketSize();
-
-  String getRejectAddress(); // Address for rejected transactions
-
-  // There appears to be a typo in method name - should be "getNodeRatio"
+  // Foundation configuration (typo: should be "Ratio" not "Ration")
   double getNodeRation();
 
 }

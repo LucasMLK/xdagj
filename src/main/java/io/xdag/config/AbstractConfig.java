@@ -35,13 +35,9 @@ import io.xdag.config.spec.RandomxSpec;
 import io.xdag.config.spec.SnapshotSpec;
 import io.xdag.config.spec.WalletSpec;
 import io.xdag.core.XAmount;
-import io.xdag.p2p.message.XdagMessageCode;
 import java.net.InetSocketAddress;
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -55,12 +51,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
 
   protected String configName;
 
-  // Pool websocket configuration
-  protected int websocketServerPort;
-  protected int maxShareCountPerChannel = 20;
-  protected int awardEpoch = 0xf;
-  protected int waitEpoch = 32;
-
   // Foundation configuration
   protected String fundAddress;
   protected double fundRation;
@@ -69,54 +59,34 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
   // Network configuration
   protected Network network;
   protected short networkVersion;
-  protected int netMaxOutboundConnections = 128;
-  protected int netMaxInboundConnections = 512;
-  protected int netMaxInboundConnectionsPerIp = 5;
-  protected int netMaxFrameBodySize = 128 * 1024;
-  protected int netMaxPacketSize = 16 * 1024 * 1024;
-  protected int netRelayRedundancy = 8;
-  protected int netHandshakeExpiry = 5 * 60 * 1000;
-  protected int netChannelIdleTimeout = 2 * 60 * 1000;
-
-  // Prioritized network messages ( Updated to Block messages)
-  protected Set<XdagMessageCode> netPrioritizedMessages = new HashSet<>(Arrays.asList(
-      XdagMessageCode.NEW_BLOCK,  //  Changed from NEW_BLOCK
-      XdagMessageCode.BLOCK_REQUEST));
 
   // Node configuration
   protected String nodeIp;
   protected int nodePort;
   protected String nodeTag;
-  protected int maxConnections = 1024;
   protected int maxInboundConnectionsPerIp = 8;
-  protected int connectionTimeout = 10000;
-  protected int connectionReadTimeout = 10000;
-  protected boolean enableTxHistory = false;
-  protected long txPageSizeLimit = 500;
-  protected boolean enableGenerateBlock = false;
+  protected int maxConnections = 1024;
+  protected int netMaxFrameBodySize = 128 * 1024;
 
   // Storage configuration
   protected String rootDir;
   protected String storeDir;
   protected String storeBackupDir;
-  protected String whiteListDir;
-  protected String rejectAddress;
-  protected String netDBDir;
-
   protected int storeMaxOpenFiles = 1024;
   protected int storeMaxThreads = 1;
   protected boolean storeFromBackup = false;
-  protected String originStoreDir = "./testdate";
 
   // Whitelist configuration
-  protected String walletKeyFile;
-
   protected int TTL = 5;
   protected List<InetSocketAddress> whiteIPList = Lists.newArrayList();
   protected List<String> poolWhiteIPList = Lists.newArrayList();
 
   // Wallet configuration
   protected String walletFilePath;
+  protected String walletKeyFile;
+
+  // Pool configuration
+  protected int waitEpoch = 32;
 
   // XDAG configuration
   protected long xdagEra;
@@ -125,9 +95,9 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
   protected XAmount apolloForkAmount;
 
   // RPC configuration
-  protected boolean rpcHttpEnabled = false;
   protected String rpcHttpHost = "127.0.0.1";
   protected int rpcHttpPort = 10001;
+  protected boolean rpcHttpEnabled = false;
   protected boolean rpcEnableHttps = false;
   protected String rpcHttpCorsOrigins = "*";
   protected String rpcHttpsCertFile;
@@ -201,11 +171,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
   }
 
   @Override
-  public Set<XdagMessageCode> getNetPrioritizedMessages() {
-    return this.netPrioritizedMessages;
-  }
-
-  @Override
   public String getClientId() {
     return String.format("%s/v%s-%s/%s",
         Constants.CLIENT_NAME,
@@ -234,6 +199,16 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     return this;
   }
 
+  @Override
+  public String getWalletFilePath() {
+    return walletFilePath;
+  }
+
+  @Override
+  public String getWalletKeyFile() {
+    return walletKeyFile;
+  }
+
   public void getSetting() {
     com.typesafe.config.Config config = ConfigFactory.load(getConfigName());
 
@@ -241,19 +216,10 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
         : Collections.singletonList("127.0.0.1");
     log.info("Pool whitelist {}. Any IP allowed? {}", poolWhiteIPList,
         poolWhiteIPList.contains("0.0.0.0"));
-    websocketServerPort = config.hasPath("pool.ws.port") ? config.getInt("pool.ws.port") : 7001;
     nodeIp = config.hasPath("node.ip") ? config.getString("node.ip") : "127.0.0.1";
     nodePort = config.hasPath("node.port") ? config.getInt("node.port") : 8001;
     nodeTag = config.hasPath("node.tag") ? config.getString("node.tag") : "xdagj";
-    rejectAddress = config.hasPath("node.reject.transaction.address") ? config.getString(
-        "node.reject.transaction.address") : "";
     maxInboundConnectionsPerIp = config.getInt("node.maxInboundConnectionsPerIp");
-    enableTxHistory = config.hasPath("node.transaction.history.enable") && config.getBoolean(
-        "node.transaction.history.enable");
-    enableGenerateBlock = config.hasPath("node.generate.block.enable") && config.getBoolean(
-        "node.generate.block.enable");
-    txPageSizeLimit = config.hasPath("node.transaction.history.pageSizeLimit") ? config.getInt(
-        "node.transaction.history.pageSizeLimit") : 500;
     fundAddress = config.hasPath("fund.address") ? config.getString("fund.address")
         : "4duPWMbYUgAifVYkKDCWxLvRRkSByf5gb";
     fundRation = config.hasPath("fund.ration") ? config.getDouble("fund.ration") : 5;
@@ -267,16 +233,14 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     }
     // RPC configuration
     rpcHttpEnabled = config.hasPath("rpc.http.enabled") && config.getBoolean("rpc.http.enabled");
-    if (rpcHttpEnabled) {
-      rpcHttpHost =
-          config.hasPath("rpc.http.host") ? config.getString("rpc.http.host") : "127.0.0.1";
-      rpcHttpPort = config.hasPath("rpc.http.port") ? config.getInt("rpc.http.port") : 10001;
-      rpcHttpAuthEnabled =
-          config.hasPath("rpc.http.auth.enabled") && config.getBoolean("rpc.http.auth.enabled");
-      if (rpcHttpAuthEnabled && config.hasPath("rpc.http.auth.apiKeys")) {
-        List<String> keyList = config.getStringList("rpc.http.auth.apiKeys");
-        rpcHttpApiKeys = keyList.toArray(new String[0]);
-      }
+    rpcHttpHost =
+        config.hasPath("rpc.http.host") ? config.getString("rpc.http.host") : "127.0.0.1";
+    rpcHttpPort = config.hasPath("rpc.http.port") ? config.getInt("rpc.http.port") : 10001;
+    rpcHttpAuthEnabled =
+        config.hasPath("rpc.http.auth.enabled") && config.getBoolean("rpc.http.auth.enabled");
+    if (rpcHttpAuthEnabled && config.hasPath("rpc.http.auth.apiKeys")) {
+      List<String> keyList = config.getStringList("rpc.http.auth.apiKeys");
+      rpcHttpApiKeys = keyList.toArray(new String[0]);
     }
     flag = config.hasPath("randomx.flags.fullmem") && config.getBoolean("randomx.flags.fullmem");
 
@@ -285,36 +249,28 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
   @Override
   public void changePara(String[] args) {
     if (args == null || args.length == 0) {
-      System.out.println("Use default configuration");
       return;
     }
 
     for (int i = 0; i < args.length; i++) {
       switch (args[i]) {
-        case "-a":
-        case "-c":
-        case "-m":
-        case "-s":
-          i++;
-          // TODO: Set mining thread count
-          break;
         case "-f":
-          i++;
-          this.rootDir = args[i];
+          // Set root directory
+          if (i + 1 < args.length) {
+            i++;
+            this.rootDir = args[i];
+          }
           break;
         case "-p":
-          i++;
-          this.changeNode(args[i]);
-          break;
-        case "-r":
-          // TODO: Only load block but no run
-          break;
-        case "-d":
-        case "-t":
-          // Only devnet or testnet
+          // Set node IP and port (format: host:port)
+          if (i + 1 < args.length) {
+            i++;
+            this.changeNode(args[i]);
+          }
           break;
         default:
-          // log.error("Illegal instruction");
+          // Ignore unknown arguments (network flags -d/-t are handled by Launcher)
+          break;
       }
     }
   }
@@ -326,28 +282,38 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
   }
 
   @Override
-  public int getNetMaxFrameBodySize() {
-    return this.netMaxFrameBodySize;
-  }
-
-  @Override
-  public int getNetMaxPacketSize() {
-    return this.netMaxPacketSize;
-  }
-
-  @Override
   public int getMaxInboundConnectionsPerIp() {
     return this.maxInboundConnectionsPerIp;
   }
 
   @Override
-  public List<String> getPoolWhiteIPList() {
-    return poolWhiteIPList;
+  public int getMaxConnections() {
+    return this.maxConnections;
   }
 
   @Override
-  public int getWebsocketServerPort() {
-    return websocketServerPort;
+  public int getNetMaxFrameBodySize() {
+    return this.netMaxFrameBodySize;
+  }
+
+  @Override
+  public int getStoreMaxOpenFiles() {
+    return this.storeMaxOpenFiles;
+  }
+
+  @Override
+  public int getStoreMaxThreads() {
+    return this.storeMaxThreads;
+  }
+
+  @Override
+  public boolean isStoreFromBackup() {
+    return this.storeFromBackup;
+  }
+
+  @Override
+  public List<String> getPoolWhiteIPList() {
+    return poolWhiteIPList;
   }
 
   @Override
@@ -428,21 +394,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
   @Override
   public boolean getRandomxFlag() {
     return flag;
-  }
-
-  @Override
-  public boolean getEnableTxHistory() {
-    return enableTxHistory;
-  }
-
-  @Override
-  public long getTxPageSizeLimit() {
-    return txPageSizeLimit;
-  }
-
-  @Override
-  public boolean getEnableGenerateBlock() {
-    return enableGenerateBlock;
   }
 
   @Override
