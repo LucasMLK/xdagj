@@ -39,15 +39,22 @@ public class XdagMessageFactory {
    * Decode a raw message.
    *
    * @param code The message code
-   * @param body The message body
-   * @return The decoded message, or NULL if the message type is not unknown
+   * @param body The message body (must not be null)
+   * @return The decoded message, or null if the message type is unknown
+   * @throws IllegalArgumentException if body is null
    * @throws MessageException when the encoding is illegal
    */
   public Message create(byte code, byte[] body) throws MessageException {
+    // BUGFIX (BUG-046): Add null check for body parameter
+    // Previously: Would throw NPE from message constructors
+    // Now: Validate input and provide clear error message
+    if (body == null) {
+      throw new IllegalArgumentException("Message body cannot be null");
+    }
 
     XdagMessageCode c = XdagMessageCode.of(code);
     if (c == null) {
-      //log.debug("Invalid message code: {}", Hex.encode0x(Bytes.of(code)));
+      log.debug("Unknown message code: 0x{}", String.format("%02X", code & 0xFF));
       return null;
     }
 

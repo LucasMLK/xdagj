@@ -180,6 +180,10 @@ public enum XdagMessageCode implements IMessageCode {
   private final int code;
 
   XdagMessageCode(int code) {
+    // BUGFIX (BUG-045): Corrected Node protocol range check from 0x15 to 0x1F
+    // Previously: Only checked 0x10-0x15, missing 0x16-0x1F
+    // Now: Checks full Node protocol range 0x10-0x1F as documented
+    //
     // Validate that application layer codes don't conflict with P2P framework
     // Note: Some legacy codes (0x00-0x1F) are kept for backward compatibility
     // but should be migrated to use P2P framework messages
@@ -188,7 +192,7 @@ public enum XdagMessageCode implements IMessageCode {
       System.err.println("WARNING: XdagMessageCode 0x" + Integer.toHexString(code) +
           " conflicts with P2P KAD protocol range (0x00-0x0F). " +
           "Consider using xdagj-p2p framework messages.");
-    } else if (code >= 0x10 && code <= 0x15) {
+    } else if (code >= 0x10 && code <= 0x1F) {
       // Node protocol range - should use xdagj-p2p MessageCode instead
       System.err.println("WARNING: XdagMessageCode 0x" + Integer.toHexString(code) +
           " conflicts with P2P Node protocol range (0x10-0x1F). " +
