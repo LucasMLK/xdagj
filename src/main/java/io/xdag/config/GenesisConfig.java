@@ -115,30 +115,6 @@ public class GenesisConfig {
   private String initialDifficulty = "0x1";
 
   /**
-   * Genesis block coinbase address (base58check encoded XDAG address)
-   *
-   * <p>CRITICAL: This field makes genesis block deterministic (like Bitcoin/Ethereum).
-   * All nodes on the same network MUST use the same genesisCoinbase to create identical genesis
-   * blocks.
-   *
-   * <p>Format: base58check encoded 20-byte XDAG address (hash160)
-   *
-   * <p>Examples:
-   * <ul>
-   *   <li>Mainnet: "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi" (example)</li>
-   *   <li>Testnet: "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2" (example)</li>
-   *   <li>Devnet:  "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" (example)</li>
-   * </ul>
-   *
-   * <p>Note: Also supports legacy 32-byte hex format (0x...) for backward compatibility,
-   * but base58check format is strongly recommended.
-   *
-   * <p>If not specified, falls back to wallet key (DEPRECATED - for backward compatibility only)
-   */
-  @JsonProperty("genesisCoinbase")
-  private String genesisCoinbase = null;
-
-  /**
    * RandomX initial seed (32-byte hex string)
    *
    * <p>IMPORTANT: This seed is used to initialize RandomX from genesis block.
@@ -285,30 +261,6 @@ public class GenesisConfig {
   }
 
   /**
-   * Get genesis coinbase address as 20-byte Bytes
-   *
-   * <p>Supports two formats:
-   * <ul>
-   *   <li>base58check encoded XDAG address (recommended): "4dutRdv..."</li>
-   *   <li>Legacy 32-byte hex (backward compatibility): "0x0000...0000"</li>
-   * </ul>
-   *
-   * @return 20-byte coinbase address, or null if not configured
-   * @throws IllegalArgumentException if address format is invalid
-   */
-  public Bytes getGenesisCoinbaseBytes() {
-    if (genesisCoinbase == null || genesisCoinbase.trim().isEmpty()) {
-      return null;
-    }
-
-    try {
-      return parseAddress(genesisCoinbase);
-    } catch (AddressFormatException e) {
-      throw new IllegalArgumentException("Invalid genesisCoinbase: " + genesisCoinbase, e);
-    }
-  }
-
-  /**
    * Parse address string to 20-byte Bytes
    *
    * <p>Supports multiple formats:
@@ -350,15 +302,6 @@ public class GenesisConfig {
 
     // Use AddressUtils for base58check format (standard XDAG address)
     return AddressUtils.fromBase58Address(address);
-  }
-
-  /**
-   * Check if genesis coinbase is configured
-   *
-   * @return true if genesisCoinbase is set
-   */
-  public boolean hasGenesisCoinbase() {
-    return genesisCoinbase != null && !genesisCoinbase.trim().isEmpty();
   }
 
   /**
@@ -422,24 +365,6 @@ public class GenesisConfig {
       getInitialDifficultyUInt256();
     } catch (Exception e) {
       throw new IllegalArgumentException("Invalid difficulty format: " + initialDifficulty, e);
-    }
-
-    // Validate genesisCoinbase if present
-    if (hasGenesisCoinbase()) {
-      try {
-        Bytes address = getGenesisCoinbaseBytes();
-        if (address == null || address.size() != 20) {
-          throw new IllegalArgumentException(
-              "genesisCoinbase must decode to exactly 20 bytes, got: " +
-                  (address != null ? address.size() : "null")
-          );
-        }
-      } catch (Exception e) {
-        throw new IllegalArgumentException(
-            "Invalid genesisCoinbase format: " + genesisCoinbase +
-                " (expected base58check address or 0x-prefixed hex)", e
-        );
-      }
     }
 
     // Validate allocations

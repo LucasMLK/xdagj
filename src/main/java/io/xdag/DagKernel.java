@@ -627,76 +627,106 @@ public class DagKernel {
    *
    * <p>Search order:
    * <ol>
-   *   <li>{rootDir}/genesis-{network}.json (e.g., genesis-devnet.json)</li>
-   *   <li>{rootDir}/config/genesis-{network}.json</li>
+   *   <li>Classpath: /genesis-{network}.json (embedded in JAR resources)</li>
+   *   <li>{rootDir}/genesis-{network}.json (external custom configuration)</li>
+   *   <li>{rootDir}/config/genesis-{network}.json (legacy location)</li>
    *   <li>FAIL: genesis-{network}.json is required</li>
    * </ol>
    *
    * @throws RuntimeException if genesis configuration not found
    */
   private void loadGenesisConfig() {
-    String rootDir = config.getRootDir();
     String network = config.getNodeSpec().getNetwork().name().toLowerCase();
-
-    // Network-specific filename (required format)
     String networkSpecificName = "genesis-" + network + ".json";
+
+    // Try 1: Load from classpath (embedded in JAR)
+    try (var inputStream = getClass().getResourceAsStream("/" + networkSpecificName)) {
+      if (inputStream != null) {
+        log.info("Loading genesis from classpath: /{}", networkSpecificName);
+        String json = new String(inputStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        genesisConfig = GenesisConfig.fromJson(json);
+        genesisConfig.validate();
+        logGenesisConfig("classpath:/" + networkSpecificName);
+        return;
+      }
+    } catch (Exception e) {
+      log.warn("Failed to load genesis from classpath: {}", e.getMessage());
+    }
+
+    // Try 2: Load from external file in rootDir
+    String rootDir = config.getRootDir();
     File genesisFile = new File(rootDir, networkSpecificName);
 
     if (!genesisFile.exists()) {
-      // Try config subdirectory
+      // Try 3: Load from config subdirectory (legacy)
       genesisFile = new File(rootDir, "config/" + networkSpecificName);
     }
 
-    if (!genesisFile.exists()) {
-      // CRITICAL: genesis-{network}.json is REQUIRED
-      String errorMsg = String.format(
-          """
-              genesis-%s.json not found! Searched:
-                1. %s/genesis-%s.json
-                2. %s/config/genesis-%s.json
-              
-              XDAG requires explicit genesis configuration (like Ethereum).
-              Network-specific filenames are required for clarity.
-              
-              Please create genesis configuration for your network:
-                - Mainnet: cp ../config/genesis-mainnet.json ./genesis-mainnet.json
-                - Testnet: cp ../config/genesis-testnet.json ./genesis-testnet.json
-                - Devnet:  cp ../config/genesis-devnet.json ./genesis-devnet.json""",
-          network, rootDir, network, rootDir, network
-      );
-      log.error(errorMsg);
-      throw new RuntimeException("genesis-" + network + ".json is required but not found");
-    }
-
-    try {
-      genesisConfig = GenesisConfig.load(genesisFile);
-      genesisConfig.validate();
-
-      log.info("========================================");
-      log.info("Loaded genesis configuration:");
-      log.info("  File: {}", genesisFile.getAbsolutePath());
-      log.info("  Network: {}", genesisConfig.getNetworkId());
-      log.info("  Chain ID: {}", genesisConfig.getChainId());
-      log.info("  Genesis Epoch: {}", genesisConfig.getEpoch());
-      log.info("  Initial Difficulty: {}", genesisConfig.getInitialDifficulty());
-
-      if (genesisConfig.hasAllocations()) {
-        log.info("  Initial Allocations: {} addresses", genesisConfig.getAlloc().size());
-        long totalAlloc = genesisConfig.getAlloc().values().stream()
-            .map(BigInteger::new)
-            .reduce(java.math.BigInteger.ZERO, java.math.BigInteger::add)
-            .divide(java.math.BigInteger.valueOf(1_000_000_000))
-            .longValue();
-        log.info("  Total Allocated: {} XDAG", totalAlloc);
+    if (genesisFile.exists()) {
+      try {
+        log.info("Loading genesis from external file: {}", genesisFile.getAbsolutePath());
+        genesisConfig = GenesisConfig.load(genesisFile);
+        genesisConfig.validate();
+        logGenesisConfig(genesisFile.getAbsolutePath());
+        return;
+      } catch (Exception e) {
+        log.error("Failed to load or validate genesis from {}: {}",
+            genesisFile, e.getMessage());
+        throw new RuntimeException("Invalid genesis.json", e);
       }
-
-      log.info("========================================");
-
-    } catch (Exception e) {
-      log.error("Failed to load or validate genesis.json from {}: {}",
-          genesisFile, e.getMessage());
-      throw new RuntimeException("Invalid genesis.json", e);
     }
+
+    // No genesis found - FAIL
+    String errorMsg = String.format(
+        """
+            genesis-%s.json not found! Searched:
+              1. classpath:/genesis-%s.json (embedded in JAR)
+              2. %s/genesis-%s.json (external custom config)
+              3. %s/config/genesis-%s.json (legacy location)
+
+            XDAG requires explicit genesis configuration (like Ethereum).
+
+            Built-in networks (mainnet/testnet/devnet) include embedded genesis configs.
+            For custom networks, create a genesis file in your root directory:
+
+              Example: %s/genesis-custom.json
+              {
+                "networkId": "custom",
+                "chainId": 999,
+                "epoch": 27555273,
+                "initialDifficulty": "0x1",
+                "randomXSeed": "0x0000000000000000000000000000000000000000000000000000000000000001",
+                "alloc": {}
+              }""",
+        network, network, rootDir, network, rootDir, network, rootDir
+    );
+    log.error(errorMsg);
+    throw new RuntimeException("genesis-" + network + ".json is required but not found");
+  }
+
+  /**
+   * Log genesis configuration details
+   */
+  private void logGenesisConfig(String source) {
+    log.info("========================================");
+    log.info("Loaded genesis configuration:");
+    log.info("  Source: {}", source);
+    log.info("  Network: {}", genesisConfig.getNetworkId());
+    log.info("  Chain ID: {}", genesisConfig.getChainId());
+    log.info("  Genesis Epoch: {}", genesisConfig.getEpoch());
+    log.info("  Initial Difficulty: {}", genesisConfig.getInitialDifficulty());
+
+    if (genesisConfig.hasAllocations()) {
+      log.info("  Initial Allocations: {} addresses", genesisConfig.getAlloc().size());
+      long totalAlloc = genesisConfig.getAlloc().values().stream()
+          .map(BigInteger::new)
+          .reduce(java.math.BigInteger.ZERO, java.math.BigInteger::add)
+          .divide(java.math.BigInteger.valueOf(1_000_000_000))
+          .longValue();
+      log.info("  Total Allocated: {} XDAG", totalAlloc);
+    }
+
+    log.info("========================================");
   }
 
   /**
@@ -832,10 +862,7 @@ public class DagKernel {
   /**
    * Create genesis block from configuration
    *
-   * <p>5+: REQUIRES deterministic genesisCoinbase from genesis.json (Bitcoin/Ethereum approach).
-   * All nodes must create identical genesis blocks using the network-defined coinbase address.
-   *
-   * @throws RuntimeException if creation fails or if genesisCoinbase is not configured
+   * @throws RuntimeException if creation fails
    */
   private void createGenesisBlock() {
     log.info("Creating genesis block...");
@@ -844,39 +871,8 @@ public class DagKernel {
     long epoch = genesisConfig.getEpoch();
     log.info("  - Genesis epoch: {}", epoch);
 
-    // 5+: genesisCoinbase is REQUIRED for deterministic genesis (Bitcoin/Ethereum approach)
-    if (!genesisConfig.hasGenesisCoinbase()) {
-      throw new RuntimeException(
-          """
-              genesisCoinbase is required in genesis.json!
-              
-              XDAG requires deterministic genesis block creation.
-              All nodes must create IDENTICAL genesis blocks (Bitcoin/Ethereum approach).
-              
-              Please add to your genesis.json:
-                "genesisCoinbase": "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi"
-              
-              Format: base58check encoded 20-byte XDAG address (recommended)
-              Legacy: 0x-prefixed 32-byte hex (backward compatibility only)"""
-      );
-    }
-
-    // Use deterministic coinbase from genesis.json (20-byte address)
-    org.apache.tuweni.bytes.Bytes genesisCoinbase = genesisConfig.getGenesisCoinbaseBytes();
-    if (genesisCoinbase == null || genesisCoinbase.size() != 20) {
-      throw new RuntimeException(
-          "Invalid genesisCoinbase in genesis.json!\n" +
-              "Expected 20-byte address, got: " +
-              (genesisCoinbase != null ? genesisCoinbase.size() + " bytes" : "null")
-      );
-    }
-
-    log.info("  - Using deterministic genesisCoinbase from genesis.json");
-    log.info("  - Coinbase: {}", genesisCoinbase.toHexString());
-    log.info("  - This ensures all nodes create IDENTICAL genesis blocks");
-
-    // Create genesis block via DagChain using deterministic coinbase
-    Block genesisBlock = dagChain.createGenesisBlock(genesisCoinbase, epoch);
+    // Create genesis block via DagChain
+    Block genesisBlock = dagChain.createGenesisBlock(epoch);
     log.info("  - Genesis block created: {}", genesisBlock.getHash().toHexString());
 
     // Import genesis block

@@ -104,7 +104,6 @@ public class DagKernelIntegrationTest {
                 "  \"chainId\": 999,\n" +
                 "  \"epoch\": " + epochNumber + ",\n" +
                 "  \"initialDifficulty\": \"0x1000\",\n" +
-                "  \"genesisCoinbase\": \"4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi\",\n" +
                 "  \"alloc\": {}\n" +
                 "}";
 

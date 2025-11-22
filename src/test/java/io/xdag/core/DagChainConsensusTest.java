@@ -350,9 +350,8 @@ public class DagChainConsensusTest {
         System.out.println("\n========== Test 6: Cumulative Difficulty (Epoch Boundaries) ==========");
 
         // Create genesis block
-        Bytes coinbase = Bytes.random(20);
         long genesisTime = config.getXdagEra();
-        Block genesisBlock = dagChain.createGenesisBlock(coinbase, genesisTime);
+        Block genesisBlock = dagChain.createGenesisBlock(genesisTime);
 
         // Import genesis block
         DagImportResult genesisResult = dagChain.tryToConnect(genesisBlock);
@@ -384,9 +383,8 @@ public class DagChainConsensusTest {
 
         // Create and import genesis block if chain is empty
         if (initialLength == 0) {
-            Bytes coinbase = Bytes.random(20);
             long genesisTime = config.getXdagEra();
-            Block genesisBlock = dagChain.createGenesisBlock(coinbase, genesisTime);
+            Block genesisBlock = dagChain.createGenesisBlock(genesisTime);
 
             DagImportResult result = dagChain.tryToConnect(genesisBlock);
             System.out.println("Genesis block import: " + result.getStatus());
@@ -543,9 +541,8 @@ public class DagChainConsensusTest {
         System.out.println("\n========== Test 12: isNodeBehind (Up-to-Date) ==========");
 
         // Create and import genesis block at current epoch
-        Bytes coinbase = Bytes.random(20);
         long currentEpoch = TimeUtils.getCurrentEpochNumber();
-        Block genesisBlock = dagChain.createGenesisBlock(coinbase, currentEpoch);
+        Block genesisBlock = dagChain.createGenesisBlock(currentEpoch);
 
         DagImportResult result = dagChain.tryToConnect(genesisBlock);
         System.out.println("Genesis block import: " + result.getStatus());
@@ -575,11 +572,10 @@ public class DagChainConsensusTest {
         System.out.println("\n========== Test 13: collectCandidateLinks (Mining Blocked) ==========");
 
         // Create genesis block at an old epoch (simulate node behind)
-        Bytes coinbase = Bytes.random(20);
         long currentEpoch = TimeUtils.getCurrentEpochNumber();
         long oldEpoch = currentEpoch - 200;  // 200 epochs behind (> MINING_MAX_REFERENCE_DEPTH = 16)
 
-        Block genesisBlock = dagChain.createGenesisBlock(coinbase, oldEpoch);
+        Block genesisBlock = dagChain.createGenesisBlock(oldEpoch);
         DagImportResult result = dagChain.tryToConnect(genesisBlock);
 
         System.out.println("Setup:");
@@ -590,6 +586,7 @@ public class DagChainConsensusTest {
 
         if (result.isMainBlock()) {
             // Try to create candidate block - should fail or return empty links
+            Bytes coinbase = Bytes.random(20);
             dagChain.setMiningCoinbase(coinbase);
             Block candidate = dagChain.createCandidateBlock();
 
@@ -613,15 +610,15 @@ public class DagChainConsensusTest {
         System.out.println("\n========== Test 14: collectCandidateLinks (Normal Mining) ==========");
 
         // Create genesis block at current epoch
-        Bytes coinbase = Bytes.random(20);
         long currentEpoch = TimeUtils.getCurrentEpochNumber();
-        Block genesisBlock = dagChain.createGenesisBlock(coinbase, currentEpoch);
+        Block genesisBlock = dagChain.createGenesisBlock(currentEpoch);
 
         DagImportResult result = dagChain.tryToConnect(genesisBlock);
         System.out.println("Genesis import: " + result.getStatus());
 
         if (result.isMainBlock()) {
             // Try to create second block - should succeed
+            Bytes coinbase = Bytes.random(20);
             dagChain.setMiningCoinbase(coinbase);
 
             // Wait a moment to ensure we're in next epoch
@@ -666,11 +663,10 @@ public class DagChainConsensusTest {
         System.out.println("\n========== Test 15: validateLinks (Moderate Depth) ==========");
 
         // Create two blocks with moderate epoch gap
-        Bytes coinbase = Bytes.random(20);
         long currentEpoch = TimeUtils.getCurrentEpochNumber();
 
         // Block 1 at current epoch
-        Block block1 = dagChain.createGenesisBlock(coinbase, currentEpoch);
+        Block block1 = dagChain.createGenesisBlock(currentEpoch);
         DagImportResult result1 = dagChain.tryToConnect(block1);
 
         System.out.println("Block 1 import: " + result1.getStatus());

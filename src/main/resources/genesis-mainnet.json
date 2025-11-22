@@ -3,7 +3,6 @@
   "chainId": 1,
   "epoch": 23694000,
   "initialDifficulty": "0x1",
-  "genesisCoinbase": "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi",
   "randomXSeed": "0x0000000000000000000000000000000000000000000000000000000000000001",
   "alloc": {}
 }

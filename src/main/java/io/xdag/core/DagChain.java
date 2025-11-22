@@ -218,7 +218,7 @@ public interface DagChain {
    * Create the genesis block with deterministic coinbase (Bitcoin/Ethereum approach)
    *
    * <p>This is the way to create genesis blocks in XDAG.
-   * All nodes must use a predefined coinbase address from genesis.json to ensure deterministic
+   * All nodes use a deterministic zero coinbase address to ensure deterministic
    * genesis block creation.
    *
    * <p><strong>Why Deterministic Genesis?</strong>
@@ -226,15 +226,15 @@ public interface DagChain {
    *   <li>All nodes on the same network must create IDENTICAL genesis blocks</li>
    *   <li>Genesis block hash defines the network identity (like Bitcoin/Ethereum)</li>
    *   <li>Nodes with different genesis blocks cannot sync with each other</li>
-   *   <li>Coinbase address is network-defined in genesis.json, not wallet-dependent</li>
+   *   <li>Zero coinbase address (20-byte array of zeros) ensures determinism</li>
    * </ul>
    *
    * <p><strong>Example genesis.json</strong>:
    * <pre>
    * {
    *   "networkId": "mainnet",
-   *   "genesisCoinbase": "0x00000000000000000000000000000000000000000000",
-   *   "timestamp": 1516406400,
+   *   "epoch": 23694000,
+   *   "initialDifficulty": "0x1",
    *   ...
    * }
    * </pre>
@@ -246,7 +246,7 @@ public interface DagChain {
    *   <li>Empty links list (no previous blocks to reference)</li>
    *   <li>Minimal difficulty (difficulty = 1)</li>
    *   <li>Zero nonce (no mining required for genesis)</li>
-   *   <li>Coinbase set to genesisCoinbase from config</li>
+   *   <li>Coinbase is zero address (20-byte array of zeros)</li>
    *   <li>Specified timestamp (from genesis.json)</li>
    *   <li>Height = 1 (first block in main chain)</li>
    *   <li>Cumulative difficulty = initial work</li>
@@ -254,13 +254,12 @@ public interface DagChain {
    *
    * <p>This method should only be called once per blockchain instance, when no blocks exist.
    *
-   * @param coinbase Coinbase address from genesis.json (20 bytes)
-   * @param epoch    genesis block epoch number (XDAG epoch)
+   * @param epoch genesis block epoch number (XDAG epoch)
    * @return genesis block ready for import
    * @see #tryToConnect(Block)
    * @since XDAGJ
    */
-  Block createGenesisBlock(Bytes coinbase, long epoch);
+  Block createGenesisBlock(long epoch);
 
   // ==================== Main Chain Queries (Height-Based) ====================
 

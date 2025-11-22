@@ -1338,9 +1338,8 @@ public class DagChainImpl implements DagChain {
   }
 
   @Override
-  public Block createGenesisBlock(Bytes coinbase, long epoch) {
-    log.info("Creating deterministic genesis block at epoch {}", epoch);
-    log.info("  - Coinbase: {}", coinbase.toHexString());
+  public Block createGenesisBlock(long epoch) {
+    log.info("Creating genesis block at epoch {}", epoch);
 
     // IMPORTANT: Block.createWithNonce() expects epoch number, not timestamp
     // Block.getTimestamp() derives display time via TimeUtils.epochNumberToMainTime(...)
@@ -1348,32 +1347,21 @@ public class DagChainImpl implements DagChain {
     log.info("  - Genesis epoch: {} (timestamp will be main time: {})", epoch,
         TimeUtils.epochNumberToMainTime(epoch));
 
-    // BUGFIX: Ensure coinbase is exactly 20 bytes (same as setMiningCoinbase)
-    Bytes normalizedCoinbase = coinbase;
-    if (coinbase == null) {
-      log.warn("Null coinbase for genesis, using zero address (20 bytes)");
-      normalizedCoinbase = Bytes.wrap(new byte[20]);
-    } else if (coinbase.size() > 20) {
-      log.warn("Genesis coinbase too long ({} bytes), truncating to 20 bytes", coinbase.size());
-      normalizedCoinbase = coinbase.slice(0, 20);
-    } else if (coinbase.size() < 20) {
-      byte[] padded = new byte[20];
-      System.arraycopy(coinbase.toArray(), 0, padded, 0, coinbase.size());
-      log.warn("Genesis coinbase too short ({} bytes), padding to 20 bytes", coinbase.size());
-      normalizedCoinbase = Bytes.wrap(padded);
-    }
+    // Use zero address (20 bytes) for genesis coinbase
+    Bytes coinbase = Bytes.wrap(new byte[20]);
+    log.info("  - Using zero coinbase (genesis block)");
 
     // Create genesis block with epoch number (NOT timestamp)
     // Block.getTimestamp() uses TimeUtils helper to derive display timestamp
     Block genesisBlock = Block.createWithNonce(
-        epoch,  // Pass epoch number (23693854), Block will convert to timestamp
+        epoch,  // Pass epoch number, Block will convert to timestamp
         UInt256.ONE,
         Bytes32.ZERO,
-        normalizedCoinbase,
+        coinbase,
         List.of()
     );
 
-    log.info("✓ Deterministic genesis block created: hash={}, epoch={}",
+    log.info("✓ Genesis block created: hash={}, epoch={}",
         genesisBlock.getHash().toHexString(),
         genesisBlock.getEpoch());
 

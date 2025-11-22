@@ -118,10 +118,7 @@ public class TransactionExecutionTimingTest {
         accountManager.ensureAccountExists(receiverAddress);
 
         // Import genesis block
-        Block genesisBlock = dagChain.createGenesisBlock(
-                org.apache.tuweni.bytes.Bytes.random(20),
-                config.getXdagEra()
-        );
+        Block genesisBlock = dagChain.createGenesisBlock(config.getXdagEra());
         dagChain.tryToConnect(genesisBlock);
     }
 
