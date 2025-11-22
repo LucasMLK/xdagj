@@ -634,7 +634,7 @@
 - **Location**: `DagTransactionProcessor.java:286-303`
 - **Problem**: validateSignature() always returned true (TODO comment)
 - **Impact**: **ASSET THEFT VULNERABILITY**
-  - Anyone could forge transactions without private keys
+  - Anyone could forge transactions without private jikeys
   - Attacker could construct: `from=victim_address, to=attacker_address`
   - No cryptographic protection against unauthorized transfers
 - **Root Cause**: Method not implemented, placeholder returning true

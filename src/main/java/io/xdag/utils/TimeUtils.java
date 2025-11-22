@@ -213,10 +213,16 @@ public class TimeUtils {
   /**
    * Format date to string in "yyyy-MM-dd HH:mm:ss" pattern
    *
-   * @param date Date to format
-   * @return Formatted date string
+   * @param date Date to format (must not be null)
+   * @return Formatted date string, or null if input is null
    */
   public static String format(Date date) {
+    // BUGFIX (BUG-029): Add null check for defensive programming
+    // Previously: Would throw NPE if date is null
+    // Now: Returns null for null input (consistent with Java conventions)
+    if (date == null) {
+      return null;
+    }
     return FastDateFormat.getInstance("yyyy-MM-dd HH:mm:ss").format(date);
   }
 
