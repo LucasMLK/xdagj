@@ -178,19 +178,25 @@ public class TransactionBroadcastManager {
    *   <li>Saves CPU and memory</li>
    * </ul>
    *
+   * <p><b>Thread Safety:</b> Uses putIfAbsent() to guarantee atomicity of check-then-act pattern.
+   *
    * @param txHash transaction hash
    * @return true if should process, false if already seen
    */
   public boolean shouldProcess(Bytes32 txHash) {
-    // Check if we've seen this transaction recently
-    if (recentlySeenTxs.getIfPresent(txHash) != null) {
+    // BUGFIX (BUG-023): Use putIfAbsent() for atomic check-then-act
+    // Previously: getIfPresent() + put() had race condition between check and insert
+    // Now: putIfAbsent() guarantees atomicity - returns null only if newly inserted
+    Long existing = recentlySeenTxs.asMap().putIfAbsent(txHash, System.currentTimeMillis());
+
+    if (existing != null) {
+      // Transaction already seen (existing value returned)
       log.trace("Transaction {} already seen, skipping",
           txHash.toHexString().substring(0, 16) + "...");
       return false;
     }
 
-    // Mark as seen
-    recentlySeenTxs.put(txHash, System.currentTimeMillis());
+    // Transaction is new (null returned, value inserted atomically)
     return true;
   }
 
@@ -200,19 +206,25 @@ public class TransactionBroadcastManager {
    * <p>This method checks if we've already broadcasted this transaction recently.
    * If yes, we skip to prevent spamming the network.
    *
+   * <p><b>Thread Safety:</b> Uses putIfAbsent() to guarantee atomicity of check-then-act pattern.
+   *
    * @param txHash transaction hash
    * @return true if should broadcast, false if already broadcasted
    */
   public boolean shouldBroadcast(Bytes32 txHash) {
-    // Check if we've broadcasted this transaction recently
-    if (recentlyBroadcastedTxs.getIfPresent(txHash) != null) {
+    // BUGFIX (BUG-023): Use putIfAbsent() for atomic check-then-act
+    // Previously: getIfPresent() + put() had race condition between check and insert
+    // Now: putIfAbsent() guarantees atomicity - returns null only if newly inserted
+    Long existing = recentlyBroadcastedTxs.asMap().putIfAbsent(txHash, System.currentTimeMillis());
+
+    if (existing != null) {
+      // Transaction already broadcasted (existing value returned)
       log.trace("Transaction {} already broadcasted, skipping",
           txHash.toHexString().substring(0, 16) + "...");
       return false;
     }
 
-    // Mark as broadcasted
-    recentlyBroadcastedTxs.put(txHash, System.currentTimeMillis());
+    // Transaction is new (null returned, value inserted atomically)
     return true;
   }
 
