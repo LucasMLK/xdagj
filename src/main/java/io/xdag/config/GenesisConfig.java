@@ -47,7 +47,6 @@ import org.apache.tuweni.units.bigints.UInt256;
  * <ul>
  *   <li>Different networks (mainnet, testnet, devnet)</li>
  *   <li>Initial balance allocations</li>
- *   <li>Snapshot import from old XDAG versions</li>
  *   <li>Custom consensus parameters</li>
  * </ul>
  *
@@ -56,19 +55,12 @@ import org.apache.tuweni.units.bigints.UInt256;
  * {
  *   "networkId": "mainnet",
  *   "chainId": 1,
- *   "timestamp": 1516406400,
- *   "initialDifficulty": "0x0000000000000001",
- *   "epochLength": 64,
+ *   "epoch": 23694000,
+ *   "initialDifficulty": "0x1",
+ *   "genesisCoinbase": "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi",
  *   "alloc": {
- *     "0x1234...": "1000000000000000000000",
- *     "0x5678...": "500000000000000000000"
- *   },
- *   "snapshot": {
- *     "enabled": true,
- *     "height": 1234567,
- *     "hash": "0xabcd...",
- *     "timestamp": 1700000000,
- *     "dataFile": "./snapshot/mainnet-1234567.dat"
+ *     "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi": "1000000000000000000000",
+ *     "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2": "500000000000000000000"
  *   }
  * }
  * </pre>
@@ -77,7 +69,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  * <ol>
  *   <li>Fresh start: Create genesis block with initial allocations</li>
  *   <li>Testnet: Use different genesis parameters than mainnet</li>
- *   <li>Migration: Import old XDAG chain via snapshot configuration</li>
+ *   <li>Devnet: Development network with test allocations</li>
  * </ol>
  *
  * @since XDAGJ
@@ -112,22 +104,7 @@ public class GenesisConfig {
    * </pre>
    */
   @JsonProperty("epoch")
-  private long epoch = 23694000L;  // XDAG_ERA epoch
-
-  /**
-   * Legacy field for backward compatibility
-   *
-   * @deprecated Use {@link #epoch} instead
-   */
-  @Deprecated
-  @JsonProperty("timestamp")
-  private Long timestamp = null;
-
-  /**
-   * Epoch length in seconds Default: 64 seconds
-   */
-  @JsonProperty("epochLength")
-  private int epochLength = 64;
+  private long epoch = 23694000L;
 
   // ========== Consensus Parameters ==========
 
@@ -136,12 +113,6 @@ public class GenesisConfig {
    */
   @JsonProperty("initialDifficulty")
   private String initialDifficulty = "0x1";
-
-  /**
-   * Extra data (up to 32 bytes) Can be used to embed version info, signatures, etc.
-   */
-  @JsonProperty("extraData")
-  private String extraData = "XDAG Genesis";
 
   /**
    * Genesis block coinbase address (base58check encoded XDAG address)
@@ -190,10 +161,10 @@ public class GenesisConfig {
   /**
    * Pre-allocated balances (address -> amount in nanoxdag)
    *
-   * <p>Address format: base58check encoded XDAG address (20 bytes)
-   * <p>Amount format: decimal string in nanoxdag (1 XDAG = 1e9 nanoxdag)
+   * <p><strong>Address format</strong>: base58check encoded XDAG address (standard format)
+   * <p><strong>Amount format</strong>: decimal string in nanoxdag (1 XDAG = 1e9 nanoxdag)
    *
-   * <p>Example:
+   * <p><strong>Example</strong>:
    * <pre>
    * "alloc": {
    *   "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi": "1000000000000000000000",  // 1000 XDAG
@@ -201,19 +172,11 @@ public class GenesisConfig {
    * }
    * </pre>
    *
-   * <p>Note: Also supports legacy 32-byte hex format (0x...) for backward compatibility,
-   * but base58check format is strongly recommended.
+   * <p><strong>Important</strong>: Use base58check addresses (like Bitcoin/XDAG addresses).
+   * Hex format (0x...) is discouraged and may be removed in future versions.
    */
   @JsonProperty("alloc")
   private Map<String, String> alloc = new HashMap<>();
-
-  // ========== Snapshot Configuration ==========
-
-  /**
-   * Snapshot configuration for importing old XDAG chain state
-   */
-  @JsonProperty("snapshot")
-  private SnapshotConfig snapshot = new SnapshotConfig();
 
   // ========== Helper Methods ==========
 
@@ -277,10 +240,14 @@ public class GenesisConfig {
         long devnetEpoch = TimeUtils.getEpoch(devnetTimestamp);
         config.setEpoch(devnetEpoch);
         config.setInitialDifficulty("0x1");
-        // Add some test allocations for devnet
+        // Add some test allocations for devnet (using base58check addresses)
         config.getAlloc().put(
-            "0x0000000000000000000000000000000000000000000000000000000000000001",
+            "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi",
             "1000000000000000000000"  // 1000 XDAG
+        );
+        config.getAlloc().put(
+            "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
+            "500000000000000000000"   // 500 XDAG
         );
         break;
 
@@ -437,15 +404,6 @@ public class GenesisConfig {
   }
 
   /**
-   * Check if snapshot import is enabled
-   *
-   * @return true if snapshot is configured and enabled
-   */
-  public boolean hasSnapshot() {
-    return snapshot != null && snapshot.isEnabled();
-  }
-
-  /**
    * Validate genesis configuration
    *
    * @throws IllegalArgumentException if configuration is invalid
@@ -453,10 +411,6 @@ public class GenesisConfig {
   public void validate() {
     if (epoch <= 0) {
       throw new IllegalArgumentException("Invalid epoch: " + epoch);
-    }
-
-    if (epochLength <= 0) {
-      throw new IllegalArgumentException("Invalid epoch length: " + epochLength);
     }
 
     if (chainId <= 0) {
@@ -516,11 +470,6 @@ public class GenesisConfig {
           throw new IllegalArgumentException("Invalid amount for " + addressStr + ": " + amount, e);
         }
       }
-    }
-
-    // Validate snapshot config if present
-    if (hasSnapshot()) {
-      snapshot.validate();
     }
   }
 

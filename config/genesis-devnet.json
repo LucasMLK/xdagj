@@ -3,24 +3,11 @@
   "chainId": 3,
   "epoch": 27555273,
   "initialDifficulty": "0x1",
-  "epochLength": 64,
-  "extraData": "XDAGJ 1.0 Devnet Genesis",
-  "genesisCoinbase": "0x1111111111111111111111111111111111111111",
+  "genesisCoinbase": "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi",
   "randomXSeed": "0x0000000000000000000000000000000000000000000000000000000000000001",
   "alloc": {
-    "0x0000000000000000000000000000000000000001": "10000000000000000000000",
-    "0x0000000000000000000000000000000000000002": "5000000000000000000000",
-    "0x0000000000000000000000000000000000000003": "1000000000000000000000"
-  },
-  "snapshot": {
-    "enabled": false,
-    "height": 0,
-    "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    "timestamp": 0,
-    "dataFile": "",
-    "verify": true,
-    "format": "v1",
-    "expectedAccounts": 0,
-    "expectedBlocks": 0
+    "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi": "10000000000000000000000",
+    "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2": "5000000000000000000000",
+    "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa": "1000000000000000000000"
   }
 }

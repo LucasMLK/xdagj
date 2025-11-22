@@ -46,29 +46,53 @@ cp config/genesis-devnet.json ./genesis.json
 
 ```json
 {
-  "networkId": "mainnet",          // Network identifier
-  "chainId": 1,                    // Chain ID for replay protection
-  "epoch": 23694000,               // Genesis block epoch (XDAG epoch number)
-  "initialDifficulty": "0x1",      // Initial mining difficulty (hex)
-  "epochLength": 64,               // Epoch length in seconds
-  "extraData": "XDAG XDAGJ 1.0 Genesis",// Extra data (up to 32 bytes)
+  "networkId": "mainnet",                               // Network identifier
+  "chainId": 1,                                         // Chain ID for replay protection
+  "epoch": 23694000,                                    // Genesis block epoch (XDAG epoch number)
+  "initialDifficulty": "0x1",                           // Initial mining difficulty (hex)
+  "genesisCoinbase": "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi",  // Genesis coinbase address (base58check)
+  "randomXSeed": "0x0000...0001",                       // RandomX initial seed (32-byte hex)
 
-  "alloc": {                       // Initial balance allocations
-    "0x0000...0001": "1000000000000000000000",  // Address -> amount in nanoxdag
-    "0x0000...0002": "500000000000000000000"
-  },
-
-  "snapshot": {                    // Snapshot import configuration
-    "enabled": false,              // Enable snapshot import
-    "height": 0,                   // Snapshot block height
-    "hash": "0x00...",             // Snapshot last block hash
-    "timestamp": 0,                // Snapshot timestamp
-    "dataFile": "",                // Path to snapshot data file
-    "verify": true,                // Verify hash after import
-    "format": "v1",                // Snapshot format version
-    "expectedAccounts": 0,         // Expected account count (for progress)
-    "expectedBlocks": 0            // Expected block count (for progress)
+  "alloc": {                                            // Initial balance allocations
+    "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi": "1000000000000000000000",  // Address -> amount in nanoxdag
+    "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2": "500000000000000000000"
   }
+}
+```
+
+### Field Descriptions
+
+#### Network Identity
+- **networkId**: "mainnet", "testnet", or "devnet"
+- **chainId**: Numeric chain ID (mainnet=1, testnet=2, devnet=3)
+
+#### Timing
+- **epoch**: XDAG epoch number for genesis block
+  - Default for mainnet: 23694000 (XDAG_ERA: 2018-01-20 00:00:00 UTC)
+  - Each epoch = 64 seconds (fixed protocol constant)
+  - Conversion: Unix timestamp → XDAG timestamp → epoch number
+
+#### Consensus
+- **initialDifficulty**: Starting mining difficulty (hex format)
+  - Must be hex string starting with "0x"
+  - Default: "0x1" (minimal difficulty for genesis)
+- **genesisCoinbase**: Genesis block coinbase address
+  - Format: base58check encoded XDAG address (standard format)
+  - Examples: "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi"
+- **randomXSeed**: RandomX initial seed (32-byte hex string)
+  - Format: 0x-prefixed 64-character hex string
+  - Used to initialize RandomX algorithm from genesis
+
+#### Initial Allocations
+- **alloc**: Map of address → balance
+  - **Address**: base58check encoded XDAG address (standard format)
+  - **Balance**: Decimal string in nanoxdag (1 XDAG = 10^9 nanoxdag)
+
+Example:
+```json
+"alloc": {
+  "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi": "1000000000000000000000",  // 1000 XDAG
+  "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2": "500000000000000000000"     // 500 XDAG
 }
 ```
 
@@ -86,7 +110,7 @@ cp config/genesis-mainnet.json ./genesis.json
 ./xdag.sh
 ```
 
-The node will create a fresh genesis block at XDAG era time.
+The node will create a fresh genesis block at the configured epoch.
 
 ### 2. Testnet with Pre-allocated Balances
 
@@ -96,113 +120,29 @@ Use `genesis-testnet.json` which includes test allocations:
 {
   "networkId": "testnet",
   "chainId": 2,
+  "epoch": 27555273,
   "alloc": {
-    "0x0000...0001": "1000000000000000000000",  // 1000 XDAG
-    "0x0000...0002": "500000000000000000000"    // 500 XDAG
+    "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2": "1000000000000000000000",  // 1000 XDAG
+    "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa": "500000000000000000000"    // 500 XDAG
   }
 }
 ```
 
-### 3. Import from Old XDAG Chain (Snapshot)
+### 3. Devnet for Development
 
-Use `genesis-snapshot-example.json` as template:
+Use `genesis-devnet.json` with multiple test allocations:
 
 ```json
 {
-  "networkId": "mainnet",
-  "chainId": 1,
-  "snapshot": {
-    "enabled": true,
-    "height": 1234567,
-    "hash": "0xabcd...",
-    "timestamp": 1700000000,
-    "dataFile": "./snapshot/mainnet-1234567.dat",
-    "expectedAccounts": 100000,
-    "expectedBlocks": 1234567
+  "networkId": "devnet",
+  "chainId": 3,
+  "alloc": {
+    "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi": "10000000000000000000000",  // 10000 XDAG
+    "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2": "5000000000000000000000",         // 5000 XDAG
+    "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa": "1000000000000000000000"          // 1000 XDAG
   }
 }
 ```
-
-**Steps to import:**
-
-1. Export snapshot from old XDAG node:
-   ```bash
-   # On old node
-   xdag-cli export-snapshot --height 1234567 --output mainnet-1234567.dat
-   ```
-
-2. Copy snapshot file to new node:
-   ```bash
-   mkdir -p ./snapshot
-   cp mainnet-1234567.dat ./snapshot/
-   ```
-
-3. Configure genesis.json with snapshot settings
-
-4. Start new XDAGJ 1.0 node:
-   ```bash
-   ./xdag.sh
-   ```
-
-The node will import all blocks and accounts from the snapshot.
-
-## Configuration Details
-
-### Network Identity
-
-- **networkId**: "mainnet", "testnet", or "devnet"
-- **chainId**: Numeric chain ID (mainnet=1, testnet=2, devnet=3)
-
-### Timing
-
-- **epoch**: XDAG epoch number for genesis block (calculated as `XdagTime.getEpoch(timestamp)`)
-  - Default for mainnet: 23694000 (XDAG_ERA: 2018-01-20 00:00:00 UTC)
-  - Each epoch = 64 seconds
-  - Example: Unix timestamp 1516406400 → XDAG epoch 23694000
-- **epochLength**: Epoch duration in seconds (default: 64)
-
-### Consensus
-
-- **initialDifficulty**: Starting mining difficulty (hex format)
-  - Must be hex string starting with "0x"
-  - Default: "0x1" (minimal difficulty for genesis)
-
-### Initial Allocations
-
-- **alloc**: Map of address -> balance
-  - Address: 32-byte hex string with "0x" prefix
-  - Balance: Decimal string in nanoxdag (1 XDAG = 10^9 nanoxdag)
-
-Example:
-```json
-"alloc": {
-  "0x0000000000000000000000000000000000000000000000000000000000000001": "1000000000000000000000"
-}
-```
-
-This allocates 1000 XDAG to address `0x00...01`.
-
-### Snapshot Import
-
-**enabled**: Set to `true` to import from snapshot
-
-**height**: Block height where snapshot was taken
-
-**hash**: Last block hash in snapshot (for verification)
-
-**timestamp**: Timestamp of last block in snapshot
-
-**dataFile**: Path to snapshot data file
-- Can be absolute or relative to data directory
-- File must exist and be readable
-
-**verify**: Verify hash matches after import (recommended: true)
-
-**format**: Snapshot format version
-- "v1": Old XDAG binary format
-- "v2": XDAGJ 1.0 optimized format (future)
-
-**expectedAccounts/expectedBlocks**: For progress reporting (optional)
 
 ## Security Considerations
 
@@ -211,16 +151,17 @@ This allocates 1000 XDAG to address `0x00...01`.
 XDAGJ 1.0 includes security measures to prevent genesis block forgery:
 
 1. **Chain State Check**: Genesis only accepted when chain is empty
-2. **Timestamp Validation**: Must be at configured timestamp ±64 seconds
+2. **Epoch Validation**: Must be at configured epoch within valid range
 3. **Unified Detection**: Consistent genesis block identification
 
-### Snapshot Import Security
+### Address Format
 
-When importing snapshots:
+**Important**: Use base58check format (like Bitcoin/XDAG addresses) for all addresses:
+- ✅ Correct: `"4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi"`
+- ✅ Correct: `"1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"`
+- ❌ Discouraged: `"0x0000000000000000000000000000000000000001"` (hex format)
 
-1. **Hash Verification**: Always enable `"verify": true`
-2. **Source Trust**: Only import snapshots from trusted sources
-3. **File Integrity**: Verify snapshot file checksum before import
+Hex format is still supported for backward compatibility but may be removed in future versions.
 
 ## Troubleshooting
 
@@ -228,13 +169,13 @@ When importing snapshots:
 
 **Error**: "Genesis block has invalid timestamp"
 
-**Solution**: Ensure timestamp is within ±64 seconds of configured value
+**Solution**: Ensure epoch is within valid range (not too old, not too far in future)
 
 ---
 
 **Error**: "Invalid address format in alloc"
 
-**Solution**: Addresses must be 32-byte hex with "0x" prefix
+**Solution**: Addresses must be base58check format (standard XDAG addresses)
 
 ---
 
@@ -245,52 +186,13 @@ When importing snapshots:
 - Storage permission issues
 - Database corruption
 
-### Snapshot import fails
-
-**Error**: "Snapshot data file not found"
-
-**Solution**: Verify file path in genesis.json and file exists
-
----
-
-**Error**: "Snapshot hash mismatch"
-
-**Solution**: Snapshot file may be corrupted. Re-download from source.
-
----
-
-**Error**: "Snapshot import not yet implemented"
-
-**Solution**: Snapshot import is planned for Phase 12.5. Currently only fresh genesis blocks are supported.
-
 ## Examples
 
 All example configurations are in the `config/` directory:
 
 - **genesis-mainnet.json**: Production mainnet config
 - **genesis-testnet.json**: Testnet with test allocations
-- **genesis-devnet.json**: Development network
-- **genesis-snapshot-example.json**: Snapshot import template
-
-## Migration from Old XDAG
-
-To migrate from old XDAG (v4.x) to XDAGJ 1.0:
-
-### Option 1: Fresh Start (Recommended for Testnets)
-
-1. Start with fresh genesis block
-2. Mine new chain from beginning
-3. Users migrate funds manually
-
-### Option 2: Snapshot Import (For Mainnets)
-
-1. Coordinate snapshot height with community
-2. All nodes export snapshot at agreed height
-3. Create genesis.json with snapshot config
-4. All nodes import snapshot
-5. Resume mining from snapshot point
-
-**Note**: Option 2 requires all nodes to use same snapshot for consensus.
+- **genesis-devnet.json**: Development network with multiple test accounts
 
 ## Advanced Topics
 
@@ -300,7 +202,7 @@ For private networks, you can set custom initial difficulty:
 
 ```json
 {
-  "initialDifficulty": "0x100000",  // Higher difficulty for faster blocks
+  "initialDifficulty": "0x100000"  // Higher difficulty requires more mining work
 }
 ```
 
@@ -311,9 +213,9 @@ For airdrops or pre-sales:
 ```json
 {
   "alloc": {
-    "0x00...01": "1000000000000000000000",
-    "0x00...02": "2000000000000000000000",
-    "0x00...03": "500000000000000000000",
+    "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi": "1000000000000000000000",
+    "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2": "2000000000000000000000",
+    "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa": "500000000000000000000"
     // ... up to thousands of addresses
   }
 }
@@ -327,27 +229,41 @@ Generate genesis.json programmatically:
 GenesisConfig genesis = new GenesisConfig();
 genesis.setNetworkId("testnet");
 genesis.setChainId(2);
+
 // Set epoch using TimeUtils utilities
-long currentTimestamp = XdagTime.getCurrentTimestamp();
-long currentEpoch = XdagTime.getEpoch(currentTimestamp);
+long currentTimestamp = TimeUtils.getCurrentEpoch();
+long currentEpoch = TimeUtils.getEpoch(currentTimestamp);
 genesis.setEpoch(currentEpoch);
 
-// Add allocations
-genesis.getAlloc().put("0x00...01", "1000000000000000000000");
-genesis.getAlloc().put("0x00...02", "500000000000000000000");
+// Add allocations (use base58check addresses)
+genesis.getAlloc().put("4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi", "1000000000000000000000");
+genesis.getAlloc().put("1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2", "500000000000000000000");
 
 // Save to file
 genesis.save(new File("./genesis.json"));
 ```
 
+## Migration from Old XDAG
+
+To migrate from old XDAG (v4.x) to XDAGJ 1.0:
+
+### Fresh Start (Recommended)
+
+1. Start with fresh genesis block
+2. Configure initial allocations for existing holders
+3. Users verify allocations match their old balances
+4. Begin mining new chain
+
+**Note**: This approach ensures clean state without carrying over any historical issues.
+
 ## Further Reading
 
 - [XDAGJ 1.0 Architecture](../docs/ARCHITECTURE.md)
-- [Phase 12 Implementation](../docs/refactor-history/phases/PHASE_12_GENESIS_CONFIG.md)
-- [Genesis Security](../docs/refactor-history/dagchain/DAGCHAIN_PHASE11_COMPLETE.md#security-enhancements)
+- [XDAG Address Format](../docs/ADDRESS_FORMAT.md)
+- [TimeUtils API Documentation](../docs/TIME_CONVERSION.md)
 
 ---
 
 **Version**: XDAGJ 1.0 Phase 12
-**Last Updated**: 2025-11-07
+**Last Updated**: 2025-11-22
 **Maintained By**: XDAG Development Team

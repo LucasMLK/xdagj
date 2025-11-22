@@ -679,7 +679,6 @@ public class DagKernel {
       log.info("  Chain ID: {}", genesisConfig.getChainId());
       log.info("  Genesis Epoch: {}", genesisConfig.getEpoch());
       log.info("  Initial Difficulty: {}", genesisConfig.getInitialDifficulty());
-      log.info("  Epoch Length: {} seconds", genesisConfig.getEpochLength());
 
       if (genesisConfig.hasAllocations()) {
         log.info("  Initial Allocations: {} addresses", genesisConfig.getAlloc().size());
@@ -691,12 +690,6 @@ public class DagKernel {
         log.info("  Total Allocated: {} XDAG", totalAlloc);
       }
 
-      if (genesisConfig.hasSnapshot()) {
-        log.info("  Snapshot Import: ENABLED");
-        log.info("    Height: {}", genesisConfig.getSnapshot().getHeight());
-        log.info("    Hash: {}", genesisConfig.getSnapshot().getHash().substring(0, 18) + "...");
-        log.info("    File: {}", genesisConfig.getSnapshot().getDataFile());
-      }
       log.info("========================================");
 
     } catch (Exception e) {
@@ -741,12 +734,8 @@ public class DagKernel {
       log.info("========================================");
 
       try {
-        // Check for snapshot import
-        if (genesisConfig.hasSnapshot()) {
-          importSnapshot();
-        } else {
-          createGenesisBlock();
-        }
+        // Create genesis block
+        createGenesisBlock();
 
         // Apply initial allocations
         if (genesisConfig.hasAllocations()) {
@@ -898,24 +887,6 @@ public class DagKernel {
     }
 
     log.info("✓ Genesis block imported successfully");
-  }
-
-  /**
-   * Import snapshot from old XDAG chain
-   *
-   * @throws RuntimeException if import fails
-   */
-  private void importSnapshot() {
-    log.info("Importing snapshot...");
-    log.info("  - {}", genesisConfig.getSnapshot().getDescription());
-
-    // TODO  Implement snapshot import
-    //  1. Read snapshot data file
-    //  2. Parse blocks and accounts
-    //  3. Import to DagStore and AccountStore
-    //  4. Create genesis block referencing snapshot state
-
-    throw new UnsupportedOperationException("Snapshot import not yet implemented (5)");
   }
 
   /**

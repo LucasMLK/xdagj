@@ -1,20 +1,7 @@
 {
   "networkId": "test",
   "chainId": 999,
-  "timestamp": 1700000000,
+  "epoch": 27555273,
   "initialDifficulty": "0x1",
-  "epochLength": 64,
-  "extraData": "XDAGJ 1.0 Test Genesis",
-  "alloc": {},
-  "snapshot": {
-    "enabled": false,
-    "height": 0,
-    "hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
-    "timestamp": 0,
-    "dataFile": "",
-    "verify": false,
-    "format": "v1",
-    "expectedAccounts": 0,
-    "expectedBlocks": 0
-  }
+  "alloc": {}
 }
