@@ -204,6 +204,35 @@ public class TransactionStoreImpl implements TransactionStore {
     }
   }
 
+  /**
+   * Index transaction to block (bidirectional).
+   *
+   * <p><strong>THREAD SAFETY WARNING (DEBT-004)</strong>:
+   * This method uses a non-atomic read-modify-write pattern for index append:
+   * <pre>{@code
+   * existingValue = indexSource.get(key);     // Non-atomic read
+   * newValue = merge(existingValue, txHash);  // Non-atomic merge
+   * indexSource.put(key, newValue);           // Non-atomic write
+   * }</pre>
+   *
+   * <p><strong>Current Safety</strong>: Protected by {@code DagChainImpl.tryToConnect()}
+   * synchronized block.
+   *
+   * <p><strong>Future Risk</strong>: HIGH - Index corruption if parallel block processing is enabled.
+   * Two concurrent calls could read the same list, both append, and the last write would lose the
+   * first append.
+   *
+   * <p><strong>TODO</strong>: Before enabling parallel processing, use:
+   * <ul>
+   *   <li>Option A: RocksDB Merge operator for atomic append</li>
+   *   <li>Option B: Synchronized blocks around index operations</li>
+   *   <li>Option C: Separate index table with append-only semantics</li>
+   * </ul>
+   *
+   * @param blockHash block hash
+   * @param txHash    transaction hash
+   * @see <a href="../../../../../CODE_REVIEW_PLAN.md#debt-004">DEBT-004 Technical Debt Documentation</a>
+   */
   @Override
   public void indexTransactionToBlock(Bytes32 blockHash, Bytes32 txHash) {
     try {
@@ -269,6 +298,23 @@ public class TransactionStoreImpl implements TransactionStore {
     }
   }
 
+  /**
+   * Index transaction to address.
+   *
+   * <p><strong>THREAD SAFETY WARNING (DEBT-004)</strong>:
+   * This method uses a non-atomic read-modify-write pattern. See
+   * {@link #indexTransactionToBlock} for detailed explanation of the concurrency risk.
+   *
+   * <p><strong>Current Safety</strong>: Protected by {@code DagChainImpl.tryToConnect()}
+   * synchronized block.
+   *
+   * <p><strong>Future Risk</strong>: HIGH - Index corruption in parallel block processing.
+   *
+   * @param address address to index
+   * @param txHash  transaction hash
+   * @see #indexTransactionToBlock
+   * @see <a href="../../../../../CODE_REVIEW_PLAN.md#debt-004">DEBT-004 Technical Debt Documentation</a>
+   */
   @Override
   public void indexTransactionToAddress(org.apache.tuweni.bytes.Bytes address, Bytes32 txHash) {
     try {

@@ -208,10 +208,32 @@ public class DagAccountManager {
   /**
    * Add to account balance in a transaction.
    *
+   * <p><strong>THREAD SAFETY WARNING (DEBT-002)</strong>:
+   * This method uses a non-atomic read-modify-write pattern:
+   * <pre>{@code
+   *   currentBalance = getBalance(address);      // Non-transactional read
+   *   newBalance = currentBalance + amount;
+   *   setBalanceInTransaction(txId, address, newBalance);  // Transactional write
+   * }</pre>
+   *
+   * <p><strong>Current Safety</strong>: Protected by {@code DagChainImpl.tryToConnect()}
+   * synchronized block, ensuring sequential block processing.
+   *
+   * <p><strong>Future Risk</strong>: HIGH - Will cause balance loss if parallel block
+   * processing is enabled. Two concurrent calls could read the same balance, both calculate
+   * new values, and the last write would overwrite the first, losing the first update.
+   *
+   * <p><strong>TODO</strong>: Before enabling parallel processing, refactor to use:
+   * <ul>
+   *   <li>Option A: Add {@code getBalanceInTransaction(txId, address)} for transactional reads</li>
+   *   <li>Option B: Implement atomic {@code addBalanceInTransaction()} in AccountStore using RocksDB Merge</li>
+   * </ul>
+   *
    * @param txId    transaction ID from RocksDBTransactionManager
    * @param address account address
    * @param amount  amount to add
    * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
+   * @see <a href="../../../../CODE_REVIEW_PLAN.md#debt-002">DEBT-002 Technical Debt Documentation</a>
    */
   public void addBalanceInTransaction(String txId, Bytes address, UInt256 amount)
       throws io.xdag.store.rocksdb.transaction.TransactionException {
@@ -229,11 +251,22 @@ public class DagAccountManager {
   /**
    * Subtract from account balance in a transaction.
    *
+   * <p><strong>THREAD SAFETY WARNING (DEBT-002)</strong>:
+   * This method uses a non-atomic read-modify-write pattern. See {@link #addBalanceInTransaction}
+   * for detailed explanation of the concurrency risk.
+   *
+   * <p><strong>Current Safety</strong>: Protected by {@code DagChainImpl.tryToConnect()}
+   * synchronized block.
+   *
+   * <p><strong>Future Risk</strong>: HIGH - Balance loss risk in parallel block processing.
+   *
    * @param txId    transaction ID from RocksDBTransactionManager
    * @param address account address
    * @param amount  amount to subtract
    * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
    * @throws IllegalArgumentException                               if insufficient balance
+   * @see #addBalanceInTransaction
+   * @see <a href="../../../../CODE_REVIEW_PLAN.md#debt-002">DEBT-002 Technical Debt Documentation</a>
    */
   public void subtractBalanceInTransaction(String txId, Bytes address, UInt256 amount)
       throws io.xdag.store.rocksdb.transaction.TransactionException {
@@ -257,9 +290,20 @@ public class DagAccountManager {
   /**
    * Increment account nonce in a transaction.
    *
+   * <p><strong>THREAD SAFETY WARNING (DEBT-002)</strong>:
+   * This method uses a non-atomic read-modify-write pattern. See {@link #addBalanceInTransaction}
+   * for detailed explanation of the concurrency risk.
+   *
+   * <p><strong>Current Safety</strong>: Protected by {@code DagChainImpl.tryToConnect()}
+   * synchronized block.
+   *
+   * <p><strong>Future Risk</strong>: HIGH - Nonce desync risk in parallel block processing.
+   *
    * @param txId    transaction ID from RocksDBTransactionManager
    * @param address account address
    * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
+   * @see #addBalanceInTransaction
+   * @see <a href="../../../../CODE_REVIEW_PLAN.md#debt-002">DEBT-002 Technical Debt Documentation</a>
    */
   public void incrementNonceInTransaction(String txId, Bytes address)
       throws io.xdag.store.rocksdb.transaction.TransactionException {

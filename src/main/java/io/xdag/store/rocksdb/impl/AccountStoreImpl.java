@@ -74,7 +74,61 @@ import org.rocksdb.WriteOptions;
  *   <li>Memory: ~14 MB L1 cache + 2-4 GB L2 RocksDB cache</li>
  * </ul>
  *
+ * <h2><strong>THREAD SAFETY WARNING (DEBT-003)</strong></h2>
+ * <p><strong style="color:red">CRITICAL CONCURRENCY ISSUE</strong>: Many modification methods in this class
+ * use non-atomic read-modify-write patterns that are NOT thread-safe:
+ *
+ * <pre>{@code
+ * // UNSAFE PATTERN - used in multiple methods:
+ * public UInt256 addBalance(Bytes address, UInt256 amount) {
+ *     UInt256 current = getBalance(address);  // ← Non-atomic read
+ *     UInt256 newBalance = current.add(amount);
+ *     setBalance(address, newBalance);        // ← Non-atomic write
+ *     return newBalance;
+ * }
+ *
+ * // CONCURRENCY FAILURE SCENARIO:
+ * Thread 1: current = getBalance(addr) = 100
+ * Thread 2: current = getBalance(addr) = 100  ← Race!
+ * Thread 1: setBalance(addr, 150)  // +50
+ * Thread 2: setBalance(addr, 130)  // +30 overwrites Thread 1's update
+ * Result: Balance is 130 instead of 180 - Lost 50 XDAG!
+ * }</pre>
+ *
+ * <p><strong>Affected Methods</strong> (DEBT-003):
+ * <ul>
+ *   <li>{@link #addBalance(Bytes, UInt256)} - Balance loss risk</li>
+ *   <li>{@link #subtractBalance(Bytes, UInt256)} - Balance loss risk</li>
+ *   <li>{@link #incrementNonce(Bytes)} - Nonce desync risk</li>
+ *   <li>{@link #decrementNonce(Bytes)} - Nonce desync risk</li>
+ *   <li>{@link #saveAccount(Account)} - Statistics corruption risk</li>
+ *   <li>{@link #updateTotalBalance(UInt256)} - Total balance corruption risk</li>
+ * </ul>
+ *
+ * <p><strong>Current Safety</strong>: All account modifications are currently protected by
+ * {@code DagChainImpl.tryToConnect()} synchronized block, ensuring sequential block processing.
+ *
+ * <p><strong>Future Risk</strong>: HIGH - Enabling parallel block processing without fixing these
+ * methods WILL cause:
+ * <ul>
+ *   <li>Balance loss (funds disappear)</li>
+ *   <li>Nonce desynchronization (transaction replay vulnerability)</li>
+ *   <li>Incorrect account statistics</li>
+ *   <li>Total balance mismatch</li>
+ * </ul>
+ *
+ * <p><strong>TODO - Before Enabling Parallel Processing</strong>:
+ * <ol>
+ *   <li><strong>Option A</strong>: Add Java synchronization ({@code synchronized} methods or {@link java.util.concurrent.locks.ReadWriteLock})</li>
+ *   <li><strong>Option B</strong>: Use RocksDB Transactions (requires sharing RocksDB instance with TransactionManager)</li>
+ *   <li><strong>Option C</strong>: Use RocksDB Merge operators for atomic operations</li>
+ * </ol>
+ *
+ * <p><strong>Note</strong>: {@link #setBalanceInTransaction} already documents related architectural
+ * limitation about separate RocksDB instances.
+ *
  * @since AccountStore
+ * @see <a href="../../../../../CODE_REVIEW_PLAN.md#debt-003">DEBT-003 Technical Debt Documentation</a>
  */
 @Slf4j
 public class AccountStoreImpl implements AccountStore {
