@@ -85,6 +85,15 @@ public class BlockRequestMessage extends Message {
   public BlockRequestMessage(byte[] body) {
     super(XdagMessageCode.BLOCK_REQUEST, NewBlockMessage.class);
 
+    // BUGFIX (BUG-056): Add message length validation
+    // Previously: Would throw unclear exception from SimpleDecoder
+    // Now: Validate input and provide clear error message
+    if (body == null || body.length < 32) {
+      throw new IllegalArgumentException(
+          "Message body must be at least 32 bytes (hash), got: " +
+          (body == null ? "null" : body.length));
+    }
+
     SimpleDecoder dec = new SimpleDecoder(body);
 
     // Deserialize hash (32 bytes)
@@ -113,6 +122,20 @@ public class BlockRequestMessage extends Message {
    */
   public BlockRequestMessage(MutableBytes hash, ChainStats chainStats) {
     super(XdagMessageCode.BLOCK_REQUEST, NewBlockMessage.class);
+
+    // BUGFIX (BUG-057): Add null check for hash parameter
+    // Previously: Would throw NPE in Bytes32.wrap() if hash is null
+    // Now: Validate input and provide clear error message
+    if (hash == null) {
+      throw new IllegalArgumentException("Block hash cannot be null");
+    }
+
+    // BUGFIX (BUG-058): Add null check for chainStats parameter
+    // Previously: Would throw NPE in encode() when calling chainStats.toBytes()
+    // Now: Validate input and provide clear error message
+    if (chainStats == null) {
+      throw new IllegalArgumentException("Chain stats cannot be null");
+    }
 
     this.hash = Bytes32.wrap(hash);
     this.chainStats = chainStats;

@@ -80,6 +80,15 @@ public class SyncBlockMessage extends Message {
   public SyncBlockMessage(byte[] body) {
     super(XdagMessageCode.SYNC_BLOCK, null);
 
+    // BUGFIX (BUG-059): Add message length validation
+    // Previously: Would throw unclear exception from SimpleDecoder
+    // Now: Validate input and provide clear error message
+    if (body == null || body.length < 5) {
+      throw new IllegalArgumentException(
+          "Message body must be at least 5 bytes (block + TTL), got: " +
+          (body == null ? "null" : body.length));
+    }
+
     SimpleDecoder dec = new SimpleDecoder(body);
 
     // Deserialize Block
@@ -103,6 +112,13 @@ public class SyncBlockMessage extends Message {
    */
   public SyncBlockMessage(Block block, int ttl) {
     super(XdagMessageCode.SYNC_BLOCK, null);
+
+    // BUGFIX (BUG-060): Add null check for block parameter
+    // Previously: Would throw NPE in encode() when calling block.toBytes()
+    // Now: Validate input and provide clear error message
+    if (block == null) {
+      throw new IllegalArgumentException("Block cannot be null");
+    }
 
     this.block = block;
     this.ttl = ttl;
