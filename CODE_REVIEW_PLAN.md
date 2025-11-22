@@ -381,15 +381,7 @@
 |----|-----------|-------------|--------|------------|
 | BUG-001 | DagKernel.java:805 | Genesis height=0 should be 1 | ✅ Fixed | 55e93216 |
 | BUG-005 | DagChainImpl.java:734 | validateEpochLimit() filters wrong blocks | ✅ Fixed | 6ce1720b |
-| BUG-008 | DagChainImpl.java:1024 | checkAndAdjustDifficulty() only counts main blocks | 🔴 Open | - |
-
-**BUG-008 Details**:
-- **Location**: `DagChainImpl.java:1024-1026`
-- **Problem**: Difficulty adjustment only counts main blocks (height > 0), not all candidates
-- **Impact**: Difficulty adjustment ineffective - always sees ~1 block/epoch instead of actual candidate count
-- **Root Cause**: Same filter issue as BUG-005 (height > 0)
-- **Expected**: Should count ALL candidate blocks (main + orphan) per epoch
-- **Fix**: Remove height filter, count `blocks.size()` directly
+| BUG-008 | DagChainImpl.java:1024 | checkAndAdjustDifficulty() only counts main blocks | ✅ Fixed | 3e3a2e6f |
 
 ### Major Bugs (🟡 Medium Priority)
 
@@ -443,16 +435,16 @@
 - **Bugs Found**: 0
 - **Dead Code Lines**: 0
 
-### Current Progress (2025-11-22 17:40)
+### Current Progress (2025-11-22 17:45)
 - **Files Reviewed**: 9 / ~200 (4.5%)
-- **Bugs Found**: 7 total
-  - Critical: 2 found, 2 fixed ✅ (100%)
-  - Major: 2 found, 1 fixed, 1 documented ✅ (100%)
-  - Minor: 3 found, 2 fixed, 1 deferred ✅ (67%)
+- **Bugs Found**: 8 total
+  - Critical: 3 found, 3 fixed ✅ (100%)
+  - Major: 3 found, 2 fixed, 1 documented ✅ (100%)
+  - Minor: 2 found, 2 fixed ✅ (100%)
 - **Technical Debt**: 1 item registered (DEBT-001)
 - **Dead Code Removed**: ~1,496 lines (config cleanup)
-- **Status**: All open bugs resolved or documented
-- **Next**: Continue Phase 3 or move to next phase
+- **Status**: All bugs resolved
+- **Next**: Continue Phase 3 consensus layer review
 
 ### Code Quality Improvements
 - Added JavaDoc comments: 10 methods

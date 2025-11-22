@@ -226,7 +226,13 @@ public class Transaction implements Serializable {
   /**
    * Calculate total fee including data fee
    * <p>
-   * Formula: total_fee = fee + base_fee * (data_length / BASE_DATA_LENGTH)
+   * Fee structure:
+   * <ul>
+   *   <li>data <= 256 bytes: total_fee = fee (no extra charge)</li>
+   *   <li>data > 256 bytes: total_fee = fee + base_fee * ((data_length - 256) / 256)</li>
+   * </ul>
+   * <p>
+   * Example: 512 bytes of data → total_fee = fee + base_fee * 1.0 = fee + base_fee
    *
    * @param baseFee base transaction fee
    * @return total fee

@@ -35,13 +35,17 @@ import org.apache.tuweni.units.bigints.UInt256;
 /**
  * BlockHeader for XDAG
  * <p>
- * Design principles (from CORE_DATA_STRUCTURES.md): 1. Participates in hash calculation: timestamp,
+ * Design principles (from CORE_DATA_STRUCTURES.md): 1. Participates in hash calculation: epoch,
  * difficulty, nonce, coinbase 2. Hash is a cached field: lazy computation, not serialized 3. All
  * blocks are candidate blocks: all have nonce and coinbase 4. Immutable design: thread-safe and
  * cacheable
  * <p>
- * Size: 104 bytes (fixed) - timestamp: 8 bytes - difficulty: 32 bytes - nonce: 32 bytes - coinbase:
- * 32 bytes - hash: 32 bytes (cached, not serialized)
+ * Size: 92 bytes serialized (124 bytes in-memory with hash cache)
+ * - epoch: 8 bytes (XDAG epoch number)
+ * - difficulty: 32 bytes (UInt256)
+ * - nonce: 32 bytes (Bytes32)
+ * - coinbase: 20 bytes (Ethereum-style address)
+ * - hash: 32 bytes (cached, not serialized)
  *
  * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">Design</a>
  */
