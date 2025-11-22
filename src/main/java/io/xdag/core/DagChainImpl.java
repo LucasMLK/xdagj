@@ -1020,11 +1020,9 @@ public class DagChainImpl implements DagChain {
 
     for (long epoch = lastAdjustmentEpoch; epoch < currentEpoch; epoch++) {
       List<Block> blocks = getCandidateBlocksInEpoch(epoch);
-      // Count non-orphan blocks only
-      long nonOrphanCount = blocks.stream()
-          .filter(b -> b.getInfo() != null && b.getInfo().getHeight() > 0)
-          .count();
-      totalBlocks += nonOrphanCount;
+      // Count ALL candidate blocks (main + orphan) per epoch
+      // This reflects the actual block production rate that difficulty should regulate
+      totalBlocks += blocks.size();
       epochCount++;
     }
 

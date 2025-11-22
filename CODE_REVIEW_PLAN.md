@@ -381,6 +381,15 @@
 |----|-----------|-------------|--------|------------|
 | BUG-001 | DagKernel.java:805 | Genesis height=0 should be 1 | ✅ Fixed | 55e93216 |
 | BUG-005 | DagChainImpl.java:734 | validateEpochLimit() filters wrong blocks | ✅ Fixed | 6ce1720b |
+| BUG-008 | DagChainImpl.java:1024 | checkAndAdjustDifficulty() only counts main blocks | 🔴 Open | - |
+
+**BUG-008 Details**:
+- **Location**: `DagChainImpl.java:1024-1026`
+- **Problem**: Difficulty adjustment only counts main blocks (height > 0), not all candidates
+- **Impact**: Difficulty adjustment ineffective - always sees ~1 block/epoch instead of actual candidate count
+- **Root Cause**: Same filter issue as BUG-005 (height > 0)
+- **Expected**: Should count ALL candidate blocks (main + orphan) per epoch
+- **Fix**: Remove height filter, count `blocks.size()` directly
 
 ### Major Bugs (🟡 Medium Priority)
 
