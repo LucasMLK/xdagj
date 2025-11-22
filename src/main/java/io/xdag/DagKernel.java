@@ -801,12 +801,24 @@ public class DagKernel {
    * @throws RuntimeException if genesis block doesn't match config
    */
   private void verifyGenesisBlock() {
-    // Get genesis block (height 0 means orphan block)
-    Block genesisBlock = dagStore.getMainBlockByHeight(0, true);
+    // Get genesis block (genesis has height 1, orphan blocks have height 0)
+    Block genesisBlock = dagStore.getMainBlockByHeight(1, true);
     if (genesisBlock == null) {
-      log.warn("Cannot verify genesis block: main chain height 0 not found");
-      log.warn("This may happen if main chain index is not yet built");
-      return;
+      String error = String.format(
+          """
+              Genesis block not found at height 1, but main chain has %d blocks.
+
+              This indicates corrupted chain data or broken height index.
+              The genesis block (height=1) must exist if the chain has blocks.
+
+              Solutions:
+                1. Rebuild the chain from genesis
+                2. Check database integrity
+                3. Restore from backup""",
+          dagChain.getChainStats().getMainBlockCount()
+      );
+      log.error(error);
+      throw new RuntimeException("Genesis block verification failed: genesis not found");
     }
 
     log.info("Verifying genesis block against genesis.json...");
