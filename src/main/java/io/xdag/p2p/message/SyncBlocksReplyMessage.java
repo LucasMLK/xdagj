@@ -132,6 +132,15 @@ public class SyncBlocksReplyMessage extends Message {
   public SyncBlocksReplyMessage(byte[] body) {
     super(XdagMessageCode.SYNC_BLOCKS_REPLY, null);
 
+    // BUGFIX (BUG-071): Add message length validation
+    // Previously: Would throw unclear exception from SimpleDecoder
+    // Now: Validate input and provide clear error message
+    if (body == null || body.length < 4) {
+      throw new IllegalArgumentException(
+          "Message body must be at least 4 bytes (blockCount), got: " +
+          (body == null ? "null" : body.length));
+    }
+
     SimpleDecoder dec = new SimpleDecoder(body);
 
     // Read block count
@@ -188,6 +197,13 @@ public class SyncBlocksReplyMessage extends Message {
    */
   public SyncBlocksReplyMessage(List<Block> blocks) {
     super(XdagMessageCode.SYNC_BLOCKS_REPLY, null);
+
+    // BUGFIX (BUG-072): Add null check for blocks parameter
+    // Previously: Would throw NPE in encode() when calling blocks.size()
+    // Now: Validate input and provide clear error message
+    if (blocks == null) {
+      throw new IllegalArgumentException("Blocks list cannot be null");
+    }
 
     this.blocks = blocks;
 

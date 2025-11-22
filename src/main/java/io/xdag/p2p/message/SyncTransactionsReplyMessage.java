@@ -139,6 +139,15 @@ public class SyncTransactionsReplyMessage extends Message {
   public SyncTransactionsReplyMessage(byte[] body) {
     super(XdagMessageCode.SYNC_TRANSACTIONS_REPLY, null);
 
+    // BUGFIX (BUG-076): Add message length validation
+    // Previously: Would throw unclear exception from SimpleDecoder
+    // Now: Validate input and provide clear error message
+    if (body == null || body.length < 4) {
+      throw new IllegalArgumentException(
+          "Message body must be at least 4 bytes (txCount), got: " +
+          (body == null ? "null" : body.length));
+    }
+
     SimpleDecoder dec = new SimpleDecoder(body);
 
     // Read transaction count
@@ -195,6 +204,13 @@ public class SyncTransactionsReplyMessage extends Message {
    */
   public SyncTransactionsReplyMessage(List<Transaction> transactions) {
     super(XdagMessageCode.SYNC_TRANSACTIONS_REPLY, null);
+
+    // BUGFIX (BUG-077): Add null check for transactions parameter
+    // Previously: Would throw NPE in encode() when calling transactions.size()
+    // Now: Validate input and provide clear error message
+    if (transactions == null) {
+      throw new IllegalArgumentException("Transactions list cannot be null");
+    }
 
     this.transactions = transactions;
 

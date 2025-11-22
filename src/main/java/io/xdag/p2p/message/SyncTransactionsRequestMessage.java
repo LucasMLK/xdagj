@@ -133,6 +133,15 @@ public class SyncTransactionsRequestMessage extends Message {
   public SyncTransactionsRequestMessage(byte[] body) {
     super(XdagMessageCode.SYNC_TRANSACTIONS_REQUEST, SyncTransactionsReplyMessage.class);
 
+    // BUGFIX (BUG-073): Add message length validation
+    // Previously: Would throw unclear exception from SimpleDecoder
+    // Now: Validate input and provide clear error message
+    if (body == null || body.length < 4) {
+      throw new IllegalArgumentException(
+          "Message body must be at least 4 bytes (hashCount), got: " +
+          (body == null ? "null" : body.length));
+    }
+
     SimpleDecoder dec = new SimpleDecoder(body);
 
     // Deserialize hash count
@@ -163,6 +172,21 @@ public class SyncTransactionsRequestMessage extends Message {
    */
   public SyncTransactionsRequestMessage(List<Bytes32> hashes) {
     super(XdagMessageCode.SYNC_TRANSACTIONS_REQUEST, SyncTransactionsReplyMessage.class);
+
+    // BUGFIX (BUG-074): Add null check for hashes parameter
+    // Previously: Would throw NPE in encode() when calling hashes.size()
+    // Now: Validate input and provide clear error message
+    if (hashes == null) {
+      throw new IllegalArgumentException("Hashes list cannot be null");
+    }
+
+    // BUGFIX (BUG-075): Enforce maximum 5000 hashes limit as documented (line 56-59)
+    // Previously: No limit enforcement
+    // Now: Validate and enforce hard limit
+    if (hashes.size() > 5000) {
+      throw new IllegalArgumentException(
+          "Maximum 5000 hashes per request, got: " + hashes.size());
+    }
 
     this.hashes = hashes;
 
