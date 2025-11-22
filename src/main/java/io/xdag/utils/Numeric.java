@@ -58,24 +58,58 @@ public class Numeric {
 
   /**
    * Converts byte array to BigInteger
+   *
+   * @param value Byte array (must not be null)
+   * @return BigInteger representation
+   * @throws IllegalArgumentException if value is null
    */
   public static BigInteger toBigInt(byte[] value) {
+    // BUGFIX (BUG-035): Add null check for defensive programming
+    // Previously: Would throw NullPointerException if value is null
+    // Now: Throw IllegalArgumentException with clear message
+    if (value == null) {
+      throw new IllegalArgumentException("Byte array cannot be null");
+    }
     return new BigInteger(1, value);
   }
 
   /**
    * Converts hex string to BigInteger, handling "0x" prefix
+   *
+   * @param hexValue Hex string (with or without "0x" prefix)
+   * @return BigInteger representation
+   * @throws IllegalArgumentException if hexValue is null or invalid
    */
   public static BigInteger toBigInt(String hexValue) {
+    // Note: cleanHexPrefix already handles null via containsHexPrefix
     String cleanValue = cleanHexPrefix(hexValue);
     return toBigIntNoPrefix(cleanValue);
   }
 
   /**
    * Converts hex string without prefix to BigInteger
+   *
+   * @param hexValue Hex string without "0x" prefix (must not be null)
+   * @return BigInteger representation
+   * @throws IllegalArgumentException if hexValue is null or not valid hex
    */
   public static BigInteger toBigIntNoPrefix(String hexValue) {
-    return new BigInteger(hexValue, 16);
+    // BUGFIX (BUG-036): Add input validation
+    // Previously: Would throw NullPointerException or NumberFormatException
+    // Now: Validate and provide clear error messages
+    if (hexValue == null) {
+      throw new IllegalArgumentException("Hex value cannot be null");
+    }
+    if (hexValue.isEmpty()) {
+      throw new IllegalArgumentException("Hex value cannot be empty");
+    }
+
+    try {
+      return new BigInteger(hexValue, 16);
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException(
+          "Invalid hex string: " + hexValue, e);
+    }
   }
 
 }
