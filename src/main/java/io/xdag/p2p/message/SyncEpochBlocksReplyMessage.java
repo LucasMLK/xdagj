@@ -128,6 +128,15 @@ public class SyncEpochBlocksReplyMessage extends Message {
   public SyncEpochBlocksReplyMessage(byte[] body) {
     super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REPLY, null);
 
+    // BUGFIX (BUG-066): Add message length validation
+    // Previously: Would throw unclear exception from SimpleDecoder
+    // Now: Validate input and provide clear error message
+    if (body == null || body.length < 4) {
+      throw new IllegalArgumentException(
+          "Message body must be at least 4 bytes (epochCount), got: " +
+          (body == null ? "null" : body.length));
+    }
+
     SimpleDecoder dec = new SimpleDecoder(body);
 
     // Deserialize epoch count
@@ -175,6 +184,13 @@ public class SyncEpochBlocksReplyMessage extends Message {
    */
   public SyncEpochBlocksReplyMessage(Map<Long, List<Bytes32>> epochBlocksMap) {
     super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REPLY, null);
+
+    // BUGFIX (BUG-067): Add null check for epochBlocksMap parameter
+    // Previously: Would throw NPE in encode() when calling epochBlocksMap.size()
+    // Now: Validate input and provide clear error message
+    if (epochBlocksMap == null) {
+      throw new IllegalArgumentException("Epoch blocks map cannot be null");
+    }
 
     this.epochBlocksMap = epochBlocksMap;
 

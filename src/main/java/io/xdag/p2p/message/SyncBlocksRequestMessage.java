@@ -123,6 +123,15 @@ public class SyncBlocksRequestMessage extends Message {
   public SyncBlocksRequestMessage(byte[] body) {
     super(XdagMessageCode.SYNC_BLOCKS_REQUEST, SyncBlocksReplyMessage.class);
 
+    // BUGFIX (BUG-068): Add message length validation
+    // Previously: Would throw unclear exception from SimpleDecoder
+    // Now: Validate input and provide clear error message
+    if (body == null || body.length < 5) {
+      throw new IllegalArgumentException(
+          "Message body must be at least 5 bytes (4 for hashCount + 1 for isRaw), got: " +
+          (body == null ? "null" : body.length));
+    }
+
     SimpleDecoder dec = new SimpleDecoder(body);
 
     // Deserialize hash count
@@ -158,6 +167,21 @@ public class SyncBlocksRequestMessage extends Message {
    */
   public SyncBlocksRequestMessage(List<Bytes32> hashes, boolean isRaw) {
     super(XdagMessageCode.SYNC_BLOCKS_REQUEST, SyncBlocksReplyMessage.class);
+
+    // BUGFIX (BUG-069): Add null check for hashes parameter
+    // Previously: Would throw NPE in encode() when calling hashes.size()
+    // Now: Validate input and provide clear error message
+    if (hashes == null) {
+      throw new IllegalArgumentException("Hashes list cannot be null");
+    }
+
+    // BUGFIX (BUG-070): Enforce maximum 1000 hashes limit as documented (line 58-61)
+    // Previously: No limit enforcement
+    // Now: Validate and enforce hard limit
+    if (hashes.size() > 1000) {
+      throw new IllegalArgumentException(
+          "Maximum 1000 hashes per request, got: " + hashes.size());
+    }
 
     this.hashes = hashes;
     this.isRaw = isRaw;

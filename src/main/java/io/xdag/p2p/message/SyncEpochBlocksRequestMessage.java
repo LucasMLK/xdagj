@@ -113,6 +113,15 @@ public class SyncEpochBlocksRequestMessage extends Message {
   public SyncEpochBlocksRequestMessage(byte[] body) {
     super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REQUEST, SyncEpochBlocksReplyMessage.class);
 
+    // BUGFIX (BUG-064): Add message length validation
+    // Previously: Would throw unclear exception from SimpleDecoder
+    // Now: Validate input and provide clear error message
+    if (body == null || body.length < 16) {
+      throw new IllegalArgumentException(
+          "Message body must be at least 16 bytes (8+8), got: " +
+          (body == null ? "null" : body.length));
+    }
+
     SimpleDecoder dec = new SimpleDecoder(body);
 
     // Deserialize epoch range
@@ -137,6 +146,17 @@ public class SyncEpochBlocksRequestMessage extends Message {
    */
   public SyncEpochBlocksRequestMessage(long startEpoch, long endEpoch) {
     super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REQUEST, SyncEpochBlocksReplyMessage.class);
+
+    // BUGFIX (BUG-065): Add parameter validation
+    // Previously: No validation, could send invalid requests
+    // Now: Validate parameters according to protocol requirements
+    if (startEpoch < 0) {
+      throw new IllegalArgumentException("startEpoch must be >= 0, got: " + startEpoch);
+    }
+    if (endEpoch < startEpoch) {
+      throw new IllegalArgumentException(
+          String.format("endEpoch (%d) must be >= startEpoch (%d)", endEpoch, startEpoch));
+    }
 
     this.startEpoch = startEpoch;
     this.endEpoch = endEpoch;
