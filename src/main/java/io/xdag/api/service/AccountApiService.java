@@ -54,9 +54,22 @@ public class AccountApiService {
 
   /**
    * Convert UInt256 to XAmount for display
+   *
+   * <p>BUGFIX BUG-084: Handle large balances safely
+   * UInt256 can hold values up to 2^256-1, but XAmount uses long (max 2^63-1).
+   * For balances that exceed Long.MAX_VALUE, we display them as MAX_VALUE to avoid overflow.
+   *
+   * @param balance Balance in UInt256
+   * @return XAmount for display (capped at Long.MAX_VALUE if needed)
    */
   private static XAmount uint256ToXAmount(UInt256 balance) {
-    return XAmount.ofXAmount(balance.toLong());
+    try {
+      return XAmount.ofXAmount(balance.toLong());
+    } catch (ArithmeticException e) {
+      // Balance exceeds Long.MAX_VALUE, return max displayable amount
+      log.warn("Balance {} exceeds Long.MAX_VALUE, displaying as max value", balance.toDecimalString());
+      return XAmount.ofXAmount(Long.MAX_VALUE);
+    }
   }
 
   /**
