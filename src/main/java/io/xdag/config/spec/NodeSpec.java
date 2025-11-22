@@ -46,11 +46,6 @@ public interface NodeSpec {
 
   int getNodePort();
 
-  int getMaxInboundConnectionsPerIp();
-
-  // Node operation parameters
-  int getTTL();
-
   // Connection parameters
   int getMaxConnections();
 

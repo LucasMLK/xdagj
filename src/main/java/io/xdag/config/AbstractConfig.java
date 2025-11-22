@@ -64,7 +64,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
   protected String nodeIp;
   protected int nodePort;
   protected String nodeTag;
-  protected int maxInboundConnectionsPerIp = 8;
   protected int maxConnections = 1024;
   protected int netMaxFrameBodySize = 128 * 1024;
 
@@ -77,7 +76,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
   protected boolean storeFromBackup = false;
 
   // Whitelist configuration
-  protected int TTL = 5;
   protected List<InetSocketAddress> whiteIPList = Lists.newArrayList();
   protected List<String> poolWhiteIPList = Lists.newArrayList();
 
@@ -219,7 +217,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     nodeIp = config.hasPath("node.ip") ? config.getString("node.ip") : "127.0.0.1";
     nodePort = config.hasPath("node.port") ? config.getInt("node.port") : 8001;
     nodeTag = config.hasPath("node.tag") ? config.getString("node.tag") : "xdagj";
-    maxInboundConnectionsPerIp = config.getInt("node.maxInboundConnectionsPerIp");
     fundAddress = config.hasPath("fund.address") ? config.getString("fund.address")
         : "4duPWMbYUgAifVYkKDCWxLvRRkSByf5gb";
     fundRation = config.hasPath("fund.ration") ? config.getDouble("fund.ration") : 5;
@@ -279,11 +276,6 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
     String[] args = host.split(":");
     this.nodeIp = args[0];
     this.nodePort = Integer.parseInt(args[1]);
-  }
-
-  @Override
-  public int getMaxInboundConnectionsPerIp() {
-    return this.maxInboundConnectionsPerIp;
   }
 
   @Override
