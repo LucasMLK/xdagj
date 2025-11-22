@@ -229,6 +229,29 @@ public class DagCache {
     return transactionCache.getIfPresent(hash);
   }
 
+  /**
+   * Put transaction into cache
+   *
+   * @param hash Transaction hash
+   * @param tx   Transaction object
+   */
+  public void putTransaction(Bytes32 hash, Transaction tx) {
+    if (hash != null && tx != null) {
+      transactionCache.put(hash, tx);
+    }
+  }
+
+  /**
+   * Invalidate transaction from cache
+   *
+   * @param hash Transaction hash
+   */
+  public void invalidateTransaction(Bytes32 hash) {
+    if (hash != null) {
+      transactionCache.invalidate(hash);
+    }
+  }
+
   // ==================== Height-to-Hash Cache Operations ====================
 
   /**
@@ -351,7 +374,7 @@ public class DagCache {
     log.info("Transaction Cache: {}", formatCacheStats(transactionCache.stats()));
     log.info("Height Cache: {}", formatCacheStats(heightToHashCache.stats()));
     log.info("Epoch Winner Cache: {}", formatCacheStats(epochWinnerCache.stats()));
-    log.info("Overall Hit Rate: {:.2f}%", getOverallHitRate() * 100);
+    log.info("Overall Hit Rate: {}", String.format("%.2f%%", getOverallHitRate() * 100));
     log.info("==========================");
   }
 
