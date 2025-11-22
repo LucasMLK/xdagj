@@ -147,37 +147,63 @@ public class BytesUtils {
   /**
    * Extracts a subarray from a byte array
    *
-   * @param arrays Source byte array
-   * @param index  Starting index
-   * @param length Length of subarray
+   * @param arrays Source byte array (must not be null)
+   * @param index  Starting index (must be >= 0)
+   * @param length Length of subarray (must be >= 0)
    * @return Extracted subarray
+   * @throws IllegalArgumentException if parameters are invalid
+   * @throws ArrayIndexOutOfBoundsException if index + length > arrays.length
    */
   public static byte[] subArray(byte[] arrays, int index, int length) {
-    byte[] arrayOfByte = new byte[length];
-    int i = 0;
-    while (true) {
-      if (i >= length) {
-        return arrayOfByte;
-      }
-      arrayOfByte[i] = arrays[(i + index)];
-      i += 1;
+    // BUGFIX (BUG-030): Add comprehensive input validation
+    // Previously: No bounds checking, would throw ArrayIndexOutOfBoundsException
+    // Now: Validate all inputs and provide clear error messages
+
+    if (arrays == null) {
+      throw new IllegalArgumentException("Source array cannot be null");
     }
+    if (index < 0) {
+      throw new IllegalArgumentException("Index cannot be negative: " + index);
+    }
+    if (length < 0) {
+      throw new IllegalArgumentException("Length cannot be negative: " + length);
+    }
+    if (index + length > arrays.length) {
+      throw new ArrayIndexOutOfBoundsException(
+          String.format("Subarray [%d, %d) exceeds array length %d",
+              index, index + length, arrays.length));
+    }
+
+    byte[] arrayOfByte = new byte[length];
+    System.arraycopy(arrays, index, arrayOfByte, 0, length);
+    return arrayOfByte;
   }
 
   /**
    * Converts a hex string to a byte array
    *
-   * @param hexString Hex string to convert
-   * @return Byte array representation
+   * @param hexString Hex string to convert (must have even length)
+   * @return Byte array representation, or null if input is null/empty
+   * @throws IllegalArgumentException if hex string has odd length or invalid characters
    */
   public static byte[] hexStringToBytes(String hexString) {
     if (hexString == null || hexString.isEmpty()) {
       return null;
     }
+
+    // BUGFIX (BUG-031): Validate hex string length is even
+    // Previously: Odd-length strings silently truncated last character
+    // Now: Throw exception for invalid input
+    if (hexString.length() % 2 != 0) {
+      throw new IllegalArgumentException(
+          "Hex string must have even length, got: " + hexString.length());
+    }
+
     hexString = hexString.toUpperCase();
     int length = hexString.length() / 2;
     char[] hexChars = hexString.toCharArray();
     byte[] d = new byte[length];
+
     for (int i = 0; i < length; i++) {
       int pos = i * 2;
       d[i] = (byte) (charToByte(hexChars[pos]) << 4 | charToByte(hexChars[pos + 1]));
@@ -187,9 +213,21 @@ public class BytesUtils {
 
   /**
    * Converts a hex character to its byte value
+   *
+   * @param c Hex character (0-9, A-F, a-f)
+   * @return Byte value (0-15)
+   * @throws IllegalArgumentException if character is not a valid hex digit
    */
   private static byte charToByte(char c) {
-    return (byte) "0123456789ABCDEF".indexOf(c);
+    // BUGFIX (BUG-032): Validate hex character before conversion
+    // Previously: Invalid characters returned -1, causing silent corruption
+    // Now: Throw exception for invalid input
+    int index = "0123456789ABCDEF".indexOf(c);
+    if (index == -1) {
+      throw new IllegalArgumentException(
+          "Invalid hex character: '" + c + "' (expected 0-9, A-F)");
+    }
+    return (byte) index;
   }
 
   /**
