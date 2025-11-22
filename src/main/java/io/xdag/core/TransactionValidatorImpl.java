@@ -219,7 +219,7 @@ public class TransactionValidatorImpl implements TransactionValidator {
         // BUGFIX BUG-080: Safe balance display (avoid toLong() overflow)
         String balanceStr;
         try {
-          balanceStr = XAmount.of(balance.toLong(), NANO_XDAG).toDecimal(9, XUnit.XDAG);
+          balanceStr = XAmount.of(balance.toLong(), NANO_XDAG).toDecimal(9, XUnit.XDAG).toString();
         } catch (ArithmeticException e) {
           // Balance too large for long, display raw UInt256
           balanceStr = balance.toDecimalString() + " nano";
