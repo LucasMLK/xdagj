@@ -560,14 +560,34 @@
 - ✅ BUG-049: Constructor missing mainBlockHash null check (FIXED)
 - ✅ BUG-050: Constructor missing body length validation (FIXED)
 
-**Phase 10 Summary** (6/18 files reviewed):
-- Files reviewed: 6 infrastructure + core message files ✅
-- 6 bugs found: 6 fixed (100%)
-- Pattern identified: Message constructors need defensive programming
-  * Validate reference-type parameters for null
-  * Validate message body length
-  * Provide clear error messages
-- Remaining: 12 sync/transaction message files (similar pattern expected)
+**Issues Found** (SyncMainBlocksRequestMessage.java):
+- ✅ BUG-051: Constructor missing body length validation (21 bytes) (FIXED)
+- ✅ BUG-052: Constructor missing parameter validation (height range, maxBlocks limit) (FIXED)
+
+**Phase 10 Summary** (7/18 files reviewed):
+- Files reviewed: 7 core message files ✅
+- 8 bugs found: 8 fixed (100%)
+- **Pattern identified**: ALL P2P message constructors have similar validation gaps:
+  1. **Deserialization constructors** (byte[] body):
+     * Missing body length validation (should check minimum bytes)
+     * Should validate against expected format
+     * Need clear error messages
+  2. **Serialization constructors** (typed parameters):
+     * Missing null checks for reference-type parameters (Block, Bytes32, List)
+     * Missing parameter range validation (heights, counts, limits)
+     * Not enforcing documented limits (e.g., maxBlocks <= 10000)
+- Remaining: 11 sync/transaction message files (same pattern expected)
+- **Recommendation**: Remaining files likely have 20-30 similar bugs
+
+**Systematic Fix Strategy**:
+Given the consistent pattern, two approaches:
+1. Continue individual file review (thorough but time-consuming)
+2. Create validation guidelines and apply systematically (efficient)
+
+Pattern examples found across all 7 files:
+- Body validation: 3 files missing (BUG-050, BUG-051, more expected)
+- Null checks: 3 files missing (BUG-048, BUG-049, more expected)
+- Range validation: 1 file missing (BUG-052, more expected in request messages)
 
 ---
 
@@ -974,6 +994,8 @@
 | BUG-048 | NewBlockMessage.java:122,134 | Constructors missing block null check | ✅ Fixed | f178d4df |
 | BUG-049 | SyncHeightReplyMessage.java:140 | Constructor missing mainBlockHash null check | ✅ Fixed | f178d4df |
 | BUG-050 | SyncHeightReplyMessage.java:108 | Constructor missing body length validation (48 bytes) | ✅ Fixed | f178d4df |
+| BUG-051 | SyncMainBlocksRequestMessage.java:134 | Constructor missing body length validation (21 bytes) | ✅ Fixed | 39bf1ea5 |
+| BUG-052 | SyncMainBlocksRequestMessage.java:165 | Constructor missing parameter validation (range, limits) | ✅ Fixed | 39bf1ea5 |
 
 **BUG-006 Details**:
 - **Location**: `DagChainImpl.java:238-562`
@@ -1003,8 +1025,8 @@
 - **Bugs Found**: 0
 - **Dead Code Lines**: 0
 
-### Current Progress (2025-11-22 19:00)
-- **Files Reviewed**: 47 / ~200 (23.5%)
+### Current Progress (2025-11-22 19:30)
+- **Files Reviewed**: 48 / ~200 (24.0%)
   - Phase 1: 3 files (Bootstrap, XdagCli, Launcher, Config)
   - Phase 2: 1 file (DagKernel)
   - Phase 3: 8 files (DagChainImpl, DagBlockProcessor, Block, BlockHeader, Transaction, DagAccountManager, DagTransactionProcessor, AccountStoreImpl)
@@ -1014,17 +1036,19 @@
   - Phase 7: 2 files (TransactionPoolImpl, TransactionBroadcastManager)
   - Phase 8: 4 files (HttpApiServer, BlockApiService, TransactionApiService, MiningApiService)
   - Phase 9: 6 files (TimeUtils, BytesUtils, BasicUtils, WalletUtils, Numeric, CompactSerializer)
-  - Phase 10: 6 files (XdagMessageCode, XdagMessageFactory, MessageException, NewBlockMessage, SyncHeightRequestMessage, SyncHeightReplyMessage)
+  - Phase 10: 7 files (XdagMessageCode, XdagMessageFactory, MessageException, NewBlockMessage, SyncHeightRequestMessage, SyncHeightReplyMessage, SyncMainBlocksRequestMessage)
   - Additional: 6 files (ApiKeyStore, etc.)
-- **Bugs Found**: 50 total (BUG-025 skipped as DEBT-005)
+- **Bugs Found**: 52 total (BUG-025 skipped as DEBT-005)
   - Critical: 6 found, 6 fixed ✅ (100%)
   - Major: 10 found, 7 fixed, 1 documented, 2 deferred ✅ (80%)
-  - Minor: 32 found, 30 fixed, 1 documented, 1 deferred ✅ (94%)
+  - Minor: 34 found, 32 fixed, 1 documented, 1 deferred ✅ (94%)
   - Security: 4 found, 4 fixed ✅ (100% - includes BUG-012, BUG-013, BUG-043, BUG-044)
 - **Technical Debt**: 6 items registered (DEBT-001 through DEBT-006)
 - **Dead Code Removed**: ~1,496 lines (config cleanup)
-- **Status**: Phase 10 (P2P Message Protocol) IN PROGRESS 🔄 (6/18 files)
-- **Next**: Continue Phase 10 (remaining 12 message files) or move to other modules
+- **Status**: Phase 10 (P2P Message Protocol) IN PROGRESS 🔄 (7/18 files)
+  - **Pattern Analysis**: Systematic validation gaps identified
+  - **Estimated remaining bugs**: 20-30 in similar message classes
+- **Next Decision**: Continue individual review OR apply systematic pattern fixes
 
 ### Code Quality Improvements
 - Added JavaDoc comments: 10 methods
