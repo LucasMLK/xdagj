@@ -40,8 +40,20 @@ public class CompactSerializer {
     /**
      * Serialize BlockInfo to bytes
      * Target size: ~180 bytes
+     *
+     * @param blockInfo BlockInfo to serialize (must not be null)
+     * @return Serialized byte array
+     * @throws IllegalArgumentException if blockInfo is null
+     * @throws IOException if serialization fails
      */
     public static byte[] serialize(BlockInfo blockInfo) throws IOException {
+        // BUGFIX (BUG-037): Add null check for defensive programming
+        // Previously: Would throw NullPointerException if blockInfo is null
+        // Now: Throw IllegalArgumentException with clear message
+        if (blockInfo == null) {
+            throw new IllegalArgumentException("BlockInfo cannot be null");
+        }
+
         ByteArrayOutputStream out = new ByteArrayOutputStream(200);
 
         // Fixed-size fields first (for alignment)
@@ -97,8 +109,20 @@ public class CompactSerializer {
 
     /**
      * Serialize ChainStats to bytes
+     *
+     * @param stats ChainStats to serialize (must not be null)
+     * @return Serialized byte array
+     * @throws IllegalArgumentException if stats is null
+     * @throws IOException if serialization fails
      */
     public static byte[] serialize(ChainStats stats) throws IOException {
+        // BUGFIX (BUG-038): Add null check for defensive programming
+        // Previously: Would throw NullPointerException if stats is null
+        // Now: Throw IllegalArgumentException with clear message
+        if (stats == null) {
+            throw new IllegalArgumentException("ChainStats cannot be null");
+        }
+
         ByteArrayOutputStream out = new ByteArrayOutputStream(200);
 
         // difficulty: 32 bytes
@@ -142,11 +166,47 @@ public class CompactSerializer {
      * - baseDifficultyTarget (nullable, 1 byte flag + 32 bytes if present)
      * - lastDifficultyAdjustmentEpoch (var long)
      * - lastOrphanCleanupEpoch (var long)
+     *
+     * @param data Serialized data (must not be null or empty)
+     * @return Deserialized ChainStats
+     * @throws IllegalArgumentException if data is null or empty
+     * @throws IOException if deserialization fails
      */
     public static ChainStats deserializeChainStats(byte[] data) throws IOException {
+        // BUGFIX (BUG-040, BUG-041): Add input validation for defensive programming
+        // Previously: Would throw NullPointerException or IOException with poor context
+        // Now: Validate input and provide clear error messages
+        if (data == null) {
+            throw new IllegalArgumentException("Data cannot be null");
+        }
+        if (data.length == 0) {
+            throw new IllegalArgumentException("Data cannot be empty");
+        }
+
         ByteReader reader = new ByteReader(data);
 
-        // Try to detect format version by data length
+        // LIMITATION (BUG-039): Legacy format detection uses heuristic
+        // Current approach: data.length > 150 to detect legacy format
+        //
+        // Why this works in practice:
+        // - Legacy format: ~200+ bytes (has maxDifficulty, totalMainBlockCount,
+        //   totalBlockCount, totalHostCount, waitingSyncCount, etc.)
+        // - New format: ~80-120 bytes (only core fields)
+        //
+        // Known edge cases:
+        // - If new format grows beyond 150 bytes (unlikely), would be misidentified
+        // - If legacy format is exactly 150 bytes or less (very unlikely)
+        //
+        // Better solution (requires protocol change):
+        // - Add version byte at the start of serialized data
+        // - Check version byte instead of length heuristic
+        //
+        // Risk assessment: LOW
+        // - Format sizes are well-separated in practice
+        // - New format is intentionally compact
+        // - No known failures in production
+        //
+        // TODO: Consider adding version byte in next protocol upgrade
         boolean isLegacyFormat = data.length > 150;  // Legacy format is much longer
 
         UInt256 difficulty;
@@ -314,6 +374,12 @@ public class CompactSerializer {
         private int position;
 
         public ByteReader(byte[] data) {
+            // BUGFIX (BUG-042): Add null check for defensive programming
+            // Previously: Would throw NullPointerException on first access
+            // Now: Throw IllegalArgumentException with clear message
+            if (data == null) {
+                throw new IllegalArgumentException("Data cannot be null");
+            }
             this.data = data;
             this.position = 0;
         }
@@ -340,10 +406,16 @@ public class CompactSerializer {
         }
 
         public int readVarInt() throws IOException {
+            // BUGFIX (BUG-043): Add overflow protection for malformed input
+            // Previously: Could overflow or loop indefinitely with malicious data
+            // Now: Limit to maximum 5 bytes (32-bit integer)
             int result = 0;
             int shift = 0;
             byte b;
             do {
+                if (shift > 28) {
+                    throw new IOException("VarInt overflow: more than 5 bytes");
+                }
                 b = readByte();
                 result |= (b & 0x7F) << shift;
                 shift += 7;
@@ -352,10 +424,16 @@ public class CompactSerializer {
         }
 
         public long readVarLong() throws IOException {
+            // BUGFIX (BUG-044): Add overflow protection for malformed input
+            // Previously: Could overflow or loop indefinitely with malicious data
+            // Now: Limit to maximum 10 bytes (64-bit long)
             long result = 0;
             int shift = 0;
             byte b;
             do {
+                if (shift > 63) {
+                    throw new IOException("VarLong overflow: more than 10 bytes");
+                }
                 b = readByte();
                 result |= (long) (b & 0x7F) << shift;
                 shift += 7;
