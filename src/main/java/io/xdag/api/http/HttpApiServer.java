@@ -71,15 +71,42 @@ public class HttpApiServer {
       String[] apiKeys = httpSpec.getRpcHttpApiKeys();
       if (apiKeys != null && apiKeys.length > 0) {
         for (String keyConfig : apiKeys) {
-          String[] parts = keyConfig.split(":");
-          if (parts.length == 2) {
-            String key = parts[0];
-            Permission permission = Permission.valueOf(parts[1].toUpperCase());
+          // BUGFIX (BUG-024): Use split(":", 2) to handle API keys containing colons
+          // Previously: split(":") would incorrectly split "my:complex:key:READ" into 4 parts
+          // Now: split(":", 2) produces ["my:complex:key", "READ"] (correct)
+          String[] parts = keyConfig.split(":", 2);
+
+          if (parts.length != 2) {
+            // BUGFIX (BUG-024): Log warning for malformed API key configuration
+            // Previously: silently skipped malformed configs, users had no feedback
+            log.warn("Malformed API key configuration (expected 'key:permission'): {}", keyConfig);
+            continue;
+          }
+
+          String key = parts[0].trim();
+          String permissionStr = parts[1].trim();
+
+          // Validate key is not empty
+          if (key.isEmpty()) {
+            log.warn("Empty API key in configuration: {}", keyConfig);
+            continue;
+          }
+
+          // BUGFIX (BUG-024): Catch invalid permission names
+          // Previously: IllegalArgumentException would crash server startup
+          // Now: log error and skip invalid configuration
+          try {
+            Permission permission = Permission.valueOf(permissionStr.toUpperCase());
             store.addApiKey(key, permission);
+            log.debug("Registered API key: {} with permission: {}",
+                key.substring(0, Math.min(8, key.length())) + "...", permission);
+          } catch (IllegalArgumentException e) {
+            log.error("Invalid permission '{}' in API key configuration: {}. Valid permissions: {}",
+                permissionStr, keyConfig, java.util.Arrays.toString(Permission.values()));
           }
         }
       }
-      log.info("API authentication enabled");
+      log.info("API authentication enabled with {} API key(s)", store.size());
     } else {
       log.info("API authentication disabled");
     }

@@ -44,6 +44,15 @@ public class ApiKeyStore {
     log.info("Added API key with {} permission", permission);
   }
 
+  /**
+   * Get the number of registered API keys
+   *
+   * @return number of API keys in the store
+   */
+  public int size() {
+    return apiKeys.size();
+  }
+
   public Permission validate(String apiKey) {
     if (!authEnabled) {
       return Permission.WRITE;
