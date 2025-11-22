@@ -229,18 +229,18 @@
 
 ## Phase 5: Network & Synchronization (🔄 In Progress)
 
-### 5.1 P2P Layer
+### 5.1 P2P Layer (✅ Completed)
 
 | Component | File | Priority | Status |
 |-----------|------|----------|--------|
 | P2P event handler | `XdagP2pEventHandler.java` | HIGH | ✅ Completed |
-| P2P config factory | `P2pConfigFactory.java` | MEDIUM | 📋 |
+| P2P config factory | `P2pConfigFactory.java` | MEDIUM | ✅ Completed |
 
 **Focus Areas**:
 - [x] Message handling
 - [x] Connection management
-- [ ] Peer discovery
-- [ ] Rate limiting
+- [ ] Peer discovery (not reviewed - separate component)
+- [ ] Rate limiting (not reviewed - separate component)
 
 **Issues Found** (XdagP2pEventHandler.java):
 - No bugs found ✅
@@ -248,6 +248,14 @@
 - TTL-based anti-loop logic correctly implemented
 - Proper error handling throughout
 - **Note**: handleSyncTransactionsRequest() has TODO for transaction retrieval (Phase 3 feature)
+
+**Issues Found** (P2pConfigFactory.java):
+- ✅ BUG-021: Missing max >= min validation for connection limits (FIXED)
+
+**Phase 5.1 Summary**:
+- All files reviewed ✅
+- 1 bug fixed (BUG-021)
+- Code quality: Excellent
 
 ### 5.2 Sync Manager
 
@@ -597,6 +605,7 @@
 | BUG-003 | XdagCli.java:409 | Unlocked wallet contract | ✅ Fixed | af4bccee |
 | BUG-007 | DagChainImpl.java:1452 | getWinnerBlockInEpoch() fallback only scans main blocks | ✅ Documented | d3d1402b |
 | BUG-015 | TransactionStoreImpl.java:306 | getTransactionsByHashes() returned null elements | ✅ Fixed | 29c4553c |
+| BUG-021 | P2pConfigFactory.java:54 | Missing max >= min validation for connection limits | ✅ Fixed | b3f5b9d8 |
 
 **BUG-007 Resolution**:
 - **Status**: Resolved via comprehensive documentation
@@ -616,6 +625,20 @@
   - Potential NPE risk when iterating without null check
 - **Fix**: Skip missing transactions instead of adding null
 - **Commit**: 29c4553c
+
+**BUG-021 Details** (MAJOR - Configuration Validation):
+- **Location**: `P2pConfigFactory.java:54-56`
+- **Problem**: No validation that maxConnections >= minConnections
+- **Impact**: **LOGIC CONFLICT**
+  - If config.getMaxConnections() returns 5, we'd have min=8, max=5
+  - P2P service might fail to satisfy minimum connection requirement
+  - Connection management logic confusion: "need 8 minimum" but "max is 5"
+- **Root Cause**: Missing validation when applying both hardcoded min and capped max
+- **Fix**:
+  1. Calculate maxConn with cap: `Math.min(config.getMaxConnections(), 100)`
+  2. Add validation: `if (maxConn < minConn) maxConn = minConn`
+  3. Log warning when adjustment is made
+- **Commit**: b3f5b9d8
 
 ### Minor Issues (🟢 Low Priority)
 
@@ -656,22 +679,22 @@
 - **Bugs Found**: 0
 - **Dead Code Lines**: 0
 
-### Current Progress (2025-11-22 22:00)
-- **Files Reviewed**: 21 / ~200 (10.5%)
+### Current Progress (2025-11-22 22:15)
+- **Files Reviewed**: 22 / ~200 (11.0%)
   - Phase 1: 3 files (Bootstrap, XdagCli, Launcher, Config)
   - Phase 2: 1 file (DagKernel)
   - Phase 3: 8 files (DagChainImpl, DagBlockProcessor, Block, BlockHeader, Transaction, DagAccountManager, DagTransactionProcessor, AccountStoreImpl)
   - Phase 4: 4 files (DagStoreImpl, TransactionStoreImpl, DagCache, DagEntityResolver)
-  - Phase 5: 1 file (XdagP2pEventHandler)
-- **Bugs Found**: 17 total
+  - Phase 5: 2 files (XdagP2pEventHandler, P2pConfigFactory)
+- **Bugs Found**: 18 total
   - Critical: 6 found, 6 fixed ✅ (100%)
-  - Major: 4 found, 3 fixed, 1 documented ✅ (100%)
+  - Major: 5 found, 4 fixed, 1 documented ✅ (100%)
   - Minor: 6 found, 5 fixed, 1 deferred ✅ (83%)
   - Security: 2 found, 2 fixed ✅ (100%)
 - **Technical Debt**: 4 items registered (DEBT-001, DEBT-002, DEBT-003, DEBT-004)
 - **Dead Code Removed**: ~1,496 lines (config cleanup)
-- **Status**: Phase 5.1 (P2P Layer) IN PROGRESS 🔄
-- **Next**: P2pConfigFactory.java
+- **Status**: Phase 5.1 (P2P Layer) COMPLETED ✅
+- **Next**: Phase 5.2 (Sync Manager)
 
 ### Code Quality Improvements
 - Added JavaDoc comments: 10 methods
