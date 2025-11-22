@@ -24,6 +24,7 @@
 
 package io.xdag.config;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.xdag.crypto.exception.AddressFormatException;
@@ -74,6 +75,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  * @since XDAGJ
  */
 @Data
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class GenesisConfig {
 
   // ========== Network Identity ==========
