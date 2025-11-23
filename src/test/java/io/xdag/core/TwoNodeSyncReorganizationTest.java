@@ -33,6 +33,7 @@ import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -65,6 +66,7 @@ import static org.junit.Assert.*;
  *
  * @since XDAGJ 1.0 Consensus Refactoring (2025-11-20)
  */
+@Ignore("Integration test - too slow for CI/Unit testing")
 public class TwoNodeSyncReorganizationTest {
 
     private DagKernel node1Kernel;

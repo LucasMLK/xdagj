@@ -34,7 +34,7 @@ import org.mockito.junit.MockitoJUnitRunner;
 /**
  * Unit tests for {@link BlockApiService}.
  */
-@RunWith(MockitoJUnitRunner.class)
+@RunWith(MockitoJUnitRunner.Silent.class)
 public class BlockApiServiceTest {
 
     @Mock

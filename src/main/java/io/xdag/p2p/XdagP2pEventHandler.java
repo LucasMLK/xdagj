@@ -193,6 +193,9 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
               messageType, channel.getRemoteAddress());
       }
     } catch (Exception e) {
+      // If parsing failed at top level (e.g. unknown message code or corrupted wrapper), penalize
+      penalizePeer(channel, "Malformed top-level message (type 0x" +
+          String.format("%02X", messageType) + "): " + e.getMessage());
       log.error("Error processing message type {} from {}: {}",
           messageType, channel.getRemoteAddress(), e.getMessage(), e);
     }
@@ -256,10 +259,18 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
       } else if (result != null && result.isOrphan()) {
         log.info("Received block imported as orphan");
       } else if (result != null) {
-        log.warn("Received block import failed: {}", result.getErrorMessage());
+        // Check for invalid block status (potential malicious behavior)
+        if (result.getStatus() == DagImportResult.ImportStatus.INVALID) {
+          penalizePeer(channel, "Sent INVALID_BLOCK: " + result.getErrorMessage());
+        } else {
+          log.warn("Received block import failed: {} (status={})",
+              result.getErrorMessage(), result.getStatus());
+        }
       }
 
     } catch (Exception e) {
+      // Message deserialization or processing error - likely malformed data
+      penalizePeer(channel, "Malformed NEW_BLOCK message: " + e.getMessage());
       log.error("Error handling NEW_BLOCK from {}: {}",
           channel.getRemoteAddress(), e.getMessage(), e);
     }
@@ -756,8 +767,33 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
       }
 
     } catch (Exception e) {
+      // Message deserialization error - likely malformed data
+      penalizePeer(channel, "Malformed NEW_TRANSACTION message: " + e.getMessage());
       log.error("Error handling NEW_TRANSACTION from {}: {}",
           channel.getRemoteAddress(), e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Penalize a peer for sending invalid or malicious data.
+   *
+   * <p>This method implements a strict "fail-fast" policy:
+   * <ul>
+   *   <li>Log the violation</li>
+   *   <li>Close the connection immediately</li>
+   * </ul>
+   *
+   * @param channel the peer channel
+   * @param reason reason for penalty
+   */
+  private void penalizePeer(Channel channel, String reason) {
+    log.warn("⛔ Penalizing peer {} due to: {}", channel.getRemoteAddress(), reason);
+    try {
+      // Disconnect immediately to prevent further processing
+      channel.close();
+    } catch (Exception e) {
+      log.warn("Error closing channel for penalized peer {}: {}",
+          channel.getRemoteAddress(), e.getMessage());
     }
   }
 

@@ -37,6 +37,7 @@ import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
 import org.junit.After;
 import org.junit.Before;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -61,6 +62,7 @@ import static org.junit.Assert.*;
  *
  * @since @since XDAGJ
  */
+@Ignore("Performance test - too slow for CI/Unit testing")
 public class BlockProcessingPerformanceTest extends BaseIntegrationTest {
 
     // Components

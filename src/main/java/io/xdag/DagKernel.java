@@ -157,6 +157,7 @@ public class DagKernel {
   // Wallet for genesis block creation (optional)
   private final Wallet wallet;
 
+  private boolean p2pEnabled = true;
   private volatile boolean running = false;
 
   /**
@@ -311,6 +312,14 @@ public class DagKernel {
     }
 
     log.info("   ✓ Consensus layer initialization complete");
+  }
+
+  /**
+   * Enable or disable P2P service (must be called before start())
+   * @param enabled true to enable P2P (default), false to disable
+   */
+  public void setP2pEnabled(boolean enabled) {
+    this.p2pEnabled = enabled;
   }
 
   /**
@@ -554,6 +563,11 @@ public class DagKernel {
    * Registers XdagP2pEventHandler to enable HybridSync protocol.
    */
   private void startP2pService() {
+    if (!p2pEnabled) {
+      log.info("P2P service disabled by configuration");
+      return;
+    }
+
     // P2P service requires a wallet/coinbase key
     if (wallet == null || wallet.getDefKey() == null) {
       log.warn("⚠ P2P service not started (wallet required)");

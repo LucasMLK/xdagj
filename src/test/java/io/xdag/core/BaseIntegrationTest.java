@@ -82,6 +82,8 @@ public abstract class BaseIntegrationTest {
 
         // Create DagKernel (subclasses can start it when ready)
         dagKernel = new DagKernel(config, testWallet);
+        // Disable P2P by default for integration tests to speed up execution and avoid port conflicts
+        dagKernel.setP2pEnabled(false);
     }
 
     @After
