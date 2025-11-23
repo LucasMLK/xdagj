@@ -60,90 +60,18 @@ import static org.junit.Assert.*;
  *
  * @since XDAGJ 5.1 - Atomic Block Processing
  */
-public class AtomicBlockProcessingTest {
+public class AtomicBlockProcessingTest extends BaseIntegrationTest {
 
-    private DagKernel dagKernel;
-    private Config config;
-    private Path tempDir;
-    private Wallet testWallet;
     private DagChain dagChain;
 
     @Before
+    @Override
     public void setUp() throws IOException {
-        // Create unique temporary directory for each test
-        tempDir = Files.createTempDirectory("atomic-block-test-");
-
-        // Create test genesis.json
-        createTestGenesisFile();
-
-        // Use DevnetConfig with custom database directory
-        config = new DevnetConfig() {
-            @Override
-            public String getStoreDir() {
-                return tempDir.toString();
-            }
-
-            @Override
-            public String getRootDir() {
-                return tempDir.toString();
-            }
-        };
-
-        // Create test wallet
-        testWallet = new Wallet(config);
-        testWallet.unlock("test-password");
-        testWallet.addAccountRandom();
-
-        // Create and start DagKernel
-        dagKernel = new DagKernel(config, testWallet);
+        super.setUp();
+        // Start the kernel for this test
         dagKernel.start();
-
         // Get DagChain instance
         dagChain = dagKernel.getDagChain();
-    }
-
-    private void createTestGenesisFile() throws IOException {
-        String genesisJson = "{\n" +
-                "  \"networkId\": \"test\",\n" +
-                "  \"chainId\": 999,\n" +
-                "  \"epoch\": 1,\n" +
-                "  \"initialDifficulty\": \"0x1000\",\n" +
-                "  \"epochLength\": 64,\n" +
-                "  \"extraData\": \"Atomic Block Processing Test\",\n" +
-                "  \"genesisCoinbase\": \"0x0000000000000000000000001111111111111111111111111111111111111111\",\n" +
-                "  \"randomXSeed\": \"0x0000000000000000000000000000000000000000000000000000000000000001\",\n" +
-                "  \"alloc\": {}\n" +
-                "}";
-
-        Path genesisFile = tempDir.resolve("genesis-devnet.json");
-        Files.writeString(genesisFile, genesisJson);
-    }
-
-    @After
-    public void tearDown() {
-        if (dagKernel != null) {
-            try {
-                dagKernel.stop();
-            } catch (Exception e) {
-                System.err.println("Error stopping DagKernel: " + e.getMessage());
-            }
-        }
-
-        if (tempDir != null && Files.exists(tempDir)) {
-            try {
-                try (var walk = Files.walk(tempDir)) {
-                    walk.sorted(Comparator.reverseOrder())
-                            .map(Path::toFile)
-                            .forEach(file -> {
-                                if (!file.delete()) {
-                                    System.err.println("Failed to delete: " + file);
-                                }
-                            });
-                }
-            } catch (Exception e) {
-                System.err.println("Error deleting temp directory: " + e.getMessage());
-            }
-        }
     }
 
     /**

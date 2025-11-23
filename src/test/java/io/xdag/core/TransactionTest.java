@@ -266,4 +266,93 @@ public class TransactionTest {
         assertEquals(2, tx2.getNonce());
         assertNotEquals(tx1.getHash(), tx2.getHash());
     }
+
+    @Test
+    public void testSignatureVerification() {
+        // Generate a key pair
+        io.xdag.crypto.keys.ECKeyPair keyPair = io.xdag.crypto.keys.ECKeyPair.generate();
+        Bytes from = io.xdag.crypto.keys.AddressUtils.toBytesAddress(keyPair);
+
+        // Create transaction
+        Transaction tx = Transaction.createTransfer(
+            from,
+            Bytes.random(20),
+            XAmount.of(100, XUnit.XDAG),
+            1,
+            XAmount.of(1, XUnit.MILLI_XDAG)
+        );
+
+        // Sign transaction
+        Transaction signedTx = tx.sign(keyPair);
+
+        // Verify signature
+        assertTrue("Signature should be valid", signedTx.verifySignature());
+    }
+
+    @Test
+    public void testSignatureVerificationTampered() {
+        io.xdag.crypto.keys.ECKeyPair keyPair = io.xdag.crypto.keys.ECKeyPair.generate();
+        Bytes from = io.xdag.crypto.keys.AddressUtils.toBytesAddress(keyPair);
+
+        Transaction tx = Transaction.createTransfer(
+            from,
+            Bytes.random(20),
+            XAmount.of(100, XUnit.XDAG),
+            1,
+            XAmount.of(1, XUnit.MILLI_XDAG)
+        );
+
+        Transaction signedTx = tx.sign(keyPair);
+
+        // Tamper: Change recipient (to) but keep original signature
+        Transaction tamperedTx = signedTx.toBuilder()
+            .to(Bytes.random(20))
+            .build();
+
+        assertFalse("Signature should be invalid for tampered data", tamperedTx.verifySignature());
+    }
+
+    @Test
+    public void testSignatureVerificationWrongKey() {
+        io.xdag.crypto.keys.ECKeyPair keyPair1 = io.xdag.crypto.keys.ECKeyPair.generate();
+        io.xdag.crypto.keys.ECKeyPair keyPair2 = io.xdag.crypto.keys.ECKeyPair.generate();
+        Bytes from1 = io.xdag.crypto.keys.AddressUtils.toBytesAddress(keyPair1);
+
+        Transaction tx = Transaction.createTransfer(
+            from1,
+            Bytes.random(20),
+            XAmount.of(100, XUnit.XDAG),
+            1,
+            XAmount.of(1, XUnit.MILLI_XDAG)
+        );
+
+        // Sign with wrong key (keyPair2) but claimed sender is from keyPair1
+        Transaction wrongSigTx = tx.sign(keyPair2);
+
+        // Verify should fail because recovered address (from keyPair2) != from1
+        assertFalse("Signature should be invalid when signed by wrong key", wrongSigTx.verifySignature());
+    }
+
+    @Test
+    public void testSignatureVerificationInvalidFormat() {
+        io.xdag.crypto.keys.ECKeyPair keyPair = io.xdag.crypto.keys.ECKeyPair.generate();
+        Bytes from = io.xdag.crypto.keys.AddressUtils.toBytesAddress(keyPair);
+
+        Transaction tx = Transaction.createTransfer(
+            from,
+            Bytes.random(20),
+            XAmount.of(100, XUnit.XDAG),
+            1,
+            XAmount.of(1, XUnit.MILLI_XDAG)
+        );
+
+        Transaction signedTx = tx.sign(keyPair);
+
+        // Invalidate v (valid values are 0-3 usually, let's set 99)
+        Transaction invalidVTx = signedTx.toBuilder()
+            .v(99)
+            .build();
+
+        assertFalse("Signature should be invalid with bad v value", invalidVTx.verifySignature());
+    }
 }
