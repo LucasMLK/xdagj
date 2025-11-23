@@ -286,12 +286,17 @@
   - **Fix Applied**: Added requestId field to all 10 sync messages (protocol change)
   - **Status**: ✅ Fixed (commit 12d592eb) - All request/reply handlers updated
   - **Files Modified**: 12 files (HybridSyncP2pAdapter, XdagP2pEventHandler, 10 message classes)
+  - **Test Coverage**: ✅ Added comprehensive unit tests (commit 01fc1164)
+    - Created HybridSyncP2pAdapterTest.java with 7 test methods
+    - All tests passing (7/7) - Verified concurrent request-response matching
+    - Tests cover: concurrent requests, unknown/null requestId handling, multiple requests to same peer, different message types, sequential requests, requestId propagation
 
 **Phase 5.2 Summary**:
 - All core files reviewed ✅
 - 1 major bug found (BUG-022) - ✅ **FIXED** (protocol design improved)
 - Code quality: Excellent (both files)
 - Sync protocol well-designed with clear phases
+- Test coverage: ✅ Comprehensive unit tests added and passing
 
 ---
 
