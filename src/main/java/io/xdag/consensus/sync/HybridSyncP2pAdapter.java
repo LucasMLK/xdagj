@@ -77,12 +77,17 @@ import org.apache.tuweni.bytes.Bytes32;
  * <pre>
  * 1. HybridSyncManager calls requestXXX()
  * 2. Adapter creates CompletableFuture and stores in pendingRequests
- * 3. Adapter sends request via P2P channel
+ * 3. Adapter sends request via P2P channel with requestId
  * 4. XdagP2pEventHandler receives response
  * 5. XdagP2pEventHandler calls onXXXReply()
- * 6. Adapter completes the Future
+ * 6. Adapter uses requestId to match and complete the correct Future
  * 7. HybridSyncManager receives result
  * </pre>
+ *
+ * <p><strong>BUGFIX (BUG-022)</strong>:
+ * Fixed request-response matching to use requestId from reply messages instead of
+ * completing the first pending request. This ensures correct pairing of requests
+ * and replies in concurrent scenarios with multiple peers.
  *
  * @since XDAGJ
  */
@@ -176,7 +181,7 @@ public class HybridSyncP2pAdapter {
 
     try {
       // Create and send request
-      SyncHeightRequestMessage request = new SyncHeightRequestMessage();
+      SyncHeightRequestMessage request = new SyncHeightRequestMessage(requestId);
 
       log.debug("Sending SyncHeightRequest to {} (requestId={})",
           channel.getRemoteAddress(), requestId);
@@ -227,7 +232,7 @@ public class HybridSyncP2pAdapter {
 
     try {
       SyncMainBlocksRequestMessage request = new SyncMainBlocksRequestMessage(
-          fromHeight, toHeight, maxBlocks, isRaw);
+          requestId, fromHeight, toHeight, maxBlocks, isRaw);
 
       log.debug("Sending SyncMainBlocksRequest [{}, {}] to {} (requestId={})",
           fromHeight, toHeight, channel.getRemoteAddress(), requestId);
@@ -272,8 +277,8 @@ public class HybridSyncP2pAdapter {
     pendingEpochBlocksRequests.put(requestId, future);
 
     try {
-      SyncEpochBlocksRequestMessage request = new SyncEpochBlocksRequestMessage(startEpoch,
-          endEpoch);
+      SyncEpochBlocksRequestMessage request = new SyncEpochBlocksRequestMessage(requestId,
+          startEpoch, endEpoch);
 
       log.debug("Sending SyncEpochBlocksRequest [{}, {}] (range={}) to {} (requestId={})",
           startEpoch, endEpoch, endEpoch - startEpoch + 1,
@@ -319,7 +324,7 @@ public class HybridSyncP2pAdapter {
     pendingBlocksRequests.put(requestId, future);
 
     try {
-      SyncBlocksRequestMessage request = new SyncBlocksRequestMessage(hashes, isRaw);
+      SyncBlocksRequestMessage request = new SyncBlocksRequestMessage(requestId, hashes, isRaw);
 
       log.debug("Sending SyncBlocksRequest count={} to {} (requestId={})",
           hashes.size(), channel.getRemoteAddress(), requestId);
@@ -362,7 +367,7 @@ public class HybridSyncP2pAdapter {
     pendingTransactionsRequests.put(requestId, future);
 
     try {
-      SyncTransactionsRequestMessage request = new SyncTransactionsRequestMessage(hashes);
+      SyncTransactionsRequestMessage request = new SyncTransactionsRequestMessage(requestId, hashes);
 
       log.debug("Sending SyncTransactionsRequest count={} to {} (requestId={})",
           hashes.size(), channel.getRemoteAddress(), requestId);
@@ -387,99 +392,147 @@ public class HybridSyncP2pAdapter {
   /**
    * Handle SyncHeightReply message Called by XdagP2pEventHandler when reply is received
    *
+   * <p>BUGFIX (BUG-022): Now uses requestId for correct request-response matching
+   * instead of completing the first pending request.
+   *
    * @param reply height reply message
    */
   public void onHeightReply(SyncHeightReplyMessage reply) {
-    // For now, complete the first pending request
-    // TODO: Implement proper request tracking by channel/peer
-    if (!pendingHeightRequests.isEmpty()) {
-      String requestId = pendingHeightRequests.keySet().iterator().next();
-      CompletableFuture<SyncHeightReplyMessage> future = pendingHeightRequests.remove(requestId);
+    // BUGFIX (BUG-022): Match reply by requestId instead of using first pending request
+    String requestId = reply.getRequestId();
 
-      if (future != null) {
-        log.debug("Completing height request {} with reply: mainHeight={}",
-            requestId, reply.getMainHeight());
-        future.complete(reply);
-      }
+    if (requestId == null) {
+      log.warn("Received SyncHeightReply without requestId, dropping");
+      return;
+    }
+
+    CompletableFuture<SyncHeightReplyMessage> future = pendingHeightRequests.remove(requestId);
+
+    if (future != null) {
+      log.debug("Completing height request {} with reply: mainHeight={}",
+          requestId, reply.getMainHeight());
+      future.complete(reply);
+    } else {
+      log.warn("Received SyncHeightReply for unknown requestId: {}", requestId);
     }
   }
 
   /**
    * Handle SyncMainBlocksReply message
    *
+   * <p>BUGFIX (BUG-022): Now uses requestId for correct request-response matching
+   * instead of completing the first pending request.
+   *
    * @param reply main blocks reply message
    */
   public void onMainBlocksReply(SyncMainBlocksReplyMessage reply) {
-    if (!pendingMainBlocksRequests.isEmpty()) {
-      String requestId = pendingMainBlocksRequests.keySet().iterator().next();
-      CompletableFuture<SyncMainBlocksReplyMessage> future =
-          pendingMainBlocksRequests.remove(requestId);
+    // BUGFIX (BUG-022): Match reply by requestId instead of using first pending request
+    String requestId = reply.getRequestId();
 
-      if (future != null) {
-        log.debug("Completing main blocks request {} with {} blocks",
-            requestId, reply.getBlocks().size());
-        future.complete(reply);
-      }
+    if (requestId == null) {
+      log.warn("Received SyncMainBlocksReply without requestId, dropping");
+      return;
+    }
+
+    CompletableFuture<SyncMainBlocksReplyMessage> future =
+        pendingMainBlocksRequests.remove(requestId);
+
+    if (future != null) {
+      log.debug("Completing main blocks request {} with {} blocks",
+          requestId, reply.getBlocks().size());
+      future.complete(reply);
+    } else {
+      log.warn("Received SyncMainBlocksReply for unknown requestId: {}", requestId);
     }
   }
 
   /**
    * Handle SyncEpochBlocksReply message
    *
+   * <p>BUGFIX (BUG-022): Now uses requestId for correct request-response matching
+   * instead of completing the first pending request.
+   *
    * @param reply epoch blocks reply message
    */
   public void onEpochBlocksReply(SyncEpochBlocksReplyMessage reply) {
-    if (!pendingEpochBlocksRequests.isEmpty()) {
-      String requestId = pendingEpochBlocksRequests.keySet().iterator().next();
-      CompletableFuture<SyncEpochBlocksReplyMessage> future =
-          pendingEpochBlocksRequests.remove(requestId);
+    // BUGFIX (BUG-022): Match reply by requestId instead of using first pending request
+    String requestId = reply.getRequestId();
 
-      if (future != null) {
-        int totalBlocks = reply.getEpochBlocksMap().values().stream()
-            .mapToInt(List::size)
-            .sum();
-        log.debug("Completing epoch blocks request {} with {} epochs, {} total blocks",
-            requestId, reply.getEpochBlocksMap().size(), totalBlocks);
-        future.complete(reply);
-      }
+    if (requestId == null) {
+      log.warn("Received SyncEpochBlocksReply without requestId, dropping");
+      return;
+    }
+
+    CompletableFuture<SyncEpochBlocksReplyMessage> future =
+        pendingEpochBlocksRequests.remove(requestId);
+
+    if (future != null) {
+      int totalBlocks = reply.getEpochBlocksMap().values().stream()
+          .mapToInt(List::size)
+          .sum();
+      log.debug("Completing epoch blocks request {} with {} epochs, {} total blocks",
+          requestId, reply.getEpochBlocksMap().size(), totalBlocks);
+      future.complete(reply);
+    } else {
+      log.warn("Received SyncEpochBlocksReply for unknown requestId: {}", requestId);
     }
   }
 
   /**
    * Handle SyncBlocksReply message
    *
+   * <p>BUGFIX (BUG-022): Now uses requestId for correct request-response matching
+   * instead of completing the first pending request.
+   *
    * @param reply blocks reply message
    */
   public void onBlocksReply(SyncBlocksReplyMessage reply) {
-    if (!pendingBlocksRequests.isEmpty()) {
-      String requestId = pendingBlocksRequests.keySet().iterator().next();
-      CompletableFuture<SyncBlocksReplyMessage> future =
-          pendingBlocksRequests.remove(requestId);
+    // BUGFIX (BUG-022): Match reply by requestId instead of using first pending request
+    String requestId = reply.getRequestId();
 
-      if (future != null) {
-        log.debug("Completing blocks request {} with {} blocks",
-            requestId, reply.getBlocks().size());
-        future.complete(reply);
-      }
+    if (requestId == null) {
+      log.warn("Received SyncBlocksReply without requestId, dropping");
+      return;
+    }
+
+    CompletableFuture<SyncBlocksReplyMessage> future =
+        pendingBlocksRequests.remove(requestId);
+
+    if (future != null) {
+      log.debug("Completing blocks request {} with {} blocks",
+          requestId, reply.getBlocks().size());
+      future.complete(reply);
+    } else {
+      log.warn("Received SyncBlocksReply for unknown requestId: {}", requestId);
     }
   }
 
   /**
    * Handle SyncTransactionsReply message
    *
+   * <p>BUGFIX (BUG-022): Now uses requestId for correct request-response matching
+   * instead of completing the first pending request.
+   *
    * @param reply transactions reply message
    */
   public void onTransactionsReply(SyncTransactionsReplyMessage reply) {
-    if (!pendingTransactionsRequests.isEmpty()) {
-      String requestId = pendingTransactionsRequests.keySet().iterator().next();
-      CompletableFuture<SyncTransactionsReplyMessage> future =
-          pendingTransactionsRequests.remove(requestId);
+    // BUGFIX (BUG-022): Match reply by requestId instead of using first pending request
+    String requestId = reply.getRequestId();
 
-      if (future != null) {
-        log.debug("Completing transactions request {} with {} transactions",
-            requestId, reply.getTransactions().size());
-        future.complete(reply);
-      }
+    if (requestId == null) {
+      log.warn("Received SyncTransactionsReply without requestId, dropping");
+      return;
+    }
+
+    CompletableFuture<SyncTransactionsReplyMessage> future =
+        pendingTransactionsRequests.remove(requestId);
+
+    if (future != null) {
+      log.debug("Completing transactions request {} with {} transactions",
+          requestId, reply.getTransactions().size());
+      future.complete(reply);
+    } else {
+      log.warn("Received SyncTransactionsReply for unknown requestId: {}", requestId);
     }
   }
 

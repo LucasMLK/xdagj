@@ -347,12 +347,12 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
         }
       }
 
-      // Create and send reply
+      // Create and send reply (BUGFIX BUG-022: Pass requestId from request to reply)
       SyncHeightReplyMessage reply = new SyncHeightReplyMessage(
-          mainHeight, finalizedHeight, tipHash);
+          request.getRequestId(), mainHeight, finalizedHeight, tipHash);
 
-      log.debug("Sending SyncHeightReply to {}: mainHeight={}, finalizedHeight={}",
-          channel.getRemoteAddress(), mainHeight, finalizedHeight);
+      log.debug("Sending SyncHeightReply to {}: mainHeight={}, finalizedHeight={}, requestId={}",
+          channel.getRemoteAddress(), mainHeight, finalizedHeight, request.getRequestId());
 
       // Send Message object directly - Channel will handle encoding
       channel.send(reply);
@@ -414,11 +414,11 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
         blocks.add(block); // May be null if block not found
       }
 
-      // Create and send reply
-      SyncMainBlocksReplyMessage reply = new SyncMainBlocksReplyMessage(blocks);
+      // Create and send reply (BUGFIX BUG-022: Pass requestId from request to reply)
+      SyncMainBlocksReplyMessage reply = new SyncMainBlocksReplyMessage(request.getRequestId(), blocks);
 
-      log.debug("Sending SyncMainBlocksReply to {}: {} blocks",
-          channel.getRemoteAddress(), blocks.size());
+      log.debug("Sending SyncMainBlocksReply to {}: {} blocks, requestId={}",
+          channel.getRemoteAddress(), blocks.size(), request.getRequestId());
 
       // Send Message object directly - Channel will handle encoding
       channel.send(reply);
@@ -506,11 +506,11 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
       log.debug("Found {} epochs with blocks ({} total blocks) in range [{}, {}]",
           epochBlocksMap.size(), totalBlocks, startEpoch, endEpoch);
 
-      // Create and send reply with batch data
-      SyncEpochBlocksReplyMessage reply = new SyncEpochBlocksReplyMessage(epochBlocksMap);
+      // Create and send reply with batch data (BUGFIX BUG-022: Pass requestId from request to reply)
+      SyncEpochBlocksReplyMessage reply = new SyncEpochBlocksReplyMessage(request.getRequestId(), epochBlocksMap);
 
-      log.debug("Sending SyncEpochBlocksReply to {}: {} epochs, {} total hashes",
-          channel.getRemoteAddress(), epochBlocksMap.size(), totalBlocks);
+      log.debug("Sending SyncEpochBlocksReply to {}: {} epochs, {} total hashes, requestId={}",
+          channel.getRemoteAddress(), epochBlocksMap.size(), totalBlocks, request.getRequestId());
 
       // Send Message object directly - Channel will handle encoding
       channel.send(reply);
@@ -572,11 +572,11 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
         blocks.add(block); // May be null if block not found
       }
 
-      // Create and send reply
-      SyncBlocksReplyMessage reply = new SyncBlocksReplyMessage(blocks);
+      // Create and send reply (BUGFIX BUG-022: Pass requestId from request to reply)
+      SyncBlocksReplyMessage reply = new SyncBlocksReplyMessage(request.getRequestId(), blocks);
 
-      log.debug("Sending SyncBlocksReply to {}: {} blocks",
-          channel.getRemoteAddress(), blocks.size());
+      log.debug("Sending SyncBlocksReply to {}: {} blocks, requestId={}",
+          channel.getRemoteAddress(), blocks.size(), request.getRequestId());
 
       // Send Message object directly - Channel will handle encoding
       channel.send(reply);
@@ -631,11 +631,11 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler {
       // For now, return empty list
       List<Transaction> transactions = new ArrayList<>();
 
-      // Create and send reply
-      SyncTransactionsReplyMessage reply = new SyncTransactionsReplyMessage(transactions);
+      // Create and send reply (BUGFIX BUG-022: Pass requestId from request to reply)
+      SyncTransactionsReplyMessage reply = new SyncTransactionsReplyMessage(request.getRequestId(), transactions);
 
-      log.debug("Sending SyncTransactionsReply to {}: {} transactions",
-          channel.getRemoteAddress(), transactions.size());
+      log.debug("Sending SyncTransactionsReply to {}: {} transactions, requestId={}",
+          channel.getRemoteAddress(), transactions.size(), request.getRequestId());
 
       // Send Message object directly - Channel will handle encoding
       channel.send(reply);

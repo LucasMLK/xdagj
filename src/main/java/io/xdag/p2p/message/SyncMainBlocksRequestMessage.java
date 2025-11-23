@@ -39,11 +39,16 @@ import lombok.Setter;
  *
  * <p><strong>Message Format</strong>:
  * <pre>
+ * [Variable] requestId    - UTF-8 encoded string with length prefix (BUGFIX BUG-022)
  * [8 bytes] fromHeight    - Start height (inclusive)
  * [8 bytes] toHeight      - End height (inclusive)
  * [4 bytes] maxBlocks     - Maximum blocks to return (recommended 1000)
  * [1 byte]  isRaw         - Whether to return full block data (true=1, false=0)
  * </pre>
+ *
+ * <p><strong>BUGFIX (BUG-022)</strong>:
+ * Added requestId field to enable correct request-response matching in concurrent scenarios.
+ * Without requestId, concurrent requests to different peers could be matched incorrectly.
  *
  * <p><strong>Fields</strong>:
  * <ul>
@@ -98,6 +103,11 @@ import lombok.Setter;
 public class SyncMainBlocksRequestMessage extends Message {
 
   /**
+   * Request ID for matching request with reply (BUGFIX BUG-022)
+   */
+  private String requestId;
+
+  /**
    * Start height (inclusive)
    */
   private long fromHeight;
@@ -122,37 +132,32 @@ public class SyncMainBlocksRequestMessage extends Message {
    *
    * <p>Deserializes message body:
    * <ol>
+   *   <li>Read requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Read fromHeight (long, 8 bytes)</li>
    *   <li>Read toHeight (long, 8 bytes)</li>
    *   <li>Read maxBlocks (int, 4 bytes)</li>
    *   <li>Read isRaw (boolean, 1 byte)</li>
    * </ol>
    *
-   * @param body serialized message body (must be at least 21 bytes)
+   * @param body serialized message body (must be at least 4 bytes for requestId length + requestId + 21 bytes)
    * @throws IllegalArgumentException if deserialization fails or body is too short
    */
   public SyncMainBlocksRequestMessage(byte[] body) {
     super(XdagMessageCode.SYNC_MAIN_BLOCKS_REQUEST, SyncMainBlocksReplyMessage.class);
-
-    // BUGFIX (BUG-051): Add message length validation
-    // Previously: Would throw unclear exception from SimpleDecoder
-    // Now: Validate input and provide clear error message
-    if (body == null || body.length < 21) {
-      throw new IllegalArgumentException(
-          "Message body must be at least 21 bytes (8+8+4+1), got: " +
-          (body == null ? "null" : body.length));
-    }
-
-    SimpleDecoder dec = new SimpleDecoder(body);
-
-    // Deserialize fields
-    this.fromHeight = dec.readLong();
-    this.toHeight = dec.readLong();
-    this.maxBlocks = dec.readInt();
-    this.isRaw = dec.readBoolean();
-
-    // Set body for reference
     this.body = body;
+
+    if (body != null && body.length > 0) {
+      SimpleDecoder dec = new SimpleDecoder(body);
+
+      // Deserialize requestId first (BUGFIX BUG-022)
+      this.requestId = dec.readString();
+
+      // Deserialize fields
+      this.fromHeight = dec.readLong();
+      this.toHeight = dec.readLong();
+      this.maxBlocks = dec.readInt();
+      this.isRaw = dec.readBoolean();
+    }
   }
 
   /**
@@ -160,19 +165,21 @@ public class SyncMainBlocksRequestMessage extends Message {
    *
    * <p>Serializes message:
    * <ol>
+   *   <li>Write requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Write fromHeight (long, 8 bytes)</li>
    *   <li>Write toHeight (long, 8 bytes)</li>
    *   <li>Write maxBlocks (int, 4 bytes)</li>
    *   <li>Write isRaw (boolean, 1 byte)</li>
    * </ol>
    *
+   * @param requestId  unique request identifier for matching reply (BUGFIX BUG-022)
    * @param fromHeight start height (inclusive, must be >= 0)
    * @param toHeight   end height (inclusive, must be >= fromHeight)
    * @param maxBlocks  maximum blocks to return (capped at 10000)
    * @param isRaw      true = full block data, false = BlockInfo only
    * @throws IllegalArgumentException if parameters are invalid
    */
-  public SyncMainBlocksRequestMessage(long fromHeight, long toHeight, int maxBlocks,
+  public SyncMainBlocksRequestMessage(String requestId, long fromHeight, long toHeight, int maxBlocks,
       boolean isRaw) {
     super(XdagMessageCode.SYNC_MAIN_BLOCKS_REQUEST, SyncMainBlocksReplyMessage.class);
 
@@ -190,6 +197,7 @@ public class SyncMainBlocksRequestMessage extends Message {
       throw new IllegalArgumentException("maxBlocks must be > 0, got: " + maxBlocks);
     }
 
+    this.requestId = requestId;
     this.fromHeight = fromHeight;
     this.toHeight = toHeight;
     // Apply hard limit of 10000 blocks as documented
@@ -204,6 +212,9 @@ public class SyncMainBlocksRequestMessage extends Message {
 
   @Override
   public void encode(SimpleEncoder enc) {
+    // Encode requestId as string with length prefix (BUGFIX BUG-022)
+    enc.writeString(requestId);
+
     // Serialize fields
     enc.writeLong(fromHeight);
     enc.writeLong(toHeight);
@@ -214,7 +225,8 @@ public class SyncMainBlocksRequestMessage extends Message {
   @Override
   public String toString() {
     return String.format(
-        "SyncMainBlocksRequestMessage[from=%d, to=%d, max=%d, raw=%b, size=%d bytes]",
+        "SyncMainBlocksRequestMessage[requestId=%s, from=%d, to=%d, max=%d, raw=%b, size=%d bytes]",
+        requestId,
         fromHeight,
         toHeight,
         maxBlocks,

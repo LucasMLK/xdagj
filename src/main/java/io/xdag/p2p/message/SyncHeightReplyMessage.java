@@ -40,10 +40,14 @@ import org.apache.tuweni.bytes.Bytes32;
  *
  * <p><strong>Message Format</strong>:
  * <pre>
+ * [Variable] requestId         - UTF-8 encoded string with length prefix (BUGFIX BUG-022)
  * [8 bytes]  mainHeight        - Current main chain height
  * [8 bytes]  finalizedHeight   - Finalized height (mainHeight - 16384)
  * [32 bytes] mainBlockHash     - Current main chain tip block hash
  * </pre>
+ *
+ * <p><strong>BUGFIX (BUG-022)</strong>:
+ * Added requestId field to enable correct request-response matching in concurrent scenarios.
  *
  * <p><strong>Fields</strong>:
  * <ul>
@@ -78,6 +82,11 @@ import org.apache.tuweni.bytes.Bytes32;
 public class SyncHeightReplyMessage extends Message {
 
   /**
+   * Request ID for matching reply with request (BUGFIX BUG-022)
+   */
+  private String requestId;
+
+  /**
    * Current main chain height
    */
   private long mainHeight;
@@ -97,27 +106,30 @@ public class SyncHeightReplyMessage extends Message {
    *
    * <p>Deserializes message body:
    * <ol>
+   *   <li>Read requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Read mainHeight (long, 8 bytes)</li>
    *   <li>Read finalizedHeight (long, 8 bytes)</li>
    *   <li>Read mainBlockHash (Bytes32, 32 bytes)</li>
    * </ol>
    *
-   * @param body serialized message body (must be at least 48 bytes)
+   * @param body serialized message body (must be at least: 4 (string length) + requestId.length + 48 bytes)
    * @throws IllegalArgumentException if deserialization fails or body is too short
    */
   public SyncHeightReplyMessage(byte[] body) {
     super(XdagMessageCode.SYNC_HEIGHT_REPLY, null);
 
     // BUGFIX (BUG-050): Add message length validation
-    // Previously: Would throw unclear exception from SimpleDecoder
-    // Now: Validate input and provide clear error message
-    if (body == null || body.length < 48) {
+    // Minimum length: 4 bytes (string length) + at least 1 byte for requestId + 48 bytes for data
+    if (body == null || body.length < 53) {
       throw new IllegalArgumentException(
-          "Message body must be at least 48 bytes (8+8+32), got: " +
+          "Message body must be at least 53 bytes (4+requestId+8+8+32), got: " +
           (body == null ? "null" : body.length));
     }
 
     SimpleDecoder dec = new SimpleDecoder(body);
+
+    // Deserialize requestId first (BUGFIX BUG-022)
+    this.requestId = dec.readString();
 
     // Deserialize fields
     this.mainHeight = dec.readLong();
@@ -137,18 +149,25 @@ public class SyncHeightReplyMessage extends Message {
    *
    * <p>Serializes message:
    * <ol>
+   *   <li>Write requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Write mainHeight (long, 8 bytes)</li>
    *   <li>Write finalizedHeight (long, 8 bytes)</li>
    *   <li>Write mainBlockHash (Bytes32, 32 bytes)</li>
    * </ol>
    *
+   * @param requestId       request ID from the original request (BUGFIX BUG-022)
    * @param mainHeight      current main chain height
    * @param finalizedHeight finalized boundary height
    * @param mainBlockHash   hash of main chain tip block (must not be null)
-   * @throws IllegalArgumentException if mainBlockHash is null
+   * @throws IllegalArgumentException if requestId or mainBlockHash is null
    */
-  public SyncHeightReplyMessage(long mainHeight, long finalizedHeight, Bytes32 mainBlockHash) {
+  public SyncHeightReplyMessage(String requestId, long mainHeight, long finalizedHeight, Bytes32 mainBlockHash) {
     super(XdagMessageCode.SYNC_HEIGHT_REPLY, null);
+
+    // BUGFIX (BUG-022): Add null check for requestId
+    if (requestId == null) {
+      throw new IllegalArgumentException("Request ID cannot be null");
+    }
 
     // BUGFIX (BUG-049): Add null check for mainBlockHash parameter
     // Previously: Would throw NPE in encode() when calling mainBlockHash.toArray()
@@ -157,6 +176,7 @@ public class SyncHeightReplyMessage extends Message {
       throw new IllegalArgumentException("Main block hash cannot be null");
     }
 
+    this.requestId = requestId;
     this.mainHeight = mainHeight;
     this.finalizedHeight = finalizedHeight;
     this.mainBlockHash = mainBlockHash;
@@ -169,6 +189,9 @@ public class SyncHeightReplyMessage extends Message {
 
   @Override
   public void encode(SimpleEncoder enc) {
+    // Serialize requestId first (BUGFIX BUG-022)
+    enc.writeString(requestId);
+
     // Serialize heights
     enc.writeLong(mainHeight);
     enc.writeLong(finalizedHeight);

@@ -23,7 +23,9 @@
  */
 package io.xdag.p2p.message;
 
+import io.xdag.p2p.utils.SimpleDecoder;
 import io.xdag.p2p.utils.SimpleEncoder;
+import lombok.Getter;
 
 /**
  * SyncHeightRequestMessage - Query peer's main chain height
@@ -36,17 +38,22 @@ import io.xdag.p2p.utils.SimpleEncoder;
  *
  * <p><strong>Message Format</strong>:
  * <pre>
- * [Empty body]
+ * [Variable] requestId - UTF-8 encoded string with length prefix (BUGFIX BUG-022)
  * </pre>
+ *
+ * <p><strong>BUGFIX (BUG-022)</strong>:
+ * Added requestId field to enable correct request-response matching in concurrent scenarios.
+ * Without requestId, concurrent requests to different peers could be matched incorrectly.
  *
  * <p><strong>Usage</strong>:
  * <pre>{@code
  * // Send height query request
- * SyncHeightRequestMessage request = new SyncHeightRequestMessage();
+ * SyncHeightRequestMessage request = new SyncHeightRequestMessage("req-12345");
  * channel.sendMessage(request);
  *
  * // Wait for reply
  * SyncHeightReplyMessage reply = channel.waitForResponse(SyncHeightReplyMessage.class);
+ * assert reply.getRequestId().equals(request.getRequestId());
  * long remoteHeight = reply.getMainHeight();
  * }</pre>
  *
@@ -54,38 +61,56 @@ import io.xdag.p2p.utils.SimpleEncoder;
  * @see <a href="../../../../../HYBRID_SYNC_MESSAGES.md">Hybrid Sync Protocol</a>
  * @since XDAGJ
  */
+@Getter
 public class SyncHeightRequestMessage extends Message {
+
+  /**
+   * Request ID for matching request with reply (BUGFIX BUG-022)
+   */
+  private String requestId;
 
   /**
    * Constructor for receiving message from network
    *
-   * <p>This message has no body, so the constructor is simple.
+   * <p>Deserializes the requestId from the message body.
    *
-   * @param body serialized message body (empty)
+   * @param body serialized message body containing requestId
    */
   public SyncHeightRequestMessage(byte[] body) {
     super(XdagMessageCode.SYNC_HEIGHT_REQUEST, SyncHeightReplyMessage.class);
     this.body = body;
+
+    if (body != null && body.length > 0) {
+      SimpleDecoder dec = new SimpleDecoder(body);
+      this.requestId = dec.readString();
+    }
   }
 
   /**
    * Constructor for sending message to network
    *
-   * <p>Creates an empty message to query peer's height.
+   * <p>Creates a message with the specified requestId.
+   *
+   * @param requestId unique request identifier for matching reply
    */
-  public SyncHeightRequestMessage() {
+  public SyncHeightRequestMessage(String requestId) {
     super(XdagMessageCode.SYNC_HEIGHT_REQUEST, SyncHeightReplyMessage.class);
-    // Empty message body
-    this.body = new byte[0];
+    this.requestId = requestId;
+
+    // Serialize message body
+    SimpleEncoder enc = new SimpleEncoder();
+    encode(enc);
+    this.body = enc.toBytes();
   }
 
   @Override
   public void encode(SimpleEncoder enc) {
-    // Empty message body - no data to encode
+    // Encode requestId as string with length prefix
+    enc.writeString(requestId);
   }
 
   @Override
   public String toString() {
-    return "SyncHeightRequestMessage[empty]";
+    return String.format("SyncHeightRequestMessage[requestId=%s]", requestId);
   }
 }

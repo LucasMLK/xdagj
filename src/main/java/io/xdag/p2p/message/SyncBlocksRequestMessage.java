@@ -42,10 +42,15 @@ import org.apache.tuweni.bytes.Bytes32;
  *
  * <p><strong>Message Format</strong>:
  * <pre>
+ * [Variable] requestId          - UTF-8 encoded string with length prefix (BUGFIX BUG-022)
  * [4 bytes]  hashCount          - Number of hashes
  * [variable] hashes[0..N-1]     - Block hash list (each 32 bytes)
  * [1 byte]   isRaw              - Whether to return full block data
  * </pre>
+ *
+ * <p><strong>BUGFIX (BUG-022)</strong>:
+ * Added requestId field to enable correct request-response matching in concurrent scenarios.
+ * Without requestId, concurrent requests to different peers could be matched incorrectly.
  *
  * <p><strong>Fields</strong>:
  * <ul>
@@ -98,6 +103,11 @@ import org.apache.tuweni.bytes.Bytes32;
 public class SyncBlocksRequestMessage extends Message {
 
   /**
+   * Request ID for matching request with reply (BUGFIX BUG-022)
+   */
+  private String requestId;
+
+  /**
    * List of block hashes to request
    */
   private List<Bytes32> hashes;
@@ -112,6 +122,7 @@ public class SyncBlocksRequestMessage extends Message {
    *
    * <p>Deserializes message body:
    * <ol>
+   *   <li>Read requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Read hashCount (int, 4 bytes)</li>
    *   <li>For each hash: read 32 bytes</li>
    *   <li>Read isRaw (boolean, 1 byte)</li>
@@ -122,34 +133,28 @@ public class SyncBlocksRequestMessage extends Message {
    */
   public SyncBlocksRequestMessage(byte[] body) {
     super(XdagMessageCode.SYNC_BLOCKS_REQUEST, SyncBlocksReplyMessage.class);
-
-    // BUGFIX (BUG-068): Add message length validation
-    // Previously: Would throw unclear exception from SimpleDecoder
-    // Now: Validate input and provide clear error message
-    if (body == null || body.length < 5) {
-      throw new IllegalArgumentException(
-          "Message body must be at least 5 bytes (4 for hashCount + 1 for isRaw), got: " +
-          (body == null ? "null" : body.length));
-    }
-
-    SimpleDecoder dec = new SimpleDecoder(body);
-
-    // Deserialize hash count
-    int hashCount = dec.readInt();
-    this.hashes = new ArrayList<>(hashCount);
-
-    // Deserialize each hash (32 bytes)
-    for (int i = 0; i < hashCount; i++) {
-      byte[] hashBytes = new byte[32];
-      dec.readBytes(hashBytes);
-      this.hashes.add(Bytes32.wrap(hashBytes));
-    }
-
-    // Deserialize isRaw flag
-    this.isRaw = dec.readBoolean();
-
-    // Set body for reference
     this.body = body;
+
+    if (body != null && body.length > 0) {
+      SimpleDecoder dec = new SimpleDecoder(body);
+
+      // Deserialize requestId first (BUGFIX BUG-022)
+      this.requestId = dec.readString();
+
+      // Deserialize hash count
+      int hashCount = dec.readInt();
+      this.hashes = new ArrayList<>(hashCount);
+
+      // Deserialize each hash (32 bytes)
+      for (int i = 0; i < hashCount; i++) {
+        byte[] hashBytes = new byte[32];
+        dec.readBytes(hashBytes);
+        this.hashes.add(Bytes32.wrap(hashBytes));
+      }
+
+      // Deserialize isRaw flag
+      this.isRaw = dec.readBoolean();
+    }
   }
 
   /**
@@ -157,15 +162,17 @@ public class SyncBlocksRequestMessage extends Message {
    *
    * <p>Serializes message:
    * <ol>
+   *   <li>Write requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Write hashCount (int, 4 bytes)</li>
    *   <li>For each hash: write 32 bytes</li>
    *   <li>Write isRaw (boolean, 1 byte)</li>
    * </ol>
    *
+   * @param requestId unique request identifier for matching reply (BUGFIX BUG-022)
    * @param hashes list of block hashes to request
    * @param isRaw  true = full block data, false = BlockInfo only
    */
-  public SyncBlocksRequestMessage(List<Bytes32> hashes, boolean isRaw) {
+  public SyncBlocksRequestMessage(String requestId, List<Bytes32> hashes, boolean isRaw) {
     super(XdagMessageCode.SYNC_BLOCKS_REQUEST, SyncBlocksReplyMessage.class);
 
     // BUGFIX (BUG-069): Add null check for hashes parameter
@@ -183,6 +190,7 @@ public class SyncBlocksRequestMessage extends Message {
           "Maximum 1000 hashes per request, got: " + hashes.size());
     }
 
+    this.requestId = requestId;
     this.hashes = hashes;
     this.isRaw = isRaw;
 
@@ -196,11 +204,14 @@ public class SyncBlocksRequestMessage extends Message {
    * Encode message to bytes
    *
    * <p>Format:
-   * [4 bytes hashCount] + [32 bytes per hash] + [1 byte isRaw]
+   * [Variable requestId] + [4 bytes hashCount] + [32 bytes per hash] + [1 byte isRaw]
    *
    */
   @Override
   public void encode(SimpleEncoder enc) {
+    // Encode requestId as string with length prefix (BUGFIX BUG-022)
+    enc.writeString(requestId);
+
     // Serialize hash count
     enc.writeInt(hashes.size());
 
@@ -217,7 +228,8 @@ public class SyncBlocksRequestMessage extends Message {
   @Override
   public String toString() {
     return String.format(
-        "SyncBlocksRequestMessage[hashes=%d, raw=%b, size=%d bytes]",
+        "SyncBlocksRequestMessage[requestId=%s, hashes=%d, raw=%b, size=%d bytes]",
+        requestId,
         hashes != null ? hashes.size() : 0,
         isRaw,
         body != null ? body.length : 0

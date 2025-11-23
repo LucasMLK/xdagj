@@ -42,6 +42,7 @@ import lombok.Setter;
  *
  * <p><strong>Message Format</strong>:
  * <pre>
+ * [Variable] requestId            - UTF-8 encoded string with length prefix (BUGFIX BUG-022)
  * [4 bytes]  blockCount           - Number of blocks returned
  * [variable] blocks[0..N-1]       - Block data list
  *     Each block:
@@ -49,6 +50,9 @@ import lombok.Setter;
  *     [4 bytes]  blockSize         - Block data size (if hasBlock=1)
  *     [variable] blockData         - Serialized block data (if hasBlock=1)
  * </pre>
+ *
+ * <p><strong>BUGFIX (BUG-022)</strong>:
+ * Added requestId field to enable correct request-response matching in concurrent scenarios.
  *
  * <p><strong>Fields</strong>:
  * <ul>
@@ -105,6 +109,11 @@ import lombok.Setter;
 public class SyncMainBlocksReplyMessage extends Message {
 
   /**
+   * Request ID for matching reply with request (BUGFIX BUG-022)
+   */
+  private String requestId;
+
+  /**
    * List of main blocks (may contain nulls for missing blocks)
    */
   private List<Block> blocks;
@@ -114,6 +123,7 @@ public class SyncMainBlocksReplyMessage extends Message {
    *
    * <p>Deserializes message body:
    * <ol>
+   *   <li>Read requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Read blockCount (int, 4 bytes)</li>
    *   <li>For each block:
    *     <ul>
@@ -124,7 +134,7 @@ public class SyncMainBlocksReplyMessage extends Message {
    *   </li>
    * </ol>
    *
-   * @param body serialized message body (must be at least 4 bytes)
+   * @param body serialized message body (must be at least 4 bytes for requestId length + requestId + 4 bytes)
    * @throws IllegalArgumentException if deserialization fails or body is too short
    */
   public SyncMainBlocksReplyMessage(byte[] body) {
@@ -133,13 +143,16 @@ public class SyncMainBlocksReplyMessage extends Message {
     // BUGFIX (BUG-053): Add message length validation
     // Previously: Would throw unclear exception from SimpleDecoder
     // Now: Validate input and provide clear error message
-    if (body == null || body.length < 4) {
+    if (body == null || body.length < 8) {
       throw new IllegalArgumentException(
-          "Message body must be at least 4 bytes (blockCount), got: " +
+          "Message body must be at least 8 bytes (4 for requestId length + requestId + 4 for blockCount), got: " +
           (body == null ? "null" : body.length));
     }
 
     SimpleDecoder dec = new SimpleDecoder(body);
+
+    // Deserialize requestId first (BUGFIX BUG-022)
+    this.requestId = dec.readString();
 
     // Read block count
     int blockCount = dec.readInt();
@@ -174,6 +187,7 @@ public class SyncMainBlocksReplyMessage extends Message {
    *
    * <p>Serializes message:
    * <ol>
+   *   <li>Write requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Write blockCount (int, 4 bytes)</li>
    *   <li>For each block:
    *     <ul>
@@ -184,11 +198,17 @@ public class SyncMainBlocksReplyMessage extends Message {
    *   </li>
    * </ol>
    *
+   * @param requestId request ID from the original request (BUGFIX BUG-022)
    * @param blocks list of main blocks (may contain nulls, but list itself must not be null)
-   * @throws IllegalArgumentException if blocks list is null
+   * @throws IllegalArgumentException if requestId or blocks list is null
    */
-  public SyncMainBlocksReplyMessage(List<Block> blocks) {
+  public SyncMainBlocksReplyMessage(String requestId, List<Block> blocks) {
     super(XdagMessageCode.SYNC_MAIN_BLOCKS_REPLY, null);
+
+    // BUGFIX (BUG-022): Add null check for requestId
+    if (requestId == null) {
+      throw new IllegalArgumentException("Request ID cannot be null");
+    }
 
     // BUGFIX (BUG-054): Add null check for blocks parameter
     // Previously: Would throw NPE in encode() when calling blocks.size()
@@ -197,6 +217,7 @@ public class SyncMainBlocksReplyMessage extends Message {
       throw new IllegalArgumentException("Blocks list cannot be null");
     }
 
+    this.requestId = requestId;
     this.blocks = blocks;
 
     // Serialize message body
@@ -207,6 +228,9 @@ public class SyncMainBlocksReplyMessage extends Message {
 
   @Override
   public void encode(SimpleEncoder enc) {
+    // Serialize requestId first (BUGFIX BUG-022)
+    enc.writeString(requestId);
+
     // Write block count
     enc.writeInt(blocks.size());
 
@@ -232,7 +256,8 @@ public class SyncMainBlocksReplyMessage extends Message {
   public String toString() {
     long nonNullCount = blocks != null ? blocks.stream().filter(Objects::nonNull).count() : 0;
     return String.format(
-        "SyncMainBlocksReplyMessage[total=%d, nonNull=%d, size=%d bytes]",
+        "SyncMainBlocksReplyMessage[requestId=%s, total=%d, nonNull=%d, size=%d bytes]",
+        requestId,
         blocks != null ? blocks.size() : 0,
         nonNullCount,
         body != null ? body.length : 0

@@ -39,9 +39,14 @@ import lombok.Setter;
  *
  * <p><strong>Message Format</strong>:
  * <pre>
+ * [Variable] requestId - UTF-8 encoded string with length prefix (BUGFIX BUG-022)
  * [8 bytes] startEpoch - Start epoch number (inclusive)
  * [8 bytes] endEpoch   - End epoch number (inclusive)
  * </pre>
+ *
+ * <p><strong>BUGFIX (BUG-022)</strong>:
+ * Added requestId field to enable correct request-response matching in concurrent scenarios.
+ * Without requestId, concurrent requests to different peers could be matched incorrectly.
  *
  * <p><strong>Fields</strong>:
  * <ul>
@@ -89,6 +94,11 @@ import lombok.Setter;
 public class SyncEpochBlocksRequestMessage extends Message {
 
   /**
+   * Request ID for matching request with reply (BUGFIX BUG-022)
+   */
+  private String requestId;
+
+  /**
    * Start epoch number (inclusive)
    */
   private long startEpoch;
@@ -103,6 +113,7 @@ public class SyncEpochBlocksRequestMessage extends Message {
    *
    * <p>Deserializes message body:
    * <ol>
+   *   <li>Read requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Read startEpoch (long, 8 bytes)</li>
    *   <li>Read endEpoch (long, 8 bytes)</li>
    * </ol>
@@ -112,24 +123,18 @@ public class SyncEpochBlocksRequestMessage extends Message {
    */
   public SyncEpochBlocksRequestMessage(byte[] body) {
     super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REQUEST, SyncEpochBlocksReplyMessage.class);
-
-    // BUGFIX (BUG-064): Add message length validation
-    // Previously: Would throw unclear exception from SimpleDecoder
-    // Now: Validate input and provide clear error message
-    if (body == null || body.length < 16) {
-      throw new IllegalArgumentException(
-          "Message body must be at least 16 bytes (8+8), got: " +
-          (body == null ? "null" : body.length));
-    }
-
-    SimpleDecoder dec = new SimpleDecoder(body);
-
-    // Deserialize epoch range
-    this.startEpoch = dec.readLong();
-    this.endEpoch = dec.readLong();
-
-    // Set body for reference
     this.body = body;
+
+    if (body != null && body.length > 0) {
+      SimpleDecoder dec = new SimpleDecoder(body);
+
+      // Deserialize requestId first (BUGFIX BUG-022)
+      this.requestId = dec.readString();
+
+      // Deserialize epoch range
+      this.startEpoch = dec.readLong();
+      this.endEpoch = dec.readLong();
+    }
   }
 
   /**
@@ -137,14 +142,16 @@ public class SyncEpochBlocksRequestMessage extends Message {
    *
    * <p>Serializes message:
    * <ol>
+   *   <li>Write requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Write startEpoch (long, 8 bytes)</li>
    *   <li>Write endEpoch (long, 8 bytes)</li>
    * </ol>
    *
+   * @param requestId  unique request identifier for matching reply (BUGFIX BUG-022)
    * @param startEpoch start epoch number (inclusive)
    * @param endEpoch   end epoch number (inclusive)
    */
-  public SyncEpochBlocksRequestMessage(long startEpoch, long endEpoch) {
+  public SyncEpochBlocksRequestMessage(String requestId, long startEpoch, long endEpoch) {
     super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REQUEST, SyncEpochBlocksReplyMessage.class);
 
     // BUGFIX (BUG-065): Add parameter validation
@@ -158,6 +165,7 @@ public class SyncEpochBlocksRequestMessage extends Message {
           String.format("endEpoch (%d) must be >= startEpoch (%d)", endEpoch, startEpoch));
     }
 
+    this.requestId = requestId;
     this.startEpoch = startEpoch;
     this.endEpoch = endEpoch;
 
@@ -169,6 +177,9 @@ public class SyncEpochBlocksRequestMessage extends Message {
 
   @Override
   public void encode(SimpleEncoder enc) {
+    // Encode requestId as string with length prefix (BUGFIX BUG-022)
+    enc.writeString(requestId);
+
     // Serialize epoch range
     enc.writeLong(startEpoch);
     enc.writeLong(endEpoch);
@@ -177,7 +188,8 @@ public class SyncEpochBlocksRequestMessage extends Message {
   @Override
   public String toString() {
     return String.format(
-        "SyncEpochBlocksRequestMessage[startEpoch=%d, endEpoch=%d, range=%d, size=%d bytes]",
+        "SyncEpochBlocksRequestMessage[requestId=%s, startEpoch=%d, endEpoch=%d, range=%d, size=%d bytes]",
+        requestId,
         startEpoch,
         endEpoch,
         endEpoch - startEpoch + 1,

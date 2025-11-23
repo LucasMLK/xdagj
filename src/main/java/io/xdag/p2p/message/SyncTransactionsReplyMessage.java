@@ -44,6 +44,7 @@ import org.apache.tuweni.bytes.Bytes32;
  *
  * <p><strong>Message Format</strong>:
  * <pre>
+ * [Variable] requestId            - UTF-8 encoded string with length prefix (BUGFIX BUG-022)
  * [4 bytes]  txCount            - Number of transactions returned
  * [variable] transactions[0..N-1] - Transaction data list
  *     Each transaction:
@@ -52,6 +53,9 @@ import org.apache.tuweni.bytes.Bytes32;
  *     [4 bytes]  txSize         - Transaction data size (if hasTx=1)
  *     [variable] txData         - Serialized transaction data (if hasTx=1)
  * </pre>
+ *
+ * <p><strong>BUGFIX (BUG-022)</strong>:
+ * Added requestId field to enable correct request-response matching in concurrent scenarios.
  *
  * <p><strong>Fields</strong>:
  * <ul>
@@ -112,6 +116,11 @@ import org.apache.tuweni.bytes.Bytes32;
 public class SyncTransactionsReplyMessage extends Message {
 
   /**
+   * Request ID for matching reply with request (BUGFIX BUG-022)
+   */
+  private String requestId;
+
+  /**
    * List of transactions (may contain nulls for missing transactions) Order corresponds to request
    * hash list
    */
@@ -122,6 +131,7 @@ public class SyncTransactionsReplyMessage extends Message {
    *
    * <p>Deserializes message body:
    * <ol>
+   *   <li>Read requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Read txCount (int, 4 bytes)</li>
    *   <li>For each transaction:
    *     <ul>
@@ -142,13 +152,16 @@ public class SyncTransactionsReplyMessage extends Message {
     // BUGFIX (BUG-076): Add message length validation
     // Previously: Would throw unclear exception from SimpleDecoder
     // Now: Validate input and provide clear error message
-    if (body == null || body.length < 4) {
+    if (body == null || body.length < 8) {
       throw new IllegalArgumentException(
-          "Message body must be at least 4 bytes (txCount), got: " +
+          "Message body must be at least 8 bytes (4 for requestId length + requestId + 4 for txCount), got: " +
           (body == null ? "null" : body.length));
     }
 
     SimpleDecoder dec = new SimpleDecoder(body);
+
+    // Deserialize requestId first (BUGFIX BUG-022)
+    this.requestId = dec.readString();
 
     // Read transaction count
     int txCount = dec.readInt();
@@ -189,6 +202,7 @@ public class SyncTransactionsReplyMessage extends Message {
    *
    * <p>Serializes message:
    * <ol>
+   *   <li>Write requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Write txCount (int, 4 bytes)</li>
    *   <li>For each transaction:
    *     <ul>
@@ -200,10 +214,16 @@ public class SyncTransactionsReplyMessage extends Message {
    *   </li>
    * </ol>
    *
+   * @param requestId request ID from the original request (BUGFIX BUG-022)
    * @param transactions list of transactions (may contain nulls)
    */
-  public SyncTransactionsReplyMessage(List<Transaction> transactions) {
+  public SyncTransactionsReplyMessage(String requestId, List<Transaction> transactions) {
     super(XdagMessageCode.SYNC_TRANSACTIONS_REPLY, null);
+
+    // BUGFIX (BUG-022): Add null check for requestId
+    if (requestId == null) {
+      throw new IllegalArgumentException("Request ID cannot be null");
+    }
 
     // BUGFIX (BUG-077): Add null check for transactions parameter
     // Previously: Would throw NPE in encode() when calling transactions.size()
@@ -212,6 +232,7 @@ public class SyncTransactionsReplyMessage extends Message {
       throw new IllegalArgumentException("Transactions list cannot be null");
     }
 
+    this.requestId = requestId;
     this.transactions = transactions;
 
     // Serialize message body
@@ -222,6 +243,9 @@ public class SyncTransactionsReplyMessage extends Message {
 
   @Override
   public void encode(SimpleEncoder enc) {
+    // Serialize requestId first (BUGFIX BUG-022)
+    enc.writeString(requestId);
+
     // Write transaction count
     enc.writeInt(transactions.size());
 
@@ -253,7 +277,8 @@ public class SyncTransactionsReplyMessage extends Message {
     long nonNullCount =
         transactions != null ? transactions.stream().filter(Objects::nonNull).count() : 0;
     return String.format(
-        "SyncTransactionsReplyMessage[total=%d, nonNull=%d, size=%d bytes]",
+        "SyncTransactionsReplyMessage[requestId=%s, total=%d, nonNull=%d, size=%d bytes]",
+        requestId,
         transactions != null ? transactions.size() : 0,
         nonNullCount,
         body != null ? body.length : 0

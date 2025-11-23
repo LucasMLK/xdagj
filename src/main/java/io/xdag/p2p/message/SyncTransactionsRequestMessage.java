@@ -42,9 +42,14 @@ import org.apache.tuweni.bytes.Bytes32;
  *
  * <p><strong>Message Format</strong>:
  * <pre>
+ * [Variable] requestId          - UTF-8 encoded string with length prefix (BUGFIX BUG-022)
  * [4 bytes]  hashCount          - Number of hashes
  * [variable] hashes[0..N-1]     - Transaction hash list (each 32 bytes)
  * </pre>
+ *
+ * <p><strong>BUGFIX (BUG-022)</strong>:
+ * Added requestId field to enable correct request-response matching in concurrent scenarios.
+ * Without requestId, concurrent requests to different peers could be matched incorrectly.
  *
  * <p><strong>Fields</strong>:
  * <ul>
@@ -114,6 +119,11 @@ import org.apache.tuweni.bytes.Bytes32;
 public class SyncTransactionsRequestMessage extends Message {
 
   /**
+   * Request ID for matching request with reply (BUGFIX BUG-022)
+   */
+  private String requestId;
+
+  /**
    * List of transaction hashes to request
    */
   private List<Bytes32> hashes;
@@ -123,6 +133,7 @@ public class SyncTransactionsRequestMessage extends Message {
    *
    * <p>Deserializes message body:
    * <ol>
+   *   <li>Read requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Read hashCount (int, 4 bytes)</li>
    *   <li>For each hash: read 32 bytes</li>
    * </ol>
@@ -132,31 +143,25 @@ public class SyncTransactionsRequestMessage extends Message {
    */
   public SyncTransactionsRequestMessage(byte[] body) {
     super(XdagMessageCode.SYNC_TRANSACTIONS_REQUEST, SyncTransactionsReplyMessage.class);
-
-    // BUGFIX (BUG-073): Add message length validation
-    // Previously: Would throw unclear exception from SimpleDecoder
-    // Now: Validate input and provide clear error message
-    if (body == null || body.length < 4) {
-      throw new IllegalArgumentException(
-          "Message body must be at least 4 bytes (hashCount), got: " +
-          (body == null ? "null" : body.length));
-    }
-
-    SimpleDecoder dec = new SimpleDecoder(body);
-
-    // Deserialize hash count
-    int hashCount = dec.readInt();
-    this.hashes = new ArrayList<>(hashCount);
-
-    // Deserialize each hash (32 bytes)
-    for (int i = 0; i < hashCount; i++) {
-      byte[] hashBytes = new byte[32];
-      dec.readBytes(hashBytes);
-      this.hashes.add(Bytes32.wrap(hashBytes));
-    }
-
-    // Set body for reference
     this.body = body;
+
+    if (body != null && body.length > 0) {
+      SimpleDecoder dec = new SimpleDecoder(body);
+
+      // Deserialize requestId first (BUGFIX BUG-022)
+      this.requestId = dec.readString();
+
+      // Deserialize hash count
+      int hashCount = dec.readInt();
+      this.hashes = new ArrayList<>(hashCount);
+
+      // Deserialize each hash (32 bytes)
+      for (int i = 0; i < hashCount; i++) {
+        byte[] hashBytes = new byte[32];
+        dec.readBytes(hashBytes);
+        this.hashes.add(Bytes32.wrap(hashBytes));
+      }
+    }
   }
 
   /**
@@ -164,13 +169,15 @@ public class SyncTransactionsRequestMessage extends Message {
    *
    * <p>Serializes message:
    * <ol>
+   *   <li>Write requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Write hashCount (int, 4 bytes)</li>
    *   <li>For each hash: write 32 bytes</li>
    * </ol>
    *
+   * @param requestId unique request identifier for matching reply (BUGFIX BUG-022)
    * @param hashes list of transaction hashes to request
    */
-  public SyncTransactionsRequestMessage(List<Bytes32> hashes) {
+  public SyncTransactionsRequestMessage(String requestId, List<Bytes32> hashes) {
     super(XdagMessageCode.SYNC_TRANSACTIONS_REQUEST, SyncTransactionsReplyMessage.class);
 
     // BUGFIX (BUG-074): Add null check for hashes parameter
@@ -188,6 +195,7 @@ public class SyncTransactionsRequestMessage extends Message {
           "Maximum 5000 hashes per request, got: " + hashes.size());
     }
 
+    this.requestId = requestId;
     this.hashes = hashes;
 
     // Serialize message body
@@ -198,6 +206,9 @@ public class SyncTransactionsRequestMessage extends Message {
 
   @Override
   public void encode(SimpleEncoder enc) {
+    // Encode requestId as string with length prefix (BUGFIX BUG-022)
+    enc.writeString(requestId);
+
     // Serialize hash count
     enc.writeInt(hashes.size());
 
@@ -210,7 +221,8 @@ public class SyncTransactionsRequestMessage extends Message {
   @Override
   public String toString() {
     return String.format(
-        "SyncTransactionsRequestMessage[hashes=%d, size=%d bytes]",
+        "SyncTransactionsRequestMessage[requestId=%s, hashes=%d, size=%d bytes]",
+        requestId,
         hashes != null ? hashes.size() : 0,
         body != null ? body.length : 0
     );

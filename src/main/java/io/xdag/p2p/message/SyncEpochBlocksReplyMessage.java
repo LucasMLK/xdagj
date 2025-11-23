@@ -21,12 +21,16 @@ import org.apache.tuweni.bytes.Bytes32;
  *
  * <p><strong>Message Format</strong>:
  * <pre>
+ * [Variable] requestId            - UTF-8 encoded string with length prefix (BUGFIX BUG-022)
  * [4 bytes]  epochCount           - Number of epochs with blocks
  * For each epoch:
  *   [8 bytes]  epoch              - Epoch number
  *   [4 bytes]  hashCount          - Number of hashes in this epoch
  *   [variable] hashes[0..N-1]     - Block hash list (each 32 bytes)
  * </pre>
+ *
+ * <p><strong>BUGFIX (BUG-022)</strong>:
+ * Added requestId field to enable correct request-response matching in concurrent scenarios.
  *
  * <p><strong>Fields</strong>:
  * <ul>
@@ -104,6 +108,11 @@ import org.apache.tuweni.bytes.Bytes32;
 public class SyncEpochBlocksReplyMessage extends Message {
 
   /**
+   * Request ID for matching reply with request (BUGFIX BUG-022)
+   */
+  private String requestId;
+
+  /**
    * Map of epoch number to list of block hashes Only epochs with blocks are included
    */
   private Map<Long, List<Bytes32>> epochBlocksMap;
@@ -113,6 +122,7 @@ public class SyncEpochBlocksReplyMessage extends Message {
    *
    * <p>Deserializes message body:
    * <ol>
+   *   <li>Read requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Read epochCount (int, 4 bytes)</li>
    *   <li>For each epoch:</li>
    *   <ol>
@@ -131,13 +141,16 @@ public class SyncEpochBlocksReplyMessage extends Message {
     // BUGFIX (BUG-066): Add message length validation
     // Previously: Would throw unclear exception from SimpleDecoder
     // Now: Validate input and provide clear error message
-    if (body == null || body.length < 4) {
+    if (body == null || body.length < 8) {
       throw new IllegalArgumentException(
-          "Message body must be at least 4 bytes (epochCount), got: " +
+          "Message body must be at least 8 bytes (4 for requestId length + requestId + 4 for epochCount), got: " +
           (body == null ? "null" : body.length));
     }
 
     SimpleDecoder dec = new SimpleDecoder(body);
+
+    // Deserialize requestId first (BUGFIX BUG-022)
+    this.requestId = dec.readString();
 
     // Deserialize epoch count
     int epochCount = dec.readInt();
@@ -171,6 +184,7 @@ public class SyncEpochBlocksReplyMessage extends Message {
    *
    * <p>Serializes message:
    * <ol>
+   *   <li>Write requestId (string with length prefix) - BUGFIX BUG-022</li>
    *   <li>Write epochCount (int, 4 bytes)</li>
    *   <li>For each epoch with blocks:</li>
    *   <ol>
@@ -180,10 +194,16 @@ public class SyncEpochBlocksReplyMessage extends Message {
    *   </ol>
    * </ol>
    *
+   * @param requestId request ID from the original request (BUGFIX BUG-022)
    * @param epochBlocksMap map of epoch number to list of block hashes
    */
-  public SyncEpochBlocksReplyMessage(Map<Long, List<Bytes32>> epochBlocksMap) {
+  public SyncEpochBlocksReplyMessage(String requestId, Map<Long, List<Bytes32>> epochBlocksMap) {
     super(XdagMessageCode.SYNC_EPOCH_BLOCKS_REPLY, null);
+
+    // BUGFIX (BUG-022): Add null check for requestId
+    if (requestId == null) {
+      throw new IllegalArgumentException("Request ID cannot be null");
+    }
 
     // BUGFIX (BUG-067): Add null check for epochBlocksMap parameter
     // Previously: Would throw NPE in encode() when calling epochBlocksMap.size()
@@ -192,6 +212,7 @@ public class SyncEpochBlocksReplyMessage extends Message {
       throw new IllegalArgumentException("Epoch blocks map cannot be null");
     }
 
+    this.requestId = requestId;
     this.epochBlocksMap = epochBlocksMap;
 
     // Serialize message body
@@ -202,6 +223,9 @@ public class SyncEpochBlocksReplyMessage extends Message {
 
   @Override
   public void encode(SimpleEncoder enc) {
+    // Serialize requestId first (BUGFIX BUG-022)
+    enc.writeString(requestId);
+
     // Serialize epoch count
     enc.writeInt(epochBlocksMap.size());
 
@@ -229,7 +253,8 @@ public class SyncEpochBlocksReplyMessage extends Message {
         .mapToInt(List::size)
         .sum();
     return String.format(
-        "SyncEpochBlocksReplyMessage[epochs=%d, totalBlocks=%d, size=%d bytes]",
+        "SyncEpochBlocksReplyMessage[requestId=%s, epochs=%d, totalBlocks=%d, size=%d bytes]",
+        requestId,
         epochBlocksMap != null ? epochBlocksMap.size() : 0,
         totalBlocks,
         body != null ? body.length : 0
