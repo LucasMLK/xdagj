@@ -105,8 +105,7 @@ public class NewBlockMessage extends Message {
     this.ttl = body[0] & 0xFF;
 
     // Read block (remaining bytes)
-    byte[] blockBytes = new byte[body.length - 1];
-    System.arraycopy(body, 1, blockBytes, 0, blockBytes.length);
+    byte[] blockBytes = java.util.Arrays.copyOfRange(body, 1, body.length);
     this.block = Block.fromBytes(blockBytes);
 
     this.body = body;

@@ -39,6 +39,7 @@ import io.xdag.crypto.encoding.Base58;
 import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.utils.BytesUtils;
+import org.apache.commons.io.FileUtils;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.Console;
@@ -578,21 +579,10 @@ public class XdagCli extends Launcher {
    * Copy directory recursively
    */
   public static void copyDir(String sourcePath, String newPath) {
-    File start = new File(sourcePath);
-    File end = new File(newPath);
-    String[] filePath = start.list();  // Get all files and directories under this folder
-    if (!end.exists()) {
-      end.mkdir();
-    }
-    for (String temp : filePath) {
-      // Check if each item is a file or directory
-      if (new File(sourcePath + File.separator + temp).isDirectory()) {
-        // For directory, recursively copy
-        copyDir(sourcePath + File.separator + temp, newPath + File.separator + temp);
-      } else {
-        // For file, copy directly
-        copyFile(sourcePath + File.separator + temp, newPath + File.separator + temp);
-      }
+    try {
+      FileUtils.copyDirectory(new File(sourcePath), new File(newPath));
+    } catch (IOException e) {
+      log.error("Failed to copy directory from {} to {}", sourcePath, newPath, e);
     }
   }
 
@@ -600,18 +590,10 @@ public class XdagCli extends Launcher {
    * Copy single file
    */
   public static void copyFile(String sourcePath, String newPath) {
-    File start = new File(sourcePath);
-    File end = new File(newPath);
-    try (BufferedInputStream bis = new BufferedInputStream(new FileInputStream(start));
-        BufferedOutputStream bos = new BufferedOutputStream(new FileOutputStream(end))) {
-      int len;
-      byte[] flush = new byte[1024];
-      while ((len = bis.read(flush)) != -1) {
-        bos.write(flush, 0, len);
-      }
-      bos.flush();
+    try {
+      FileUtils.copyFile(new File(sourcePath), new File(newPath));
     } catch (IOException e) {
-      log.error("IO error during file copy", e);
+      log.error("Failed to copy file from {} to {}", sourcePath, newPath, e);
     }
   }
 }

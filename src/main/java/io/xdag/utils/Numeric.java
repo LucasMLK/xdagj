@@ -26,6 +26,7 @@ package io.xdag.utils;
 
 import java.math.BigInteger;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.tuweni.bytes.Bytes;
 
 /**
  * Utility class for numeric and hex string conversions
@@ -64,9 +65,6 @@ public class Numeric {
    * @throws IllegalArgumentException if value is null
    */
   public static BigInteger toBigInt(byte[] value) {
-    // BUGFIX (BUG-035): Add null check for defensive programming
-    // Previously: Would throw NullPointerException if value is null
-    // Now: Throw IllegalArgumentException with clear message
     if (value == null) {
       throw new IllegalArgumentException("Byte array cannot be null");
     }
@@ -74,42 +72,34 @@ public class Numeric {
   }
 
   /**
-   * Converts hex string to BigInteger, handling "0x" prefix
+   * Converts hex string to BigInteger, handling "0x" prefix automatically.
    *
    * @param hexValue Hex string (with or without "0x" prefix)
    * @return BigInteger representation
    * @throws IllegalArgumentException if hexValue is null or invalid
    */
   public static BigInteger toBigInt(String hexValue) {
-    // Note: cleanHexPrefix already handles null via containsHexPrefix
-    String cleanValue = cleanHexPrefix(hexValue);
-    return toBigIntNoPrefix(cleanValue);
-  }
-
-  /**
-   * Converts hex string without prefix to BigInteger
-   *
-   * @param hexValue Hex string without "0x" prefix (must not be null)
-   * @return BigInteger representation
-   * @throws IllegalArgumentException if hexValue is null or not valid hex
-   */
-  public static BigInteger toBigIntNoPrefix(String hexValue) {
-    // BUGFIX (BUG-036): Add input validation
-    // Previously: Would throw NullPointerException or NumberFormatException
-    // Now: Validate and provide clear error messages
     if (hexValue == null) {
       throw new IllegalArgumentException("Hex value cannot be null");
     }
     if (hexValue.isEmpty()) {
       throw new IllegalArgumentException("Hex value cannot be empty");
     }
-
     try {
-      return new BigInteger(hexValue, 16);
-    } catch (NumberFormatException e) {
-      throw new IllegalArgumentException(
-          "Invalid hex string: " + hexValue, e);
+      return Bytes.fromHexString(hexValue).toUnsignedBigInteger();
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("Invalid hex string: " + hexValue, e);
     }
   }
 
+  /**
+   * Converts hex string without prefix to BigInteger.
+   *
+   * @param hexValue Hex string without "0x" prefix (must not be null)
+   * @return BigInteger representation
+   * @throws IllegalArgumentException if hexValue is null or not valid hex
+   */
+  public static BigInteger toBigIntNoPrefix(String hexValue) {
+    return toBigInt(hexValue);
+  }
 }

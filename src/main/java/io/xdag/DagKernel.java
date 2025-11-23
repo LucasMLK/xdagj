@@ -64,6 +64,7 @@ import java.math.BigInteger;
 import java.util.Map;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.io.IOUtils;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.rocksdb.RocksDB;
 
@@ -643,7 +644,7 @@ public class DagKernel {
     try (var inputStream = getClass().getResourceAsStream("/" + networkSpecificName)) {
       if (inputStream != null) {
         log.info("Loading genesis from classpath: /{}", networkSpecificName);
-        String json = new String(inputStream.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        String json = IOUtils.toString(inputStream, java.nio.charset.StandardCharsets.UTF_8);
         genesisConfig = GenesisConfig.fromJson(json);
         genesisConfig.validate();
         logGenesisConfig("classpath:/" + networkSpecificName);

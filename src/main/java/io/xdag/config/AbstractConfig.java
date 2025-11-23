@@ -25,6 +25,7 @@
 package io.xdag.config;
 
 import com.google.common.collect.Lists;
+import com.google.common.net.HostAndPort;
 import com.typesafe.config.ConfigFactory;
 import io.xdag.Network;
 import io.xdag.config.spec.AdminSpec;
@@ -260,9 +261,9 @@ public class AbstractConfig implements Config, AdminSpec, NodeSpec, WalletSpec, 
   }
 
   public void changeNode(String host) {
-    String[] args = host.split(":");
-    this.nodeIp = args[0];
-    this.nodePort = Integer.parseInt(args[1]);
+    HostAndPort hostAndPort = HostAndPort.fromString(host).withDefaultPort(nodePort);
+    this.nodeIp = hostAndPort.getHost();
+    this.nodePort = hostAndPort.getPort();
   }
 
   @Override

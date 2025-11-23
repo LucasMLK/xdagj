@@ -45,6 +45,10 @@ Key REST endpoints:
 - Main services: `DagKernel`, `DagChainImpl`, `HybridSyncManager`, `HttpApiServer`, `MiningApiService`
 - External libraries: Netty, Jackson (JSON/YAML), RocksDB, Apache Tuweni, BouncyCastle, RandomX JNI
 
+## Devnet Multi-Node Testing
+
+Use `python3 script/devnet_manager.py` to rebuild XDAGJ/xdagj-pool/xdagj-miner (via the sibling repos under `/Users/reymondtu/dev/github`), auto-regenerate each suite’s config files from `test-nodes/templates/`, start/stop multiple local nodes, and compare block heights/hashes across suites. Set the desired suite count in `test-nodes/devnet-manager.json -> suiteTemplate.count`, then follow [docs/DEVNET_MULTI_NODE.md](docs/DEVNET_MULTI_NODE.md) for workflow examples and configuration options.
+
 ## License
 
 Distributed under the MIT License. See [LICENSE](LICENSE).

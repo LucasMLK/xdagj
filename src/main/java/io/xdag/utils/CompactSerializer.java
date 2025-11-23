@@ -218,7 +218,7 @@ public class CompactSerializer {
 
         if (isLegacyFormat) {
             // Legacy format: skip obsolete fields
-            difficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
+            difficulty = UInt256.fromBytes(reader.readBytes(32));
             reader.readBytes(32);  // Skip maxDifficulty
 
             mainBlockCount = reader.readVarLong();
@@ -236,7 +236,7 @@ public class CompactSerializer {
             if (reader.hasMoreData()) {
                 byte baseDiffFlag = reader.readByte();
                 if (baseDiffFlag == 1) {
-                    baseDifficultyTarget = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
+                    baseDifficultyTarget = UInt256.fromBytes(reader.readBytes(32));
                 }
 
                 lastDifficultyAdjustmentEpoch = reader.readVarLong();
@@ -264,14 +264,14 @@ public class CompactSerializer {
             }
         } else {
             // New format (v3)
-            difficulty = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
+            difficulty = UInt256.fromBytes(reader.readBytes(32));
             mainBlockCount = reader.readVarLong();
             balance = deserializeXAmount(reader);
 
             // baseDifficultyTarget (nullable)
             byte baseDiffFlag = reader.readByte();
             if (baseDiffFlag == 1) {
-                baseDifficultyTarget = UInt256.fromBytes(Bytes.wrap(reader.readBytes(32)));
+                baseDifficultyTarget = UInt256.fromBytes(reader.readBytes(32));
             }
 
             // lastDifficultyAdjustmentEpoch
@@ -370,7 +370,7 @@ public class CompactSerializer {
      * Helper class for reading bytes sequentially
      */
     private static class ByteReader {
-        private final byte[] data;
+        private final Bytes data;
         private int position;
 
         public ByteReader(byte[] data) {
@@ -380,27 +380,26 @@ public class CompactSerializer {
             if (data == null) {
                 throw new IllegalArgumentException("Data cannot be null");
             }
-            this.data = data;
+            this.data = Bytes.wrap(data);
             this.position = 0;
         }
 
         public boolean hasMoreData() {
-            return position < data.length;
+            return position < data.size();
         }
 
         public byte readByte() throws IOException {
-            if (position >= data.length) {
+            if (position >= data.size()) {
                 throw new IOException("End of data reached");
             }
-            return data[position++];
+            return data.get(position++);
         }
 
-        public byte[] readBytes(int length) throws IOException {
-            if (position + length > data.length) {
+        public Bytes readBytes(int length) throws IOException {
+            if (position + length > data.size()) {
                 throw new IOException("Not enough data");
             }
-            byte[] result = new byte[length];
-            System.arraycopy(data, position, result, 0, length);
+            Bytes result = data.slice(position, length);
             position += length;
             return result;
         }

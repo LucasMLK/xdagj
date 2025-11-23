@@ -116,18 +116,7 @@ public class BytesUtils {
    * @return Combined byte array
    */
   public static byte[] merge(byte[]... arrays) {
-    int count = 0;
-    for (byte[] array : arrays) {
-      count += array.length;
-    }
-
-    byte[] mergedArray = new byte[count];
-    int start = 0;
-    for (byte[] array : arrays) {
-      System.arraycopy(array, 0, mergedArray, start, array.length);
-      start += array.length;
-    }
-    return mergedArray;
+    return com.google.common.primitives.Bytes.concat(arrays);
   }
 
   /**
@@ -138,10 +127,7 @@ public class BytesUtils {
    * @return Combined byte array
    */
   public static byte[] merge(byte b1, byte[] b2) {
-    byte[] res = new byte[1 + b2.length];
-    res[0] = b1;
-    System.arraycopy(b2, 0, res, 1, b2.length);
-    return res;
+    return com.google.common.primitives.Bytes.concat(new byte[]{b1}, b2);
   }
 
   /**
@@ -156,9 +142,6 @@ public class BytesUtils {
    */
   public static byte[] subArray(byte[] arrays, int index, int length) {
     // BUGFIX (BUG-030): Add comprehensive input validation
-    // Previously: No bounds checking, would throw ArrayIndexOutOfBoundsException
-    // Now: Validate all inputs and provide clear error messages
-
     if (arrays == null) {
       throw new IllegalArgumentException("Source array cannot be null");
     }
@@ -174,9 +157,7 @@ public class BytesUtils {
               index, index + length, arrays.length));
     }
 
-    byte[] arrayOfByte = new byte[length];
-    System.arraycopy(arrays, index, arrayOfByte, 0, length);
-    return arrayOfByte;
+    return java.util.Arrays.copyOfRange(arrays, index, index + length);
   }
 
   /**
@@ -192,42 +173,16 @@ public class BytesUtils {
     }
 
     // BUGFIX (BUG-031): Validate hex string length is even
-    // Previously: Odd-length strings silently truncated last character
-    // Now: Throw exception for invalid input
     if (hexString.length() % 2 != 0) {
       throw new IllegalArgumentException(
           "Hex string must have even length, got: " + hexString.length());
     }
 
-    hexString = hexString.toUpperCase();
-    int length = hexString.length() / 2;
-    char[] hexChars = hexString.toCharArray();
-    byte[] d = new byte[length];
-
-    for (int i = 0; i < length; i++) {
-      int pos = i * 2;
-      d[i] = (byte) (charToByte(hexChars[pos]) << 4 | charToByte(hexChars[pos + 1]));
+    try {
+      return Bytes.fromHexString(hexString).toArray();
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("Invalid hex string: " + hexString, e);
     }
-    return d;
-  }
-
-  /**
-   * Converts a hex character to its byte value
-   *
-   * @param c Hex character (0-9, A-F, a-f)
-   * @return Byte value (0-15)
-   * @throws IllegalArgumentException if character is not a valid hex digit
-   */
-  private static byte charToByte(char c) {
-    // BUGFIX (BUG-032): Validate hex character before conversion
-    // Previously: Invalid characters returned -1, causing silent corruption
-    // Now: Throw exception for invalid input
-    int index = "0123456789ABCDEF".indexOf(c);
-    if (index == -1) {
-      throw new IllegalArgumentException(
-          "Invalid hex character: '" + c + "' (expected 0-9, A-F)");
-    }
-    return (byte) index;
   }
 
   /**

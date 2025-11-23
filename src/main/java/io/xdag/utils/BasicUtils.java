@@ -176,8 +176,7 @@ public class BasicUtils {
 
     CRC32 crc32 = new CRC32();
     crc32.update(src, 0, 512);
-    return equalBytes(
-        BytesUtils.intToBytes((int) crc32.getValue(), true), BytesUtils.intToBytes(crc, true));
+    return (int) crc32.getValue() == crc;
   }
 
   /**

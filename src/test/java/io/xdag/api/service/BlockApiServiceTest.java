@@ -85,16 +85,6 @@ public class BlockApiServiceTest {
                     return txCountByHash.getOrDefault(hash.toHexString(), 0);
                 });
 
-        // Also keep the old mock for getTransactionsByBlock() in case it's used elsewhere
-        when(transactionStore.getTransactionsByBlock(any(Bytes32.class)))
-                .thenAnswer(invocation -> {
-                    Bytes32 hash = invocation.getArgument(0);
-                    int count = txCountByHash.getOrDefault(hash.toHexString(), 0);
-                    return IntStream.range(0, count)
-                            .mapToObj(i -> mock(io.xdag.core.Transaction.class))
-                            .collect(Collectors.toList());
-                });
-
         PagedResult<BlockSummary> result = blockApiService.getMainBlocksPage(1, 2);
 
         assertEquals(5, result.getTotal());
@@ -159,8 +149,8 @@ public class BlockApiServiceTest {
         }
 
         when(dagStore.getCandidateBlocksInEpoch(epoch)).thenReturn(blocksInEpoch);
-        when(transactionStore.getTransactionsByBlock(any(Bytes32.class)))
-                .thenReturn(new ArrayList<>());
+        when(transactionStore.getTransactionCountByBlock(any(Bytes32.class)))
+                .thenReturn(0);
 
         List<BlockSummary> result = blockApiService.getBlocksByEpoch(epoch);
 
@@ -200,8 +190,8 @@ public class BlockApiServiceTest {
         }
 
         when(dagStore.getCandidateBlocksInEpoch(epoch)).thenReturn(blocksInEpoch);
-        when(transactionStore.getTransactionsByBlock(any(Bytes32.class)))
-                .thenReturn(new ArrayList<>());
+        when(transactionStore.getTransactionCountByBlock(any(Bytes32.class)))
+                .thenReturn(0);
 
         // Get first page (size 10)
         PagedResult<BlockSummary> page1 = blockApiService.getBlocksByEpochPage(epoch, 1, 10);
@@ -232,8 +222,8 @@ public class BlockApiServiceTest {
         }
 
         when(dagStore.getCandidateBlocksInEpoch(epoch)).thenReturn(blocksInEpoch);
-        when(transactionStore.getTransactionsByBlock(any(Bytes32.class)))
-                .thenReturn(new ArrayList<>());
+        when(transactionStore.getTransactionCountByBlock(any(Bytes32.class)))
+                .thenReturn(0);
 
         PagedResult<BlockSummary> result = blockApiService.getBlocksByEpochPage(epoch, 10, 10);
 
@@ -263,8 +253,8 @@ public class BlockApiServiceTest {
                     Long epoch = invocation.getArgument(0);
                     return blocksByEpoch.getOrDefault(epoch, new ArrayList<>());
                 });
-        when(transactionStore.getTransactionsByBlock(any(Bytes32.class)))
-                .thenReturn(new ArrayList<>());
+        when(transactionStore.getTransactionCountByBlock(any(Bytes32.class)))
+                .thenReturn(0);
 
         List<BlockApiService.EpochBlocks> result = blockApiService.getBlocksByEpochRange(fromEpoch, toEpoch);
 
@@ -295,8 +285,8 @@ public class BlockApiServiceTest {
         // Return a mutable list for sorting
         when(dagStore.getCandidateBlocksInEpoch(anyLong()))
                 .thenReturn(new ArrayList<>(List.of(createBlockWithEpoch(1L, true))));
-        when(transactionStore.getTransactionsByBlock(any(Bytes32.class)))
-                .thenReturn(new ArrayList<>());
+        when(transactionStore.getTransactionCountByBlock(any(Bytes32.class)))
+                .thenReturn(0);
 
         List<BlockApiService.EpochBlocks> result = blockApiService.getBlocksByEpochRange(fromEpoch, toEpoch);
 
