@@ -28,6 +28,7 @@ import io.xdag.DagKernel;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
+import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.utils.TimeUtils;
 import org.apache.tuweni.bytes.Bytes32;
@@ -108,7 +109,7 @@ public class DagChainIntegrationTest {
 
         // Create test accounts
         senderKey = ECKeyPair.generate();
-        senderAddress = org.apache.tuweni.bytes.Bytes.random(20);
+        senderAddress = AddressUtils.toBytesAddress(senderKey);  // Derive address from key pair
         receiverAddress = org.apache.tuweni.bytes.Bytes.random(20);
 
         // Initialize sender account with balance
