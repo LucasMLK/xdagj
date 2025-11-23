@@ -276,6 +276,149 @@ public class DagTransactionProcessorTest {
         );
     }
 
+    // ========== BUG-012: Signature Validation (SECURITY) ==========
+
+    /**
+     * Test BUG-012 Fix: Transaction with invalid signature should be rejected
+     *
+     * <p>Critical Security Bug:
+     * <ul>
+     *   <li>Before fix: validateSignature() always returned true (not implemented)</li>
+     *   <li>After fix: Properly validates ECDSA signature using tx.verifySignature()</li>
+     *   <li>Impact: Prevents asset theft by signature forgery</li>
+     * </ul>
+     */
+    @Test
+    public void testRejectTransactionWithInvalidSignature() {
+        when(accountManager.hasAccount(senderAddress)).thenReturn(true);
+        when(accountManager.getBalance(senderAddress)).thenReturn(UInt256.valueOf(200000000000L));
+        when(accountManager.getNonce(senderAddress)).thenReturn(UInt64.ZERO);
+
+        // Create transaction with INVALID signature (wrong key pair)
+        ECKeyPair wrongKeyPair = ECKeyPair.generate();
+        Transaction tx = Transaction.builder()
+                .from(senderAddress)  // Claim to be from senderAddress
+                .to(receiverAddress)
+                .amount(XAmount.of(100, XUnit.XDAG))
+                .nonce(0)
+                .fee(XAmount.of(1, XUnit.MILLI_XDAG))
+                .data(Bytes.EMPTY)
+                .v(0)
+                .r(Bytes32.ZERO)
+                .s(Bytes32.ZERO)
+                .build();
+
+        // Sign with WRONG key pair (not matching senderAddress)
+        Transaction signedTx = tx.sign(wrongKeyPair);
+
+        DagTransactionProcessor.ProcessingResult result = processor.processTransaction(signedTx);
+
+        assertFalse("Transaction with invalid signature should fail", result.isSuccess());
+        assertTrue("Error should mention signature",
+                result.getError().toLowerCase().contains("signature"));
+
+        // Verify no state updates occurred (CRITICAL: prevents asset theft)
+        verify(accountManager, never()).subtractBalance(any(), any());
+        verify(accountManager, never()).incrementNonce(any());
+        verify(accountManager, never()).addBalance(any(), any());
+        verify(transactionStore, never()).saveTransaction(any());
+
+        System.out.println("✅ BUG-012 Fix Verified: Invalid signature rejected");
+    }
+
+    /**
+     * Test BUG-012 Fix: Transaction with valid signature should pass validation
+     *
+     * <p>This ensures the fix doesn't reject valid signatures
+     */
+    @Test
+    public void testAcceptTransactionWithValidSignature() {
+        when(accountManager.hasAccount(senderAddress)).thenReturn(true);
+        when(accountManager.getBalance(senderAddress)).thenReturn(UInt256.valueOf(200000000000L));
+        when(accountManager.getNonce(senderAddress)).thenReturn(UInt64.ZERO);
+
+        // Create transaction with VALID signature (correct key pair)
+        Transaction tx = createTransaction(senderAddress, receiverAddress, 100, 0, 1);
+
+        DagTransactionProcessor.ProcessingResult result = processor.processTransaction(tx);
+
+        assertTrue("Transaction with valid signature should succeed", result.isSuccess());
+
+        // Verify state updates occurred
+        verify(accountManager).subtractBalance(any(), any());
+        verify(accountManager).incrementNonce(senderAddress);
+        verify(transactionStore).saveTransaction(tx);
+
+        System.out.println("✅ BUG-012 Fix Verified: Valid signature accepted");
+    }
+
+    // ========== BUG-013: Double-Spend Protection (SECURITY) ==========
+
+    /**
+     * Test BUG-013 Fix: Already executed transaction should be rejected
+     *
+     * <p>Critical Security Bug:
+     * <ul>
+     *   <li>Before fix: validateAccountState() didn't check if transaction already executed</li>
+     *   <li>After fix: Checks transactionStore.isTransactionExecuted() before processing</li>
+     *   <li>Impact: Prevents double-spending (same transaction executed multiple times)</li>
+     * </ul>
+     */
+    @Test
+    public void testRejectAlreadyExecutedTransaction() {
+        when(accountManager.hasAccount(senderAddress)).thenReturn(true);
+        when(accountManager.getBalance(senderAddress)).thenReturn(UInt256.valueOf(200000000000L));
+        when(accountManager.getNonce(senderAddress)).thenReturn(UInt64.ZERO);
+
+        Transaction tx = createTransaction(senderAddress, receiverAddress, 100, 0, 1);
+
+        // Mock: transaction already executed (BUG-013 scenario)
+        when(transactionStore.isTransactionExecuted(tx.getHash())).thenReturn(true);
+
+        DagTransactionProcessor.ProcessingResult result = processor.processTransaction(tx);
+
+        assertFalse("Already executed transaction should fail", result.isSuccess());
+        assertTrue("Error should mention already executed",
+                result.getError().toLowerCase().contains("already executed"));
+
+        // Verify no state updates occurred (CRITICAL: prevents double-spend)
+        verify(accountManager, never()).subtractBalance(any(), any());
+        verify(accountManager, never()).incrementNonce(any());
+        verify(accountManager, never()).addBalance(any(), any());
+
+        // Verify transaction NOT saved again
+        verify(transactionStore, never()).saveTransaction(any());
+
+        System.out.println("✅ BUG-013 Fix Verified: Double-spend prevented");
+    }
+
+    /**
+     * Test BUG-013 Fix: Block with already executed transaction should be rejected
+     *
+     * <p>Ensures double-spend protection works at block level
+     */
+    @Test
+    public void testRejectBlockWithAlreadyExecutedTransaction() {
+        when(accountManager.hasAccount(senderAddress)).thenReturn(true);
+        when(accountManager.getBalance(senderAddress)).thenReturn(UInt256.valueOf(200000000000L));
+        when(accountManager.getNonce(senderAddress)).thenReturn(UInt64.ZERO);
+
+        Block block = createTestBlock();
+        Transaction tx = createTransaction(senderAddress, receiverAddress, 100, 0, 1);
+
+        // Mock: transaction already executed
+        when(transactionStore.isTransactionExecuted(tx.getHash())).thenReturn(true);
+
+        DagTransactionProcessor.ProcessingResult result = processor.processBlockTransactions(block, List.of(tx));
+
+        assertFalse("Block with executed transaction should fail", result.isSuccess());
+
+        // Verify no execution marking occurred
+        verify(transactionStore, never()).markTransactionExecuted(any(), any(), anyLong());
+
+        System.out.println("✅ BUG-013 Fix Verified: Block with double-spend rejected");
+    }
+
     // ========== Helper Methods ==========
 
     private Transaction createTransaction(Bytes from, Bytes to, long amount, long nonce, long fee) {
