@@ -553,8 +553,8 @@ public class DagKernelIntegrationTest {
         DagAccountManager accountManager = dagKernel.getDagAccountManager();
         DagTransactionProcessor txProcessor = dagKernel.getDagTransactionProcessor();
 
-        // Step 1: Create test accounts (32 bytes for XDAG)
-        Bytes senderAddress = Bytes.random(20);
+        // Step 1: Create test accounts - use testKeyPair for sender to enable signature verification
+        Bytes senderAddress = AddressUtils.toBytesAddress(testKeyPair);
         Bytes receiverAddress = Bytes.random(20);
 
         // Step 2: Create sender account with initial balance
@@ -581,6 +581,9 @@ public class DagKernelIntegrationTest {
                 .r(Bytes32.ZERO)
                 .s(Bytes32.ZERO)
                 .build();
+
+        // Sign transaction with testKeyPair
+        tx = signTransaction(tx);
 
         // Step 4: Process transaction
         DagTransactionProcessor.ProcessingResult result = txProcessor.processTransaction(tx);
@@ -630,8 +633,8 @@ public class DagKernelIntegrationTest {
         DagAccountManager accountManager = dagKernel.getDagAccountManager();
         DagTransactionProcessor txProcessor = dagKernel.getDagTransactionProcessor();
 
-        // Create sender with small balance
-        Bytes senderAddress = Bytes.random(20);
+        // Create sender with small balance - use testKeyPair for signature verification
+        Bytes senderAddress = AddressUtils.toBytesAddress(testKeyPair);
         Bytes receiverAddress = Bytes.random(20);
 
         accountManager.ensureAccountExists(senderAddress);
@@ -654,6 +657,9 @@ public class DagKernelIntegrationTest {
                 .r(Bytes32.ZERO)
                 .s(Bytes32.ZERO)
                 .build();
+
+        // Sign transaction with testKeyPair
+        tx = signTransaction(tx);
 
         // Process transaction
         DagTransactionProcessor.ProcessingResult result = txProcessor.processTransaction(tx);
@@ -686,8 +692,8 @@ public class DagKernelIntegrationTest {
         DagAccountManager accountManager = dagKernel.getDagAccountManager();
         DagTransactionProcessor txProcessor = dagKernel.getDagTransactionProcessor();
 
-        // Create accounts with sufficient balance
-        Bytes senderAddress = Bytes.random(20);
+        // Create accounts with sufficient balance - use testKeyPair for signature verification
+        Bytes senderAddress = AddressUtils.toBytesAddress(testKeyPair);
         Bytes receiverAddress = Bytes.random(20);
 
         accountManager.ensureAccountExists(senderAddress);
@@ -707,6 +713,9 @@ public class DagKernelIntegrationTest {
                 .r(Bytes32.ZERO)
                 .s(Bytes32.ZERO)
                 .build();
+
+        // Sign transaction with testKeyPair
+        tx = signTransaction(tx);
 
         // Process transaction
         DagTransactionProcessor.ProcessingResult result = txProcessor.processTransaction(tx);
@@ -729,9 +738,11 @@ public class DagKernelIntegrationTest {
 
         DagTransactionProcessor txProcessor = dagKernel.getDagTransactionProcessor();
 
-        // Create transaction from non-existent account
-        Bytes senderAddress = Bytes.random(20);
+        // Create transaction from non-existent account - use testKeyPair for signature verification
+        Bytes senderAddress = AddressUtils.toBytesAddress(testKeyPair);
         Bytes receiverAddress = Bytes.random(20);
+
+        // Note: We intentionally do NOT create the sender account, to test the error case
 
         Transaction tx = Transaction.builder()
                 .from(senderAddress)
@@ -744,6 +755,9 @@ public class DagKernelIntegrationTest {
                 .r(Bytes32.ZERO)
                 .s(Bytes32.ZERO)
                 .build();
+
+        // Sign transaction with testKeyPair
+        tx = signTransaction(tx);
 
         // Process transaction
         DagTransactionProcessor.ProcessingResult result = txProcessor.processTransaction(tx);
@@ -768,8 +782,8 @@ public class DagKernelIntegrationTest {
         DagAccountManager accountManager = dagKernel.getDagAccountManager();
         DagTransactionProcessor txProcessor = dagKernel.getDagTransactionProcessor();
 
-        // Create sender with sufficient balance
-        Bytes senderAddress = Bytes.random(20);
+        // Create sender with sufficient balance - use testKeyPair for signature verification
+        Bytes senderAddress = AddressUtils.toBytesAddress(testKeyPair);
         Bytes receiver1 = Bytes.random(20);
         Bytes receiver2 = Bytes.random(20);
         Bytes receiver3 = Bytes.random(20);
@@ -798,6 +812,9 @@ public class DagKernelIntegrationTest {
                     .r(Bytes32.ZERO)
                     .s(Bytes32.ZERO)
                     .build();
+
+            // Sign transaction with testKeyPair
+            tx = signTransaction(tx);
 
             DagTransactionProcessor.ProcessingResult result = txProcessor.processTransaction(tx);
             assertTrue("Transaction " + i + " should succeed", result.isSuccess());
