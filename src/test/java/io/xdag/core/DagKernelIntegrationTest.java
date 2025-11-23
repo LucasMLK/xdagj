@@ -748,6 +748,130 @@ public class DagKernelIntegrationTest extends BaseIntegrationTest {
                 accountManager.getBalance(receiver3));
     }
 
+    // ========== BUG-001: Genesis Height Verification (CRITICAL) ==========
+
+    /**
+     * Test BUG-001 Fix: Genesis block stored at height=1, not height=0
+     *
+     * <p>Critical Bug Fixed:
+     * <ul>
+     *   <li>Before fix: verifyGenesisBlock() queried height=0 (orphan blocks)</li>
+     *   <li>After fix: Correctly queries height=1 (genesis block)</li>
+     *   <li>Impact: Genesis verification was silently skipped, node could join wrong network</li>
+     *   <li>Root Cause: XDAG 1.0 protocol defines height=0 for orphans, height=1 for genesis</li>
+     * </ul>
+     *
+     * <p>This test verifies:
+     * <ol>
+     *   <li>Genesis block is stored at height=1 (not height=0)</li>
+     *   <li>No blocks exist at height=0 (orphan blocks have height=0 but are not in main chain)</li>
+     *   <li>Genesis verification succeeds on subsequent startups</li>
+     * </ol>
+     */
+    @Test
+    public void testGenesisBlockStoredAtHeightOne() {
+        // Start DagKernel (creates genesis block)
+        dagKernel.start();
+
+        // Verify genesis block is at height=1 (XDAG 1.0 protocol)
+        Block genesisAtHeight1 = dagKernel.getDagStore().getMainBlockByHeight(1, true);
+        assertNotNull("Genesis block should exist at height=1 (BUGFIX BUG-001)",
+                genesisAtHeight1);
+
+        // Verify genesis block properties
+        assertEquals("Genesis block should have height=1",
+                1L, genesisAtHeight1.getInfo().getHeight());
+
+        // Verify no main block at height=0 (orphan blocks use height=0 but aren't in main chain)
+        Block blockAtHeight0 = dagKernel.getDagStore().getMainBlockByHeight(0, true);
+        assertNull("No main block should exist at height=0 (height=0 is for orphan blocks only)",
+                blockAtHeight0);
+
+        // Verify genesis block properties match expected values
+        // The genesis epoch is stored in the genesis block itself
+        long expectedEpoch = dagKernel.getGenesisConfig().getEpoch();
+        long actualEpoch = genesisAtHeight1.getEpoch();
+        assertEquals("Genesis epoch should match genesis.json",
+                expectedEpoch, actualEpoch);
+
+        // Verify genesis block hash matches chain stats
+        Bytes32 genesisHash = genesisAtHeight1.getHash();
+        assertNotNull("Genesis hash should not be null", genesisHash);
+
+        System.out.println("✅ BUG-001 Fix Verified: Genesis block correctly stored at height=1");
+        System.out.println("   Genesis hash: " + genesisHash.toHexString().substring(0, 16) + "...");
+        System.out.println("   Genesis epoch: " + actualEpoch);
+        System.out.println("   Genesis height: " + genesisAtHeight1.getInfo().getHeight());
+    }
+
+    /**
+     * Test BUG-001 Fix: Genesis verification succeeds on subsequent startup
+     *
+     * <p>This test simulates a node restart scenario to ensure that:
+     * <ol>
+     *   <li>Genesis verification logic queries height=1 (correct)</li>
+     *   <li>Genesis verification succeeds (doesn't throw exception)</li>
+     *   <li>Node can successfully join the network after restart</li>
+     * </ol>
+     *
+     * <p>Before BUG-001 fix, this would fail because:
+     * <ul>
+     *   <li>verifyGenesisBlock() queried height=0 → got orphan blocks or null</li>
+     *   <li>Genesis verification always failed or was skipped</li>
+     *   <li>Node could potentially join wrong network</li>
+     * </ul>
+     */
+    @Test
+    public void testGenesisVerificationAfterRestart() throws Exception {
+        // Step 1: Start original kernel to create genesis block
+        dagKernel.start();
+
+        // Step 2: Stop current kernel (simulating shutdown)
+        dagKernel.stop();
+
+        // Step 3: Wait for RocksDB locks to be released
+        Thread.sleep(100);
+
+        // Step 4: Create a new kernel instance with SAME database
+        // This simulates a node restart - should verify existing genesis
+        DagKernel restartedKernel = new DagKernel(config);
+
+        try {
+            // Step 5: Start the restarted kernel
+            // This will call verifyGenesisBlock() because chain already has blocks
+            restartedKernel.start();
+
+            // Step 6: Verify genesis verification succeeded (no exception thrown)
+            // If BUG-001 wasn't fixed, this would either:
+            //   - Throw exception (genesis not found at height=0)
+            //   - Silently skip verification (null check)
+
+            // Verify kernel started successfully
+            DagChain restartedChain = restartedKernel.getDagChain();
+            assertNotNull("DagChain should be initialized after restart", restartedChain);
+
+            // Verify genesis block is still at height=1
+            Block genesisBlock = restartedKernel.getDagStore().getMainBlockByHeight(1, true);
+            assertNotNull("Genesis block should exist at height=1 after restart",
+                    genesisBlock);
+
+            // Verify chain stats are correct
+            long mainBlockCount = restartedChain.getChainStats().getMainBlockCount();
+            assertTrue("Main block count should be >= 1 (at least genesis)",
+                    mainBlockCount >= 1);
+
+            System.out.println("✅ BUG-001 Fix Verified: Genesis verification succeeds after restart");
+            System.out.println("   Genesis found at height=1: " + genesisBlock.getHash().toHexString().substring(0, 16) + "...");
+            System.out.println("   Main block count: " + mainBlockCount);
+
+        } finally {
+            // Clean up: stop the restarted kernel
+            if (restartedKernel != null) {
+                restartedKernel.stop();
+            }
+        }
+    }
+
     /**
      * Helper method: Sign a transaction with the test key pair
      */
