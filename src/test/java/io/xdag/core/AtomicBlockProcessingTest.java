@@ -377,8 +377,8 @@ public class AtomicBlockProcessingTest {
 
         // BUGFIX: Query actual block state AFTER both imports (not stale import result)
         // Import results are immutable snapshots - block1's result was created before block2 demoted it
-        Block block1Final = dagKernel.getDagStore().getBlockByHash(block1.getHash());
-        Block block2Final = dagKernel.getDagStore().getBlockByHash(block2.getHash());
+        Block block1Final = dagKernel.getDagStore().getBlockByHash(block1.getHash(), false);
+        Block block2Final = dagKernel.getDagStore().getBlockByHash(block2.getHash(), false);
 
         // One should be main (height > 0), one should be orphan (height == 0)
         boolean block1IsMain = block1Final != null && block1Final.getInfo() != null &&
