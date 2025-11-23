@@ -25,9 +25,12 @@
 package io.xdag.core;
 
 import io.xdag.DagKernel;
+import io.xdag.SampleKeys;
 import io.xdag.Wallet;
 import io.xdag.config.Config;
 import io.xdag.config.DevnetConfig;
+import io.xdag.crypto.keys.AddressUtils;
+import io.xdag.crypto.keys.ECKeyPair;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -60,6 +63,7 @@ public class DagKernelIntegrationTest {
     private Config config;
     private Path tempDir;
     private Wallet testWallet;
+    private ECKeyPair testKeyPair;  // Key pair for signing test transactions
 
     @Before
     public void setUp() throws IOException {
@@ -86,6 +90,9 @@ public class DagKernelIntegrationTest {
         testWallet = new Wallet(config);
         testWallet.unlock("test-password");  // Use test password
         testWallet.addAccountRandom();  // Add random account as default
+
+        // Initialize test key pair for signing transactions
+        testKeyPair = SampleKeys.KEY_PAIR;
 
         // Create real DagKernel with wallet (not mocked)
         dagKernel = new DagKernel(config, testWallet);
@@ -810,5 +817,12 @@ public class DagKernelIntegrationTest {
                 accountManager.getBalance(receiver2));
         assertEquals("Receiver 3 should have 1 XDAG", expectedBalance,
                 accountManager.getBalance(receiver3));
+    }
+
+    /**
+     * Helper method: Sign a transaction with the test key pair
+     */
+    private Transaction signTransaction(Transaction tx) {
+        return tx.sign(testKeyPair);
     }
 }
