@@ -78,6 +78,14 @@ public class BlockApiServiceTest {
         when(dagChain.getMainBlockByHeight(anyLong()))
                 .thenAnswer(invocation -> blocks.get(invocation.getArgument(0)));
 
+        // Mock getTransactionCountByBlock() - this is what BlockApiService actually calls
+        when(transactionStore.getTransactionCountByBlock(any(Bytes32.class)))
+                .thenAnswer(invocation -> {
+                    Bytes32 hash = invocation.getArgument(0);
+                    return txCountByHash.getOrDefault(hash.toHexString(), 0);
+                });
+
+        // Also keep the old mock for getTransactionsByBlock() in case it's used elsewhere
         when(transactionStore.getTransactionsByBlock(any(Bytes32.class)))
                 .thenAnswer(invocation -> {
                     Bytes32 hash = invocation.getArgument(0);
