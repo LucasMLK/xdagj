@@ -36,6 +36,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.xdag.SampleKeys;
+import io.xdag.crypto.keys.AddressUtils;
+import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.store.TransactionStore;
 import java.util.ArrayList;
 import java.util.List;
@@ -64,6 +67,7 @@ public class DagTransactionProcessorTest {
     private DagAccountManager accountManager;
     private TransactionStore transactionStore;
 
+    private ECKeyPair senderKeyPair;
     private Bytes senderAddress;
     private Bytes receiverAddress;
 
@@ -73,8 +77,13 @@ public class DagTransactionProcessorTest {
         transactionStore = mock(TransactionStore.class);
         processor = new DagTransactionProcessor(accountManager, transactionStore);
 
-        senderAddress = Bytes.random(20);
+        // Use sample key pair for generating valid signatures
+        senderKeyPair = SampleKeys.KEY_PAIR;
+        senderAddress = AddressUtils.toBytesAddress(senderKeyPair);
         receiverAddress = Bytes.random(20);
+
+        // Mock transactionStore.isTransactionExecuted() to return false (not executed yet)
+        when(transactionStore.isTransactionExecuted(any())).thenReturn(false);
     }
 
     // ========== Single Transaction Processing ==========
@@ -270,7 +279,7 @@ public class DagTransactionProcessorTest {
     // ========== Helper Methods ==========
 
     private Transaction createTransaction(Bytes from, Bytes to, long amount, long nonce, long fee) {
-        return Transaction.builder()
+        Transaction tx = Transaction.builder()
                 .from(from)
                 .to(to)
                 .amount(XAmount.of(amount, XUnit.XDAG))
@@ -281,6 +290,9 @@ public class DagTransactionProcessorTest {
                 .r(Bytes32.ZERO)
                 .s(Bytes32.ZERO)
                 .build();
+
+        // Sign transaction with sender's key pair to create valid signature
+        return tx.sign(senderKeyPair);
     }
 
     private Block createTestBlock() {

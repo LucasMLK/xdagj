@@ -298,9 +298,10 @@ public class TransactionStoreTest {
         List<Bytes32> hashes = List.of(tx1.getHash(), Bytes32.random());
         List<Transaction> txs = transactionStore.getTransactionsByHashes(hashes);
 
-        assertEquals(2, txs.size());
+        // After BUG-015 fix: method skips missing transactions instead of returning null
+        assertEquals(1, txs.size());  // Only found transaction is returned
         assertNotNull(txs.get(0));
-        assertNull(txs.get(1));
+        assertEquals(tx1.getHash(), txs.get(0).getHash());
     }
 
     // ========== Statistics Tests ==========
