@@ -279,16 +279,17 @@
 - Performance targets documented: 1M blocks in 15-20 minutes
 
 **Issues Found** (HybridSyncP2pAdapter.java):
-- ⚠️ BUG-022: Response matching error - all reply handlers match first request (MAJOR)
+- ✅ BUG-022: Response matching error - all reply handlers match first request (MAJOR) - **FIXED**
   - **Impact**: Data corruption risk in concurrent sync scenarios
-  - **Root Cause**: No requestId in protocol messages, uses HashMap.iterator().next()
+  - **Root Cause**: No requestId in protocol messages, used HashMap.iterator().next()
   - **Current Safety**: Safe for sequential sync, unsafe for concurrent requests
-  - **Fix Required**: Add requestId field to all sync messages (protocol change)
-  - **Status**: Documented, deferred (requires protocol-level changes)
+  - **Fix Applied**: Added requestId field to all 10 sync messages (protocol change)
+  - **Status**: ✅ Fixed (commit 12d592eb) - All request/reply handlers updated
+  - **Files Modified**: 12 files (HybridSyncP2pAdapter, XdagP2pEventHandler, 10 message classes)
 
 **Phase 5.2 Summary**:
 - All core files reviewed ✅
-- 1 major bug found (BUG-022) - protocol design issue
+- 1 major bug found (BUG-022) - ✅ **FIXED** (protocol design improved)
 - Code quality: Excellent (both files)
 - Sync protocol well-designed with clear phases
 
@@ -1406,7 +1407,7 @@
 | BUG-007 | DagChainImpl.java:1452 | getWinnerBlockInEpoch() fallback only scans main blocks | ✅ Documented | d3d1402b |
 | BUG-015 | TransactionStoreImpl.java:306 | getTransactionsByHashes() returned null elements | ✅ Fixed | 29c4553c |
 | BUG-021 | P2pConfigFactory.java:54 | Missing max >= min validation for connection limits | ✅ Fixed | b3f5b9d8 |
-| BUG-022 | HybridSyncP2pAdapter.java:392 | Response matching error - all reply handlers match first request | ⏸️ Deferred | - |
+| BUG-022 | HybridSyncP2pAdapter.java:392 | Response matching error - all reply handlers match first request | ✅ Fixed | 12d592eb |
 | BUG-023 | TransactionBroadcastManager.java:186 | Race condition in check-then-act pattern (shouldProcess/shouldBroadcast) | ✅ Fixed | 2dd403f9 |
 | BUG-024 | HttpApiServer.java:74 | API key configuration parsing issues (split, validation, error handling) | ✅ Fixed | 1d4d9c05 |
 | BUG-026 | TransactionApiService.java:133 | Pagination total count includes orphan blocks but queries only main chain | ✅ Documented | 691daa5e |
@@ -1444,10 +1445,11 @@
   3. Log warning when adjustment is made
 - **Commit**: b3f5b9d8
 
-**BUG-022 Details** (MAJOR - Protocol Design):
+**BUG-022 Details** (MAJOR - Protocol Design) - ✅ **FIXED**:
 - **Location**: `HybridSyncP2pAdapter.java:392-484` (all 5 reply handlers)
-- **Problem**: All reply handlers match FIRST pending request instead of correct request
+- **Problem**: All reply handlers matched FIRST pending request instead of correct request
   ```java
+  // BEFORE (BUGGY CODE):
   public void onHeightReply(SyncHeightReplyMessage reply) {
       // Gets FIRST request (iterator.next()), not matching request!
       String requestId = pendingHeightRequests.keySet().iterator().next();
@@ -1467,22 +1469,49 @@
         → Request B times out
     Result: Data mismatch + timeout
     ```
-- **Root Cause**: Protocol messages lack requestId field, adapter assumes sequential replies
+- **Root Cause**: Protocol messages lacked requestId field, adapter assumed sequential replies
 - **Affected Methods**:
   - `onHeightReply()` - line 392
   - `onMainBlocksReply()` - line 412
   - `onEpochBlocksReply()` - line 431
   - `onBlocksReply()` - line 453
   - `onTransactionsReply()` - line 472
-- **Current Safety**: Safe ONLY for sequential sync (single request at a time)
-- **Future Risk**: HIGH - Will cause data corruption if concurrent sync is enabled
-- **Fix Required** (Protocol Change):
-  1. Add `requestId` field to all request/reply message classes
-  2. Update all 5 reply handlers to match by requestId
-  3. Update XdagP2pEventHandler to pass requestId from reply messages
-  4. **Scope**: Requires changes across multiple files (protocol layer)
-- **Status**: Deferred (requires protocol-level design changes)
-- **TODO Comment**: "TODO: Implement proper request tracking by channel/peer" (line 394)
+- **Fix Implemented** (Protocol Change - commit 12d592eb):
+  1. ✅ Added `requestId` field to all 10 request/reply message classes (first field)
+  2. ✅ Updated all 5 request methods to generate UUID and pass to messages
+  3. ✅ Updated all 5 reply handlers to extract requestId from reply and match correctly:
+     ```java
+     // AFTER (FIXED CODE):
+     public void onHeightReply(SyncHeightReplyMessage reply) {
+         // BUGFIX (BUG-022): Match reply by requestId
+         String requestId = reply.getRequestId();
+
+         if (requestId == null) {
+           log.warn("Received SyncHeightReply without requestId, dropping");
+           return;
+         }
+
+         CompletableFuture<SyncHeightReplyMessage> future = pendingHeightRequests.remove(requestId);
+
+         if (future != null) {
+           log.debug("Completing height request {} with reply: mainHeight={}",
+               requestId, reply.getMainHeight());
+           future.complete(reply);
+         } else {
+           log.warn("Received SyncHeightReply for unknown requestId: {}", requestId);
+         }
+     }
+     ```
+  4. ✅ Updated XdagP2pEventHandler to extract requestId from requests and pass to replies
+  5. ✅ Enhanced logging with requestId for debugging
+  6. ✅ Added proper validation with null checks and warnings
+- **Files Modified** (12 total):
+  - `HybridSyncP2pAdapter.java` - Updated all 5 request/reply methods
+  - `XdagP2pEventHandler.java` - Updated all 5 request handlers
+  - 10 message classes: `SyncHeight/MainBlocks/EpochBlocks/Blocks/Transactions` Request/Reply
+- **Protocol Compatibility**: ⚠️ **Breaking change** - requires network upgrade
+- **Status**: ✅ **FIXED** - Correct request-response matching in concurrent scenarios
+- **Commit**: 12d592eb
 
 **BUG-023 Details** (MEDIUM - Concurrency):**
 - **Location**: `TransactionBroadcastManager.java:186-229` (shouldProcess and shouldBroadcast)
