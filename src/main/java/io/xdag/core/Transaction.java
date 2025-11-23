@@ -78,6 +78,11 @@ public class Transaction implements Serializable {
   XAmount fee;
 
   /**
+   * Chain ID for replay protection (EIP-155 style)
+   */
+  long chainId;
+
+  /**
    * Transaction data (max 1KB) Used for smart contract calls, similar to Ethereum's data field
    */
   @Builder.Default
@@ -128,7 +133,7 @@ public class Transaction implements Serializable {
   /**
    * Calculate transaction hash
    * <p>
-   * Hash calculation: tx_hash = Keccak256(from + to + amount + nonce + fee + data) Signature
+   * Hash calculation: tx_hash = Keccak256(from + to + amount + nonce + fee + chainId + data) Signature
    * (v/r/s) does NOT participate in hash calculation
    *
    * @return transaction hash (32 bytes)
@@ -149,6 +154,7 @@ public class Transaction implements Serializable {
             8 +   // amount
             8 +   // nonce
             8 +   // fee
+            8 +   // chainId
             2 +   // data length
             data.size()  // data
     );
@@ -158,6 +164,7 @@ public class Transaction implements Serializable {
     buffer.putLong(amount.toXAmount().toLong());
     buffer.putLong(nonce);
     buffer.putLong(fee.toXAmount().toLong());
+    buffer.putLong(chainId);
     buffer.putShort((short) data.size());
     buffer.put(data.toArray());
 
@@ -259,7 +266,7 @@ public class Transaction implements Serializable {
    * Validate transaction basic rules
    * <p>
    * Checks: 1. data size <= MAX_DATA_LENGTH 2. amount >= 0 3. fee >= 0 4. nonce >= 0 5. from and to
-   * are not null
+   * are not null 6. chainId > 0
    *
    * @return true if valid
    */
@@ -279,6 +286,9 @@ public class Transaction implements Serializable {
     if (from == null || to == null) {
       return false;
     }
+    if (chainId <= 0) {
+      return false;
+    }
     return true;
   }
 
@@ -293,6 +303,7 @@ public class Transaction implements Serializable {
         8 +   // amount
         8 +   // nonce
         8 +   // fee
+        8 +   // chainId
         2 +   // data length
         data.size() +  // data
         1 +   // v
@@ -303,13 +314,14 @@ public class Transaction implements Serializable {
   @Override
   public String toString() {
     return String.format(
-        "Transaction[hash=%s, from=%s, to=%s, amount=%s, nonce=%d, fee=%s, dataSize=%d]",
+        "Transaction[hash=%s, from=%s, to=%s, amount=%s, nonce=%d, fee=%s, chainId=%d, dataSize=%d]",
         getHash().toHexString().substring(0, 16) + "...",
         from.toHexString().substring(0, 16) + "...",
         to.toHexString().substring(0, 16) + "...",
         amount.toDecimal(9, XUnit.XDAG).toPlainString(),
         nonce,
         fee.toDecimal(9, XUnit.XDAG).toPlainString(),
+        chainId,
         data.size()
     );
   }
@@ -324,11 +336,12 @@ public class Transaction implements Serializable {
    * @param amount transfer amount
    * @param nonce  account nonce
    * @param fee    transaction fee
+   * @param chainId chain ID for replay protection
    * @return unsigned transaction
    * @throws IllegalArgumentException if addresses are not exactly 20 bytes
    */
   public static Transaction createTransfer(Bytes from, Bytes to, XAmount amount, long nonce,
-      XAmount fee) {
+      XAmount fee, long chainId) {
     if (from.size() != 20) {
       throw new IllegalArgumentException(
           "from address must be exactly 20 bytes, got: " + from.size());
@@ -343,6 +356,7 @@ public class Transaction implements Serializable {
         .amount(amount)
         .nonce(nonce)
         .fee(fee)
+        .chainId(chainId)
         .data(Bytes.EMPTY)
         .build();
   }
@@ -355,13 +369,14 @@ public class Transaction implements Serializable {
    * @param amount transfer amount
    * @param nonce  account nonce
    * @param fee    transaction fee
+   * @param chainId chain ID for replay protection
    * @param data   transaction data (max 1KB)
    * @return unsigned transaction
    * @throws IllegalArgumentException if data size exceeds MAX_DATA_LENGTH or addresses are not 20
    *                                  bytes
    */
   public static Transaction createWithData(Bytes from, Bytes to, XAmount amount, long nonce,
-      XAmount fee, Bytes data) {
+      XAmount fee, long chainId, Bytes data) {
     if (from.size() != 20) {
       throw new IllegalArgumentException(
           "from address must be exactly 20 bytes, got: " + from.size());
@@ -380,6 +395,7 @@ public class Transaction implements Serializable {
         .amount(amount)
         .nonce(nonce)
         .fee(fee)
+        .chainId(chainId)
         .data(data)
         .build();
   }
@@ -389,9 +405,18 @@ public class Transaction implements Serializable {
   /**
    * Serialize transaction to bytes (for storage or network transmission)
    * <p>
-   * Format (minimum 132 bytes + data length): [from - 20 bytes, hash160] [to - 20 bytes, hash160]
-   * [amount - 8 bytes] [nonce - 8 bytes] [fee - 8 bytes] [data_length - 2 bytes] [data - variable,
-   * max 1024 bytes] [v - 1 byte] [r - 32 bytes] [s - 32 bytes]
+   * Format (minimum 140 bytes + data length):
+   * [from - 20 bytes, hash160]
+   * [to - 20 bytes, hash160]
+   * [amount - 8 bytes]
+   * [nonce - 8 bytes]
+   * [fee - 8 bytes]
+   * [chainId - 8 bytes]
+   * [data_length - 2 bytes]
+   * [data - variable, max 1024 bytes]
+   * [v - 1 byte]
+   * [r - 32 bytes]
+   * [s - 32 bytes]
    *
    * @return serialized transaction bytes
    */
@@ -405,6 +430,7 @@ public class Transaction implements Serializable {
     buffer.putLong(amount.toXAmount().toLong());
     buffer.putLong(nonce);
     buffer.putLong(fee.toXAmount().toLong());
+    buffer.putLong(chainId);
     buffer.putShort((short) data.size());
     buffer.put(data.toArray());
 
@@ -424,9 +450,9 @@ public class Transaction implements Serializable {
    * @throws IllegalArgumentException if data is invalid
    */
   public static Transaction fromBytes(byte[] bytes) {
-    if (bytes.length < 131) {  // Minimum size without data (20+20+8+8+8+2+1+32+32 = 131 bytes)
+    if (bytes.length < 139) {  // Minimum size without data (20+20+8+8+8+8+2+1+32+32 = 139 bytes)
       throw new IllegalArgumentException(
-          "Invalid transaction data: too small (" + bytes.length + " bytes, minimum 131)"
+          "Invalid transaction data: too small (" + bytes.length + " bytes, minimum 139)"
       );
     }
 
@@ -448,6 +474,8 @@ public class Transaction implements Serializable {
 
     long feeValue = buffer.getLong();
     XAmount fee = XAmount.ofXAmount(feeValue);
+
+    long chainId = buffer.getLong();
 
     short dataLength = buffer.getShort();
     if (dataLength < 0 || dataLength > MAX_DATA_LENGTH) {
@@ -483,6 +511,7 @@ public class Transaction implements Serializable {
         .amount(amount)
         .nonce(nonce)
         .fee(fee)
+        .chainId(chainId)
         .data(data)
         .v(v)
         .r(r)

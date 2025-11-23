@@ -112,6 +112,10 @@ public abstract class BaseIntegrationTest {
     }
 
     protected void createTestGenesisFile() throws IOException {
+        createTestGenesisFile(this.tempDir);
+    }
+
+    public static void createTestGenesisFile(Path directory) throws IOException {
         long epochNumber = 1;
 
         String genesisJson = "{\n" +
@@ -126,7 +130,7 @@ public abstract class BaseIntegrationTest {
                 "  \"alloc\": {}\n" +
                 "}";
 
-        Path genesisFile = tempDir.resolve("genesis-devnet.json");
+        Path genesisFile = directory.resolve("genesis-devnet.json");
         Files.writeString(genesisFile, genesisJson);
     }
 }

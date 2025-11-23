@@ -53,77 +53,21 @@ import static org.junit.Assert.*;
  *
  * @since @since XDAGJ
  */
-public class DagBlockProcessorIntegrationTest {
+public class DagBlockProcessorIntegrationTest extends BaseIntegrationTest {
 
-    private DagKernel dagKernel;
-    private Config config;
-    private Path tempDir;
-    private Wallet testWallet;
     private DagBlockProcessor blockProcessor;
     private DagAccountManager accountManager;
 
     @Before
+    @Override
     public void setUp() throws IOException {
-        // Create unique temporary directory for each test
-        tempDir = Files.createTempDirectory("dagblockprocessor-test-");
-
-        // Create test genesis.json file
-        TestGenesisHelper.createTestGenesisFile(tempDir);
-
-        // Use DevnetConfig with custom database directory
-        config = new DevnetConfig() {
-            @Override
-            public String getStoreDir() {
-                return tempDir.toString();
-            }
-
-            @Override
-            public String getRootDir() {
-                return tempDir.toString();
-            }
-        };
-
-        // Create test wallet with random account
-        testWallet = new Wallet(config);
-        testWallet.unlock("test-password");
-        testWallet.addAccountRandom();
-
-        // Create real DagKernel with wallet (not mocked)
-        dagKernel = new DagKernel(config, testWallet);
+        super.setUp();
+        // Start real DagKernel with wallet (not mocked)
         dagKernel.start();
 
         // Get components
         blockProcessor = dagKernel.getDagBlockProcessor();
         accountManager = dagKernel.getDagAccountManager();
-    }
-
-    @After
-    public void tearDown() {
-        // Cleanup: stop DagKernel
-        if (dagKernel != null) {
-            try {
-                dagKernel.stop();
-            } catch (Exception e) {
-                System.err.println("Error stopping DagKernel: " + e.getMessage());
-            }
-        }
-
-        // Delete temporary directory
-        if (tempDir != null && Files.exists(tempDir)) {
-            try {
-                try (var walk = Files.walk(tempDir)) {
-                    walk.sorted(Comparator.reverseOrder())
-                            .map(Path::toFile)
-                            .forEach(file -> {
-                                if (!file.delete()) {
-                                    System.err.println("Failed to delete: " + file);
-                                }
-                            });
-                }
-            } catch (Exception e) {
-                System.err.println("Error deleting temp directory: " + e.getMessage());
-            }
-        }
     }
 
     /**

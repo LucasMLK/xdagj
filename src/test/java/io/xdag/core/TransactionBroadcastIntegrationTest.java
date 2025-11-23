@@ -211,7 +211,8 @@ public class TransactionBroadcastIntegrationTest {
             to,
             XAmount.of(100, XUnit.XDAG),
             (long) (Math.random() * 1000),  // Random nonce for uniqueness
-            XAmount.of(1, XUnit.MILLI_XDAG)
+            XAmount.of(1, XUnit.MILLI_XDAG),
+            1L
         );
 
         return tx.sign(keyPair);

@@ -315,4 +315,31 @@ public class BlockTest {
         assertEquals(1_485_000, Block.MAX_LINKS_PER_BLOCK);
         assertEquals(23_200, Block.TARGET_TPS);
     }
+
+    @Test
+    public void testHashConsistencyWithSerialization() {
+        // Create a block with specific values
+        long epoch = 100;
+        UInt256 difficulty = UInt256.ONE;
+        Bytes32 nonce = Bytes32.random();
+        Bytes coinbase = Bytes.random(20);
+        List<Link> links = List.of(
+            Link.toTransaction(Bytes32.random()),
+            Link.toBlock(Bytes32.random())
+        );
+
+        Block block = Block.createWithNonce(epoch, difficulty, nonce, coinbase, links);
+
+        // Get the cached hash
+        Bytes32 cachedHash = block.getHash();
+
+        // Serialize the block
+        byte[] serialized = block.toBytes();
+
+        // Calculate hash of serialized bytes using Keccak256 (standard for XDAGJ 1.0)
+        Bytes32 calculatedHash = io.xdag.crypto.hash.HashUtils.keccak256(Bytes.wrap(serialized));
+
+        // Verify they match
+        assertEquals("Block hash must match hash of serialized bytes", cachedHash, calculatedHash);
+    }
 }

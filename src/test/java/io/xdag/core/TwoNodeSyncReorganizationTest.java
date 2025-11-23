@@ -87,11 +87,11 @@ public class TwoNodeSyncReorganizationTest {
         node2Dir = Files.createTempDirectory("node2-test-");
 
         // Create genesis files
-        TestGenesisHelper.createTestGenesisFile(node1Dir);
-        TestGenesisHelper.createTestGenesisFile(node2Dir);
+        BaseIntegrationTest.createTestGenesisFile(node1Dir);
+        BaseIntegrationTest.createTestGenesisFile(node2Dir);
 
         // Setup Node1
-        Config node1Config = new DevnetConfig() {
+        DevnetConfig node1Config = new DevnetConfig() {
             @Override
             public String getStoreDir() {
                 return node1Dir.toString();
@@ -102,6 +102,7 @@ public class TwoNodeSyncReorganizationTest {
                 return node1Dir.toString();
             }
         };
+        node1Config.setNodePort(10001);
 
         node1Wallet = new Wallet(node1Config);
         node1Wallet.unlock("node1-password");
@@ -112,7 +113,7 @@ public class TwoNodeSyncReorganizationTest {
         node1Chain = (DagChainImpl) node1Kernel.getDagChain();
 
         // Setup Node2
-        Config node2Config = new DevnetConfig() {
+        DevnetConfig node2Config = new DevnetConfig() {
             @Override
             public String getStoreDir() {
                 return node2Dir.toString();
@@ -123,6 +124,7 @@ public class TwoNodeSyncReorganizationTest {
                 return node2Dir.toString();
             }
         };
+        node2Config.setNodePort(10002);
 
         node2Wallet = new Wallet(node2Config);
         node2Wallet.unlock("node2-password");

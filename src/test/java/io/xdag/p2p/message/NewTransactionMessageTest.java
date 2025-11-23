@@ -96,7 +96,8 @@ public class NewTransactionMessageTest {
             Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             1,
-            XAmount.of(1, XUnit.MILLI_XDAG)
+            XAmount.of(1, XUnit.MILLI_XDAG),
+            1L
         );
 
         Transaction signedTx = tx.sign(keyPair);
@@ -148,6 +149,7 @@ public class NewTransactionMessageTest {
             XAmount.of(50, XUnit.XDAG),
             2,
             XAmount.of(2, XUnit.MILLI_XDAG),
+            1L,
             data
         );
 
@@ -251,7 +253,8 @@ public class NewTransactionMessageTest {
             to,
             XAmount.of(100, XUnit.XDAG),
             1,
-            XAmount.of(1, XUnit.MILLI_XDAG)
+            XAmount.of(1, XUnit.MILLI_XDAG),
+            1L
         );
 
         return tx.sign(keyPair);

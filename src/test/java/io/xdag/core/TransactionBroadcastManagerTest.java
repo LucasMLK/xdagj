@@ -312,7 +312,8 @@ public class TransactionBroadcastManagerTest {
             to,
             XAmount.of(100, XUnit.XDAG),
             1,
-            XAmount.of(1, XUnit.MILLI_XDAG)
+            XAmount.of(1, XUnit.MILLI_XDAG),
+            1L
         );
 
         return tx.sign(keyPair);

@@ -91,7 +91,8 @@ public class TransactionRollbackIntegrationTest {
                 bob,
                 XAmount.of(100, XUnit.XDAG),
                 5,  // nonce = 5
-                XAmount.of(1, XUnit.MILLI_XDAG)
+                XAmount.of(1, XUnit.MILLI_XDAG),
+                1L
         );
 
         Block block = createTestBlock(100, tx);
@@ -126,9 +127,9 @@ public class TransactionRollbackIntegrationTest {
     @Test
     public void testRollbackMultipleTransactions() {
         // Create multiple transactions in one block
-        Transaction tx1 = Transaction.createTransfer(alice, bob, XAmount.of(100, XUnit.XDAG), 5, XAmount.of(1, XUnit.MILLI_XDAG));
-        Transaction tx2 = Transaction.createTransfer(alice, bob, XAmount.of(50, XUnit.XDAG), 6, XAmount.of(1, XUnit.MILLI_XDAG));
-        Transaction tx3 = Transaction.createTransfer(alice, bob, XAmount.of(25, XUnit.XDAG), 7, XAmount.of(1, XUnit.MILLI_XDAG));
+        Transaction tx1 = Transaction.createTransfer(alice, bob, XAmount.of(100, XUnit.XDAG), 5, XAmount.of(1, XUnit.MILLI_XDAG), 1L);
+        Transaction tx2 = Transaction.createTransfer(alice, bob, XAmount.of(50, XUnit.XDAG), 6, XAmount.of(1, XUnit.MILLI_XDAG), 1L);
+        Transaction tx3 = Transaction.createTransfer(alice, bob, XAmount.of(25, XUnit.XDAG), 7, XAmount.of(1, XUnit.MILLI_XDAG), 1L);
 
         Block block = createTestBlock(100, tx1, tx2, tx3);
 
@@ -168,7 +169,8 @@ public class TransactionRollbackIntegrationTest {
                 bob,
                 XAmount.of(100, XUnit.XDAG),
                 5,
-                XAmount.of(1, XUnit.MILLI_XDAG)
+                XAmount.of(1, XUnit.MILLI_XDAG),
+                1L
         );
 
         Block block = createTestBlock(100, tx);
@@ -207,7 +209,8 @@ public class TransactionRollbackIntegrationTest {
                 bob,
                 XAmount.of(100, XUnit.XDAG),
                 5,
-                XAmount.of(1, XUnit.MILLI_XDAG)
+                XAmount.of(1, XUnit.MILLI_XDAG),
+                1L
         );
 
         Block block = createTestBlock(100, tx);

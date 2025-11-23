@@ -61,12 +61,7 @@ import static org.junit.Assert.*;
  *
  * @since @since XDAGJ
  */
-public class BlockProcessingPerformanceTest {
-
-    private DagKernel dagKernel;
-    private Config config;
-    private Path tempDir;
-    private Wallet testWallet;
+public class BlockProcessingPerformanceTest extends BaseIntegrationTest {
 
     // Components
     private DagBlockProcessor blockProcessor;
@@ -79,33 +74,10 @@ public class BlockProcessingPerformanceTest {
     private ECKeyPair senderKey;
 
     @Before
+    @Override
     public void setUp() throws IOException {
-        // Create unique temporary directory
-        tempDir = Files.createTempDirectory("perf-test-");
-
-        // Create test genesis.json file
-        TestGenesisHelper.createTestGenesisFile(tempDir);
-
-        // Use DevnetConfig with custom database directory
-        config = new DevnetConfig() {
-            @Override
-            public String getStoreDir() {
-                return tempDir.toString();
-            }
-
-            @Override
-            public String getRootDir() {
-                return tempDir.toString();
-            }
-        };
-
-        // Create test wallet with random account
-        testWallet = new Wallet(config);
-        testWallet.unlock("test-password");
-        testWallet.addAccountRandom();
-
-        // Create and start DagKernel with wallet
-        dagKernel = new DagKernel(config, testWallet);
+        super.setUp();
+        // Start DagKernel
         dagKernel.start();
 
         // Get components
@@ -119,35 +91,6 @@ public class BlockProcessingPerformanceTest {
         senderAddress = Bytes.wrap(AddressUtils.toBytesAddress(senderKey));
         accountManager.ensureAccountExists(senderAddress);
         accountManager.setBalance(senderAddress, UInt256.valueOf(10_000_000_000_000L)); // 10000 XDAG (enough for all tests)
-    }
-
-    @After
-    public void tearDown() {
-        // Stop DagKernel
-        if (dagKernel != null) {
-            try {
-                dagKernel.stop();
-            } catch (Exception e) {
-                System.err.println("Error stopping DagKernel: " + e.getMessage());
-            }
-        }
-
-        // Delete temporary directory
-        if (tempDir != null && Files.exists(tempDir)) {
-            try {
-                try (var walk = Files.walk(tempDir)) {
-                    walk.sorted(Comparator.reverseOrder())
-                            .map(Path::toFile)
-                            .forEach(file -> {
-                                if (!file.delete()) {
-                                    System.err.println("Failed to delete: " + file);
-                                }
-                            });
-                }
-            } catch (Exception e) {
-                System.err.println("Error deleting temp directory: " + e.getMessage());
-            }
-        }
     }
 
     /**

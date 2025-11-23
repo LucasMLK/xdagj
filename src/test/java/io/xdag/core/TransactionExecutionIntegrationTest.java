@@ -216,7 +216,7 @@ public class TransactionExecutionIntegrationTest {
      * Create and sign a transfer transaction using Alice's key pair
      */
     private Transaction createSignedTransaction(Bytes from, Bytes to, XAmount amount, long nonce, XAmount fee) {
-        Transaction tx = Transaction.createTransfer(from, to, amount, nonce, fee);
+        Transaction tx = Transaction.createTransfer(from, to, amount, nonce, fee, 1L);
         return tx.sign(aliceKeyPair);
     }
 

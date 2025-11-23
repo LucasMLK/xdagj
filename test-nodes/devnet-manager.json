@@ -1,0 +1,169 @@
+{
+  "artifacts": {
+    "node": {
+      "projectDir": ".",
+      "jarGlob": "target/xdagj-*-executable.jar",
+      "build": [
+        "mvn",
+        "clean",
+        "package",
+        "-DskipTests"
+      ]
+    },
+    "pool": {
+      "projectDir": "../xdagj-pool",
+      "jarGlob": "target/xdagj-pool-*.jar",
+      "build": [
+        "mvn",
+        "clean",
+        "package",
+        "-DskipTests"
+      ]
+    },
+    "miner": {
+      "projectDir": "../xdagj-miner",
+      "jarGlob": "target/xdagj-miner-*.jar",
+      "build": [
+        "mvn",
+        "clean",
+        "package",
+        "-DskipTests"
+      ]
+    }
+  },
+  "suiteTemplate": {
+    "namePrefix": "suite",
+    "startIndex": 1,
+    "count": 2,
+    "description": "XDAGJ node + pool + miner combo bound to ports {node_port}/{http_port}/{stratum_port}",
+    "variables": {
+      "node_port": {
+        "base": 8001,
+        "step": 1
+      },
+      "http_port": {
+        "base": 10001,
+        "step": 1
+      },
+      "stratum_port": {
+        "base": 3333,
+        "step": 1
+      },
+      "node_host": "127.0.0.1",
+      "http_host": "127.0.0.1",
+      "stratum_bind_host": "0.0.0.0",
+      "miner_pool_host": "127.0.0.1",
+      "miner_worker_address": "nCR7vmdnVzsZ24VtqqurSmC7WLMF8Ymj"
+    },
+    "components": {
+      "node": {
+        "workdir": "test-nodes/{suite}/node",
+        "artifact": "xdagj.jar",
+        "artifactRef": "node",
+        "pidFile": "xdag.pid",
+        "logFile": "node.log",
+        "httpAddress": "http://127.0.0.1:{http_port}",
+        "startArgs": [
+          "java",
+          "-Dlog4j.configurationFile=log4j2.xml",
+          "-Dconfig.file=xdag-devnet.conf",
+          "-cp",
+          ".:xdagj.jar",
+          "io.xdag.Bootstrap",
+          "-d"
+        ],
+        "env": {
+          "XDAGJ_WALLET_PASSWORD": "test123"
+        },
+        "files": [
+          {
+            "template": "test-nodes/templates/node/xdag-devnet.conf.tmpl",
+            "destination": "xdag-devnet.conf"
+          },
+          {
+            "template": "test-nodes/templates/common/log4j2.xml",
+            "destination": "log4j2.xml",
+            "format": false
+          }
+        ]
+      },
+      "pool": {
+        "workdir": "test-nodes/{suite}/pool",
+        "artifact": "xdagj-pool.jar",
+        "artifactRef": "pool",
+        "pidFile": "xdagj-pool.pid",
+        "logFile": "pool.log",
+        "stratumPort": {
+          "var": "stratum_port"
+        },
+        "startArgs": [
+          "java",
+          "-jar",
+          "xdagj-pool.jar",
+          "-c",
+          "pool-config.conf"
+        ],
+        "files": [
+          {
+            "template": "test-nodes/templates/pool/pool-config.conf.tmpl",
+            "destination": "pool-config.conf"
+          },
+          {
+            "template": "test-nodes/templates/common/log4j2.xml",
+            "destination": "log4j2.xml",
+            "format": false
+          }
+        ]
+      },
+      "miner": {
+        "workdir": "test-nodes/{suite}/miner",
+        "artifact": "xdagj-miner.jar",
+        "artifactRef": "miner",
+        "pidFile": "xdagj-miner.pid",
+        "logFile": "miner.log",
+        "startArgs": [
+          "java",
+          "-jar",
+          "xdagj-miner.jar",
+          "-c",
+          "miner-config.conf"
+        ],
+        "files": [
+          {
+            "template": "test-nodes/templates/miner/miner-config.conf.tmpl",
+            "destination": "miner-config.conf"
+          }
+        ]
+      }
+    }
+  },
+  "suites": {},
+  "cleanup": {
+    "enabled": true,
+    "preserve": [
+      "devnet/wallet"
+    ],
+    "paths": [
+      {
+        "component": "node",
+        "relative": "logs"
+      },
+      {
+        "component": "node",
+        "relative": "rocksdb"
+      },
+      {
+        "component": "node",
+        "relative": "dagdb"
+      },
+      {
+        "component": "pool",
+        "relative": "logs"
+      },
+      {
+        "component": "miner",
+        "relative": "logs"
+      }
+    ]
+  }
+}

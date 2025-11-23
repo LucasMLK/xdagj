@@ -1,0 +1,25 @@
+pool {{
+  id = "{pool_id}"
+  name = "{pool_name}"
+
+  node {{
+    rpcUrl = "{http_url}"
+    timeout = 30s
+    maxRetries = 3
+    retryDelay = 5s
+  }}
+
+  stratum {{
+    host = "{stratum_bind_host}"
+    port = {stratum_port}
+    initialDifficulty = 1000
+  }}
+
+  mining {{
+    blockInterval = 64s
+  }}
+
+  database {{
+    type = "memory"
+  }}
+}}

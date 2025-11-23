@@ -48,7 +48,7 @@ public class TransactionTest {
         long nonce = 1;
         XAmount fee = XAmount.of(1, XUnit.MILLI_XDAG);
 
-        Transaction tx = Transaction.createTransfer(from, to, amount, nonce, fee);
+        Transaction tx = Transaction.createTransfer(from, to, amount, nonce, fee, 1L);
 
         assertNotNull(tx);
         assertEquals(from, tx.getFrom());
@@ -68,7 +68,7 @@ public class TransactionTest {
         XAmount fee = XAmount.of(2, XUnit.MILLI_XDAG);
         Bytes data = Bytes.wrap("Hello XDAG".getBytes());
 
-        Transaction tx = Transaction.createWithData(from, to, amount, nonce, fee, data);
+        Transaction tx = Transaction.createWithData(from, to, amount, nonce, fee, 1L, data);
 
         assertNotNull(tx);
         assertEquals(data, tx.getData());
@@ -82,7 +82,7 @@ public class TransactionTest {
         Bytes tooLargeData = Bytes.random(Transaction.MAX_DATA_LENGTH + 1);
 
         assertThrows(IllegalArgumentException.class, () -> {
-            Transaction.createWithData(from, to, XAmount.ZERO, 1, XAmount.ZERO, tooLargeData);
+            Transaction.createWithData(from, to, XAmount.ZERO, 1, XAmount.ZERO, 1L, tooLargeData);
         });
     }
 
@@ -93,7 +93,8 @@ public class TransactionTest {
             Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             1,
-            XAmount.of(1, XUnit.MILLI_XDAG)
+            XAmount.of(1, XUnit.MILLI_XDAG),
+            1L
         );
 
         Bytes32 hash1 = tx.getHash();
@@ -111,8 +112,8 @@ public class TransactionTest {
         long nonce = 1;
         XAmount fee = XAmount.of(1, XUnit.MILLI_XDAG);
 
-        Transaction tx1 = Transaction.createTransfer(from, to, amount, nonce, fee);
-        Transaction tx2 = Transaction.createTransfer(from, to, amount, nonce, fee);
+        Transaction tx1 = Transaction.createTransfer(from, to, amount, nonce, fee, 1L);
+        Transaction tx2 = Transaction.createTransfer(from, to, amount, nonce, fee, 1L);
 
         // Same parameters should produce same hash
         assertEquals(tx1.getHash(), tx2.getHash());
@@ -126,7 +127,8 @@ public class TransactionTest {
             Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             1,
-            XAmount.of(1, XUnit.MILLI_XDAG)
+            XAmount.of(1, XUnit.MILLI_XDAG),
+            1L
         );
         assertTrue(validTx.isValid());
 
@@ -137,6 +139,7 @@ public class TransactionTest {
                 .amount(XAmount.of(-100, XUnit.XDAG))
                 .nonce(1)
                 .fee(XAmount.ZERO)
+                .chainId(1L)
                 .build();
         assertFalse(invalidAmount.isValid());
 
@@ -147,6 +150,7 @@ public class TransactionTest {
                 .amount(XAmount.ZERO)
                 .nonce(-1)
                 .fee(XAmount.ZERO)
+                .chainId(1L)
                 .build();
         assertFalse(invalidNonce.isValid());
 
@@ -157,6 +161,7 @@ public class TransactionTest {
                 .amount(XAmount.ZERO)
                 .nonce(1)
                 .fee(XAmount.ZERO)
+                .chainId(1L)
                 .data(Bytes.random(Transaction.MAX_DATA_LENGTH + 1))
                 .build();
         assertFalse(invalidData.isValid());
@@ -173,6 +178,7 @@ public class TransactionTest {
                 .amount(XAmount.ZERO)
                 .nonce(1)
                 .fee(baseFee)
+                .chainId(1L)
                 .data(Bytes.EMPTY)
                 .build();
         assertEquals(baseFee, tx1.calculateTotalFee(baseFee));
@@ -184,6 +190,7 @@ public class TransactionTest {
                 .amount(XAmount.ZERO)
                 .nonce(1)
                 .fee(baseFee)
+                .chainId(1L)
                 .data(Bytes.random(256))
                 .build();
         assertEquals(baseFee, tx2.calculateTotalFee(baseFee));
@@ -195,6 +202,7 @@ public class TransactionTest {
                 .amount(XAmount.ZERO)
                 .nonce(1)
                 .fee(baseFee)
+                .chainId(1L)
                 .data(Bytes.random(512))
                 .build();
         assertTrue(tx3.calculateTotalFee(baseFee).compareTo(baseFee) > 0);
@@ -207,7 +215,8 @@ public class TransactionTest {
             Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             1,
-            XAmount.of(1, XUnit.MILLI_XDAG)
+            XAmount.of(1, XUnit.MILLI_XDAG),
+            1L
         );
 
         int expectedSize = 20 +  // from (XDAGJ 1.0: 20-byte address)
@@ -215,6 +224,7 @@ public class TransactionTest {
                           8 +   // amount
                           8 +   // nonce
                           8 +   // fee
+                          8 +   // chainId
                           2 +   // data length
                           0 +   // data (empty)
                           1 +   // v
@@ -231,7 +241,8 @@ public class TransactionTest {
             Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             5,
-            XAmount.of(1, XUnit.MILLI_XDAG)
+            XAmount.of(1, XUnit.MILLI_XDAG),
+            1L
         );
 
         String str = tx.toString();
@@ -253,7 +264,8 @@ public class TransactionTest {
             Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             1,
-            XAmount.ZERO
+            XAmount.ZERO,
+            1L
         );
 
         // Modify via builder
@@ -279,7 +291,8 @@ public class TransactionTest {
             Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             1,
-            XAmount.of(1, XUnit.MILLI_XDAG)
+            XAmount.of(1, XUnit.MILLI_XDAG),
+            1L
         );
 
         // Sign transaction
@@ -299,7 +312,8 @@ public class TransactionTest {
             Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             1,
-            XAmount.of(1, XUnit.MILLI_XDAG)
+            XAmount.of(1, XUnit.MILLI_XDAG),
+            1L
         );
 
         Transaction signedTx = tx.sign(keyPair);
@@ -323,7 +337,8 @@ public class TransactionTest {
             Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             1,
-            XAmount.of(1, XUnit.MILLI_XDAG)
+            XAmount.of(1, XUnit.MILLI_XDAG),
+            1L
         );
 
         // Sign with wrong key (keyPair2) but claimed sender is from keyPair1
@@ -343,7 +358,8 @@ public class TransactionTest {
             Bytes.random(20),
             XAmount.of(100, XUnit.XDAG),
             1,
-            XAmount.of(1, XUnit.MILLI_XDAG)
+            XAmount.of(1, XUnit.MILLI_XDAG),
+            1L
         );
 
         Transaction signedTx = tx.sign(keyPair);

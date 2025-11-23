@@ -91,12 +91,12 @@ public class HybridSyncManagerIntegrationTest {
                 anyInt(),
                 anyBoolean()
         )).thenReturn(CompletableFuture.completedFuture(
-                new SyncMainBlocksReplyMessage(Collections.emptyList())
+                new SyncMainBlocksReplyMessage("test-id", Collections.emptyList())
         ));
 
         when(mockP2pAdapter.requestEpochBlocks(any(Channel.class), anyLong(), anyLong()))
                 .thenReturn(CompletableFuture.completedFuture(
-                        new SyncEpochBlocksReplyMessage(Collections.emptyMap())
+                        new SyncEpochBlocksReplyMessage("test-id", Collections.emptyMap())
                 ));
 
         when(mockP2pAdapter.requestBlocks(
@@ -104,14 +104,14 @@ public class HybridSyncManagerIntegrationTest {
                 anyList(),
                 anyBoolean()
         )).thenReturn(CompletableFuture.completedFuture(
-                new SyncBlocksReplyMessage(Collections.emptyList())
+                new SyncBlocksReplyMessage("test-id", Collections.emptyList())
         ));
 
         when(mockP2pAdapter.requestTransactions(
                 any(Channel.class),
                 anyList()
         )).thenReturn(CompletableFuture.completedFuture(
-                new SyncTransactionsReplyMessage(Collections.emptyList())
+                new SyncTransactionsReplyMessage("test-id", Collections.emptyList())
         ));
     }
 
@@ -125,6 +125,7 @@ public class HybridSyncManagerIntegrationTest {
         Bytes32 remoteTipHash = Bytes32.random();
 
         SyncHeightReplyMessage mockReply = new SyncHeightReplyMessage(
+                "test-id",
                 remoteMainHeight,
                 remoteFinalizedHeight,
                 remoteTipHash
@@ -172,6 +173,7 @@ public class HybridSyncManagerIntegrationTest {
         long finalizedHeight = 2900L;
 
         SyncHeightReplyMessage heightReply = new SyncHeightReplyMessage(
+                "test-id",
                 remoteHeight,
                 finalizedHeight,
                 Bytes32.random()
@@ -183,7 +185,7 @@ public class HybridSyncManagerIntegrationTest {
 
         // Setup: Mock main blocks download
         List<Block> mockBlocks = createMockBlocks(1000, 1100);
-        SyncMainBlocksReplyMessage blocksReply = new SyncMainBlocksReplyMessage(mockBlocks);
+        SyncMainBlocksReplyMessage blocksReply = new SyncMainBlocksReplyMessage("test-id", mockBlocks);
 
         when(mockP2pAdapter.requestMainBlocks(
                 any(Channel.class),
@@ -226,6 +228,7 @@ public class HybridSyncManagerIntegrationTest {
         long finalizedHeight = 4900L;
 
         SyncHeightReplyMessage heightReply = new SyncHeightReplyMessage(
+                "test-id",
                 remoteHeight,
                 finalizedHeight,
                 Bytes32.random()
@@ -250,7 +253,7 @@ public class HybridSyncManagerIntegrationTest {
             long fromHeight = invocation.getArgument(1);
             long toHeight = invocation.getArgument(2);
             List<Block> blocks = createMockBlocks(fromHeight, Math.min(fromHeight + 999, toHeight));
-            return CompletableFuture.completedFuture(new SyncMainBlocksReplyMessage(blocks));
+            return CompletableFuture.completedFuture(new SyncMainBlocksReplyMessage("test-id", blocks));
         });
 
         // Setup: Mock block import - update local height after each import
@@ -269,7 +272,7 @@ public class HybridSyncManagerIntegrationTest {
         java.util.Map<Long, List<Bytes32>> emptyEpochMap = new java.util.HashMap<>();
         when(mockP2pAdapter.requestEpochBlocks(any(Channel.class), anyLong(), anyLong()))
                 .thenReturn(CompletableFuture.completedFuture(
-                        new SyncEpochBlocksReplyMessage(emptyEpochMap)
+                        new SyncEpochBlocksReplyMessage("test-id", emptyEpochMap)
                 ));
 
         // Execute: Start sync
@@ -295,6 +298,7 @@ public class HybridSyncManagerIntegrationTest {
         long finalizedHeight = 8500L;
 
         SyncHeightReplyMessage heightReply = new SyncHeightReplyMessage(
+                "test-id",
                 remoteHeight,
                 finalizedHeight,
                 Bytes32.random()
@@ -308,7 +312,7 @@ public class HybridSyncManagerIntegrationTest {
         List<Bytes32> epochHashes = createMockHashes(10);
         java.util.Map<Long, List<Bytes32>> epochBlocksMap = new java.util.HashMap<>();
         epochBlocksMap.put(9000L, epochHashes);
-        SyncEpochBlocksReplyMessage epochReply = new SyncEpochBlocksReplyMessage(epochBlocksMap);
+        SyncEpochBlocksReplyMessage epochReply = new SyncEpochBlocksReplyMessage("test-id", epochBlocksMap);
 
         when(mockP2pAdapter.requestEpochBlocks(any(Channel.class), anyLong(), anyLong()))
                 .thenReturn(CompletableFuture.completedFuture(epochReply));
@@ -319,7 +323,7 @@ public class HybridSyncManagerIntegrationTest {
 
         // Setup: Mock blocks download
         List<Block> mockBlocks = createMockBlocks(9000, 9010);
-        SyncBlocksReplyMessage blocksReply = new SyncBlocksReplyMessage(mockBlocks);
+        SyncBlocksReplyMessage blocksReply = new SyncBlocksReplyMessage("test-id", mockBlocks);
 
         when(mockP2pAdapter.requestBlocks(
                 any(Channel.class),
@@ -360,6 +364,7 @@ public class HybridSyncManagerIntegrationTest {
         long remoteHeight = 10000L;
 
         SyncHeightReplyMessage heightReply = new SyncHeightReplyMessage(
+                "test-id",
                 remoteHeight,
                 9000L,
                 Bytes32.random()
@@ -388,6 +393,7 @@ public class HybridSyncManagerIntegrationTest {
         long remoteHeight = 2000L;
 
         SyncHeightReplyMessage heightReply = new SyncHeightReplyMessage(
+                "test-id",
                 remoteHeight,
                 1900L,
                 Bytes32.random()
@@ -407,7 +413,7 @@ public class HybridSyncManagerIntegrationTest {
         )).thenAnswer(invocation -> {
             long fromHeight = invocation.getArgument(1);
             List<Block> blocks = createMockBlocks(fromHeight, fromHeight + 100);
-            return CompletableFuture.completedFuture(new SyncMainBlocksReplyMessage(blocks));
+            return CompletableFuture.completedFuture(new SyncMainBlocksReplyMessage("test-id", blocks));
         });
 
         when(mockDagChain.tryToConnect(any(Block.class)))
@@ -417,7 +423,7 @@ public class HybridSyncManagerIntegrationTest {
         java.util.Map<Long, List<Bytes32>> emptyEpochMap2 = new java.util.HashMap<>();
         when(mockP2pAdapter.requestEpochBlocks(any(Channel.class), anyLong(), anyLong()))
                 .thenReturn(CompletableFuture.completedFuture(
-                        new SyncEpochBlocksReplyMessage(emptyEpochMap2)
+                        new SyncEpochBlocksReplyMessage("test-id", emptyEpochMap2)
                 ));
 
         // Execute: Start sync

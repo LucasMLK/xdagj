@@ -68,4 +68,22 @@ public class PubkeyAddressUtilsTest {
         String res = Base58.encodeCheck(BytesUtils.byte32ToArray(address));
         Assert.assertEquals(addressStr, res);
     }
+
+    @Test
+    public void testAddressConsistency() {
+        ECKeyPair key = ECKeyPair.generate();
+        Bytes addr1 = AddressUtils.toBytesAddress(key);
+        Bytes addr2 = AddressUtils.toBytesAddress(key);
+
+        assertEquals("Same key should produce same address", addr1, addr2);
+        assertEquals("Address size should be consistent", addr1.size(), addr2.size());
+    }
+
+    @Test
+    public void testAddressSize() {
+        ECKeyPair key = ECKeyPair.generate();
+        Bytes address = AddressUtils.toBytesAddress(key);
+
+        assertEquals("Address size must be 20 bytes (Hash160)", 20, address.size());
+    }
 }

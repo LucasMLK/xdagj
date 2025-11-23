@@ -1,0 +1,25 @@
+miner {{
+  pool {{
+    host = "{miner_pool_host}"
+    port = {stratum_port}
+    reconnectDelay = 10s
+    timeout = 30s
+  }}
+
+  worker {{
+    address = "{miner_worker_address}"
+    name = "{miner_worker_name}"
+    password = "x"
+  }}
+
+  mining {{
+    threads = 2
+    algorithm = "auto"
+    nonceRange = 10000
+  }}
+
+  stats {{
+    interval = 60s
+    verbose = false
+  }}
+}}

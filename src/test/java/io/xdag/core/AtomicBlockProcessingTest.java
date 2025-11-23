@@ -131,6 +131,7 @@ public class AtomicBlockProcessingTest extends BaseIntegrationTest {
                 .amount(XAmount.of(1, XUnit.XDAG))
                 .nonce(0)
                 .fee(XAmount.of(100, XUnit.MILLI_XDAG))
+                .chainId(1L)
                 .data(Bytes.EMPTY)
                 .build();
 
@@ -236,6 +237,7 @@ public class AtomicBlockProcessingTest extends BaseIntegrationTest {
                 .amount(XAmount.of(1, XUnit.XDAG))
                 .nonce(0)
                 .fee(XAmount.of(100, XUnit.MILLI_XDAG))
+                .chainId(1L)
                 .data(Bytes.EMPTY)
                 .build();
 
@@ -414,6 +416,7 @@ public class AtomicBlockProcessingTest extends BaseIntegrationTest {
                     .amount(XAmount.of(1, XUnit.XDAG))
                     .nonce(0)
                     .fee(XAmount.of(100, XUnit.MILLI_XDAG))
+                    .chainId(1L)
                     .data(Bytes.EMPTY)
                     .build();
 
