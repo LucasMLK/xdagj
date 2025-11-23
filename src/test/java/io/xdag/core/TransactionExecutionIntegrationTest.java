@@ -31,6 +31,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.xdag.SampleKeys;
+import io.xdag.crypto.keys.AddressUtils;
+import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.store.TransactionStore;
 import java.util.ArrayList;
 import java.util.List;
@@ -60,6 +63,7 @@ public class TransactionExecutionIntegrationTest {
     private TransactionStore transactionStore;
     private DagTransactionProcessor transactionProcessor;
 
+    private ECKeyPair aliceKeyPair;
     private Bytes alice;
     private Bytes bob;
 
@@ -70,8 +74,9 @@ public class TransactionExecutionIntegrationTest {
         transactionStore = mock(TransactionStore.class);
         transactionProcessor = new DagTransactionProcessor(accountManager, transactionStore);
 
-        // Setup test accounts
-        alice = Bytes.random(20);
+        // Setup test accounts with valid key pair for signing
+        aliceKeyPair = SampleKeys.KEY_PAIR;
+        alice = AddressUtils.toBytesAddress(aliceKeyPair);
         bob = Bytes.random(20);
 
         // Mock account initial states
@@ -97,7 +102,7 @@ public class TransactionExecutionIntegrationTest {
     @Test
     public void testSimpleTransfer() {
         // Create transaction: Alice sends 100 XDAG to Bob
-        Transaction tx = Transaction.createTransfer(
+        Transaction tx = createSignedTransaction(
                 alice,
                 bob,
                 XAmount.of(100, XUnit.XDAG),
@@ -114,9 +119,9 @@ public class TransactionExecutionIntegrationTest {
     @Test
     public void testMultipleSequentialTransactions() {
         // Alice sends 3 transactions
-        Transaction tx1 = Transaction.createTransfer(alice, bob, XAmount.of(100, XUnit.XDAG), 0, XAmount.of(1, XUnit.MILLI_XDAG));
-        Transaction tx2 = Transaction.createTransfer(alice, bob, XAmount.of(50, XUnit.XDAG), 1, XAmount.of(1, XUnit.MILLI_XDAG));
-        Transaction tx3 = Transaction.createTransfer(alice, bob, XAmount.of(25, XUnit.XDAG), 2, XAmount.of(1, XUnit.MILLI_XDAG));
+        Transaction tx1 = createSignedTransaction(alice, bob, XAmount.of(100, XUnit.XDAG), 0, XAmount.of(1, XUnit.MILLI_XDAG));
+        Transaction tx2 = createSignedTransaction(alice, bob, XAmount.of(50, XUnit.XDAG), 1, XAmount.of(1, XUnit.MILLI_XDAG));
+        Transaction tx3 = createSignedTransaction(alice, bob, XAmount.of(25, XUnit.XDAG), 2, XAmount.of(1, XUnit.MILLI_XDAG));
 
         // Update mock for sequential nonces
         when(accountManager.getNonce(alice))
@@ -142,8 +147,8 @@ public class TransactionExecutionIntegrationTest {
 
         // Create transactions
         List<Transaction> transactions = new ArrayList<>();
-        transactions.add(Transaction.createTransfer(alice, bob, XAmount.of(100, XUnit.XDAG), 0, XAmount.of(1, XUnit.MILLI_XDAG)));
-        transactions.add(Transaction.createTransfer(alice, bob, XAmount.of(50, XUnit.XDAG), 1, XAmount.of(1, XUnit.MILLI_XDAG)));
+        transactions.add(createSignedTransaction(alice, bob, XAmount.of(100, XUnit.XDAG), 0, XAmount.of(1, XUnit.MILLI_XDAG)));
+        transactions.add(createSignedTransaction(alice, bob, XAmount.of(50, XUnit.XDAG), 1, XAmount.of(1, XUnit.MILLI_XDAG)));
 
         // Update mock for sequential nonces
         when(accountManager.getNonce(alice))
@@ -164,7 +169,7 @@ public class TransactionExecutionIntegrationTest {
         when(accountManager.getBalance(alice)).thenReturn(UInt256.valueOf(50000000000L));  // Only 50 XDAG
 
         // Alice tries to send more than she has
-        Transaction tx = Transaction.createTransfer(
+        Transaction tx = createSignedTransaction(
                 alice,
                 bob,
                 XAmount.of(100, XUnit.XDAG),  // More than 50 XDAG balance
@@ -184,7 +189,7 @@ public class TransactionExecutionIntegrationTest {
         when(accountManager.getNonce(alice)).thenReturn(UInt64.valueOf(5));
 
         // Alice tries to send transaction with wrong nonce
-        Transaction tx = Transaction.createTransfer(alice, bob, XAmount.of(100, XUnit.XDAG), 3, XAmount.of(1, XUnit.MILLI_XDAG));
+        Transaction tx = createSignedTransaction(alice, bob, XAmount.of(100, XUnit.XDAG), 3, XAmount.of(1, XUnit.MILLI_XDAG));
 
         DagTransactionProcessor.ProcessingResult result = transactionProcessor.processTransaction(tx);
 
@@ -197,7 +202,7 @@ public class TransactionExecutionIntegrationTest {
         // Mock sender doesn't exist
         when(accountManager.hasAccount(alice)).thenReturn(false);
 
-        Transaction tx = Transaction.createTransfer(alice, bob, XAmount.of(100, XUnit.XDAG), 0, XAmount.of(1, XUnit.MILLI_XDAG));
+        Transaction tx = createSignedTransaction(alice, bob, XAmount.of(100, XUnit.XDAG), 0, XAmount.of(1, XUnit.MILLI_XDAG));
 
         DagTransactionProcessor.ProcessingResult result = transactionProcessor.processTransaction(tx);
 
@@ -206,6 +211,14 @@ public class TransactionExecutionIntegrationTest {
     }
 
     // ========== Helper Methods ==========
+
+    /**
+     * Create and sign a transfer transaction using Alice's key pair
+     */
+    private Transaction createSignedTransaction(Bytes from, Bytes to, XAmount amount, long nonce, XAmount fee) {
+        Transaction tx = Transaction.createTransfer(from, to, amount, nonce, fee);
+        return tx.sign(aliceKeyPair);
+    }
 
     private Block createTestBlock(long height) {
         BlockInfo info = BlockInfo.builder()
