@@ -375,9 +375,16 @@ public class AtomicBlockProcessingTest {
                            (comparison < 0 ? "<" : (comparison > 0 ? ">" : "==")) +
                            " block2 (smaller wins)");
 
-        // One should be main, one should be orphan (based on hash competition)
-        boolean block1IsMain = result1.isMainBlock();
-        boolean block2IsMain = result2.isMainBlock();
+        // BUGFIX: Query actual block state AFTER both imports (not stale import result)
+        // Import results are immutable snapshots - block1's result was created before block2 demoted it
+        Block block1Final = dagKernel.getDagStore().getBlockByHash(block1.getHash());
+        Block block2Final = dagKernel.getDagStore().getBlockByHash(block2.getHash());
+
+        // One should be main (height > 0), one should be orphan (height == 0)
+        boolean block1IsMain = block1Final != null && block1Final.getInfo() != null &&
+                              block1Final.getInfo().getHeight() > 0;
+        boolean block2IsMain = block2Final != null && block2Final.getInfo() != null &&
+                              block2Final.getInfo().getHeight() > 0;
 
         System.out.println("Expected: block1IsMain=" + (comparison < 0) +
                            ", block2IsMain=" + (comparison > 0));
