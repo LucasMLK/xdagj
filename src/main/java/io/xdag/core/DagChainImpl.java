@@ -352,93 +352,6 @@ public class DagChainImpl implements DagChain {
     }
   }
 
-  /**
-   * Validate basic block rules
-   *
-   * @deprecated Moved to {@link BlockValidator#validate(Block)} (P0 refactoring)
-   */
-  @Deprecated
-  private DagImportResult validateBasicRules(Block block) {
-    // IMPORTANT: Check for genesis block FIRST, before timestamp validation
-    // Genesis blocks use configured epoch timestamps that may not match current time
-    // and should be exempt from general timestamp checks
-    if (isGenesisBlock(block)) {
-      // SECURITY: Genesis blocks can only be accepted if the chain is empty
-      if (chainStats.getMainBlockCount() > 0) {
-        log.warn("SECURITY: Rejecting genesis block {} - chain already initialized with {} blocks",
-            block.getHash().toHexString(), chainStats.getMainBlockCount());
-        return DagImportResult.invalidBasic(
-            "Genesis block rejected: chain already has main blocks");
-      }
-
-      // Genesis block validation passed - skip timestamp checks
-      // Genesis epoch comes from genesis.json configuration and is deterministic
-      log.info("Accepting genesis block {} at epoch {} - deterministic from genesis.json",
-          block.getHash().toHexString(), block.getEpoch());
-
-      // Continue to other validations (structure, coinbase, etc.) but skip timestamp checks
-      // by setting a flag or directly jumping to structure validation
-    } else {
-      // Regular blocks: Apply timestamp validation
-      long currentTimestamp = TimeUtils.getCurrentEpoch();
-      long blockTimestamp = TimeUtils.epochNumberToMainTime(block.getEpoch());
-      if (blockTimestamp > (currentTimestamp + MAIN_CHAIN_PERIOD)) {
-        log.debug("Block {} has invalid timestamp: {} (current: {})",
-            block.getHash().toHexString(), blockTimestamp, currentTimestamp);
-        return DagImportResult.invalidBasic("Block timestamp is too far in the future");
-      }
-
-      // BUGFIX: Convert xdagEra from Unix seconds to XDAG timestamp for comparison
-      // Config stores Unix seconds, but Block uses XDAG timestamp (1/1024 second precision)
-      long xdagEra = dagKernel.getConfig().getXdagEra();
-      long xdagEraTimestamp = xdagEra * 1024;
-
-      if (blockTimestamp < xdagEraTimestamp) {
-        log.debug("Block {} timestamp {} is before XDAG era {} (Unix: {})",
-            block.getHash().toHexString(), blockTimestamp, xdagEraTimestamp, xdagEra);
-        return DagImportResult.invalidBasic("Block timestamp is before XDAG era");
-      }
-    }
-
-    // Check if block already exists (applies to all blocks)
-    if (dagStore.hasBlock(block.getHash())) {
-      Block existingBlock = dagStore.getBlockByHash(block.getHash(), false);
-      if (existingBlock != null && existingBlock.getInfo() != null
-          && existingBlock.getInfo().getHeight() == 0) {
-        // Orphan block exists - allow re-processing
-        // When dependencies arrive, orphan blocks should be re-evaluated for main chain inclusion
-        log.debug("Block {} exists as orphan, allowing re-processing",
-            block.getHash().toHexString());
-        // Continue with validation
-      } else {
-        log.debug("Block {} already exists as non-orphan", block.getHash().toHexString());
-        return DagImportResult.duplicate();
-      }
-    }
-
-    // Validate block structure
-    if (!block.isValid()) {
-      log.debug("Block {} failed structure validation", block.getHash().toHexString());
-      return DagImportResult.invalidBasic("Block structure validation failed");
-    }
-
-    // SECURITY: Validate coinbase field length (must be exactly 20 bytes)
-    // This prevents BufferOverflowException during hash calculation
-    // and ensures all blocks follow the Ethereum-style 20-byte address format
-    Bytes coinbase = block.getHeader().getCoinbase();
-    if (coinbase == null) {
-      log.warn("SECURITY: Rejecting block {} - null coinbase", block.getHash().toHexString());
-      return DagImportResult.invalidBasic("Block coinbase is null");
-    }
-    if (coinbase.size() != 20) {
-      log.warn("SECURITY: Rejecting block {} - invalid coinbase length: {} bytes (expected 20)",
-          block.getHash().toHexString(), coinbase.size());
-      return DagImportResult.invalidBasic(String.format(
-          "Block coinbase must be exactly 20 bytes, got %d bytes", coinbase.size()));
-    }
-
-    return null;  // Validation passed
-  }
 
   /**
    * Check if a block is a genesis block
@@ -455,255 +368,8 @@ public class DagChainImpl implements DagChain {
         block.getHeader().getDifficulty().equals(UInt256.ONE);
   }
 
-  /**
-   * Validate minimum PoW requirement (NEW CONSENSUS)
-   * <p>
-   * Ensures block hash satisfies the base difficulty target. This prevents spam blocks and ensures
-   * basic work was done.
-   * <p>
-   * Rule: hash <= baseDifficultyTarget
-   * <p>
-   * Genesis blocks are exempt from this check.
-   *
-   * @param block block to validate
-   * @return null if valid, error result if invalid
-   * @deprecated Moved to {@link BlockValidator#validate(Block)} (P0 refactoring)
-   */
-  @Deprecated
-  private DagImportResult validateMinimumPoW(Block block) {
-    // Skip genesis blocks
-    if (isGenesisBlock(block)) {
-      return null;
-    }
 
-    UInt256 baseDifficultyTarget = chainStats.getBaseDifficultyTarget();
 
-    // Skip validation if target not initialized (backward compatibility)
-    if (baseDifficultyTarget == null) {
-      log.warn("Base difficulty target not initialized, skipping PoW validation");
-      return null;
-    }
-
-    // Calculate block hash as UInt256
-    UInt256 blockHash = UInt256.fromBytes(block.getHash());
-
-    // Check: hash <= baseDifficultyTarget
-    if (blockHash.compareTo(baseDifficultyTarget) > 0) {
-      log.debug("Block {} rejected: insufficient PoW (hash {} > target {})",
-          block.getHash().toHexString().substring(0, 16),
-          blockHash.toHexString().substring(0, 16),
-          baseDifficultyTarget.toHexString().substring(0, 16));
-
-      return DagImportResult.invalidBasic(String.format(
-          "Insufficient proof of work: hash exceeds difficulty target (hash=%s, target=%s)",
-          blockHash.toHexString().substring(0, 16) + "...",
-          baseDifficultyTarget.toHexString().substring(0, 16) + "..."
-      ));
-    }
-
-    log.debug("Block {} passed minimum PoW check (hash {} <= target {})",
-        block.getHash().toHexString().substring(0, 16),
-        blockHash.toHexString().substring(0, 16),
-        baseDifficultyTarget.toHexString().substring(0, 16));
-
-    return null;  // Validation passed
-  }
-
-  /**
-   * Validate epoch block limit (NEW CONSENSUS)
-   * <p>
-   * Limits the number of blocks accepted per epoch to control orphan block growth. If epoch already
-   * has MAX_BLOCKS_PER_EPOCH blocks, only accept new blocks if they have better difficulty (smaller
-   * hash) than the worst existing block.
-   * <p>
-   * This implements a competitive admission policy: - First MAX_BLOCKS_PER_EPOCH blocks are always
-   * accepted - Additional blocks must beat the weakest accepted block - Maintains top N blocks per
-   * epoch
-   *
-   * @param block block to validate
-   * @return null if valid, error result if should be rejected
-   * @deprecated Moved to {@link BlockValidator#validate(Block)} (P0 refactoring)
-   */
-  @Deprecated
-  private DagImportResult validateEpochLimit(Block block) {
-    long epoch = block.getEpoch();
-    List<Block> candidates = getCandidateBlocksInEpoch(epoch);
-
-    // Count ALL candidate blocks in this epoch (both main and orphan blocks)
-    // Each epoch should have at most MAX_BLOCKS_PER_EPOCH candidate blocks
-    // (1 winner with height > 0, and up to 15 losers with height = 0)
-    int candidateCount = candidates.size();
-
-    // If under limit, accept
-    if (candidateCount < MAX_BLOCKS_PER_EPOCH) {
-      log.debug("Block {} accepted: epoch {} has {} < {} candidate blocks",
-          block.getHash().toHexString().substring(0, 16),
-          epoch, candidateCount, MAX_BLOCKS_PER_EPOCH);
-      return null;  // Accept
-    }
-
-    // Epoch is full, check if this block is better than the worst one
-    UInt256 thisBlockWork = calculateBlockWork(block.getHash());
-
-    // Find the worst block (smallest work = largest hash)
-    Block worstBlock = null;
-    UInt256 worstWork = UInt256.MAX_VALUE;
-
-    for (Block candidate : candidates) {
-      UInt256 candidateWork = calculateBlockWork(candidate.getHash());
-      if (candidateWork.compareTo(worstWork) < 0) {
-        worstWork = candidateWork;
-        worstBlock = candidate;
-      }
-    }
-
-    // Compare with worst block
-    if (thisBlockWork.compareTo(worstWork) > 0) {
-      // This block is better, will replace the worst one
-      log.info("Block {} will replace worse block {} in epoch {} (work {} > {})",
-          block.getHash().toHexString().substring(0, 16),
-          worstBlock.getHash().toHexString().substring(0, 16),
-          epoch,
-          thisBlockWork.toHexString().substring(0, 16),
-          worstWork.toHexString().substring(0, 16));
-
-      // Demote worst block to orphan
-      demoteBlockToOrphan(worstBlock);
-
-      return null;  // Accept this block
-    } else {
-      // This block is not better than worst, reject
-      log.debug("Block {} rejected: epoch {} full and work {} <= worst {}",
-          block.getHash().toHexString().substring(0, 16),
-          epoch,
-          thisBlockWork.toHexString().substring(0, 16),
-          worstWork.toHexString().substring(0, 16));
-
-      return DagImportResult.invalidBasic(String.format(
-          "Epoch %d full (%d blocks) and this block's work not in top %d",
-          epoch, MAX_BLOCKS_PER_EPOCH, MAX_BLOCKS_PER_EPOCH
-      ));
-    }
-  }
-
-  /**
-   * Validate block links (Transaction and Block references)
-   *
-   * @deprecated Moved to {@link BlockValidator#validate(Block)} (P0 refactoring)
-   */
-  @Deprecated
-  private DagImportResult validateLinks(Block block) {
-    ResolvedLinks resolved = entityResolver.resolveAllLinks(block);
-
-    // Check for missing references
-    if (!resolved.hasAllReferences()) {
-      boolean allowBootstrap = chainStats.getMainBlockCount() <= 1;
-      if (!allowBootstrap) {
-        Bytes32 missing = resolved.getMissingReferences().getFirst();
-        log.debug("Block {} has missing dependency: {}",
-            block.getHash().toHexString(), missing.toHexString());
-
-        // Save block to DagStore for later retry when dependency arrives
-        // Blocks with missing dependencies are stored with height=0 (pending)
-        // They can be queried via dagStore.getPendingBlocks() for retry
-        try {
-          Block persistableBlock = ensurePersistableBlock(block);
-          dagStore.saveBlock(persistableBlock);
-
-          log.info("Saved block {} to DagStore awaiting dependency: {}",
-              block.getHash().toHexString().substring(0, 16),
-              missing.toHexString().substring(0, 16));
-        } catch (Exception e) {
-          log.error("Failed to save pending block {}: {}",
-              block.getHash().toHexString().substring(0, 16),
-              e.getMessage());
-        }
-
-        return DagImportResult.missingDependency(
-            missing,
-            "Link target not found: " + missing.toHexString()
-        );
-      } else {
-        log.warn(
-            "Bootstrap mode: accepting block {} despite {} missing references (chain height={})",
-            block.getHash().toHexString().substring(0, 16),
-            resolved.getMissingReferences().size(),
-            chainStats.getMainBlockCount());
-        resolved = ResolvedLinks.builder()
-            .referencedBlocks(new ArrayList<>(resolved.getReferencedBlocks()))
-            .referencedTransactions(new ArrayList<>(resolved.getReferencedTransactions()))
-            .missingReferences(List.of())
-            .build();
-      }
-    }
-
-    // Validate all referenced Blocks
-    for (Block refBlock : resolved.getReferencedBlocks()) {
-      // Validate epoch order: blocks can ONLY reference blocks from PREVIOUS epochs
-      // Same epoch references are NOT allowed (prevents circular dependencies within epoch)
-      // Future epoch references are NOT allowed (violates causality)
-      if (refBlock.getEpoch() >= block.getEpoch()) {
-        log.debug(
-            "Block {} (epoch {}) references block {} (epoch {}) - invalid: must reference EARLIER epochs only",
-            block.getHash().toHexString(), block.getEpoch(),
-            refBlock.getHash().toHexString(), refBlock.getEpoch());
-        return DagImportResult.invalidLink(
-            String.format(
-                "Referenced block epoch (%d) >= current block epoch (%d) - must reference earlier epochs only",
-                refBlock.getEpoch(), block.getEpoch()),
-            refBlock.getHash()
-        );
-      }
-
-      // NEW: Check reference depth for network partition detection
-      // This is a SOFT check - we warn but still accept the block
-      // This allows handling network partition/merge scenarios
-      long referenceDepth = block.getEpoch() - refBlock.getEpoch();
-
-      if (referenceDepth > SYNC_MAX_REFERENCE_DEPTH) {
-        // Possible network partition scenario
-        log.warn("Block {} (epoch {}) references very old block {} (epoch {}) - depth: {} epochs",
-            block.getHash().toHexString().substring(0, 16),
-            block.getEpoch(),
-            refBlock.getHash().toHexString().substring(0, 16),
-            refBlock.getEpoch(),
-            referenceDepth);
-        log.warn(
-            "This may indicate a network partition merge scenario (partition duration: ~{} hours)",
-            referenceDepth * 64 / 3600.0);
-        log.warn("Block will be accepted, but node operators should verify chain consistency");
-        // Continue validation - do NOT reject
-      }
-    }
-
-    // Validate all referenced Transactions
-    for (Transaction tx : resolved.getReferencedTransactions()) {
-      // Validate transaction structure
-      if (!tx.isValid()) {
-        log.debug("Transaction {} has invalid structure", tx.getHash().toHexString());
-        return DagImportResult.invalidLink("Invalid transaction structure", tx.getHash());
-      }
-
-      // Validate transaction signature
-      if (!tx.verifySignature()) {
-        log.debug("Transaction {} has invalid signature", tx.getHash().toHexString());
-        return DagImportResult.invalidLink("Invalid transaction signature", tx.getHash());
-      }
-
-      // Validate transaction amount
-      if (tx.getAmount().add(tx.getFee()).subtract(MIN_GAS).isNegative()) {
-        log.debug("Transaction {} has insufficient amount", tx.getHash().toHexString());
-        return DagImportResult.invalidLink("Transaction amount + fee < MIN_GAS", tx.getHash());
-      }
-    }
-
-    log.debug("Block {} link validation passed: {} block links, {} transaction links",
-        block.getHash().toHexString(),
-        resolved.getReferencedBlocks().size(),
-        resolved.getReferencedTransactions().size());
-
-    return null;  // Validation passed
-  }
 
   /**
    * Update chain statistics for new main block
@@ -728,43 +394,7 @@ public class DagChainImpl implements DagChain {
         chainStats.getMainBlockCount(), chainStats.getDifficulty().toDecimalString());
   }
 
-  /**
-   * Clean up old orphan blocks beyond retention window (NEW CONSENSUS)
-   * <p>
-   * Periodically removes orphan blocks older than ORPHAN_RETENTION_WINDOW (16384 epochs = 12 days).
-   * According to XDAG rules, blocks can only reference blocks within 12 days, so older orphan
-   * blocks cannot become main blocks anymore and can be safely deleted.
-   * <p>
-   * Runs every ORPHAN_CLEANUP_INTERVAL (100) epochs to maintain manageable orphan pool size.
-   *
-   * @param currentEpoch current epoch number
-   * @deprecated Moved to {@link OrphanManager#cleanupOldOrphans} (P1 refactoring)
-   */
-  @Deprecated
-  private synchronized void cleanupOldOrphans(long currentEpoch) {
-    throw new UnsupportedOperationException(
-        "This method has been moved to OrphanManager. Use orphanManager.cleanupOldOrphans() instead.");
-  }
 
-  /**
-   * Check and adjust difficulty target if needed (NEW CONSENSUS)
-   * <p>
-   * Adjusts baseDifficultyTarget every DIFFICULTY_ADJUSTMENT_INTERVAL (1000) epochs based on
-   * average blocks per epoch to maintain TARGET_BLOCKS_PER_EPOCH (150) blocks/epoch.
-   * <p>
-   * Algorithm: - If avgBlocksPerEpoch > TARGET * 1.5 → increase difficulty (lower target) - If
-   * avgBlocksPerEpoch < TARGET * 0.5 → decrease difficulty (raise target) - Adjustment limited to
-   * MIN_ADJUSTMENT_FACTOR (0.5x) to MAX_ADJUSTMENT_FACTOR (2x)
-   *
-   * @param currentHeight current main block height
-   * @param currentEpoch  current epoch number
-   * @deprecated Moved to {@link DifficultyAdjuster#checkAndAdjustDifficulty} (P1 refactoring)
-   */
-  @Deprecated
-  private synchronized void checkAndAdjustDifficulty(long currentHeight, long currentEpoch) {
-    throw new UnsupportedOperationException(
-        "This method has been moved to DifficultyAdjuster. Use difficultyAdjuster.checkAndAdjustDifficulty() instead.");
-  }
 
   /**
    * Notify listeners of new block
@@ -818,18 +448,6 @@ public class DagChainImpl implements DagChain {
     return blockBuilder.createCandidateBlock(this.chainStats);
   }
 
-  /**
-   * Collect links for candidate block creation
-   *
-   * @deprecated Moved to {@link BlockBuilder#collectCandidateLinks()} (P1 refactoring)
-   */
-  @Deprecated
-  private List<Link> collectCandidateLinks() {
-    // This method has been moved to BlockBuilder
-    // Keeping this stub for reference during migration
-    throw new UnsupportedOperationException(
-        "This method has been moved to BlockBuilder. Use blockBuilder.createCandidateBlock() instead.");
-  }
 
   /**
    * Set mining coinbase address
@@ -1120,73 +738,8 @@ public class DagChainImpl implements DagChain {
     return blockValidator.validateDAGRules(block, chainStats);
   }
 
-  /**
-   * Check if adding this block creates a cycle in the DAG
-   *
-   * @deprecated Moved to {@link BlockValidator} (P0 refactoring)
-   */
-  @Deprecated
-  private boolean hasCycle(Block block) {
-    Set<Bytes32> visited = new HashSet<>();
-    Set<Bytes32> recursionStack = new HashSet<>();
 
-    return hasCycleDFS(block.getHash(), visited, recursionStack);
-  }
 
-  /**
-   * DFS-based cycle detection
-   *
-   * @deprecated Moved to {@link BlockValidator} (P0 refactoring)
-   */
-  @Deprecated
-  private boolean hasCycleDFS(Bytes32 currentHash, Set<Bytes32> visited,
-      Set<Bytes32> recursionStack) {
-    visited.add(currentHash);
-    recursionStack.add(currentHash);
-
-    Block current = dagStore.getBlockByHash(currentHash, false);
-    if (current != null) {
-      for (Link link : current.getLinks()) {
-        if (link.isBlock()) {
-          Bytes32 childHash = link.getTargetHash();
-
-          if (!visited.contains(childHash)) {
-            if (hasCycleDFS(childHash, visited, recursionStack)) {
-              return true;
-            }
-          } else if (recursionStack.contains(childHash)) {
-            // Found a back edge (cycle)
-            return true;
-          }
-        }
-      }
-    }
-
-    recursionStack.remove(currentHash);
-    return false;
-  }
-
-  /**
-   * Calculate depth from genesis
-   *
-   * @deprecated Moved to {@link BlockValidator} (P0 refactoring)
-   */
-  @Deprecated
-  private int calculateDepthFromGenesis(Block block) {
-    int maxDepth = 0;
-
-    for (Link link : block.getLinks()) {
-      if (link.isBlock()) {
-        Block parent = dagStore.getBlockByHash(link.getTargetHash(), false);
-        if (parent != null) {
-          int parentDepth = calculateDepthFromGenesis(parent);
-          maxDepth = Math.max(maxDepth, parentDepth + 1);
-        }
-      }
-    }
-
-    return maxDepth;
-  }
 
   @Override
   public boolean isBlockInMainChain(Bytes32 hash) {
@@ -1233,128 +786,16 @@ public class DagChainImpl implements DagChain {
         this::getWinnerBlockInEpoch);
   }
 
-  /**
-   * Check for chain reorganization
-   *
-   * @deprecated Moved to {@link ChainReorganizer#checkChainReorganization} (P1 refactoring)
-   */
-  @Deprecated
-  private synchronized void checkChainReorganization() {
-    // This method has been moved to ChainReorganizer
-    throw new UnsupportedOperationException(
-        "This method has been moved to ChainReorganizer. Use chainReorganizer.checkNewMain() instead.");
-  }
 
-  /**
-   * Perform chain reorganization
-   *
-   * @deprecated Moved to {@link ChainReorganizer#performChainReorganization} (P1 refactoring)
-   */
-  @Deprecated
-  private synchronized void performChainReorganization(Block newForkHead) {
-    // This method has been moved to ChainReorganizer
-    throw new UnsupportedOperationException(
-        "This method has been moved to ChainReorganizer. Use chainReorganizer.checkNewMain() instead.");
-  }
 
-  /**
-   * Find the fork point
-   *
-   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
-   */
-  @Deprecated
-  private Block findForkPoint(Block forkHead) {
-    throw new UnsupportedOperationException(
-        "This method has been moved to ChainReorganizer.");
-  }
 
-  /**
-   * Build chain path
-   *
-   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
-   */
-  @Deprecated
-  private List<Block> buildChainPath(Block forkHead, Block forkPoint) {
-    throw new UnsupportedOperationException(
-        "This method has been moved to ChainReorganizer.");
-  }
 
-  /**
-   * Demote blocks after height
-   *
-   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
-   */
-  @Deprecated
-  private List<Block> demoteBlocksAfterHeight(long afterHeight) {
-    throw new UnsupportedOperationException(
-        "This method has been moved to ChainReorganizer.");
-  }
 
-  /**
-   * Promote block to height
-   *
-   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
-   */
-  @Deprecated
-  private void promoteBlockToHeight(Block block, long height) {
-    throw new UnsupportedOperationException(
-        "This method has been moved to ChainReorganizer.");
-  }
 
-  /**
-   * Verify main chain consistency
-   *
-   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
-   */
-  @Deprecated
-  private void verifyMainChainConsistency() {
-    throw new UnsupportedOperationException(
-        "This method has been moved to ChainReorganizer.");
-  }
 
-  /**
-   * Demote blocks from height
-   *
-   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
-   */
-  @Deprecated
-  private synchronized void demoteBlocksFromHeight(long fromHeight) {
-    throw new UnsupportedOperationException(
-        "This method has been moved to ChainReorganizer. Use chainReorganizer.demoteBlocksFromHeight() instead.");
-  }
 
-  /**
-   * Demote a block from main chain to orphan status
-   *
-   * @deprecated Moved to {@link ChainReorganizer#demoteBlockToOrphan} (P1 refactoring)
-   */
-  @Deprecated
-  private synchronized void demoteBlockToOrphan(Block block) {
-    // Delegate to ChainReorganizer (P1 refactoring)
-    chainReorganizer.demoteBlockToOrphan(block);
-  }
 
-  /**
-   * Rollback block transactions
-   *
-   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
-   */
-  @Deprecated
-  private void rollbackBlockTransactions(Block block) {
-    throw new UnsupportedOperationException(
-        "This method has been moved to ChainReorganizer.");
-  }
 
-  /**
-   * Rollback transaction state
-   *
-   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
-   */
-  @Deprecated
-  private void rollbackTransactionState(Transaction tx, DagAccountManager accountManager) {
-    throw new UnsupportedOperationException(
-        "This method has been moved to ChainReorganizer.");
-  }
 
   // ==================== Statistics and State ====================
 
@@ -1367,20 +808,6 @@ public class DagChainImpl implements DagChain {
 
   // ==================== Lifecycle Management ====================
 
-  /**
-   * Retry orphan blocks that may now have satisfied dependencies
-   *
-   * <p>After successfully importing a block, some orphan blocks may now have all
-   * their dependencies satisfied. This method retrieves orphan blocks from the queue and attempts
-   * to import them again.
-   *
-   * @deprecated Moved to {@link OrphanManager#retryOrphanBlocks} (P1 refactoring)
-   */
-  @Deprecated
-  private void retryOrphanBlocks() {
-    throw new UnsupportedOperationException(
-        "This method has been moved to OrphanManager. Use orphanManager.retryOrphanBlocks() instead.");
-  }
 
   /**
    * Attach placeholder BlockInfo for blocks that have not been fully imported yet.
