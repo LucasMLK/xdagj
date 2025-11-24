@@ -30,6 +30,7 @@ import com.github.benmanes.caffeine.cache.stats.CacheStats;
 import io.xdag.Wallet;
 import io.xdag.api.service.dto.BlockSubmitResult;
 import io.xdag.api.service.dto.RandomXInfo;
+import io.xdag.consensus.epoch.EpochConsensusManager;
 import io.xdag.consensus.miner.BlockGenerator;
 import io.xdag.consensus.pow.PowAlgorithm;
 import io.xdag.core.Block;
@@ -48,7 +49,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  * <p>This service allows external pool servers to connect to the XDAG node
  * and coordinate mining activities via HTTP API.
  *
- * <h2>Architecture</h2>
+ * <h2>Architecture (with Epoch Consensus)</h2>
  * <pre>
  * Pool Server (xdagj-pool)
  *      │
@@ -56,15 +57,25 @@ import org.apache.tuweni.units.bigints.UInt256;
  *      ▼
  * MiningApiService ← YOU ARE HERE
  *      ├─> BlockGenerator (generates candidate blocks)
- *      ├─> DagChain (imports mined blocks)
+ *      ├─> EpochConsensusManager (collects solutions, selects best at epoch end)
+ *      │   ├─> SolutionCollector (validates and collects submissions)
+ *      │   ├─> BestSolutionSelector (picks highest difficulty)
+ *      │   └─> BackupMiner (forces block if no solutions)
+ *      ├─> DagChain (imports winning block at epoch boundary)
  *      └─> CandidateBlockCache (validates submissions)
  * </pre>
+ *
+ * <h2>Consensus Behavior</h2>
+ * <ul>
+ *   <li><b>With EpochConsensusManager</b>: Solutions collected during 64s epoch, best wins at T=64s</li>
+ *   <li><b>Without EpochConsensusManager</b>: Legacy immediate import (first valid solution wins)</li>
+ * </ul>
  *
  * <h2>Key Responsibilities</h2>
  * <ul>
  *   <li>Generate candidate blocks for pools to mine</li>
  *   <li>Cache candidate blocks to validate submissions</li>
- *   <li>Validate and import mined blocks from pools</li>
+ *   <li>Submit solutions to EpochConsensusManager (or direct import for legacy)</li>
  *   <li>Provide network difficulty and RandomX status</li>
  * </ul>
  *
@@ -74,6 +85,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  * <h2>Usage Example</h2>
  * <pre>
  * MiningApiService apiService = new MiningApiService(dagChain, wallet, powAlgorithm);
+ * apiService.setEpochConsensusManager(epochConsensusManager); // Enable epoch consensus
  *
  * // Pool fetches candidate block
  * Block candidate = apiService.getCandidateBlock("pool1");
@@ -81,6 +93,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  * // Pool mines and submits result
  * Block minedBlock = candidate.withNonce(foundNonce);
  * BlockSubmitResult result = apiService.submitMinedBlock(minedBlock, "pool1");
+ * // Result: "Solution collected for epoch N, will be processed at epoch end"
  * </pre>
  *
  * @since XDAGJ 1.0
@@ -97,6 +110,12 @@ public class MiningApiService {
   @Getter
   private final BlockGenerator blockGenerator;
   private final PowAlgorithm powAlgorithm;
+
+  /**
+   * Epoch consensus manager for solution collection (optional, for BUG-CONSENSUS fix)
+   * If null, falls back to legacy immediate import behavior
+   */
+  private volatile EpochConsensusManager epochConsensusManager;
 
   // ========== State ==========
 
@@ -128,6 +147,24 @@ public class MiningApiService {
     this.blockCache = new CandidateBlockCache();
 
     log.info("MiningApiService initialized");
+  }
+
+  /**
+   * Set the epoch consensus manager (for BUG-CONSENSUS fix integration)
+   *
+   * <p>This method is called by DagKernel during initialization to enable
+   * the new epoch-based consensus mechanism. If not set, the service falls
+   * back to legacy immediate import behavior.
+   *
+   * @param consensusManager The EpochConsensusManager instance
+   */
+  public void setEpochConsensusManager(EpochConsensusManager consensusManager) {
+    this.epochConsensusManager = consensusManager;
+    if (consensusManager != null) {
+      log.info("✓ Epoch consensus manager enabled - solutions will be collected for epoch-end processing");
+    } else {
+      log.info("Epoch consensus manager disabled - using legacy immediate import");
+    }
   }
 
   // ========== API Methods ==========
@@ -194,28 +231,44 @@ public class MiningApiService {
         return BlockSubmitResult.rejected("Unknown candidate block", "UNKNOWN_CANDIDATE");
       }
 
-      // Step 2: Import block to blockchain via DagChain
-      DagImportResult importResult = dagChain.tryToConnect(block);
+      // Step 2: Check if epoch consensus is enabled
+      if (epochConsensusManager != null && epochConsensusManager.isRunning()) {
+        // NEW: Submit to EpochConsensusManager for collection (BUG-CONSENSUS-002 fix)
+        io.xdag.consensus.epoch.SubmitResult result = epochConsensusManager.submitSolution(block, poolId);
 
-      // Step 3: Process result
-      if (importResult.isSuccess()) {
-        log.info("✓ Block from pool '{}' accepted and imported: hash={}",
-            poolId, block.getHash().toHexString().substring(0, 18) + "...");
-
-        // Remove from cache (block is now on-chain)
-        blockCache.remove(hashWithoutNonce);
-
-        return BlockSubmitResult.accepted(block.getHash());
+        if (result.isAccepted()) {
+          log.info("✓ Solution from pool '{}' collected for epoch processing", poolId);
+          return BlockSubmitResult.accepted(block.getHash());
+        } else {
+          log.warn("✗ Solution from pool '{}' rejected: {}", poolId, result.getErrorMessage());
+          return BlockSubmitResult.rejected(result.getErrorMessage(), "REJECTED");
+        }
 
       } else {
-        log.warn("✗ Block from pool '{}' rejected: {}",
-            poolId, importResult.getErrorMessage());
+        // LEGACY: Immediate import (old behavior)
+        log.debug("Using legacy immediate import for pool '{}'", poolId);
+        DagImportResult importResult = dagChain.tryToConnect(block);
 
-        return BlockSubmitResult.rejected(
-            importResult.getErrorMessage() != null ? importResult.getErrorMessage()
-                : "Import failed",
-            "IMPORT_FAILED"
-        );
+        // Step 3: Process result
+        if (importResult.isSuccess()) {
+          log.info("✓ Block from pool '{}' accepted and imported: hash={}",
+              poolId, block.getHash().toHexString().substring(0, 18) + "...");
+
+          // Remove from cache (block is now on-chain)
+          blockCache.remove(hashWithoutNonce);
+
+          return BlockSubmitResult.accepted(block.getHash());
+
+        } else {
+          log.warn("✗ Block from pool '{}' rejected: {}",
+              poolId, importResult.getErrorMessage());
+
+          return BlockSubmitResult.rejected(
+              importResult.getErrorMessage() != null ? importResult.getErrorMessage()
+                  : "Import failed",
+              "IMPORT_FAILED"
+          );
+        }
       }
 
     } catch (Exception e) {

@@ -26,6 +26,7 @@ package io.xdag;
 
 import io.xdag.api.service.MiningApiService;
 import io.xdag.config.Config;
+import io.xdag.consensus.epoch.EpochConsensusManager;
 import io.xdag.config.GenesisConfig;
 import io.xdag.config.spec.TransactionPoolSpec;
 import io.xdag.consensus.pow.PowAlgorithm;
@@ -144,6 +145,9 @@ public class DagKernel {
 
   // Mining API service (for pool server integration)
   private io.xdag.api.service.MiningApiService miningApiService;
+
+  // Epoch consensus manager (for BUG-CONSENSUS-001 and BUG-CONSENSUS-002 fix)
+  private EpochConsensusManager epochConsensusManager;
 
   // P2P service (5)
   private P2pService p2pService;
@@ -297,6 +301,21 @@ public class DagKernel {
     if (wallet != null) {
       this.miningApiService = new MiningApiService(dagChain, wallet, powAlgorithm);
       log.info("   ✓ MiningApiService initialized (pool server interface ready)");
+
+      // Initialize Epoch Consensus Manager (for BUG-CONSENSUS fix)
+      // Configuration: 2 backup mining threads, minimum difficulty from config
+      org.apache.tuweni.units.bigints.UInt256 minimumDifficulty =
+          org.apache.tuweni.units.bigints.UInt256.fromHexString("0x0000ffffffffffffffffffffffffffff");
+
+      this.epochConsensusManager = new EpochConsensusManager(
+          dagChain,
+          2,  // backup mining threads
+          minimumDifficulty
+      );
+
+      // Connect consensus manager to mining API service
+      this.miningApiService.setEpochConsensusManager(this.epochConsensusManager);
+      log.info("   ✓ EpochConsensusManager initialized (epoch-based consensus enabled)");
     } else {
       log.warn("   ⚠ MiningApiService not initialized (wallet required)");
     }
@@ -386,6 +405,12 @@ public class DagKernel {
         }
       }
 
+      // Start Epoch Consensus Manager (for BUG-CONSENSUS fix)
+      if (epochConsensusManager != null) {
+        epochConsensusManager.start();
+        log.info("✓ EpochConsensusManager started (epoch-based consensus active)");
+      }
+
       running = true;
       log.info("========================================");
       log.info("✓ DagKernel started successfully");
@@ -425,6 +450,12 @@ public class DagKernel {
       if (powAlgorithm != null) {
         powAlgorithm.stop();
         log.info("✓ PoW Algorithm stopped: {}", powAlgorithm.getName());
+      }
+
+      // Stop Epoch Consensus Manager (for BUG-CONSENSUS fix)
+      if (epochConsensusManager != null) {
+        epochConsensusManager.stop();
+        log.info("✓ EpochConsensusManager stopped");
       }
 
       // Stop P2P service (5)
