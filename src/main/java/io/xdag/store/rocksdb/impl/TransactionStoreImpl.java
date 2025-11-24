@@ -61,6 +61,8 @@ public class TransactionStoreImpl implements TransactionStore {
    */
   private final KVSource<byte[], byte[]> indexSource;
 
+  private volatile boolean running;
+
   /**
    * Transaction manager for atomic operations (NEW - atomic block processing)
    */
@@ -102,6 +104,7 @@ public class TransactionStoreImpl implements TransactionStore {
   public void start() {
     txSource.init();
     indexSource.init();
+    running = true;
     log.info("TransactionStore started");
   }
 
@@ -109,12 +112,13 @@ public class TransactionStoreImpl implements TransactionStore {
   public void stop() {
     txSource.close();
     indexSource.close();
+    running = false;
     log.info("TransactionStore stopped");
   }
 
   @Override
   public boolean isRunning() {
-    return false;
+    return running;
   }
 
   @Override
@@ -355,6 +359,29 @@ public class TransactionStoreImpl implements TransactionStore {
           txHash.toHexString(), address.toHexString());
     } catch (Exception e) {
       log.error("Failed to index transaction to address", e);
+    }
+  }
+
+  @Override
+  public void removeTransactionsByBlock(Bytes32 blockHash) {
+    try {
+      List<Bytes32> txHashes = getTransactionHashesByBlock(blockHash);
+
+      byte[] forwardKey = BytesUtils.merge(TX_BLOCK_INDEX, blockHash.toArray());
+      indexSource.delete(forwardKey);
+
+      if (!txHashes.isEmpty()) {
+        for (Bytes32 txHash : txHashes) {
+          byte[] reverseKey = BytesUtils.merge(TRANSACTION_TO_BLOCK_INDEX, txHash.toArray());
+          indexSource.delete(reverseKey);
+        }
+      }
+
+      log.debug("Removed {} transaction mappings for block {}",
+          txHashes.size(), blockHash.toHexString());
+    } catch (Exception e) {
+      log.error("Failed to remove transaction mappings for block {}",
+          blockHash.toHexString(), e);
     }
   }
 

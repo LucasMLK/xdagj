@@ -191,6 +191,15 @@ public interface TransactionStore extends XdagLifecycle {
    */
   void indexTransactionToAddress(org.apache.tuweni.bytes.Bytes address, Bytes32 txHash);
 
+  /**
+   * Remove all block->transaction and transaction->block index entries for a block.
+   *
+   * <p>Used during chain reorganization when a block is demoted.
+   *
+   * @param blockHash block hash whose transaction mappings should be removed
+   */
+  void removeTransactionsByBlock(Bytes32 blockHash);
+
   // ========== Batch Operations ==========
 
   /**

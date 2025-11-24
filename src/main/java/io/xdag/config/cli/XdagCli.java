@@ -227,7 +227,7 @@ public class XdagCli extends Launcher {
       }
 
       // Keep main thread alive to prevent JVM from exiting
-      // The background threads (HybridSyncManager, PoW Algorithm) will keep running
+      // The background threads (SyncManager, PoW Algorithm) will keep running
       System.out.println("XDAG node is running. Press Ctrl+C to stop.");
       Thread.currentThread().join();
     } catch (InterruptedException e) {

@@ -5,7 +5,7 @@ XDAGJ is the Java reference implementation of the XDAG 1.0b protocol. It bundles
 ## Highlights
 
 - **XDAG 1.0b Consensus** – Epoch-based DAG where smallest hash wins each 64-second epoch (primary consensus), with sequential height indexing for querying and cumulative difficulty for fork resolution.
-- **Hybrid Synchronization** – Height negotiation + finalized main-chain download + DAG solidification driven by `HybridSyncManager`.
+- **FastDAG Synchronization** – Epoch hash gossip + block backfill driven by the new `SyncManager`.
 - **Typed Storage** – RocksDB-backed stores for blocks, transactions, accounts, and orphan metadata with crash-safe batching.
 - **Modern APIs** – REST + JSON-RPC served over Netty for wallet management, block/transaction queries, and mining.
 
@@ -42,7 +42,7 @@ Key REST endpoints:
 ## Developer Notes
 
 - Entry point: `io.xdag.cli.XdagCli`
-- Main services: `DagKernel`, `DagChainImpl`, `HybridSyncManager`, `HttpApiServer`, `MiningApiService`
+- Main services: `DagKernel`, `DagChainImpl`, `SyncManager`, `HttpApiServer`, `MiningApiService`
 - External libraries: Netty, Jackson (JSON/YAML), RocksDB, Apache Tuweni, BouncyCastle, RandomX JNI
 
 ## Devnet Multi-Node Testing

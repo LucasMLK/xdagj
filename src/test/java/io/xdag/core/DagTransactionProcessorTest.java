@@ -186,6 +186,7 @@ public class DagTransactionProcessorTest {
         verify(transactionStore, times(2)).saveTransaction(any(Transaction.class));
         verify(transactionStore, times(2)).markTransactionExecuted(
                 any(Bytes32.class), eq(block.getHash()), anyLong());
+        verify(transactionStore, times(2)).indexTransactionToBlock(eq(block.getHash()), any(Bytes32.class));
     }
 
     @Test
@@ -220,6 +221,7 @@ public class DagTransactionProcessorTest {
 
         assertTrue("Empty block should succeed", result.isSuccess());
         verify(transactionStore, never()).markTransactionExecuted(any(), any(), anyLong());
+        verify(transactionStore, never()).indexTransactionToBlock(any(Bytes32.class), any(Bytes32.class));
     }
 
     // ========== Account State Updates ==========

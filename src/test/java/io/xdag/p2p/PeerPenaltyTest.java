@@ -1,140 +1,108 @@
+/*
+ * The MIT License (MIT)
+ *
+ * Copyright (c) 2020-2030 The XdagJ Developers
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
+ */
 package io.xdag.p2p;
 
-import io.xdag.DagKernel;
-import io.xdag.core.Block;
-import io.xdag.core.DagChain;
-import io.xdag.core.DagImportResult;
-import io.xdag.core.XUnit;
-import io.xdag.p2p.channel.Channel;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import io.xdag.DagKernel;
+import io.xdag.core.DagChain;
+import io.xdag.core.Transaction;
+import io.xdag.core.TransactionBroadcastManager;
+import io.xdag.core.TransactionPool;
+import io.xdag.core.XAmount;
+import io.xdag.p2p.channel.Channel;
 import io.xdag.p2p.message.XdagMessageCode;
+import java.net.InetSocketAddress;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
-import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 
-import java.net.InetSocketAddress;
-import java.util.Collections;
-
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
-
 public class PeerPenaltyTest {
 
-    @Mock
-    private DagKernel dagKernel;
-    @Mock
-    private DagChain dagChain;
-    @Mock
-    private Channel channel;
+  @Mock private DagKernel dagKernel;
+  @Mock private DagChain dagChain;
+  @Mock private Channel channel;
+  @Mock private TransactionPool transactionPool;
+  @Mock private TransactionBroadcastManager broadcastManager;
 
-    private XdagP2pEventHandler handler;
+  private XdagP2pEventHandler handler;
 
-    @Before
-    public void setUp() {
-        MockitoAnnotations.openMocks(this);
-        when(dagKernel.getDagChain()).thenReturn(dagChain);
-        when(channel.getRemoteAddress()).thenReturn(new InetSocketAddress("127.0.0.1", 12345));
-        
-        handler = new XdagP2pEventHandler(dagKernel);
-    }
+  @Before
+  public void setUp() {
+    MockitoAnnotations.openMocks(this);
+    when(dagKernel.getDagChain()).thenReturn(dagChain);
+    when(dagKernel.getTransactionPool()).thenReturn(transactionPool);
+    when(dagKernel.getTransactionBroadcastManager()).thenReturn(broadcastManager);
+    when(broadcastManager.shouldProcess(any(Bytes32.class))).thenReturn(true);
+    when(channel.getRemoteAddress()).thenReturn(new InetSocketAddress("127.0.0.1", 12345));
 
-    /**
-     * Test that a malformed message triggers a penalty (disconnect).
-     */
-    @Test
-    public void testPenalizeOnMalformedMessage() {
-        // Create a byte array with correct message code but invalid body (garbage)
-        byte[] malformedData = new byte[10];
-        malformedData[0] = XdagMessageCode.NEW_BLOCK.toByte(); // Valid message code
-        // Rest is zeros, which should fail deserialization for NewBlockMessage
-        
-        Bytes message = Bytes.wrap(malformedData);
+    handler = new XdagP2pEventHandler(dagKernel);
+  }
 
-        // Process message
-        handler.onMessage(channel, message);
+  @Test
+  public void testPenalizeOnMalformedTransactionMessage() {
+    byte[] malformed = new byte[2];
+    malformed[0] = XdagMessageCode.NEW_TRANSACTION.toByte();
+    malformed[1] = 0x01; // TTL, but missing transaction payload
 
-        // Verify that channel.close() was called (penalty applied)
-        verify(channel, times(1)).close();
-    }
+    handler.onMessage(channel, Bytes.wrap(malformed));
 
-    /**
-     * Test that an INVALID_BLOCK triggers a penalty (disconnect).
-     */
-    @Test
-    public void testPenalizeOnInvalidBlock() {
-        // 1. Create a valid block structure to pass deserialization
-        long time = System.currentTimeMillis();
-        Block block = Block.createCandidate(
-            time,
-            UInt256.ONE,
-            Bytes.random(20), // Random coinbase
-            Collections.emptyList() // No links
-        );
-        
-        // 2. Manually serialize body: [TTL] + [BlockBytes]
-        byte[] blockBytes = block.toBytes();
-        byte[] msgBytes = new byte[1 + blockBytes.length];
-        msgBytes[0] = 1; // TTL = 1
-        System.arraycopy(blockBytes, 0, msgBytes, 1, blockBytes.length);
-        
-        // 3. Prepend message code (NEW_BLOCK)
-        byte[] fullMessage = new byte[msgBytes.length + 1];
-        fullMessage[0] = XdagMessageCode.NEW_BLOCK.toByte();
-        System.arraycopy(msgBytes, 0, fullMessage, 1, msgBytes.length);
-        
-        Bytes messageData = Bytes.wrap(fullMessage);
+    verify(channel, times(1)).close();
+  }
 
-        // 4. Mock DagChain to return INVALID status using factory method
-        DagImportResult invalidResult = DagImportResult.invalidBasic("Invalid signature");
-        when(dagChain.tryToConnect(any(Block.class))).thenReturn(invalidResult);
+  @Test
+  public void testNoPenaltyOnValidTransaction() {
+    Transaction tx = Transaction.builder()
+        .from(Bytes.wrap(new byte[20]))
+        .to(Bytes.wrap(new byte[20]))
+        .amount(XAmount.ofXAmount(100))
+        .fee(XAmount.ofXAmount(1))
+        .nonce(1L)
+        .chainId(1L)
+        .build();
 
-        // 5. Process message
-        handler.onMessage(channel, messageData);
+    byte[] txBytes = tx.toBytes();
+    byte[] body = new byte[txBytes.length + 1];
+    body[0] = 2; // TTL
+    System.arraycopy(txBytes, 0, body, 1, txBytes.length);
 
-        // 6. Verify that channel.close() was called
-        verify(channel, times(1)).close();
-    }
+    byte[] full = new byte[body.length + 1];
+    full[0] = XdagMessageCode.NEW_TRANSACTION.toByte();
+    System.arraycopy(body, 0, full, 1, body.length);
 
-    /**
-     * Test that a normal block processing (IMPORTED) does NOT trigger penalty.
-     */
-    @Test
-    public void testNoPenalizeOnValidBlock() {
-        // 1. Create a valid block structure
-        long time = System.currentTimeMillis();
-        Block block = Block.createCandidate(
-            time,
-            UInt256.ONE,
-            Bytes.random(20),
-            Collections.emptyList()
-        );
-        
-        // 2. Manually serialize body: [TTL] + [BlockBytes]
-        byte[] blockBytes = block.toBytes();
-        byte[] msgBytes = new byte[1 + blockBytes.length];
-        msgBytes[0] = 1; // TTL = 1
-        System.arraycopy(blockBytes, 0, msgBytes, 1, blockBytes.length);
-        
-        // 3. Prepend message code
-        byte[] fullMessage = new byte[msgBytes.length + 1];
-        fullMessage[0] = XdagMessageCode.NEW_BLOCK.toByte();
-        System.arraycopy(msgBytes, 0, fullMessage, 1, msgBytes.length);
-        
-        Bytes messageData = Bytes.wrap(fullMessage);
+    when(transactionPool.addTransaction(any(Transaction.class))).thenReturn(true);
 
-        // 4. Mock DagChain to return SUCCESS using factory method
-        // Use mainBlock as an example of success
-        DagImportResult successResult = DagImportResult.mainBlock(100L, 10L, UInt256.ONE, true);
-        when(dagChain.tryToConnect(any(Block.class))).thenReturn(successResult);
+    handler.onMessage(channel, Bytes.wrap(full));
 
-        // 5. Process message
-        handler.onMessage(channel, messageData);
-
-        // 6. Verify that channel.close() was NOT called
-        verify(channel, never()).close();
-    }
+    verify(channel, never()).close();
+    verify(transactionPool, times(1)).addTransaction(any(Transaction.class));
+  }
 }

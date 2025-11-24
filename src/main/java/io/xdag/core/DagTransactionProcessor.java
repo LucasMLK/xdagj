@@ -180,6 +180,7 @@ public class DagTransactionProcessor {
             block.getHash(),
             block.getInfo().getHeight()
         );
+        transactionStore.indexTransactionToBlock(block.getHash(), tx.getHash());
         log.debug("Marked transaction {} as executed by block {} at height {}",
             tx.getHash().toHexString().substring(0, 16),
             block.getHash().toHexString().substring(0, 16),

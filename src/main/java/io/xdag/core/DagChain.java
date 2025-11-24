@@ -399,6 +399,16 @@ public interface DagChain {
   List<Block> getCandidateBlocksInEpoch(long epoch);
 
   /**
+   * Get hashes for all blocks in a specific epoch.
+   *
+   * <p>Used by FastDAG sync to quickly advertise which blocks exist in a time range.
+   *
+   * @param epoch epoch number (timestamp / 64)
+   * @return ordered list of block hashes (may be empty but never {@code null})
+   */
+  List<Bytes32> getBlockHashesByEpoch(long epoch);
+
+  /**
    * Get the winning block for a specific epoch
    *
    * <p>Returns the block with the smallest hash in the given epoch
@@ -671,8 +681,6 @@ public interface DagChain {
    */
   ChainStats getChainStats();
 
-  // ==================== Economic Model ====================
-
   // ==================== Lifecycle Management ====================
 
   // ==================== DAG Chain Event Listeners ====================
@@ -714,4 +722,11 @@ public interface DagChain {
    * @since XDAGJ v0.8.1
    */
   void removeListener(DagchainListener listener);
+
+  /**
+   * Register a listener for new block events (specifically for P2P broadcasting).
+   *
+   * @param listener the listener to register
+   */
+  void registerNewBlockListener(io.xdag.core.listener.NewBlockListener listener);
 }

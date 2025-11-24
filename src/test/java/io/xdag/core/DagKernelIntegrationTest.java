@@ -88,7 +88,7 @@ public class DagKernelIntegrationTest extends BaseIntegrationTest {
         assertNotNull("EntityResolver should be initialized", dagKernel.getEntityResolver());
 
         // Note: Consensus layer components are NOT initialized until start() is called
-        // See DagKernel.java line 210: "Note: DagChain and HybridSyncManager will be
+        // See DagKernel.java line 210: "Note: DagChain and SyncManager will be
         // initialized in start() method because DagChainImpl needs a fully constructed
         // DagKernel instance"
     }

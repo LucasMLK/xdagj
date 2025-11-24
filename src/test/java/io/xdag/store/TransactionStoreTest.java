@@ -199,6 +199,25 @@ public class TransactionStoreTest {
     }
 
     @Test
+    public void testRemoveTransactionsByBlock() {
+        Bytes32 blockHash = Bytes32.random();
+        Transaction tx1 = createTestTransaction(1);
+        Transaction tx2 = createTestTransaction(2);
+
+        transactionStore.saveTransaction(tx1);
+        transactionStore.saveTransaction(tx2);
+
+        transactionStore.indexTransactionToBlock(blockHash, tx1.getHash());
+        transactionStore.indexTransactionToBlock(blockHash, tx2.getHash());
+
+        transactionStore.removeTransactionsByBlock(blockHash);
+
+        assertTrue(transactionStore.getTransactionsByBlock(blockHash).isEmpty());
+        assertNull(transactionStore.getBlockByTransaction(tx1.getHash()));
+        assertNull(transactionStore.getBlockByTransaction(tx2.getHash()));
+    }
+
+    @Test
     public void testGetTransactionHashesByBlock() {
         Bytes32 blockHash = Bytes32.random();
         Transaction tx1 = createTestTransaction(1);
