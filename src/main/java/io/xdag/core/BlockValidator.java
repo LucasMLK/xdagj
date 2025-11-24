@@ -24,6 +24,7 @@
 
 package io.xdag.core;
 
+import static io.xdag.config.Constants.MAIN_CHAIN_PERIOD;
 import static io.xdag.config.Constants.MIN_GAS;
 
 import io.xdag.config.Config;
@@ -68,7 +69,6 @@ public class BlockValidator {
   private final DagStore dagStore;
   private final DagEntityResolver entityResolver;
   private final Config config;
-  private final ChainStats chainStats;
 
   /**
    * Creates a BlockValidator with required dependencies
@@ -76,17 +76,14 @@ public class BlockValidator {
    * @param dagStore        DAG storage layer
    * @param entityResolver  entity resolution service
    * @param config          node configuration
-   * @param chainStats      current chain statistics
    */
   public BlockValidator(
       DagStore dagStore,
       DagEntityResolver entityResolver,
-      Config config,
-      ChainStats chainStats) {
+      Config config) {
     this.dagStore = dagStore;
     this.entityResolver = entityResolver;
     this.config = config;
-    this.chainStats = chainStats;
   }
 
   /**
@@ -102,35 +99,36 @@ public class BlockValidator {
    * </ol>
    *
    * @param block block to validate
+   * @param chainStats current chain statistics (for difficulty target)
    * @return validation result (success or specific error)
    */
-  public DagImportResult validate(Block block) {
+  public DagImportResult validate(Block block, ChainStats chainStats) {
     // Stage 1: Basic rules
-    DagImportResult basicResult = validateBasicRules(block);
+    DagImportResult basicResult = validateBasicRules(block, chainStats);
     if (basicResult != null) {
       return basicResult;
     }
 
     // Stage 2: PoW validation
-    DagImportResult powResult = validateMinimumPoW(block);
+    DagImportResult powResult = validateMinimumPoW(block, chainStats);
     if (powResult != null) {
       return powResult;
     }
 
     // Stage 3: Epoch limit
-    DagImportResult epochLimitResult = validateEpochLimit(block);
+    DagImportResult epochLimitResult = validateEpochLimit(block, chainStats);
     if (epochLimitResult != null) {
       return epochLimitResult;
     }
 
     // Stage 4: Link validation
-    DagImportResult linkResult = validateLinks(block);
+    DagImportResult linkResult = validateLinks(block, chainStats);
     if (linkResult != null) {
       return linkResult;
     }
 
     // Stage 5: DAG rules
-    DAGValidationResult dagResult = validateDAGRules(block);
+    DAGValidationResult dagResult = validateDAGRules(block, chainStats);
     if (!dagResult.isValid()) {
       log.debug("Block {} failed DAG validation: {}",
           formatHash(block.getHash()), dagResult.getErrorMessage());
@@ -154,9 +152,10 @@ public class BlockValidator {
    * </ul>
    *
    * @param block block to validate
+   * @param chainStats current chain statistics
    * @return null if valid, error result if invalid
    */
-  private DagImportResult validateBasicRules(Block block) {
+  private DagImportResult validateBasicRules(Block block, ChainStats chainStats) {
     // Genesis block special handling
     if (isGenesisBlock(block)) {
       // Security: Genesis blocks can only be accepted if chain is empty
@@ -174,7 +173,7 @@ public class BlockValidator {
       long currentTimestamp = TimeUtils.getCurrentEpoch();
       long blockTimestamp = TimeUtils.epochNumberToMainTime(block.getEpoch());
 
-      if (blockTimestamp > (currentTimestamp + 64)) {
+      if (blockTimestamp > (currentTimestamp + MAIN_CHAIN_PERIOD)) {
         log.debug("Block {} has invalid timestamp: {} (current: {})",
             formatHash(block.getHash()), blockTimestamp, currentTimestamp);
         return DagImportResult.invalidBasic("Block timestamp is too far in the future");
@@ -237,9 +236,10 @@ public class BlockValidator {
    * Genesis blocks are exempt from this check.
    *
    * @param block block to validate
+   * @param chainStats current chain statistics (for difficulty target)
    * @return null if valid, error result if invalid
    */
-  private DagImportResult validateMinimumPoW(Block block) {
+  private DagImportResult validateMinimumPoW(Block block, ChainStats chainStats) {
     // Skip genesis blocks
     if (isGenesisBlock(block)) {
       return null;
@@ -292,9 +292,10 @@ public class BlockValidator {
    * </ul>
    *
    * @param block block to validate
+   * @param chainStats current chain statistics
    * @return null if valid, error result if should be rejected
    */
-  private DagImportResult validateEpochLimit(Block block) {
+  private DagImportResult validateEpochLimit(Block block, ChainStats chainStats) {
     long epoch = block.getEpoch();
     List<Block> candidates = dagStore.getCandidateBlocksInEpoch(epoch);
 
@@ -361,9 +362,10 @@ public class BlockValidator {
    * </ul>
    *
    * @param block block to validate
+   * @param chainStats current chain statistics
    * @return null if valid, error result if invalid
    */
-  private DagImportResult validateLinks(Block block) {
+  private DagImportResult validateLinks(Block block, ChainStats chainStats) {
     ResolvedLinks resolved = entityResolver.resolveAllLinks(block);
 
     // Check for missing references
@@ -460,9 +462,10 @@ public class BlockValidator {
    * </ul>
    *
    * @param block block to validate
+   * @param chainStats current chain statistics
    * @return validation result with detailed error info if invalid
    */
-  public DAGValidationResult validateDAGRules(Block block) {
+  public DAGValidationResult validateDAGRules(Block block, ChainStats chainStats) {
     // Genesis block doesn't need DAG validation
     if (isGenesisBlock(block)) {
       return DAGValidationResult.valid();

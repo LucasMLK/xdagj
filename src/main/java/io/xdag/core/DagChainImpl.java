@@ -238,8 +238,7 @@ public class DagChainImpl implements DagChain {
     this.blockValidator = new BlockValidator(
         dagStore,
         entityResolver,
-        dagKernel.getConfig(),
-        this.chainStats);
+        dagKernel.getConfig());
 
     this.blockImporter = new BlockImporter(
         dagKernel,
@@ -1464,7 +1463,7 @@ public class DagChainImpl implements DagChain {
   @Override
   public DAGValidationResult validateDAGRules(Block block) {
     // Delegate to BlockValidator (P0 refactoring)
-    return blockValidator.validateDAGRules(block);
+    return blockValidator.validateDAGRules(block, chainStats);
   }
 
   /**

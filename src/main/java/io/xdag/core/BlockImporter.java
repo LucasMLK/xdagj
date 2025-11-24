@@ -103,7 +103,7 @@ public class BlockImporter {
       log.debug("Importing block: {}", formatHash(block.getHash()));
 
       // Step 1: Validate block (delegated to BlockValidator)
-      DagImportResult validationResult = validator.validate(block);
+      DagImportResult validationResult = validator.validate(block, chainStats);
       if (validationResult != null) {
         // Validation failed
         return ImportResult.fromDagImportResult(validationResult);
@@ -140,6 +140,14 @@ public class BlockImporter {
 
       // Step 4: Determine epoch competition result
       EpochCompetitionResult competition = determineEpochWinner(block, blockEpoch, chainStats);
+
+      // Step 4.5: Handle epoch competition demotion (if new block wins)
+      if (competition.isWinner() && competition.getDemotedBlock() != null) {
+        Block demotedBlock = competition.getDemotedBlock();
+        demoteBlockToOrphan(demotedBlock);
+        log.info("Demoted block {} to orphan (lost epoch {} competition)",
+            formatHash(demotedBlock.getHash()), blockEpoch);
+      }
 
       // Step 5: Update height based on competition
       long finalHeight = competition.getHeight();
@@ -215,6 +223,7 @@ public class BlockImporter {
 
     long height;
     boolean isBestChain;
+    Block demotedBlock = null;  // Track which block needs demotion
 
     if (isEpochWinner) {
       if (currentWinner != null && !currentWinner.getHash().equals(block.getHash())) {
@@ -227,8 +236,8 @@ public class BlockImporter {
             formatHash(block.getHash()),
             formatHash(currentWinner.getHash()));
 
-        // Demote old winner (handled by caller)
-        // For now, record that demotion is needed
+        // Mark old winner for demotion
+        demotedBlock = currentWinner;
         height = replacementHeight;
         isBestChain = true;
 
@@ -239,6 +248,7 @@ public class BlockImporter {
 
         if (otherMainBlock != null) {
           // Demote other main block, take its height
+          demotedBlock = otherMainBlock;
           height = otherMainBlock.getInfo().getHeight();
           isBestChain = true;
         } else {
@@ -264,7 +274,7 @@ public class BlockImporter {
       isBestChain = false;
     }
 
-    return new EpochCompetitionResult(height, isBestChain, isEpochWinner);
+    return new EpochCompetitionResult(height, isBestChain, isEpochWinner, demotedBlock);
   }
 
   /**
@@ -279,6 +289,50 @@ public class BlockImporter {
       }
     }
     return null;
+  }
+
+  /**
+   * Demote a block to orphan status (height = 0)
+   *
+   * <p>This happens when:
+   * <ul>
+   *   <li>A new block with smaller hash wins epoch competition</li>
+   *   <li>Chain reorganization makes blocks obsolete</li>
+   * </ul>
+   *
+   * @param block block to demote
+   */
+  private void demoteBlockToOrphan(Block block) {
+    if (block == null || block.getInfo() == null) {
+      log.warn("Attempted to demote null block or block without info");
+      return;
+    }
+
+    long previousHeight = block.getInfo().getHeight();
+    if (previousHeight == 0) {
+      log.debug("Block {} is already an orphan, skipping demotion",
+          formatHash(block.getHash()));
+      return;
+    }
+
+    log.debug("Demoting block {} from height {} to orphan",
+        formatHash(block.getHash()), previousHeight);
+
+    // Update BlockInfo with height=0
+    BlockInfo orphanInfo = block.getInfo().toBuilder()
+        .height(0)
+        .build();
+
+    Block orphanBlock = block.toBuilder()
+        .info(orphanInfo)
+        .build();
+
+    // Save updated block to storage
+    dagStore.saveBlockInfo(orphanInfo);
+    dagStore.saveBlock(orphanBlock);
+
+    log.info("Block {} demoted to orphan (previous height={})",
+        formatHash(block.getHash()), previousHeight);
   }
 
   /**
@@ -505,11 +559,29 @@ public class BlockImporter {
     private final long height;
     private final boolean winner;
     private final boolean epochWinner;
+    private final Block demotedBlock;  // Block that was demoted (if any)
 
-    public EpochCompetitionResult(long height, boolean winner, boolean epochWinner) {
+    public EpochCompetitionResult(long height, boolean winner, boolean epochWinner, Block demotedBlock) {
       this.height = height;
       this.winner = winner;
       this.epochWinner = epochWinner;
+      this.demotedBlock = demotedBlock;
+    }
+
+    public long getHeight() {
+      return height;
+    }
+
+    public boolean isWinner() {
+      return winner;
+    }
+
+    public boolean isEpochWinner() {
+      return epochWinner;
+    }
+
+    public Block getDemotedBlock() {
+      return demotedBlock;
     }
   }
 }
