@@ -170,12 +170,16 @@ public class DagChainImpl implements DagChain {
   private final BlockValidator blockValidator;
   private final BlockImporter blockImporter;
 
+  // Refactored components (P1 phase)
+  private final BlockBuilder blockBuilder;
+  private final ChainReorganizer chainReorganizer;
+  private final DifficultyAdjuster difficultyAdjuster;
+  private final OrphanManager orphanManager;
+
   private volatile ChainStats chainStats;
   private final List<Listener> listeners = new ArrayList<>();
   private final List<DagchainListener> dagchainListeners = new ArrayList<>();
   private final List<NewBlockListener> newBlockListeners = new ArrayList<>();
-  private final ThreadLocal<Boolean> isRetryingOrphans = ThreadLocal.withInitial(() -> false);
-  private volatile Bytes miningCoinbase = Bytes.wrap(new byte[20]);
 
   /**
    * Creates DagChain with DagKernel dependencies
@@ -244,12 +248,22 @@ public class DagChainImpl implements DagChain {
         dagKernel,
         blockValidator);
 
+    // Initialize refactored components (P1 phase)
+    this.blockBuilder = new BlockBuilder(dagKernel);
+    this.chainReorganizer = new ChainReorganizer(dagKernel);
+    this.difficultyAdjuster = new DifficultyAdjuster(dagKernel);
+    this.orphanManager = new OrphanManager(dagKernel);
+
     log.info("DagChainImpl initialized with DagKernel");
     log.info("  - DagStore: {}", dagStore.getClass().getSimpleName());
     log.info("  - DagEntityResolver: {}", entityResolver.getClass().getSimpleName());
     log.info("  - TransactionStore: {}", transactionStore.getClass().getSimpleName());
     log.info("  - BlockValidator: initialized (P0 refactoring)");
     log.info("  - BlockImporter: initialized (P0 refactoring)");
+    log.info("  - BlockBuilder: initialized (P1 refactoring)");
+    log.info("  - ChainReorganizer: initialized (P1 refactoring)");
+    log.info("  - DifficultyAdjuster: initialized (P1 refactoring)");
+    log.info("  - OrphanManager: initialized (P1 refactoring)");
   }
 
   // ==================== Block Import Operations ====================
@@ -289,12 +303,23 @@ public class DagChainImpl implements DagChain {
 
         // Update chain stats for main blocks
         updateChainStatsForNewMainBlock(blockInfo);
-        checkAndAdjustDifficulty(importResult.getHeight(), block.getEpoch());
-        cleanupOldOrphans(block.getEpoch());
+
+        // Delegate to DifficultyAdjuster (P1 refactoring)
+        this.chainStats = difficultyAdjuster.checkAndAdjustDifficulty(
+            this.chainStats,
+            importResult.getHeight(),
+            block.getEpoch(),
+            this::getCandidateBlocksInEpoch);
+
+        // Delegate to OrphanManager (P1 refactoring)
+        this.chainStats = orphanManager.cleanupOldOrphans(
+            this.chainStats,
+            block.getEpoch(),
+            this::getCandidateBlocksInEpoch);
       }
 
-      // Retry orphan blocks (dependency resolution)
-      retryOrphanBlocks();
+      // Delegate to OrphanManager (P1 refactoring)
+      orphanManager.retryOrphanBlocks(this::tryToConnect);
 
       log.info("Successfully imported block {}: height={}, difficulty={}",
           block.getHash().toHexString(),
@@ -713,70 +738,12 @@ public class DagChainImpl implements DagChain {
    * Runs every ORPHAN_CLEANUP_INTERVAL (100) epochs to maintain manageable orphan pool size.
    *
    * @param currentEpoch current epoch number
+   * @deprecated Moved to {@link OrphanManager#cleanupOldOrphans} (P1 refactoring)
    */
+  @Deprecated
   private synchronized void cleanupOldOrphans(long currentEpoch) {
-    long lastCleanupEpoch = chainStats.getLastOrphanCleanupEpoch();
-
-    // Check if cleanup interval reached
-    if (currentEpoch - lastCleanupEpoch < ORPHAN_CLEANUP_INTERVAL) {
-      return;  // Not time yet
-    }
-
-    log.info("Orphan cleanup triggered at epoch {} (last cleanup: epoch {})",
-        currentEpoch, lastCleanupEpoch);
-
-    long cutoffEpoch = currentEpoch - ORPHAN_RETENTION_WINDOW;
-    if (cutoffEpoch < 0) {
-      cutoffEpoch = 0;  // Don't go negative
-    }
-
-    int removedCount = 0;
-    long scanStartEpoch = Math.max(0, lastCleanupEpoch - ORPHAN_RETENTION_WINDOW);
-
-    // BUGFIX: Limit scan range to prevent scanning too many epochs
-    // In test scenarios, lastCleanupEpoch may be very old (tens of thousands of epochs ago)
-    // We don't need to scan ALL epochs since last cleanup - just cleanup the retention window
-    long maxScanRange = ORPHAN_RETENTION_WINDOW + ORPHAN_CLEANUP_INTERVAL;
-    if ((cutoffEpoch - scanStartEpoch) > maxScanRange) {
-      long originalStart = scanStartEpoch;
-      scanStartEpoch = Math.max(0, cutoffEpoch - maxScanRange);
-      log.warn("Large epoch gap detected in orphan cleanup: {} epochs between {} and {}",
-          cutoffEpoch - originalStart, originalStart, cutoffEpoch);
-      log.warn("Limiting cleanup scan to recent {} epochs (from epoch {} to {})",
-          maxScanRange, scanStartEpoch, cutoffEpoch);
-    }
-
-    // Scan epochs from last cleanup to cutoff epoch
-    for (long epoch = scanStartEpoch; epoch < cutoffEpoch; epoch++) {
-      List<Block> candidates = getCandidateBlocksInEpoch(epoch);
-
-      for (Block block : candidates) {
-        // Remove orphan blocks (height = 0)
-        if (block.getInfo() != null && block.getInfo().getHeight() == 0) {
-          try {
-            dagStore.deleteBlock(block.getHash());
-            removedCount++;
-
-            if (removedCount % 1000 == 0) {
-              log.debug("Orphan cleanup progress: removed {} blocks so far", removedCount);
-            }
-          } catch (Exception e) {
-            log.warn("Failed to delete orphan block {}: {}",
-                block.getHash().toHexString().substring(0, 16), e.getMessage());
-          }
-        }
-      }
-    }
-
-    log.info("Orphan cleanup completed: removed {} blocks from epochs {} to {} (~{} days old)",
-        removedCount, scanStartEpoch, cutoffEpoch,
-        (currentEpoch - cutoffEpoch) * 64 / 86400);
-
-    // Update last cleanup epoch
-    chainStats = chainStats.toBuilder()
-        .lastOrphanCleanupEpoch(currentEpoch)
-        .build();
-    dagStore.saveChainStats(chainStats);
+    throw new UnsupportedOperationException(
+        "This method has been moved to OrphanManager. Use orphanManager.cleanupOldOrphans() instead.");
   }
 
   /**
@@ -791,100 +758,12 @@ public class DagChainImpl implements DagChain {
    *
    * @param currentHeight current main block height
    * @param currentEpoch  current epoch number
+   * @deprecated Moved to {@link DifficultyAdjuster#checkAndAdjustDifficulty} (P1 refactoring)
    */
+  @Deprecated
   private synchronized void checkAndAdjustDifficulty(long currentHeight, long currentEpoch) {
-    long lastAdjustmentEpoch = chainStats.getLastDifficultyAdjustmentEpoch();
-
-    // Check if adjustment interval reached
-    if (currentEpoch - lastAdjustmentEpoch < DIFFICULTY_ADJUSTMENT_INTERVAL) {
-      return;  // Not time yet
-    }
-
-    log.info("Difficulty adjustment triggered at epoch {} (last adjustment: epoch {})",
-        currentEpoch, lastAdjustmentEpoch);
-
-    // Calculate average blocks per epoch in the adjustment period
-    long totalBlocks = 0;
-    long epochCount = 0;
-
-    // BUGFIX: Limit scan range to prevent scanning too many epochs
-    // Only scan the adjustment interval window, not the entire gap
-    long scanStartEpoch = Math.max(lastAdjustmentEpoch,
-        currentEpoch - DIFFICULTY_ADJUSTMENT_INTERVAL);
-    long epochsToScan = currentEpoch - scanStartEpoch;
-
-    if (epochsToScan > DIFFICULTY_ADJUSTMENT_INTERVAL * 2) {
-      // Gap too large (likely test scenario or chain restart) - use recent window only
-      log.warn("Large epoch gap detected: {} epochs between {} and {}",
-          currentEpoch - lastAdjustmentEpoch, lastAdjustmentEpoch, currentEpoch);
-      log.warn("Limiting difficulty calculation to recent {} epochs", DIFFICULTY_ADJUSTMENT_INTERVAL);
-      scanStartEpoch = currentEpoch - DIFFICULTY_ADJUSTMENT_INTERVAL;
-    }
-
-    for (long epoch = scanStartEpoch; epoch < currentEpoch; epoch++) {
-      List<Block> blocks = getCandidateBlocksInEpoch(epoch);
-      // Count ALL candidate blocks (main + orphan) per epoch
-      // This reflects the actual block production rate that difficulty should regulate
-      totalBlocks += blocks.size();
-      epochCount++;
-    }
-
-    double avgBlocksPerEpoch = epochCount > 0 ? (double) totalBlocks / epochCount : 0;
-
-    log.info("Average blocks per epoch in last {} epochs: {} (target: {})",
-        epochCount, String.format("%.2f", avgBlocksPerEpoch), TARGET_BLOCKS_PER_EPOCH);
-
-    // Calculate adjustment factor
-    double adjustmentFactor = 1.0;
-
-    if (avgBlocksPerEpoch > TARGET_BLOCKS_PER_EPOCH * 1.5) {
-      // Too many blocks → increase difficulty (lower target)
-      adjustmentFactor = TARGET_BLOCKS_PER_EPOCH / avgBlocksPerEpoch;
-      log.info("Too many blocks, increasing difficulty (lowering target) by factor {}",
-          String.format("%.2f", adjustmentFactor));
-    } else if (avgBlocksPerEpoch < TARGET_BLOCKS_PER_EPOCH * 0.5) {
-      // Too few blocks → decrease difficulty (raise target)
-      adjustmentFactor = TARGET_BLOCKS_PER_EPOCH / avgBlocksPerEpoch;
-      log.info("Too few blocks, decreasing difficulty (raising target) by factor {}",
-          String.format("%.2f", adjustmentFactor));
-    } else {
-      log.info("Block count in acceptable range, no adjustment needed");
-      // Update last adjustment epoch even if no change
-      chainStats = chainStats.toBuilder()
-          .lastDifficultyAdjustmentEpoch(currentEpoch)
-          .build();
-      dagStore.saveChainStats(chainStats);
-      return;
-    }
-
-    // Limit adjustment factor
-    adjustmentFactor = Math.max(MIN_ADJUSTMENT_FACTOR,
-        Math.min(MAX_ADJUSTMENT_FACTOR, adjustmentFactor));
-
-    log.info("Limited adjustment factor: {} (range: {} - {})",
-        String.format("%.2f", adjustmentFactor),
-        String.format("%.2f", MIN_ADJUSTMENT_FACTOR),
-        String.format("%.2f", MAX_ADJUSTMENT_FACTOR));
-
-    // Calculate new target
-    UInt256 currentTarget = chainStats.getBaseDifficultyTarget();
-    BigInteger newTargetBigInt = currentTarget.toBigInteger()
-        .multiply(BigInteger.valueOf((long) (adjustmentFactor * 1000)))
-        .divide(BigInteger.valueOf(1000));
-
-    UInt256 newTarget = UInt256.valueOf(newTargetBigInt);
-
-    log.info("Difficulty adjusted: old target={}, new target={}, factor={}",
-        currentTarget.toHexString().substring(0, 16) + "...",
-        newTarget.toHexString().substring(0, 16) + "...",
-        String.format("%.2f", adjustmentFactor));
-
-    // Update chain stats
-    chainStats = chainStats.toBuilder()
-        .baseDifficultyTarget(newTarget)
-        .lastDifficultyAdjustmentEpoch(currentEpoch)
-        .build();
-    dagStore.saveChainStats(chainStats);
+    throw new UnsupportedOperationException(
+        "This method has been moved to DifficultyAdjuster. Use difficultyAdjuster.checkAndAdjustDifficulty() instead.");
   }
 
   /**
@@ -935,191 +814,21 @@ public class DagChainImpl implements DagChain {
 
   @Override
   public Block createCandidateBlock() {
-    log.info("Creating candidate block for mining");
-
-    // BUGFIX: Use epoch number directly; block timestamp is derived at epoch end for display
-    long epoch = TimeUtils.getCurrentEpochNumber();
-
-    // Use baseDifficultyTarget from chain stats (NEW CONSENSUS)
-    UInt256 difficultyTarget = chainStats.getBaseDifficultyTarget();
-    if (difficultyTarget == null) {
-      // Fallback for uninitialized chains
-      difficultyTarget = INITIAL_BASE_DIFFICULTY_TARGET;
-      log.warn("Base difficulty target not set, using initial value: {}",
-          difficultyTarget.toHexString().substring(0, 16) + "...");
-    }
-
-    Bytes coinbase = miningCoinbase;
-    List<Link> links = collectCandidateLinks();
-
-    Block candidateBlock = Block.createCandidate(epoch, difficultyTarget, coinbase, links);
-
-    log.info("Created mining candidate block: epoch={}, target={}, links={}, hash={}",
-        epoch,
-        difficultyTarget.toHexString().substring(0, 16) + "...",
-        links.size(),
-        candidateBlock.getHash().toHexString().substring(0, 16) + "...");
-
-    return candidateBlock;
+    // Delegate to BlockBuilder (P1 refactoring)
+    return blockBuilder.createCandidateBlock(this.chainStats);
   }
 
   /**
-   * Collect links for candidate block creation (REFACTORED)
+   * Collect links for candidate block creation
    *
-   * <p>NEW STRATEGY: Reference "top 16 candidates from previous height's epoch" + up to 1024
-   * transactions from pool
-   *
-   * <p>Algorithm:
-   * <ol>
-   *   <li>Get previous main block (height N-1)</li>
-   *   <li>Check if node is up-to-date (strict mining reference depth limit)</li>
-   *   <li>Get all candidates in that block's epoch</li>
-   *   <li>Sort by work (descending), take top 16 (MAX_BLOCK_LINKS)</li>
-   *   <li>Add references to these 16 blocks</li>
-   *   <li>Add up to 1024 transaction references from transaction pool</li>
-   * </ol>
-   *
-   * <p>RATIONALE:
-   * <ul>
-   *   <li>Height N-1 is already confirmed (epoch competition finished)</li>
-   *   <li>All candidates are valid and can be referenced</li>
-   *   <li>Top 16 includes the winner (highest work) and top candidates</li>
-   *   <li>Gives epoch losers a chance to be referenced</li>
-   *   <li>Strict reference limit prevents outdated nodes from mining</li>
-   *   <li>MAX_LINKS_PER_BLOCK (1,485,000) allows massive transaction throughput</li>
-   *   <li>Initial limit of 1024 txs is conservative for stability</li>
-   * </ul>
-   *
-   * <p>See: docs/DESIGN-BLOCK-LINK-ORPHAN-STORE-REFACTOR.md
-   *
-   * @return list of links (16 block links + up to 1024 tx links), empty list if node is too far
-   *     behind
+   * @deprecated Moved to {@link BlockBuilder#collectCandidateLinks()} (P1 refactoring)
    */
+  @Deprecated
   private List<Link> collectCandidateLinks() {
-    List<Link> links = new ArrayList<>();
-
-    // Step 1: Get previous main block (height N-1)
-    // IMPORTANT: mainBlockCount is 0-indexed relative to next block height
-    // When Genesis (height=1) exists, mainBlockCount=0
-    // So we need to get block at height (mainBlockCount), NOT (mainBlockCount-1)
-    long currentMainHeight = chainStats.getMainBlockCount();
-
-    // Try to get the last main block
-    // If mainBlockCount==0, this will try to get Genesis at height 1
-    // If mainBlockCount>0, this gets the actual last main block
-    long lastBlockHeight = Math.max(1, currentMainHeight);
-
-    log.debug("Collecting candidate links: currentMainHeight={}, lastBlockHeight={}",
-        currentMainHeight, lastBlockHeight);
-
-    Block prevMainBlock = dagStore.getMainBlockByHeight(lastBlockHeight, false);
-
-    if (prevMainBlock == null) {
-      // No blocks exist yet (not even Genesis) - this should only happen during initialization
-      log.error(
-          "ERROR: Cannot find block at height {}! currentMainHeight={}, Genesis might not be imported!",
-          lastBlockHeight, currentMainHeight);
-      return links;
-    }
-
-    log.debug("Found previous main block at height {}, epoch={}, hash={}",
-        lastBlockHeight, prevMainBlock.getEpoch(),
-        prevMainBlock.getHash().toHexString().substring(0, 16));
-
-    // Step 2: STRICT mining reference depth check
-    // Prevent outdated nodes from creating blocks with stale references
-    long currentEpoch = TimeUtils.getCurrentEpochNumber();
-    long prevEpoch = prevMainBlock.getEpoch();
-    long referenceDepth = currentEpoch - prevEpoch;
-
-    // DEVNET: Skip reference depth check to allow development/testing with arbitrary epoch gaps
-    // In development, nodes may be stopped for extended periods, and strict epoch checks
-    // would prevent mining even after successful sync
-    boolean isDevnet = dagKernel.getConfig().getNodeSpec().getNetwork()
-        .toString().toLowerCase().contains("devnet");
-
-    boolean allowBootstrap = currentMainHeight <= 1;
-
-    if (!isDevnet) {
-      // Production networks: enforce strict reference depth limit
-      if (referenceDepth > MINING_MAX_REFERENCE_DEPTH && !allowBootstrap) {
-        log.error(
-            "MINING BLOCKED: Previous main block (epoch {}) is {} epochs behind current epoch {}",
-            prevEpoch, referenceDepth, currentEpoch);
-        log.error("Maximum allowed reference depth for mining: {} epochs (~{} minutes)",
-            MINING_MAX_REFERENCE_DEPTH, MINING_MAX_REFERENCE_DEPTH * 64 / 60);
-        log.error("Node must sync to latest epoch before mining can resume");
-        log.error("Current lag: {} epochs (~{} minutes)",
-            referenceDepth, referenceDepth * 64 / 60);
-        return links;  // Return empty links to prevent mining
-      } else if (referenceDepth > MINING_MAX_REFERENCE_DEPTH) {
-        log.warn(
-            "Reference depth {} exceeds limit {} but allowing bootstrap because currentMainHeight={}",
-            referenceDepth, MINING_MAX_REFERENCE_DEPTH, currentMainHeight);
-      }
-    } else {
-      // DEVNET: Log reference depth but don't block mining
-      if (referenceDepth > MINING_MAX_REFERENCE_DEPTH) {
-        log.info(
-            "DEVNET: Reference depth {} epochs (~{} minutes) exceeds normal limit {}, but allowing for development",
-            referenceDepth, referenceDepth * 64 / 60, MINING_MAX_REFERENCE_DEPTH);
-      }
-    }
-
-    // Step 3: Get all candidates in prev block's epoch
-    log.debug("Collecting links from height {} (epoch {}), reference depth: {} epochs",
-        currentMainHeight, prevEpoch, referenceDepth);
-
-    List<Block> candidates = getCandidateBlocksInEpoch(prevEpoch);
-
-    if (candidates.isEmpty()) {
-      // Fallback: if no candidates found (shouldn't happen), at least reference prev main block
-      log.warn("No candidates found in epoch {}, only referencing prev main block", prevEpoch);
-      links.add(Link.toBlock(prevMainBlock.getHash()));
-      return links;
-    }
-
-    // Step 3: Sort by work (descending), take top 16 (MAX_BLOCK_LINKS)
-    // Work = MAX_UINT256 / hash → smaller hash = more work
-    List<Block> top16 = candidates.stream()
-        .sorted((b1, b2) -> {
-          UInt256 work1 = calculateBlockWork(b1.getHash());
-          UInt256 work2 = calculateBlockWork(b2.getHash());
-          return work2.compareTo(work1);  // Descending: largest work first
-        })
-        .limit(Block.MAX_BLOCK_LINKS)
-        .toList();
-
-    // Step 4: Add block references
-    for (Block block : top16) {
-      links.add(Link.toBlock(block.getHash()));
-    }
-
-    log.info("Collected {} block links from height {} epoch {} (top {} of {} candidates)",
-        links.size(), currentMainHeight, prevEpoch,
-        Math.min(Block.MAX_BLOCK_LINKS, candidates.size()), candidates.size());
-
-    // Step 5: Add transaction links from transaction pool
-    // MAX_LINKS_PER_BLOCK (1,485,000) - MAX_BLOCK_LINKS (16) = 1,484,984 available for transactions
-    // Initial conservative limit: 1024 transactions per block for stability
-    final int MAX_TX_LINKS_PER_BLOCK = 1024;
-
-    TransactionPool txPool = dagKernel.getTransactionPool();
-    if (txPool != null && txPool.size() > 0) {
-      // Select transactions from pool (ordered by fee, highest first)
-      List<Transaction> selectedTxs = txPool.selectTransactions(MAX_TX_LINKS_PER_BLOCK);
-
-      for (Transaction tx : selectedTxs) {
-        links.add(Link.toTransaction(tx.getHash()));
-      }
-
-      log.info("Added {} transaction links from pool ({} total pending, limit {})",
-          selectedTxs.size(), txPool.size(), MAX_TX_LINKS_PER_BLOCK);
-    } else {
-      log.debug("Transaction pool is empty or not available, no transaction links added");
-    }
-
-    return links;
+    // This method has been moved to BlockBuilder
+    // Keeping this stub for reference during migration
+    throw new UnsupportedOperationException(
+        "This method has been moved to BlockBuilder. Use blockBuilder.createCandidateBlock() instead.");
   }
 
   /**
@@ -1128,69 +837,14 @@ public class DagChainImpl implements DagChain {
    * @param coinbase mining reward address (20 bytes)
    */
   public void setMiningCoinbase(Bytes coinbase) {
-    Bytes normalized;
-    if (coinbase == null) {
-      log.warn("Null coinbase provided, using zero address (20 bytes)");
-      normalized = Bytes.wrap(new byte[20]);
-    } else if (coinbase.size() > 20) {
-      log.warn("Coinbase address too long ({} bytes), truncating to 20 bytes: {} -> {}",
-          coinbase.size(),
-          coinbase.toHexString(),
-          coinbase.slice(0, 20).toHexString());
-      normalized = coinbase.slice(0, 20);
-    } else if (coinbase.size() < 20) {
-      byte[] padded = new byte[20];
-      System.arraycopy(coinbase.toArray(), 0, padded, 0, coinbase.size());
-      log.warn("Coinbase address too short ({} bytes), padding to 20 bytes: {} -> {}",
-          coinbase.size(),
-          coinbase.toHexString(),
-          Bytes.wrap(padded).toHexString());
-      normalized = Bytes.wrap(padded);
-    } else {
-      normalized = coinbase;
-    }
-
-    if (normalized.equals(this.miningCoinbase)) {
-      return;
-    }
-
-    this.miningCoinbase = normalized;
-    log.info("Mining coinbase address set: {}", normalized.toHexString().substring(0, 16) + "...");
+    // Delegate to BlockBuilder (P1 refactoring)
+    blockBuilder.setMiningCoinbase(coinbase);
   }
 
   @Override
   public Block createGenesisBlock(long epoch) {
-    log.info("Creating genesis block at epoch {}", epoch);
-
-    // IMPORTANT: Block.createWithNonce() expects epoch number, not timestamp
-    // Block.getTimestamp() derives display time via TimeUtils.epochNumberToMainTime(...)
-    // So we pass the epoch number directly
-    log.info("  - Genesis epoch: {} (timestamp will be main time: {})", epoch,
-        TimeUtils.epochNumberToMainTime(epoch));
-
-    // Use zero address (20 bytes) for genesis coinbase
-    Bytes coinbase = Bytes.wrap(new byte[20]);
-    log.info("  - Using zero coinbase (genesis block)");
-
-    // Get difficulty from genesis config (not hardcoded)
-    UInt256 difficulty = dagKernel.getGenesisConfig().getDifficultyUInt256();
-    log.info("  - Genesis difficulty: {}", difficulty.toHexString());
-
-    // Create genesis block with epoch number (NOT timestamp)
-    // Block.getTimestamp() uses TimeUtils helper to derive display timestamp
-    Block genesisBlock = Block.createWithNonce(
-        epoch,  // Pass epoch number, Block will convert to timestamp
-        difficulty,  // Use configured difficulty from genesis.json
-        Bytes32.ZERO,
-        coinbase,
-        List.of()
-    );
-
-    log.info("✓ Genesis block created: hash={}, epoch={}",
-        genesisBlock.getHash().toHexString(),
-        genesisBlock.getEpoch());
-
-    return genesisBlock;
+    // Delegate to BlockBuilder (P1 refactoring)
+    return blockBuilder.createGenesisBlock(epoch);
   }
 
   // ==================== Main Chain Queries (Height-Based) ====================
@@ -1572,419 +1226,134 @@ public class DagChainImpl implements DagChain {
 
   @Override
   public synchronized void checkNewMain() {
-    log.debug("Running checkNewMain() - assigning heights to epoch winners based on epoch order");
-
-    long currentEpoch = getCurrentEpoch();
-    long scanStartEpoch = Math.max(1, currentEpoch - ORPHAN_RETENTION_WINDOW);
-
-    // Step 1: Collect all epoch winners and their epochs
-    // Map: epoch -> winner block
-    Map<Long, Block> epochWinners = new java.util.TreeMap<>();
-
-    for (long epoch = scanStartEpoch; epoch <= currentEpoch; epoch++) {
-      Block winner = getWinnerBlockInEpoch(epoch);
-      if (winner != null) {
-        epochWinners.put(epoch, winner);
-      }
-    }
-
-    if (epochWinners.isEmpty()) {
-      log.warn("No epoch winners found in range {} to {}", scanStartEpoch, currentEpoch);
-      return;
-    }
-
-    // Step 2: Sort epoch winners by epoch number (ascending - earliest first)
-    // Heights follow epoch order: epoch 100 → height 1, epoch 101 → height 2, etc.
-    // This ensures continuous heights even with discontinuous epochs
-    List<Map.Entry<Long, Block>> sortedWinners = new ArrayList<>(epochWinners.entrySet());
-    sortedWinners.sort(Map.Entry.comparingByKey());  // Sort by epoch (key)
-
-    // Step 3: Assign continuous heights: 1, 2, 3, 4, ...
-    long height = 1;
-    Block topBlock = null;
-    UInt256 maxDifficulty = UInt256.ZERO;
-
-    for (Map.Entry<Long, Block> entry : sortedWinners) {
-      long epoch = entry.getKey();
-      Block winner = entry.getValue();
-
-      // Check if height needs update
-      if (winner.getInfo() == null || winner.getInfo().getHeight() != height) {
-        log.debug("Assigning height {} to epoch {} winner {}",
-            height, epoch,
-            winner.getHash().toHexString().substring(0, 16));
-
-        // Update BlockInfo with new height
-        BlockInfo updatedInfo = (winner.getInfo() != null ? winner.getInfo().toBuilder()
-            : BlockInfo.builder())
-            .hash(winner.getHash())
-            .epoch(winner.getEpoch())
-            .height(height)
-            .difficulty(winner.getInfo() != null ? winner.getInfo().getDifficulty() : UInt256.ZERO)
-            .build();
-
-        dagStore.saveBlockInfo(updatedInfo);
-
-        // Save updated block
-        Block updatedBlock = winner.toBuilder().info(updatedInfo).build();
-        dagStore.saveBlock(updatedBlock);
-
-        log.info("Assigned height {} to block {} (epoch {})",
-            height, winner.getHash().toHexString().substring(0, 16), epoch);
-      }
-
-      // Track top block (last in epoch-sorted order)
-      topBlock = winner;
-      if (winner.getInfo() != null
-          && winner.getInfo().getDifficulty().compareTo(maxDifficulty) > 0) {
-        maxDifficulty = winner.getInfo().getDifficulty();
-      }
-
-      height++;
-    }
-
-    // Step 4: Update chain stats
-    long finalMainBlockCount = height - 1;  // height is now one past the last assigned
-    if (topBlock != null) {
-      chainStats = chainStats
-          .withMainBlockCount(finalMainBlockCount)
-          .withDifficulty(maxDifficulty);
-
-      dagStore.saveChainStats(chainStats);
-
-      log.info("Height assignment completed: {} epoch winners assigned heights 1 to {}",
-          sortedWinners.size(), finalMainBlockCount);
-      log.debug("Epoch range: {} to {}, mainBlockCount={}",
-          sortedWinners.get(0).getKey(),
-          sortedWinners.get(sortedWinners.size() - 1).getKey(),
-          finalMainBlockCount);
-    }
-
-    // Step 5: Check for chain reorganization (orphan blocks with higher cumulative difficulty)
-    checkChainReorganization();
-
-    log.debug("checkNewMain() completed: mainBlockCount={}, difficulty={}",
-        chainStats.getMainBlockCount(), chainStats.getDifficulty().toDecimalString());
+    // Delegate to ChainReorganizer (P1 refactoring)
+    this.chainStats = chainReorganizer.checkNewMain(
+        this.chainStats,
+        this::getCurrentEpoch,
+        this::getWinnerBlockInEpoch);
   }
 
   /**
    * Check for chain reorganization
-   * <p>
-   * This method performs a comprehensive check for potential chain reorganization scenarios:
-   * <ol>
-   *   <li>Scan orphan blocks for higher cumulative difficulty forks</li>
-   *   <li>Verify main chain consistency (no gaps in height sequence)</li>
-   *   <li>Detect and resolve fork points if better chain exists</li>
-   * </ol>
-   * <p>
-   * Note: Most reorganization is handled incrementally in tryToConnect().
-   * This method handles edge cases and performs validation.
+   *
+   * @deprecated Moved to {@link ChainReorganizer#checkChainReorganization} (P1 refactoring)
    */
+  @Deprecated
   private synchronized void checkChainReorganization() {
-    if (chainStats.getMainBlockCount() == 0) {
-      return;  // Empty chain, nothing to reorganize
-    }
-
-    log.debug("Checking for chain reorganization (current main chain length: {})",
-        chainStats.getMainBlockCount());
-
-    // Step 1: Scan recent epochs for orphan blocks with high cumulative difficulty
-    long currentEpoch = getCurrentEpoch();
-    long scanStartEpoch = Math.max(1, currentEpoch - 100);  // Scan last 100 epochs
-
-    List<Block> potentialForkHeads = new ArrayList<>();
-    UInt256 currentDifficulty = chainStats.getDifficulty();
-
-    for (long epoch = scanStartEpoch; epoch <= currentEpoch; epoch++) {
-      List<Block> candidates = getCandidateBlocksInEpoch(epoch);
-
-      for (Block block : candidates) {
-        // Find orphan blocks (height=0) with high cumulative difficulty
-        if (block.getInfo() != null && block.getInfo().getHeight() == 0) {
-          UInt256 blockDifficulty = block.getInfo().getDifficulty();
-
-          // If orphan block has higher cumulative difficulty than current main chain
-          if (blockDifficulty.compareTo(currentDifficulty) > 0) {
-            potentialForkHeads.add(block);
-            log.warn("Found orphan block {} with higher difficulty ({}) than main chain ({})",
-                block.getHash().toHexString().substring(0, 16),
-                blockDifficulty.toDecimalString(),
-                currentDifficulty.toDecimalString());
-          }
-        }
-      }
-    }
-
-    // Step 2: If better forks found, trigger reorganization
-    if (!potentialForkHeads.isEmpty()) {
-      log.warn("Found {} orphan blocks with higher cumulative difficulty, investigating...",
-          potentialForkHeads.size());
-
-      // Sort by cumulative difficulty (descending)
-      potentialForkHeads.sort((b1, b2) ->
-          b2.getInfo().getDifficulty().compareTo(b1.getInfo().getDifficulty()));
-
-      Block bestForkHead = potentialForkHeads.getFirst();
-
-      log.info("Best fork head: {} (difficulty: {})",
-          bestForkHead.getHash().toHexString(),
-          bestForkHead.getInfo().getDifficulty().toDecimalString());
-
-      // Find fork point and perform reorganization
-      performChainReorganization(bestForkHead);
-    }
-
-    // Step 3: Verify main chain consistency
-    verifyMainChainConsistency();
-
-    log.debug("Chain reorganization check completed");
+    // This method has been moved to ChainReorganizer
+    throw new UnsupportedOperationException(
+        "This method has been moved to ChainReorganizer. Use chainReorganizer.checkNewMain() instead.");
   }
 
   /**
-   * Perform chain reorganization to switch to a better fork
-   * <p>
-   * Algorithm:
-   * <ol>
-   *   <li>Find the fork point (common ancestor)</li>
-   *   <li>Demote blocks on current main chain after fork point</li>
-   *   <li>Promote blocks on new fork to main chain</li>
-   *   <li>Update chain statistics</li>
-   * </ol>
+   * Perform chain reorganization
    *
-   * @param newForkHead the head block of the new (better) fork
+   * @deprecated Moved to {@link ChainReorganizer#performChainReorganization} (P1 refactoring)
    */
+  @Deprecated
   private synchronized void performChainReorganization(Block newForkHead) {
-    log.warn("CHAIN REORGANIZATION: Switching to fork with head {}",
-        newForkHead.getHash().toHexString());
-
-    // Step 1: Find fork point
-    Block forkPoint = findForkPoint(newForkHead);
-
-    if (forkPoint == null) {
-      log.error("Cannot find fork point for reorganization, aborting");
-      return;
-    }
-
-    long forkHeight = forkPoint.getInfo().getHeight();
-    log.info("Fork point found at height {} (block: {})",
-        forkHeight, forkPoint.getHash().toHexString().substring(0, 16));
-
-    // Step 2: Demote blocks on current main chain after fork point
-    List<Block> demotedBlocks = demoteBlocksAfterHeight(forkHeight);
-    log.info("Demoted {} blocks from old main chain", demotedBlocks.size());
-
-    // Step 3: Build new main chain path from fork point to new head
-    List<Block> newMainChainBlocks = buildChainPath(newForkHead, forkPoint);
-
-    if (newMainChainBlocks.isEmpty()) {
-      log.error("Failed to build new main chain path, aborting reorganization");
-      // Restore demoted blocks by calling checkNewMain() to reassign heights
-      // Heights will be assigned based on epoch order and cumulative difficulty
-      log.info("Restoring {} demoted blocks by reassigning heights", demotedBlocks.size());
-      checkNewMain();
-      return;
-    }
-
-    log.info("New main chain has {} blocks from fork point to new head",
-        newMainChainBlocks.size());
-
-    // Step 4: Promote blocks on new fork (from fork point + 1 to new head)
-    long currentHeight = forkHeight;
-    for (int i = newMainChainBlocks.size() - 1; i >= 0; i--) {
-      Block block = newMainChainBlocks.get(i);
-
-      // Skip fork point itself (already on main chain)
-      if (block.getHash().equals(forkPoint.getHash())) {
-        continue;
-      }
-
-      currentHeight++;
-      promoteBlockToHeight(block, currentHeight);
-    }
-
-    // Step 5: Update chain statistics
-    Block newTip = newMainChainBlocks.getFirst();  // First element is the new head
-    chainStats = chainStats
-        .withMainBlockCount(currentHeight)
-        .withDifficulty(newTip.getInfo().getDifficulty());
-
-    dagStore.saveChainStats(chainStats);
-
-    log.warn("CHAIN REORGANIZATION COMPLETE: New main chain length = {}, new tip = {}",
-        currentHeight, newTip.getHash().toHexString().substring(0, 16));
+    // This method has been moved to ChainReorganizer
+    throw new UnsupportedOperationException(
+        "This method has been moved to ChainReorganizer. Use chainReorganizer.checkNewMain() instead.");
   }
 
   /**
-   * Find the fork point (common ancestor) between new fork and current main chain
+   * Find the fork point
    *
-   * @param forkHead head block of the new fork
-   * @return the fork point block, or null if not found
+   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
    */
+  @Deprecated
   private Block findForkPoint(Block forkHead) {
-    Set<Bytes32> visited = new HashSet<>();
-    Block current = forkHead;
-
-    // Traverse back from fork head until we find a main block
-    while (current != null) {
-      Bytes32 currentHash = current.getHash();
-
-      // Prevent infinite loop
-      if (visited.contains(currentHash)) {
-        log.warn("Cycle detected while finding fork point");
-        return null;
-      }
-      visited.add(currentHash);
-
-      // Check if this block is on main chain (height > 0)
-      if (current.getInfo() != null && current.getInfo().getHeight() > 0) {
-        log.debug("Fork point found: {} at height {}",
-            currentHash.toHexString().substring(0, 16),
-            current.getInfo().getHeight());
-        return current;
-      }
-
-      // Move to parent with highest cumulative difficulty
-      current = findMaxDifficultyParent(current);
-    }
-
-    log.error("Could not find fork point (reached genesis)");
-    return null;
+    throw new UnsupportedOperationException(
+        "This method has been moved to ChainReorganizer.");
   }
 
   /**
-   * Build chain path from fork head back to fork point
+   * Build chain path
    *
-   * @param forkHead  the head of the fork
-   * @param forkPoint the common ancestor
-   * @return list of blocks from forkHead to forkPoint (inclusive, ordered head-first)
+   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
    */
+  @Deprecated
   private List<Block> buildChainPath(Block forkHead, Block forkPoint) {
-    List<Block> path = new ArrayList<>();
-    Set<Bytes32> visited = new HashSet<>();
-    Block current = forkHead;
-
-    while (current != null) {
-      // Prevent infinite loop
-      if (visited.contains(current.getHash())) {
-        log.error("Cycle detected while building chain path");
-        return new ArrayList<>();  // Return empty list on error
-      }
-      visited.add(current.getHash());
-
-      path.add(current);
-
-      // Stop when we reach fork point
-      if (current.getHash().equals(forkPoint.getHash())) {
-        break;
-      }
-
-      // Move to parent with highest cumulative difficulty
-      current = findMaxDifficultyParent(current);
-    }
-
-    return path;
+    throw new UnsupportedOperationException(
+        "This method has been moved to ChainReorganizer.");
   }
 
   /**
-   * Demote all blocks on main chain after the specified height
-   * <p>
-   * SECURITY: Genesis block (height 1) is NEVER demoted. Reorganization can only happen from height
-   * 2 onwards.
+   * Demote blocks after height
    *
-   * @param afterHeight demote blocks with height > afterHeight
-   * @return list of demoted blocks
+   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
    */
+  @Deprecated
   private List<Block> demoteBlocksAfterHeight(long afterHeight) {
-    List<Block> demoted = new ArrayList<>();
-    long currentHeight = chainStats.getMainBlockCount();
-
-    // SECURITY: Prevent demoting genesis block (height 1)
-    // Genesis block is the foundation of the chain and must never be rolled back
-    long minHeight = Math.max(2, afterHeight + 1);  // Never go below height 2
-
-    if (afterHeight < 1) {
-      log.warn(
-          "SECURITY: Attempted to demote from afterHeight={}, protecting genesis block (height 1)",
-          afterHeight);
-      log.warn("Reorganization will only affect blocks from height {} onwards", minHeight);
-    }
-
-    // Demote from highest to minHeight (protecting genesis)
-    for (long height = currentHeight; height >= minHeight; height--) {
-      Block block = dagStore.getMainBlockByHeight(height, false);
-      if (block != null) {
-        demoteBlockToOrphan(block);
-        demoted.add(block);
-        log.debug("Demoted block {} from height {}",
-            block.getHash().toHexString().substring(0, 16), height);
-      }
-    }
-
-    log.info("Demoted {} blocks (protected genesis at height 1)", demoted.size());
-    return demoted;
+    throw new UnsupportedOperationException(
+        "This method has been moved to ChainReorganizer.");
   }
 
   /**
-   * Promote a block to main chain at specific height
+   * Promote block to height
    *
-   * @param block  the block to promote
-   * @param height the height to assign
+   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
    */
+  @Deprecated
   private void promoteBlockToHeight(Block block, long height) {
-    BlockInfo updatedInfo = block.getInfo().toBuilder()
-        .height(height)
-        .build();
-
-    dagStore.saveBlockInfo(updatedInfo);
-
-    Block updatedBlock = block.toBuilder().info(updatedInfo).build();
-    dagStore.saveBlock(updatedBlock);
-
-    log.debug("Promoted block {} to height {}",
-        block.getHash().toHexString().substring(0, 16), height);
+    throw new UnsupportedOperationException(
+        "This method has been moved to ChainReorganizer.");
   }
 
   /**
    * Verify main chain consistency
-   * <p>
-   * Checks that:
-   * <ol>
-   *   <li>Height sequence is continuous (no gaps)</li>
-   *   <li>Each block's cumulative difficulty >= parent's difficulty</li>
-   *   <li>Top block matches chain stats</li>
-   * </ol>
+   *
+   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
    */
+  @Deprecated
   private void verifyMainChainConsistency() {
-    long mainBlockCount = chainStats.getMainBlockCount();
+    throw new UnsupportedOperationException(
+        "This method has been moved to ChainReorganizer.");
+  }
 
-    if (mainBlockCount == 0) {
-      return;  // Empty chain is trivially consistent
-    }
+  /**
+   * Demote blocks from height
+   *
+   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
+   */
+  @Deprecated
+  private synchronized void demoteBlocksFromHeight(long fromHeight) {
+    throw new UnsupportedOperationException(
+        "This method has been moved to ChainReorganizer. Use chainReorganizer.demoteBlocksFromHeight() instead.");
+  }
 
-    // Check height sequence
-    for (long height = 1; height <= mainBlockCount; height++) {
-      Block block = dagStore.getMainBlockByHeight(height, false);
-      if (block == null) {
-        log.error("INCONSISTENCY: Missing main block at height {}", height);
-        return;
-      }
+  /**
+   * Demote a block from main chain to orphan status
+   *
+   * @deprecated Moved to {@link ChainReorganizer#demoteBlockToOrphan} (P1 refactoring)
+   */
+  @Deprecated
+  private synchronized void demoteBlockToOrphan(Block block) {
+    // Delegate to ChainReorganizer (P1 refactoring)
+    chainReorganizer.demoteBlockToOrphan(block);
+  }
 
-      if (block.getInfo() == null || block.getInfo().getHeight() != height) {
-        log.error("INCONSISTENCY: Block at height {} has wrong height info: {}",
-            height, block.getInfo() != null ? block.getInfo().getHeight() : "null");
-        return;
-      }
-    }
+  /**
+   * Rollback block transactions
+   *
+   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
+   */
+  @Deprecated
+  private void rollbackBlockTransactions(Block block) {
+    throw new UnsupportedOperationException(
+        "This method has been moved to ChainReorganizer.");
+  }
 
-    // Verify top block
-    Block topBlock = dagStore.getMainBlockByHeight(mainBlockCount, false);
-    if (topBlock == null) {
-      log.error("INCONSISTENCY: Top block at height {} not found", mainBlockCount);
-      return;
-    }
-
-    log.debug("Main chain consistency verified: {} blocks, no gaps",
-        mainBlockCount);
+  /**
+   * Rollback transaction state
+   *
+   * @deprecated Moved to {@link ChainReorganizer} (P1 refactoring)
+   */
+  @Deprecated
+  private void rollbackTransactionState(Transaction tx, DagAccountManager accountManager) {
+    throw new UnsupportedOperationException(
+        "This method has been moved to ChainReorganizer.");
   }
 
   // ==================== Statistics and State ====================
@@ -2004,100 +1373,13 @@ public class DagChainImpl implements DagChain {
    * <p>After successfully importing a block, some orphan blocks may now have all
    * their dependencies satisfied. This method retrieves orphan blocks from the queue and attempts
    * to import them again.
+   *
+   * @deprecated Moved to {@link OrphanManager#retryOrphanBlocks} (P1 refactoring)
    */
+  @Deprecated
   private void retryOrphanBlocks() {
-    // Prevent recursive retry (avoid infinite loop)
-    if (isRetryingOrphans.get()) {
-      return;
-    }
-
-    try {
-      isRetryingOrphans.set(true);
-
-      // Keep retrying until no more orphans can be imported (cascading retry for chain dependencies)
-      int totalSuccessCount = 0;
-      int pass = 1;
-      boolean madeProgress;
-
-      do {
-        madeProgress = false;
-
-        // Get up to 100 pending blocks (height=0) to retry
-        // fromEpoch=0 means start from earliest epoch
-        List<Bytes32> pendingHashes = dagStore.getPendingBlocks(100, 0);
-
-        if (pendingHashes == null || pendingHashes.isEmpty()) {
-          break;  // No pending blocks to retry
-        }
-
-        log.debug("Pending block retry pass {}: {} blocks to process", pass, pendingHashes.size());
-
-        int successCount = 0;
-        int failCount = 0;
-
-        for (Bytes32 pendingHash : pendingHashes) {
-          try {
-            // Retrieve pending block from DagStore (full data required for re-import)
-            Block pendingBlock = dagStore.getBlockByHash(pendingHash, true);
-            if (pendingBlock == null) {
-              log.warn("Pending block {} not found in DagStore",
-                  pendingHash.toHexString().substring(0, 16));
-              continue;
-            }
-
-            // Attempt to import
-            log.debug("Re-importing pending block {} (current height={})",
-                pendingHash.toHexString().substring(0, 16),
-                pendingBlock.getInfo() != null ? pendingBlock.getInfo().getHeight() : "null");
-            DagImportResult result = tryToConnect(pendingBlock);
-            log.debug("Re-import result for block {}: status={}, isMain={}, height={}",
-                pendingHash.toHexString().substring(0, 16),
-                result.getStatus(),
-                result.isMainBlock(),
-                result.getHeight());
-
-            if (result.isMainBlock() || result.isOrphan()) {
-              successCount++;
-              totalSuccessCount++;
-              madeProgress = true;
-              // Block now has height>0 (main) or stayed at height=0 (orphan)
-              // No need to manually remove from pending list
-              log.debug("Successfully imported pending block {} (status: {})",
-                  pendingHash.toHexString().substring(0, 16), result.getStatus());
-            } else if (result.getStatus() == DagImportResult.ImportStatus.MISSING_DEPENDENCY) {
-              failCount++;
-              // Still missing dependencies, block remains at height=0
-            } else if (result.getStatus() == DagImportResult.ImportStatus.DUPLICATE) {
-              // Already imported, skip
-            } else {
-              failCount++;
-              log.warn("Pending block {} import failed: {}",
-                  pendingHash.toHexString().substring(0, 16), result.getStatus());
-            }
-
-          } catch (Exception e) {
-            failCount++;
-            log.error("Error retrying pending block {}: {}",
-                pendingHash.toHexString().substring(0, 16), e.getMessage());
-          }
-        }
-
-        if (successCount > 0) {
-          log.info("Orphan retry pass {} completed: {} succeeded, {} still pending",
-              pass, successCount, failCount);
-        }
-
-        pass++;
-      } while (madeProgress && pass <= 10);  // Max 10 passes to prevent infinite loop
-
-      if (totalSuccessCount > 0) {
-        log.info("Orphan block retry completed: {} total blocks imported across {} passes",
-            totalSuccessCount, pass - 1);
-      }
-
-    } finally {
-      isRetryingOrphans.set(false);
-    }
+    throw new UnsupportedOperationException(
+        "This method has been moved to OrphanManager. Use orphanManager.retryOrphanBlocks() instead.");
   }
 
   /**
@@ -2171,340 +1453,6 @@ public class DagChainImpl implements DagChain {
     return naturalHeight;
   }
 
-  /**
-   * Demote a block at specific height and all its descendants
-   * <p>
-   * This is called during height-based chain reorganization when a better block is found for an
-   * existing height. All blocks from the specified height onwards are demoted to orphan status.
-   * <p>
-   * BUGFIX (2025-11-20): After demotion, scan orphan blocks and promote suitable replacements to
-   * fill gaps in the main chain. This prevents the chain from having discontinuous heights.
-   *
-   * @param fromHeight the height to start demotion from (inclusive)
-   */
-  private synchronized void demoteBlocksFromHeight(long fromHeight) {
-    long currentHeight = chainStats.getMainBlockCount();
-
-    log.info("Demoting blocks from height {} to {} (chain reorganization)",
-        fromHeight, currentHeight);
-
-    // Step 1: Collect demoted blocks for epoch range calculation
-    List<Block> demotedBlocks = new ArrayList<>();
-    int demotedCount = 0;
-
-    // Demote from highest to fromHeight (reverse order to maintain consistency)
-    for (long height = currentHeight; height >= fromHeight; height--) {
-      Block block = dagStore.getMainBlockByHeight(height, false);
-      if (block != null) {
-        demotedBlocks.add(block);
-        demoteBlockToOrphan(block);
-        demotedCount++;
-        log.debug("Demoted block {} from height {}",
-            block.getHash().toHexString().substring(0, 16), height);
-      }
-    }
-
-    log.info("Demoted {} blocks during chain reorganization", demotedCount);
-
-    // Step 2: BUGFIX - Find replacement blocks to fill gaps
-    if (!demotedBlocks.isEmpty()) {
-      log.info("Scanning for replacement blocks to fill gaps at heights {} to {}",
-          fromHeight, currentHeight);
-
-      // Calculate epoch range from demoted blocks
-      long minEpoch = demotedBlocks.stream()
-          .mapToLong(Block::getEpoch)
-          .min()
-          .orElse(0);
-
-      long currentEpoch = TimeUtils.getCurrentEpochNumber();
-      long maxEpoch = Math.min(currentEpoch, minEpoch + 1000);  // Limit scan to reasonable range
-
-      // Step 3: Collect orphan block candidates from relevant epochs
-      List<Block> replacementCandidates = new ArrayList<>();
-
-      for (long epoch = minEpoch; epoch <= maxEpoch; epoch++) {
-        try {
-          List<Block> candidates = dagStore.getCandidateBlocksInEpoch(epoch);
-
-          // Filter to orphans with valid cumulative difficulty
-          for (Block candidate : candidates) {
-            if (candidate.getInfo() != null &&
-                candidate.getInfo().getHeight() == 0 &&  // Orphan block
-                candidate.getInfo().getDifficulty().compareTo(UInt256.ZERO) > 0) {
-              replacementCandidates.add(candidate);
-            }
-          }
-        } catch (Exception e) {
-          log.warn("Failed to scan epoch {} for replacement blocks: {}",
-              epoch, e.getMessage());
-        }
-      }
-
-      log.info("Found {} orphan block candidates for gap filling",
-          replacementCandidates.size());
-
-      // Step 4: Sort candidates by cumulative difficulty (descending - best first)
-      replacementCandidates.sort((b1, b2) ->
-          b2.getInfo().getDifficulty().compareTo(b1.getInfo().getDifficulty()));
-
-      // Step 5: Promote blocks to fill gaps from fromHeight to currentHeight
-      int gapsToFill = (int) (currentHeight - fromHeight + 1);
-      int filledCount = 0;
-
-      for (int i = 0; i < Math.min(gapsToFill, replacementCandidates.size()); i++) {
-        Block replacement = replacementCandidates.get(i);
-        long targetHeight = fromHeight + i;
-
-        try {
-          promoteBlockToHeight(replacement, targetHeight);
-          filledCount++;
-
-          log.info("Filled gap at height {} with block {} (cumDiff: {})",
-              targetHeight,
-              replacement.getHash().toHexString().substring(0, 16),
-              replacement.getInfo().getDifficulty().toDecimalString());
-        } catch (Exception e) {
-          log.error("Failed to promote block {} to height {}: {}",
-              replacement.getHash().toHexString().substring(0, 16),
-              targetHeight, e.getMessage());
-        }
-      }
-
-      log.info("Gap filling completed: filled {}/{} gaps", filledCount, gapsToFill);
-
-      // Step 6: Update chain stats with correct mainBlockCount
-      long newMainBlockCount = fromHeight + filledCount - 1;
-      if (filledCount > 0) {
-        Block newTip = replacementCandidates.get(filledCount - 1);
-        chainStats = chainStats
-            .withMainBlockCount(newMainBlockCount)
-            .withDifficulty(newTip.getInfo().getDifficulty());
-        dagStore.saveChainStats(chainStats);
-
-        log.info("Updated chain stats: mainBlockCount={}, tip={}",
-            newMainBlockCount, newTip.getHash().toHexString().substring(0, 16));
-      } else {
-        log.warn("No replacement blocks found - chain has gaps from height {} to {}",
-            fromHeight, currentHeight);
-      }
-    }
-  }
-
-  /**
-   * Demote a block from main chain to orphan status
-   *
-   * <p>This is called during epoch competition when a new winner emerges.
-   * The previous epoch winner must be demoted to orphan (height=0) to maintain consensus rule: only
-   * one main block per epoch.
-   *
-   * <p>When a block is demoted, we must also adjust the chain stats to ensure
-   * the next main block gets the correct height. The mainBlockCount is decremented so that the new
-   * winner can take the demoted block's height.
-   *
-   * @param block the block to demote
-   */
-  private synchronized void demoteBlockToOrphan(Block block) {
-    if (block == null || block.getInfo() == null) {
-      log.warn("Attempted to demote null block or block without info");
-      return;
-    }
-
-    long previousHeight = block.getInfo().getHeight();
-    if (previousHeight == 0) {
-      log.debug("Block {} is already an orphan, skipping demotion",
-          block.getHash().toHexString());
-      return;
-    }
-
-    log.debug("Demoting block {} from height {} to orphan",
-        block.getHash().toHexString().substring(0, 16), previousHeight);
-
-    // BUGFIX: Delete old height mapping BEFORE updating BlockInfo
-    // This prevents multiple blocks from mapping to the same height
-    // When a block is demoted from height X to height 0, we must explicitly
-    // delete the height X -> hash mapping from the database
-    try {
-      dagStore.deleteHeightMapping(previousHeight);
-      log.debug("Deleted height mapping for height {} before demotion",
-          previousHeight);
-    } catch (Exception e) {
-      log.error("Failed to delete height mapping for height {}: {}",
-          previousHeight, e.getMessage());
-      // Continue with demotion even if delete fails (safer to continue than abort)
-    }
-
-    // Rollback transaction executions (Phase 1 - Task 1.4)
-    // When a block is demoted, unmark all its transactions as executed
-    // so they can be re-executed if the block becomes main again
-    rollbackBlockTransactions(block);
-
-    // Update BlockInfo to mark as orphan (height = 0)
-    BlockInfo updatedInfo = block.getInfo().toBuilder()
-        .height(0)
-        .build();
-
-    dagStore.saveBlockInfo(updatedInfo);
-
-    // IMPORTANT: Also save the Block with updated info to update cache and indices
-    // This ensures that getBlockByHash() and time-range queries return the updated block
-    Block updatedBlock = block.toBuilder().info(updatedInfo).build();
-    dagStore.saveBlock(updatedBlock);
-
-    // Demoted blocks are now stored in DagStore with height=0 (pending)
-    // They can be queried via dagStore.getPendingBlocks() and may be promoted during reorganization
-    log.debug("Demoted block {} to pending (previous height: {})",
-        block.getHash().toHexString().substring(0, 16),
-        previousHeight);
-
-    // NOTE: We do NOT modify mainBlockCount here!
-    // The mainBlockCount should only be updated by updateChainStatsForNewMainBlock()
-    // using Math.max(currentCount, newBlockHeight) to ensure correctness during replacements.
-    // Decrementing here would break the chain when demoting non-tail blocks.
-
-    log.info("Demoted block {} from height {} to orphan (epoch competition loser)",
-        block.getHash().toHexString(), previousHeight);
-  }
-
-  /**
-   * Rollback transaction executions for a demoted block (Phase 1 - Task 1.4)
-   *
-   * <p>When a block is demoted from main chain to orphan status (e.g., during chain
-   * reorganization or epoch competition), all transactions executed by that block must be unmarked
-   * AND their state changes must be reverted.
-   *
-   * <p>This is critical for:
-   * <ul>
-   *   <li>Chain reorganization: When blocks are demoted, their state changes must be reverted</li>
-   *   <li>Epoch competition: When a block loses to a new winner with smaller hash</li>
-   *   <li>Transaction replay: Allows transactions to be re-executed in a different block</li>
-   * </ul>
-   *
-   * <p>Rollback operations for each transaction:
-   * <ol>
-   *   <li>Sender: Restore balance (refund amount + fee), decrement nonce</li>
-   *   <li>Receiver: Deduct balance (remove received amount)</li>
-   *   <li>Unmark transaction as executed</li>
-   * </ol>
-   *
-   * @param block the block being demoted
-   */
-  private void rollbackBlockTransactions(Block block) {
-    try {
-      // Get all transaction hashes in this block
-      List<Bytes32> txHashes = transactionStore.getTransactionHashesByBlock(block.getHash());
-
-      if (txHashes.isEmpty()) {
-        log.debug("No transactions to rollback for block {}",
-            block.getHash().toHexString().substring(0, 16));
-        return;
-      }
-
-      // Get account manager for state rollback
-      DagAccountManager accountManager = dagKernel.getDagAccountManager();
-      if (accountManager == null) {
-        log.error("Cannot rollback transactions: DagAccountManager not available");
-        return;
-      }
-
-      // Rollback each transaction
-      int rolledBackCount = 0;
-      for (Bytes32 txHash : txHashes) {
-        try {
-          // Load transaction
-          Transaction tx = transactionStore.getTransaction(txHash);
-          if (tx == null) {
-            log.warn("Transaction {} not found in store, skipping rollback",
-                txHash.toHexString().substring(0, 16));
-            continue;
-          }
-
-          // Rollback account state changes
-          rollbackTransactionState(tx, accountManager);
-
-          // Unmark transaction as executed
-          transactionStore.unmarkTransactionExecuted(txHash);
-
-          rolledBackCount++;
-
-          if (log.isDebugEnabled()) {
-            log.debug("Rolled back transaction {} from block {}",
-                txHash.toHexString().substring(0, 16),
-                block.getHash().toHexString().substring(0, 16));
-          }
-
-        } catch (Exception e) {
-          log.error("Failed to rollback transaction {}: {}",
-              txHash.toHexString().substring(0, 16), e.getMessage());
-        }
-      }
-
-      log.info("Rolled back {} transactions (state + execution status) for demoted block {}",
-          rolledBackCount, block.getHash().toHexString().substring(0, 16));
-
-      transactionStore.removeTransactionsByBlock(block.getHash());
-
-    } catch (Exception e) {
-      log.error("Failed to rollback transactions for block {}: {}",
-          block.getHash().toHexString().substring(0, 16), e.getMessage());
-    }
-  }
-
-  /**
-   * Rollback account state changes for a single transaction
-   *
-   * <p>Reverses the state changes applied during transaction execution:
-   * <ul>
-   *   <li>Sender: Restore balance (refund amount + fee), decrement nonce</li>
-   *   <li>Receiver: Deduct balance (remove received amount)</li>
-   * </ul>
-   *
-   * @param tx             transaction to rollback
-   * @param accountManager account manager for state operations
-   */
-  private void rollbackTransactionState(Transaction tx, DagAccountManager accountManager) {
-    // Convert XAmount to UInt256 (nano units)
-    UInt256 txAmount = UInt256.valueOf(tx.getAmount().toDecimal(0, XUnit.NANO_XDAG).longValue());
-    UInt256 txFee = UInt256.valueOf(tx.getFee().toDecimal(0, XUnit.NANO_XDAG).longValue());
-
-    // Rollback sender account: refund amount + fee, decrement nonce
-    try {
-      accountManager.addBalance(tx.getFrom(), txAmount.add(txFee));
-      accountManager.decrementNonce(tx.getFrom());
-
-      if (log.isDebugEnabled()) {
-        log.debug("Rolled back sender {}: refunded {}, decremented nonce",
-            tx.getFrom().toHexString().substring(0, 8),
-            txAmount.add(txFee).toDecimalString());
-      }
-    } catch (Exception e) {
-      log.error("Failed to rollback sender account {}: {}",
-          tx.getFrom().toHexString().substring(0, 8), e.getMessage());
-    }
-
-    // Rollback receiver account: deduct amount
-    try {
-      UInt256 receiverBalance = accountManager.getBalance(tx.getTo());
-      if (receiverBalance.compareTo(txAmount) >= 0) {
-        accountManager.subtractBalance(tx.getTo(), txAmount);
-
-        if (log.isDebugEnabled()) {
-          log.debug("Rolled back receiver {}: deducted {}",
-              tx.getTo().toHexString().substring(0, 8),
-              txAmount.toDecimalString());
-        }
-      } else {
-        // This shouldn't happen in normal operation
-        log.warn("Cannot fully rollback receiver {}: insufficient balance ({} < {})",
-            tx.getTo().toHexString().substring(0, 8),
-            receiverBalance.toDecimalString(),
-            txAmount.toDecimalString());
-      }
-    } catch (Exception e) {
-      log.error("Failed to rollback receiver account {}: {}",
-          tx.getTo().toHexString().substring(0, 8), e.getMessage());
-    }
-  }
 
   // ==================== DAG Chain Event Listeners ====================
 
