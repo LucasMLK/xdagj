@@ -30,8 +30,6 @@ import io.xdag.config.GenesisConfig;
 import io.xdag.config.spec.TransactionPoolSpec;
 import io.xdag.consensus.pow.PowAlgorithm;
 import io.xdag.consensus.pow.RandomXPow;
-import io.xdag.consensus.sync.HybridSyncManager;
-import io.xdag.consensus.sync.HybridSyncP2pAdapter;
 import io.xdag.core.Block;
 import io.xdag.core.DagAccountManager;
 import io.xdag.core.DagBlockProcessor;
@@ -45,6 +43,7 @@ import io.xdag.core.TransactionPoolImpl;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.p2p.P2pConfigFactory;
 import io.xdag.p2p.P2pService;
+import io.xdag.p2p.SyncManager;
 import io.xdag.p2p.config.P2pConfig;
 import io.xdag.store.AccountStore;
 import io.xdag.store.DagStore;
@@ -139,8 +138,6 @@ public class DagKernel {
   private TransactionBroadcastManager transactionBroadcastManager;
 
   private DagChain dagChain;
-  private HybridSyncManager hybridSyncManager;
-  private HybridSyncP2pAdapter hybridSyncP2pAdapter;
 
   // PoW Algorithm (RandomX only)
   private PowAlgorithm powAlgorithm;
@@ -150,6 +147,7 @@ public class DagKernel {
 
   // P2P service (5)
   private P2pService p2pService;
+  private SyncManager syncManager;
 
   // Genesis configuration
   private GenesisConfig genesisConfig;
@@ -238,7 +236,7 @@ public class DagKernel {
     this.entityResolver = new DagEntityResolver(dagStore, transactionStore);
     log.info("   ✓ DagEntityResolver initialized");
 
-    // Note: DagChain and HybridSyncManager will be initialized in start() method
+    // Note: DagChain and SyncManager will be initialized in start() method
     // because DagChainImpl needs a fully constructed DagKernel instance
 
     log.info("========================================");
@@ -247,7 +245,7 @@ public class DagKernel {
   }
 
   /**
-   * Initialize DagChain and HybridSyncManager
+   * Initialize DagChain and SyncManager
    *
    * <p>This method should be called after DagKernel construction but before start().
    * It creates the consensus layer components that depend on a fully constructed DagKernel.
@@ -291,14 +289,6 @@ public class DagKernel {
     this.dagChain = new DagChainImpl(this);
     log.info("   ✓ DagChain initialized");
 
-    // 7. Create HybridSyncP2pAdapter (bridge to P2P layer)
-    this.hybridSyncP2pAdapter = new HybridSyncP2pAdapter();
-    log.info("   ✓ HybridSyncP2pAdapter initialized");
-
-    // 8. Create HybridSyncManager (inject adapter)
-    this.hybridSyncManager = new HybridSyncManager(this, dagChain, hybridSyncP2pAdapter);
-    log.info("   ✓ HybridSyncManager initialized");
-
     // 9. Create PoW Algorithm: RandomX only
     this.powAlgorithm = new RandomXPow(config, dagChain);
     log.info("   ✓ RandomXPow initialized");
@@ -328,7 +318,7 @@ public class DagKernel {
    * <p>Components are started in dependency order:
    * 1. OrphanBlockStore (orphan block management) 2. DagStore (Block persistence) 3.
    * TransactionStore (Transaction persistence) 4. AccountStore (Account state) 5. DagChain +
-   * HybridSyncManager (Consensus layer)
+   * SyncManager (Consensus layer)
    *
    * @throws RuntimeException if startup fails
    */
@@ -360,7 +350,7 @@ public class DagKernel {
       // DagCache and DagEntityResolver don't need explicit startup
       // They are ready to use after construction
 
-      // Initialize consensus layer (DagChain + HybridSyncManager)
+      // Initialize consensus layer (DagChain)
       if (dagChain == null) {
         initializeConsensusLayer();
       }
@@ -370,12 +360,6 @@ public class DagKernel {
 
       // Start P2P service (5)
       startP2pService();
-
-      // Start HybridSyncManager (auto-sync)
-      if (hybridSyncManager != null) {
-        hybridSyncManager.start();
-        log.info("✓ HybridSyncManager started (auto-sync enabled)");
-      }
 
       // Start PoW Algorithm (RandomX)
       if (powAlgorithm != null) {
@@ -407,7 +391,7 @@ public class DagKernel {
       log.info("✓ DagKernel started successfully");
       log.info("  - Storage: DagStore + TransactionStore + AccountStore");
       log.info("  - Cache: DagCache (13.8 MB L1) + DagEntityResolver");
-      log.info("  - Consensus: DagChain + HybridSyncManager");
+      log.info("  - Consensus: DagChain (FastDAG v3.0)");
       log.info("  - Main Chain Height: {}", dagChain.getMainChainLength());
       log.info("  - Cumulative Difficulty: {}",
           dagChain.getChainStats().getDifficulty().toDecimalString());
@@ -423,7 +407,7 @@ public class DagKernel {
    * Stop the DagKernel and all managed components
    *
    * <p>Components are stopped in reverse dependency order:
-   * 1. HybridSyncManager 2. DagChain 3. TransactionStore 4. DagStore 5. OrphanBlockStore 6.
+   * 1. SyncManager 2. DagChain 3. TransactionStore 4. DagStore 5. OrphanBlockStore 6.
    * AccountStore 7. DatabaseFactory (RocksDB cleanup)
    */
   public synchronized void stop() {
@@ -445,18 +429,6 @@ public class DagKernel {
 
       // Stop P2P service (5)
       stopP2pService();
-
-      // Stop HybridSyncManager first (if present)
-      if (hybridSyncManager != null) {
-        hybridSyncManager.stop();
-        log.info("✓ HybridSyncManager stopped");
-      }
-
-      // Stop HybridSyncP2pAdapter
-      if (hybridSyncP2pAdapter != null) {
-        // hybridSyncP2pAdapter cleanup if needed
-        log.info("✓ HybridSyncP2pAdapter stopped");
-      }
 
       // Stop DagChain (if present)
       if (dagChain != null) {
@@ -560,7 +532,7 @@ public class DagKernel {
    * Start P2P service for block broadcasting
    *
    * <p>5+: P2P integration with application layer event handler.
-   * Registers XdagP2pEventHandler to enable HybridSync protocol.
+   * Registers XdagP2pEventHandler to enable FastDAG Sync Protocol (v3.0).
    */
   private void startP2pService() {
     if (!p2pEnabled) {
@@ -584,9 +556,6 @@ public class DagKernel {
       // Create application layer event handler
       io.xdag.p2p.XdagP2pEventHandler eventHandler = new io.xdag.p2p.XdagP2pEventHandler(this);
 
-      // Connect HybridSyncP2pAdapter to event handler
-      eventHandler.setHybridSyncAdapter(hybridSyncP2pAdapter);
-
       // Register event handler with P2P config
       p2pConfig.addP2pEventHandle(eventHandler);
 
@@ -594,17 +563,18 @@ public class DagKernel {
       this.p2pService = new P2pService(p2pConfig);
       this.p2pService.start();
 
-      // Connect P2P service to HybridSyncP2pAdapter for channel management
-      if (hybridSyncP2pAdapter != null) {
-        hybridSyncP2pAdapter.setP2pService(this.p2pService);
-        log.info("✓ P2P service connected to HybridSyncP2pAdapter");
-      }
-
       // Connect P2P service to TransactionBroadcastManager (Phase 3)
       if (transactionBroadcastManager != null) {
         transactionBroadcastManager.setP2pService(this.p2pService);
         log.info("✓ P2P service connected to TransactionBroadcastManager");
       }
+
+      // Start FastDAG sync loop
+      if (this.syncManager == null) {
+        this.syncManager = new SyncManager(this);
+      }
+      this.syncManager.start();
+      log.info("✓ FastDAG SyncManager started");
 
       log.info("✓ P2P service started (broadcasting enabled)");
 
@@ -620,6 +590,16 @@ public class DagKernel {
    * Stop P2P service
    */
   private void stopP2pService() {
+    if (syncManager != null) {
+      try {
+        syncManager.stop();
+        log.info("✓ FastDAG SyncManager stopped");
+      } catch (Exception e) {
+        log.warn("Error stopping SyncManager: {}", e.getMessage());
+      }
+      syncManager = null;
+    }
+
     if (p2pService != null) {
       log.info("Stopping P2P service...");
       try {

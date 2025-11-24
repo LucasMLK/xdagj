@@ -45,9 +45,6 @@ public class XdagMessageFactory {
    * @throws MessageException when the encoding is illegal
    */
   public Message create(byte code, byte[] body) throws MessageException {
-    // BUGFIX (BUG-046): Add null check for body parameter
-    // Previously: Would throw NPE from message constructors
-    // Now: Validate input and provide clear error message
     if (body == null) {
       throw new IllegalArgumentException("Message body cannot be null");
     }
@@ -60,24 +57,20 @@ public class XdagMessageFactory {
 
     try {
       return switch (c) {
-        case BLOCK_REQUEST -> new BlockRequestMessage(body);
-        case SYNCBLOCK_REQUEST -> new SyncBlockRequestMessage(body);
-        //  Block messages
-        case NEW_BLOCK -> new NewBlockMessage(body);
-        case SYNC_BLOCK -> new SyncBlockMessage(body);
-        //  Hybrid sync protocol messages
-        case SYNC_HEIGHT_REQUEST -> new SyncHeightRequestMessage(body);
-        case SYNC_HEIGHT_REPLY -> new SyncHeightReplyMessage(body);
-        case SYNC_MAIN_BLOCKS_REQUEST -> new SyncMainBlocksRequestMessage(body);
-        case SYNC_MAIN_BLOCKS_REPLY -> new SyncMainBlocksReplyMessage(body);
-        case SYNC_EPOCH_BLOCKS_REQUEST -> new SyncEpochBlocksRequestMessage(body);
-        case SYNC_EPOCH_BLOCKS_REPLY -> new SyncEpochBlocksReplyMessage(body);
-        case SYNC_BLOCKS_REQUEST -> new SyncBlocksRequestMessage(body);
-        case SYNC_BLOCKS_REPLY -> new SyncBlocksReplyMessage(body);
-        case SYNC_TRANSACTIONS_REQUEST -> new SyncTransactionsRequestMessage(body);
-        case SYNC_TRANSACTIONS_REPLY -> new SyncTransactionsReplyMessage(body);
         //  Transaction broadcast message (Phase 3)
         case NEW_TRANSACTION -> new NewTransactionMessage(body);
+        
+        // FastDAG Sync Protocol Messages (v3.0)
+        case NEW_BLOCK_HASH -> new NewBlockHashMessage(body);
+        case GET_BLOCKS -> new GetBlocksMessage(body);
+        case BLOCKS_REPLY -> new BlocksReplyMessage(body);
+        case GET_EPOCH_HASHES -> new GetEpochHashesMessage(body);
+        case EPOCH_HASHES_REPLY -> new EpochHashesReplyMessage(body);
+        
+        default -> {
+            log.warn("Received deprecated or unknown message code: {}", c);
+            yield null;
+        }
       };
     } catch (Exception e) {
       throw new MessageException("Failed to decode message", e);

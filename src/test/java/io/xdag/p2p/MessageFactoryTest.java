@@ -27,6 +27,7 @@ import static org.junit.Assert.assertNull;
 
 import io.xdag.p2p.message.MessageException;
 import io.xdag.p2p.message.XdagMessageFactory;
+import io.xdag.p2p.message.XdagMessageCode;
 import org.junit.Test;
 
 public class MessageFactoryTest {
@@ -40,7 +41,7 @@ public class MessageFactoryTest {
     @Test(expected = MessageException.class)
     public void testWrongCodec() throws MessageException {
         XdagMessageFactory factory = new XdagMessageFactory();
-        // Use valid message code (0x16 = BLOCK_REQUEST) with malformed body (1 byte is too short, needs 32+ bytes)
-        factory.create((byte) 0x16, new byte[1]);
+        // Use valid message code (GET_BLOCKS) with malformed body (needs >= 4 bytes for count)
+        factory.create(XdagMessageCode.GET_BLOCKS.toByte(), new byte[1]);
     }
 }

@@ -67,7 +67,36 @@ public enum XdagMessageCode implements IMessageCode {
   SYNC_BLOCK(0x1C),
 
   // =======================================
-  // [0x1D, 0x24] Reserved for hybrid sync protocol
+  // [0x30, 0x4F] FastDAG Sync Protocol (v3.0)
+  // =======================================
+
+  /**
+   * [0x30] NEW_BLOCK_HASH - Broadcast new block hash (Inv)
+   */
+  NEW_BLOCK_HASH(0x30),
+
+  /**
+   * [0x31] GET_BLOCKS - Request block data by hash list
+   */
+  GET_BLOCKS(0x31),
+
+  /**
+   * [0x32] BLOCKS_REPLY - Reply with block data
+   */
+  BLOCKS_REPLY(0x32),
+
+  /**
+   * [0x33] GET_EPOCH_HASHES - Request block hashes in epoch range
+   */
+  GET_EPOCH_HASHES(0x33),
+
+  /**
+   * [0x34] EPOCH_HASHES_REPLY - Reply with epoch hashes
+   */
+  EPOCH_HASHES_REPLY(0x34),
+
+  // =======================================
+  // [0x1D, 0x26] Legacy / Reserved (Deprecated)
   // =======================================
 
   /**
