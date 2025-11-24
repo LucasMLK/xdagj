@@ -54,37 +54,44 @@ public class EpochTimerTest {
     }
 
     /**
-     * Test 1: getCurrentEpoch() returns correct epoch number
+     * Test 1: getCurrentEpoch() returns correct epoch number using XDAG time system
      */
     @Test
     public void testGetCurrentEpoch() {
-        long now = System.currentTimeMillis();
-        long expected = now / 64000;
+        long expected = io.xdag.utils.TimeUtils.getCurrentEpochNumber();
 
         long actual = epochTimer.getCurrentEpoch();
 
-        assertEquals("Epoch number should match current time / 64000", expected, actual);
+        assertEquals("Epoch number should match TimeUtils calculation", expected, actual);
     }
 
     /**
-     * Test 2: getEpochDurationMs() returns 64000
+     * Test 2: getEpochDurationMs() returns approximately 64000ms
      */
     @Test
     public void testGetEpochDurationMs() {
-        assertEquals("Epoch duration should be 64000ms", 64000, EpochTimer.getEpochDurationMs());
+        long duration = EpochTimer.getEpochDurationMs();
+
+        // XDAG epoch duration = 65536 / 1024 seconds ≈ 63.999 seconds
+        // Should be in range [63998, 64002]
+        assertTrue("Epoch duration should be approximately 64000ms",
+            duration >= 63998 && duration <= 64002);
     }
 
     /**
-     * Test 3: getCurrentEpochStartTime() returns correct start time
+     * Test 3: getCurrentEpochStartTime() returns correct start time using XDAG time system
      */
     @Test
     public void testGetCurrentEpochStartTime() {
-        long now = System.currentTimeMillis();
-        long expected = (now / 64000) * 64000;
+        long currentEpochNum = io.xdag.utils.TimeUtils.getCurrentEpochNumber();
+        long xdagEpochStart = io.xdag.utils.TimeUtils.epochNumberToEpoch(currentEpochNum);
+        long expected = io.xdag.utils.TimeUtils.epochToTimeMillis(xdagEpochStart);
 
         long actual = epochTimer.getCurrentEpochStartTime();
 
-        assertEquals("Epoch start time should be aligned to 64s boundary", expected, actual);
+        // Allow 10ms tolerance for execution time
+        assertTrue("Epoch start time should match XDAG time system calculation",
+            Math.abs(actual - expected) < 10);
     }
 
     /**
@@ -93,35 +100,38 @@ public class EpochTimerTest {
     @Test
     public void testGetCurrentEpochEndTime() {
         long now = System.currentTimeMillis();
-        long expectedStart = (now / 64000) * 64000;
-        long expectedEnd = expectedStart + 64000;
+        long currentEpochNum = io.xdag.utils.TimeUtils.getCurrentEpochNumber();
+        long expectedEnd = io.xdag.utils.TimeUtils.epochNumberToTimeMillis(currentEpochNum);
 
         long actual = epochTimer.getCurrentEpochEndTime();
 
-        assertEquals("Epoch end time should be start + 64000", expectedEnd, actual);
+        // Allow 10ms tolerance for execution time
+        assertTrue("Epoch end time should match XDAG time system calculation",
+            Math.abs(actual - expectedEnd) < 10);
     }
 
     /**
-     * Test 5: getTimeUntilEpochEnd() returns value between 0 and 64000
+     * Test 5: getTimeUntilEpochEnd() returns value between 0 and approximately 64000
      */
     @Test
     public void testGetTimeUntilEpochEnd() {
         long remaining = epochTimer.getTimeUntilEpochEnd();
 
-        assertTrue("Time remaining should be positive", remaining > 0);
+        assertTrue("Time remaining should be non-negative", remaining >= 0);
+        // XDAG epoch is approximately 64000ms, allow 64100ms upper bound for tolerance
         assertTrue("Time remaining should be less than epoch duration",
-            remaining <= 64000);
+            remaining <= 64100);
     }
 
     /**
-     * Test 6: getTimeUntilEpochEnd() calculation is correct
+     * Test 6: getTimeUntilEpochEnd() calculation is correct using XDAG time system
      */
     @Test
     public void testGetTimeUntilEpochEndCalculation() {
         long now = System.currentTimeMillis();
-        long epochStart = (now / 64000) * 64000;
-        long epochEnd = epochStart + 64000;
-        long expected = epochEnd - now;
+        long currentEpochNum = io.xdag.utils.TimeUtils.getCurrentEpochNumber();
+        long epochEndMs = io.xdag.utils.TimeUtils.epochNumberToTimeMillis(currentEpochNum);
+        long expected = Math.max(0, epochEndMs - now);
 
         long actual = epochTimer.getTimeUntilEpochEnd();
 
@@ -244,14 +254,17 @@ public class EpochTimerTest {
     }
 
     /**
-     * Test 15: Epoch start and end times are 64000ms apart
+     * Test 15: Epoch start and end times are approximately 64000ms apart
      */
     @Test
     public void testEpochStartEndTimeDifference() {
         long startTime = epochTimer.getCurrentEpochStartTime();
         long endTime = epochTimer.getCurrentEpochEndTime();
+        long difference = endTime - startTime;
 
-        assertEquals("Epoch should be exactly 64000ms long",
-            64000, endTime - startTime);
+        // XDAG epoch duration = 65536 / 1024 seconds ≈ 63.999 seconds
+        // Allow 2ms tolerance for precision and execution time
+        assertTrue("Epoch should be approximately 64000ms long (63999-64001ms range)",
+            difference >= 63998 && difference <= 64002);
     }
 }

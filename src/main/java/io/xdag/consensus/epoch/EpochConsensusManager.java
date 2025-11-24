@@ -75,9 +75,10 @@ public class EpochConsensusManager {
     // ========== Configuration ==========
 
     /**
-     * Epoch duration in milliseconds (64 seconds).
+     * Epoch duration in milliseconds (approximately 64 seconds).
+     * Calculated dynamically from XDAG time system via TimeUtils.
      */
-    private static final long EPOCH_DURATION_MS = 64_000L;
+    private static final long EPOCH_DURATION_MS = io.xdag.utils.TimeUtils.epochNumberToTimeMillis(1) - io.xdag.utils.TimeUtils.epochNumberToTimeMillis(0);
 
     /**
      * Trigger backup mining when this much time remains in epoch (5 seconds).
@@ -138,8 +139,9 @@ public class EpochConsensusManager {
 
     /**
      * Scheduler for backup miner trigger.
+     * Recreated on each start() to avoid RejectedExecutionException.
      */
-    private final ScheduledExecutorService backupMinerScheduler;
+    private ScheduledExecutorService backupMinerScheduler;
 
     /**
      * Create a new EpochConsensusManager.
@@ -161,11 +163,6 @@ public class EpochConsensusManager {
         this.solutionCollector = new SolutionCollector(minimumDifficulty, epochContexts);
         this.bestSolutionSelector = new BestSolutionSelector();
         this.backupMiner = new BackupMiner(backupMiningThreads);
-        this.backupMinerScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "BackupMinerScheduler");
-            t.setDaemon(true);
-            return t;
-        });
     }
 
     /**
@@ -178,6 +175,13 @@ public class EpochConsensusManager {
         }
 
         log.info("Starting EpochConsensusManager...");
+
+        // Create new scheduler to avoid RejectedExecutionException from reused terminated pool
+        this.backupMinerScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "BackupMinerScheduler");
+            t.setDaemon(true);
+            return t;
+        });
 
         // Initialize current epoch
         long epoch = getCurrentEpoch();
@@ -202,7 +206,6 @@ public class EpochConsensusManager {
      */
     public void stop() {
         if (!running) {
-            log.warn("EpochConsensusManager not running");
             return;
         }
 
@@ -210,7 +213,18 @@ public class EpochConsensusManager {
 
         epochTimer.stop();
         backupMiner.stop();
-        backupMinerScheduler.shutdown();
+
+        if (backupMinerScheduler != null) {
+            backupMinerScheduler.shutdown();
+            try {
+                if (!backupMinerScheduler.awaitTermination(2, TimeUnit.SECONDS)) {
+                    backupMinerScheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
+                backupMinerScheduler.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+        }
 
         running = false;
         log.info("✓ EpochConsensusManager stopped");
@@ -235,12 +249,12 @@ public class EpochConsensusManager {
     }
 
     /**
-     * Get the current epoch number.
+     * Get the current epoch number using XDAG time system.
      *
-     * @return Current epoch (based on system time)
+     * @return Current epoch number (64-second period)
      */
     public long getCurrentEpoch() {
-        return System.currentTimeMillis() / EPOCH_DURATION_MS;
+        return io.xdag.utils.TimeUtils.getCurrentEpochNumber();
     }
 
     // ========== Private Methods ==========

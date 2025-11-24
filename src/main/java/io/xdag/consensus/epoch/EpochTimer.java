@@ -23,6 +23,7 @@
  */
 package io.xdag.consensus.epoch;
 
+import io.xdag.utils.TimeUtils;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.Executors;
@@ -31,34 +32,40 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
- * EpochTimer - Manages epoch timing with precise 64-second boundary alignment.
+ * EpochTimer - Manages epoch timing with precise 64-second boundary alignment using XDAG time system.
  *
  * <p>This timer ensures that epochs are triggered exactly at 64-second boundaries
- * (T=0s, T=64s, T=128s, etc.), matching the original XDAG consensus mechanism.
+ * matching the XDAG consensus mechanism. It uses {@link TimeUtils} to properly
+ * handle XDAG's unique time representation (1/1024 second precision).
+ *
+ * <p><b>XDAG Time System:</b>
+ * <ul>
+ *   <li>XDAG epoch: 1/1024 second precision (not milliseconds)</li>
+ *   <li>Epoch number: 64-second period number (epoch >> 16)</li>
+ *   <li>64 seconds = 65536 XDAG epoch units (2^16)</li>
+ * </ul>
  *
  * <p>Key features:
  * <ul>
+ *   <li>Uses TimeUtils for XDAG-compliant epoch calculations</li>
  *   <li>Precise epoch boundary alignment using scheduleAtFixedRate</li>
  *   <li>Calculates initial delay to sync with next epoch boundary</li>
- *   <li>Provides utilities to query current epoch and remaining time</li>
+ *   <li>Recreates scheduler on each start for thread pool reuse safety</li>
  * </ul>
  *
  * <p>Part of BUG-CONSENSUS-001 and BUG-CONSENSUS-002 unified fix.
  *
  * @see EpochConsensusManager
+ * @see TimeUtils
  */
 @Slf4j
 public class EpochTimer {
 
     /**
-     * Epoch duration in milliseconds (64 seconds = 64,000 ms).
-     */
-    private static final long EPOCH_DURATION_MS = 64_000L;
-
-    /**
      * Scheduler for epoch boundary triggers.
+     * Recreated on each start() to avoid RejectedExecutionException.
      */
-    private final ScheduledExecutorService epochScheduler;
+    private ScheduledExecutorService epochScheduler;
 
     /**
      * Flag indicating if the timer is running.
@@ -66,11 +73,6 @@ public class EpochTimer {
     private volatile boolean running;
 
     public EpochTimer() {
-        this.epochScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "EpochTimer");
-            t.setDaemon(true);
-            return t;
-        });
         this.running = false;
     }
 
@@ -79,6 +81,8 @@ public class EpochTimer {
      *
      * <p>The timer will trigger the callback at every epoch boundary (every 64 seconds).
      * The first trigger is scheduled at the next epoch boundary to ensure alignment.
+     *
+     * <p>Uses XDAG time system via {@link TimeUtils} to calculate precise epoch boundaries.
      *
      * @param onEpochEnd Callback to invoke when an epoch ends. Receives the epoch number.
      * @throws NullPointerException if onEpochEnd is null
@@ -93,34 +97,47 @@ public class EpochTimer {
             return;
         }
 
-        // Calculate the next epoch boundary
-        long now = System.currentTimeMillis();
-        long epochStart = (now / EPOCH_DURATION_MS) * EPOCH_DURATION_MS;
-        long nextEpochStart = epochStart + EPOCH_DURATION_MS;
-        long initialDelay = nextEpochStart - now;
+        // Create new scheduler to avoid RejectedExecutionException from reused terminated pool
+        this.epochScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "EpochTimer");
+            t.setDaemon(true);
+            return t;
+        });
 
-        log.info("EpochTimer starting: current_time={}ms, next_epoch_boundary={}ms, initial_delay={}ms",
-                now, nextEpochStart, initialDelay);
+        // Calculate the next epoch boundary using XDAG time system
+        long now = System.currentTimeMillis();
+        long currentEpochNum = TimeUtils.getCurrentEpochNumber();
+
+        // Get current and next epoch boundary in milliseconds
+        long currentEpochEndMs = TimeUtils.epochNumberToTimeMillis(currentEpochNum);
+        long nextEpochEndMs = TimeUtils.epochNumberToTimeMillis(currentEpochNum + 1);
+
+        // Calculate initial delay and epoch duration
+        long initialDelay = nextEpochEndMs - now;
+        long epochDurationMs = nextEpochEndMs - currentEpochEndMs;
+
+        log.info("EpochTimer starting: current_epoch_num={}, next_epoch_end={}ms, initial_delay={}ms, epoch_duration={}ms",
+                currentEpochNum, nextEpochEndMs, initialDelay, epochDurationMs);
 
         // Schedule at fixed rate to maintain epoch boundary alignment
         epochScheduler.scheduleAtFixedRate(
                 () -> {
                     try {
-                        long epoch = getCurrentEpoch();
-                        log.info("═══════════ Epoch {} ended ═══════════", epoch);
-                        onEpochEnd.accept(epoch);
+                        long epochNum = getCurrentEpoch();
+                        log.info("═══════════ Epoch {} ended ═══════════", epochNum);
+                        onEpochEnd.accept(epochNum);
                     } catch (Exception e) {
                         log.error("Error processing epoch end", e);
                     }
                 },
                 initialDelay,
-                EPOCH_DURATION_MS,
+                epochDurationMs,
                 TimeUnit.MILLISECONDS
         );
 
         running = true;
         log.info("✓ EpochTimer started (epoch_duration={}ms, initial_delay={}ms)",
-                EPOCH_DURATION_MS, initialDelay);
+                epochDurationMs, initialDelay);
     }
 
     /**
@@ -128,64 +145,73 @@ public class EpochTimer {
      */
     public void stop() {
         if (!running) {
-            log.warn("EpochTimer is not running");
             return;
         }
 
         log.info("Stopping EpochTimer...");
-        epochScheduler.shutdown();
-        try {
-            if (!epochScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+        if (epochScheduler != null) {
+            epochScheduler.shutdown();
+            try {
+                if (!epochScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    epochScheduler.shutdownNow();
+                }
+            } catch (InterruptedException e) {
                 epochScheduler.shutdownNow();
+                Thread.currentThread().interrupt();
             }
-        } catch (InterruptedException e) {
-            epochScheduler.shutdownNow();
-            Thread.currentThread().interrupt();
         }
         running = false;
         log.info("✓ EpochTimer stopped");
     }
 
     /**
-     * Get the current epoch number.
+     * Get the current epoch number using XDAG time system.
      *
-     * <p>Epoch number is calculated as: current_time_ms / EPOCH_DURATION_MS
+     * <p>Uses {@link TimeUtils#getCurrentEpochNumber()} for XDAG-compliant calculation.
      *
-     * @return Current epoch number
+     * @return Current epoch number (64-second period)
      */
     public long getCurrentEpoch() {
-        return System.currentTimeMillis() / EPOCH_DURATION_MS;
+        return TimeUtils.getCurrentEpochNumber();
     }
 
     /**
      * Get the time remaining until the current epoch ends.
      *
+     * <p>Uses XDAG time system to calculate epoch boundaries.
+     *
      * @return Time in milliseconds until epoch end
      */
     public long getTimeUntilEpochEnd() {
         long now = System.currentTimeMillis();
-        long epochStart = (now / EPOCH_DURATION_MS) * EPOCH_DURATION_MS;
-        long epochEnd = epochStart + EPOCH_DURATION_MS;
-        return epochEnd - now;
+        long currentEpochNum = TimeUtils.getCurrentEpochNumber();
+        long epochEndMs = TimeUtils.epochNumberToTimeMillis(currentEpochNum);
+        return Math.max(0, epochEndMs - now);
     }
 
     /**
      * Get the start time of the current epoch.
      *
+     * <p>Uses XDAG time system: start of epoch = epoch_number << 16 (converted to milliseconds).
+     *
      * @return Epoch start time in milliseconds
      */
     public long getCurrentEpochStartTime() {
-        long now = System.currentTimeMillis();
-        return (now / EPOCH_DURATION_MS) * EPOCH_DURATION_MS;
+        long currentEpochNum = TimeUtils.getCurrentEpochNumber();
+        long xdagEpochStart = TimeUtils.epochNumberToEpoch(currentEpochNum);
+        return TimeUtils.epochToTimeMillis(xdagEpochStart);
     }
 
     /**
      * Get the end time of the current epoch.
      *
+     * <p>Uses XDAG time system: end of epoch = (epoch_number << 16) | 0xffff (converted to milliseconds).
+     *
      * @return Epoch end time in milliseconds
      */
     public long getCurrentEpochEndTime() {
-        return getCurrentEpochStartTime() + EPOCH_DURATION_MS;
+        long currentEpochNum = TimeUtils.getCurrentEpochNumber();
+        return TimeUtils.epochNumberToTimeMillis(currentEpochNum);
     }
 
     /**
@@ -200,9 +226,17 @@ public class EpochTimer {
     /**
      * Get the epoch duration in milliseconds.
      *
-     * @return Epoch duration (64,000 ms)
+     * <p>Calculates the actual duration dynamically from XDAG time system.
+     * Should be approximately 64,000ms, but calculated precisely each time.
+     *
+     * @return Epoch duration in milliseconds (approximately 64,000ms)
      */
     public static long getEpochDurationMs() {
-        return EPOCH_DURATION_MS;
+        // Calculate epoch duration from XDAG time system
+        // Epoch N end - Epoch N-1 end = one epoch duration
+        long currentEpochNum = TimeUtils.getCurrentEpochNumber();
+        long currentEpochEndMs = TimeUtils.epochNumberToTimeMillis(currentEpochNum);
+        long previousEpochEndMs = TimeUtils.epochNumberToTimeMillis(currentEpochNum - 1);
+        return currentEpochEndMs - previousEpochEndMs;
     }
 }
