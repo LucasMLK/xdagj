@@ -116,12 +116,10 @@ public class TransactionValidatorImpl implements TransactionValidator {
   @Override
   public ValidationResult validateSyntax(Transaction tx) {
     try {
-      // 1. Check basic transaction validity (built-in checks)
-      if (!tx.isValid()) {
-        return failure(SYNTAX, "Transaction failed basic validation (amount/fee/nonce/data)");
-      }
+      // Note: Skip tx.isValid() check as it includes nonce validation
+      // which belongs in validateState(), not here
 
-      // 2. Check signature components
+      // 1. Check signature components
       if (tx.getV() < 0 || tx.getV() > 255) {
         return failure(SYNTAX, String.format("Invalid signature v value: %d", tx.getV()));
       }
@@ -130,12 +128,12 @@ public class TransactionValidatorImpl implements TransactionValidator {
         return failure(SYNTAX, "Signature r or s is null");
       }
 
-      // 3. Verify signature cryptographically
+      // 2. Verify signature cryptographically
       if (!tx.verifySignature()) {
         return failure(SYNTAX, "Invalid transaction signature");
       }
 
-      // 4. Check address sizes
+      // 3. Check address sizes
       if (tx.getFrom().size() != 20) {
         return failure(SYNTAX, String.format("Invalid from address size: %d (expected 20)",
             tx.getFrom().size()));
@@ -146,7 +144,7 @@ public class TransactionValidatorImpl implements TransactionValidator {
             tx.getTo().size()));
       }
 
-      // 5. Check self-transfer
+      // 4. Check self-transfer
       if (tx.getFrom().equals(tx.getTo())) {
         return failure(SYNTAX, "Cannot transfer to self");
       }
@@ -163,19 +161,27 @@ public class TransactionValidatorImpl implements TransactionValidator {
   @Override
   public ValidationResult validateState(Transaction tx) {
     try {
-      // 1. Check if transaction already executed
+      // 1. Check if sender account exists
+      if (!accountManager.hasAccount(tx.getFrom())) {
+        return failure(STATE, "Sender account does not exist: " + tx.getFrom().toHexString());
+      }
+
+      // 2. Check if transaction already executed
       if (transactionStore.isTransactionExecuted(tx.getHash())) {
         return failure(STATE, "Transaction already executed");
       }
 
-      // 2. Check nonce continuity
+      // 3. Check nonce matches account nonce (NOT +1, just equals)
+      // IMPORTANT: In XDAG, tx nonce must equal current account nonce
       UInt64 accountNonce = accountManager.getNonce(tx.getFrom());
-      long expectedNonce = accountNonce.toLong() + 1;
+      UInt64 txNonce = UInt64.valueOf(tx.getNonce());
 
-      if (tx.getNonce() != expectedNonce) {
+      if (!txNonce.equals(accountNonce)) {
         return failure(STATE, String.format(
-            "Nonce mismatch: expected %d, got %d",
-            expectedNonce, tx.getNonce()));
+            "Invalid nonce: address=%s, expected=%d, got=%d",
+            tx.getFrom().toHexString(),
+            accountNonce.toLong(),
+            txNonce.toLong()));
       }
 
       return ValidationResult.success();

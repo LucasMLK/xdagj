@@ -34,18 +34,20 @@ import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt64;
 
 /**
- * DagTransactionProcessor - Complete transaction processing for Dag layer
+ * DagTransactionProcessor - Complete transaction processing coordinator (P3 Refactored)
  *
- * <p>This class handles all aspects of transaction processing including
- * validation, account state updates, and transaction persistence.
+ * <p>Coordinates transaction processing by delegating to specialized components:
+ * <ul>
+ *   <li>{@link TransactionValidator} - Validates transactions</li>
+ *   <li>{@link TransactionExecutor} - Executes account state updates</li>
+ *   <li>{@link TransactionPersister} - Persists transactions</li>
+ * </ul>
  *
  * <h2>Processing Flow</h2>
  * <pre>
- * 1. Validate transaction signature
- * 2. Validate account state (balance, nonce)
- * 3. Ensure receiver account exists
- * 4. Update account states (via DagAccountManager)
- * 5. Save transaction to store
+ * 1. Validate (delegate to TransactionValidator)
+ * 2. Execute (delegate to TransactionExecutor)
+ * 3. Persist (delegate to TransactionPersister)
  * </pre>
  *
  * <h2>Usage Example</h2>
@@ -65,16 +67,29 @@ import org.apache.tuweni.units.bigints.UInt64;
  * ProcessingResult result = processor.processBlockTransactions(block, txs);
  * </pre>
  *
- * @since XDAGJ
+ * @since XDAGJ (P3 Refactored: 2025-11-24)
  */
 @Slf4j
 public class DagTransactionProcessor {
 
+  // Legacy dependencies (kept for backward compatibility)
   private final DagAccountManager accountManager;
   private final TransactionStore transactionStore;
 
+  // P3 Refactored components
+  private final TransactionValidator transactionValidator;
+  private final TransactionExecutor transactionExecutor;
+  private final TransactionPersister transactionPersister;
+
   /**
-   * Create DagTransactionProcessor
+   * Create DagTransactionProcessor (P3 Refactored)
+   *
+   * <p>Internally creates specialized components:
+   * <ul>
+   *   <li>TransactionValidator - for validation</li>
+   *   <li>TransactionExecutor - for account updates</li>
+   *   <li>TransactionPersister - for persistence</li>
+   * </ul>
    *
    * @param accountManager   account state manager
    * @param transactionStore transaction storage
@@ -85,52 +100,60 @@ public class DagTransactionProcessor {
   ) {
     this.accountManager = accountManager;
     this.transactionStore = transactionStore;
+
+    // Initialize P3 refactored components
+    this.transactionValidator = new TransactionValidatorImpl(
+        accountManager,
+        transactionStore,
+        XAmount.ZERO,  // minFee (TODO: make configurable)
+        XAmount.of(1000000000000L, NANO_XDAG)  // maxFee = 1000 XDAG (anti-DoS)
+    );
+    this.transactionExecutor = new TransactionExecutor(accountManager);
+    this.transactionPersister = new TransactionPersister(transactionStore);
+
+    log.info("DagTransactionProcessor initialized (P3 refactored)");
+    log.info("  - TransactionValidator: {}", transactionValidator.getClass().getSimpleName());
+    log.info("  - TransactionExecutor: {}", transactionExecutor.getClass().getSimpleName());
+    log.info("  - TransactionPersister: {}", transactionPersister.getClass().getSimpleName());
   }
 
   /**
-   * Process a single transaction
+   * Process a single transaction (P3 Refactored)
    *
-   * <p>This method:
+   * <p>This method delegates to specialized components:
    * <ol>
-   *   <li>Validates transaction signature</li>
-   *   <li>Validates account state</li>
-   *   <li>Ensures receiver exists</li>
-   *   <li>Updates account states</li>
-   *   <li>Saves transaction</li>
+   *   <li>Validates transaction (TransactionValidator)</li>
+   *   <li>Executes account updates (TransactionExecutor)</li>
+   *   <li>Persists transaction (TransactionPersister)</li>
    * </ol>
    *
    * @param tx transaction to process
    * @return processing result
    */
   public ProcessingResult processTransaction(Transaction tx) {
-    // 1. Validate transaction signature
-    if (!validateSignature(tx)) {
-      log.warn("Transaction signature validation failed: {}", tx.getHash().toHexString());
-      return ProcessingResult.error("Invalid transaction signature");
+    // 1. Validate (delegate to TransactionValidator)
+    ValidationResult validation = transactionValidator.validate(tx);
+    if (!validation.isValid()) {
+      log.warn("Transaction validation failed: {}, error: {}",
+          tx.getHash().toHexString(), validation.getErrorMessage());
+      return ProcessingResult.error(validation.getErrorMessage());
     }
 
-    // 2. Validate account state
-    ValidationResult validation = validateAccountState(tx);
-    if (!validation.isSuccess()) {
-      log.warn("Transaction account validation failed: {}, error: {}",
-          tx.getHash().toHexString(), validation.getError());
-      return ProcessingResult.error(validation.getError());
+    // 2. Execute (delegate to TransactionExecutor)
+    TransactionExecutor.ExecutionResult execution = transactionExecutor.executeTransaction(tx);
+    if (!execution.isSuccess()) {
+      log.error("Transaction execution failed: {}, error: {}",
+          tx.getHash().toHexString(), execution.getError());
+      return ProcessingResult.error(execution.getError());
     }
 
-    // 3. Ensure receiver account exists
-    accountManager.ensureAccountExists(tx.getTo());
-
-    // 4. Update account states
-    try {
-      updateAccountStates(tx);
-    } catch (Exception e) {
-      log.error("Failed to update account states for tx: {}",
-          tx.getHash().toHexString(), e);
-      return ProcessingResult.error("Failed to update account states: " + e.getMessage());
+    // 3. Persist (delegate to TransactionPersister)
+    TransactionPersister.PersistenceResult persistence = transactionPersister.saveTransaction(tx);
+    if (!persistence.isSuccess()) {
+      log.error("Transaction persistence failed: {}, error: {}",
+          tx.getHash().toHexString(), persistence.getError());
+      return ProcessingResult.error(persistence.getError());
     }
-
-    // 5. Save transaction to store
-    transactionStore.saveTransaction(tx);
 
     log.debug("Transaction processed: hash={}, from={}, to={}, amount={}",
         tx.getHash().toHexString(),
@@ -142,16 +165,17 @@ public class DagTransactionProcessor {
   }
 
   /**
-   * Process all transactions in a block
+   * Process all transactions in a block (P3 Refactored)
    *
-   * <p>Processes transactions sequentially. If any transaction fails,
-   * the entire block processing fails and no further transactions are processed.
+   * <p>Processes transactions sequentially, delegating to specialized components.
+   * If any transaction fails, the entire block processing fails.
    *
-   * <p>For each successfully processed transaction:
-   * <ul>
-   *   <li>Updates account states (balance, nonce)</li>
-   *   <li>Marks transaction as executed by this block</li>
-   * </ul>
+   * <p>For each transaction:
+   * <ol>
+   *   <li>Validates (TransactionValidator)</li>
+   *   <li>Executes account updates (TransactionExecutor)</li>
+   *   <li>Persists and marks as executed (TransactionPersister)</li>
+   * </ol>
    *
    * @param block        block being processed
    * @param transactions transactions to process
@@ -161,60 +185,57 @@ public class DagTransactionProcessor {
     List<String> processedTxHashes = new ArrayList<>();
 
     for (Transaction tx : transactions) {
-      ProcessingResult result = processTransaction(tx);
-      if (!result.isSuccess()) {
-        log.warn("Transaction processing failed in block {}, tx {}: {}",
+      // 1. Validate (delegate to TransactionValidator)
+      ValidationResult validation = transactionValidator.validate(tx);
+      if (!validation.isValid()) {
+        log.warn("Transaction validation failed in block {}, tx {}: {}",
             block.getHash().toHexString(),
             tx.getHash().toHexString(),
-            result.getError());
-
+            validation.getErrorMessage());
         return ProcessingResult.error(
-            String.format("Block transaction processing failed: %s", result.getError())
+            String.format("Block transaction validation failed: %s", validation.getErrorMessage())
         );
       }
 
-      // Mark transaction as executed by this block (Phase 1 - Task 1.2)
-      try {
-        transactionStore.markTransactionExecuted(
-            tx.getHash(),
-            block.getHash(),
-            block.getInfo().getHeight()
+      // 2. Execute (delegate to TransactionExecutor)
+      TransactionExecutor.ExecutionResult execution = transactionExecutor.executeTransaction(tx);
+      if (!execution.isSuccess()) {
+        log.warn("Transaction execution failed in block {}, tx {}: {}",
+            block.getHash().toHexString(),
+            tx.getHash().toHexString(),
+            execution.getError());
+        return ProcessingResult.error(
+            String.format("Block transaction execution failed: %s", execution.getError())
         );
-        transactionStore.indexTransactionToBlock(block.getHash(), tx.getHash());
-        log.debug("Marked transaction {} as executed by block {} at height {}",
-            tx.getHash().toHexString().substring(0, 16),
-            block.getHash().toHexString().substring(0, 16),
-            block.getInfo().getHeight());
-      } catch (Exception e) {
-        log.error("Failed to mark transaction {} as executed: {}",
-            tx.getHash().toHexString().substring(0, 16), e.getMessage());
-        // Continue processing - marking execution status is informational
       }
+
+      // 3. Persist (delegate to TransactionPersister)
+      transactionPersister.saveTransaction(tx);
+      transactionPersister.markExecuted(tx, block);
 
       processedTxHashes.add(tx.getHash().toHexString());
     }
 
     log.info(
-        "Successfully processed {} transactions for block {} (states updated + execution marked)",
+        "Successfully processed {} transactions for block {} (validated + executed + persisted)",
         transactions.size(), block.getHash().toHexString());
 
     return ProcessingResult.success();
   }
 
   /**
-   * Process all transactions in a block within a transaction context (ATOMIC)
+   * Process all transactions in a block within a transaction context (ATOMIC) (P3 Refactored)
    *
-   * <p>This is the NEW atomic version that buffers all operations in a transaction.
-   * Unlike {@link #processBlockTransactions}, this method:
-   * <ul>
-   *   <li>Validates all transactions first (fail-fast)</li>
-   *   <li>Buffers all account state updates in transaction</li>
-   *   <li>Buffers transaction execution marks in transaction</li>
-   *   <li>Does NOT commit - caller must commit the transaction</li>
-   * </ul>
+   * <p>This is the atomic version that buffers all operations in a transaction.
+   * Delegates to specialized components:
+   * <ol>
+   *   <li>Validates all transactions first (TransactionValidator)</li>
+   *   <li>Executes in transaction (TransactionExecutor)</li>
+   *   <li>Marks execution in transaction (TransactionPersister)</li>
+   * </ol>
    *
    * <p><strong>IMPORTANT</strong>: This method assumes transactions are already saved
-   * separately. It only updates account states and marks execution status.
+   * separately. It only validates, executes, and marks execution status.
    *
    * @param txId         transaction ID from RocksDBTransactionManager
    * @param block        block being processed
@@ -230,33 +251,26 @@ public class DagTransactionProcessor {
 
     // Step 1: Validate all transactions FIRST (fail-fast before any modifications)
     for (Transaction tx : transactions) {
-      // 1.1 Validate signature
-      if (!validateSignature(tx)) {
-        log.warn("Transaction signature validation failed: {}", tx.getHash().toHexString());
-        return ProcessingResult.error("Invalid transaction signature");
-      }
-
-      // 1.2 Validate account state
-      ValidationResult validation = validateAccountState(tx);
-      if (!validation.isSuccess()) {
-        log.warn("Transaction account validation failed: {}, error: {}",
-            tx.getHash().toHexString(), validation.getError());
-        return ProcessingResult.error(validation.getError());
+      ValidationResult validation = transactionValidator.validate(tx);
+      if (!validation.isValid()) {
+        log.warn("Transaction validation failed: {}, error: {}",
+            tx.getHash().toHexString(), validation.getErrorMessage());
+        return ProcessingResult.error(validation.getErrorMessage());
       }
     }
 
-    // Step 2: Process transactions (buffer all operations in transaction)
+    // Step 2: Execute all transactions in transaction
     for (Transaction tx : transactions) {
       try {
-        // 2.1 Ensure receiver account exists
-        accountManager.ensureAccountExists(tx.getTo());
+        // Execute IN TRANSACTION (delegate to TransactionExecutor)
+        TransactionExecutor.ExecutionResult execution =
+            transactionExecutor.executeTransactionInTransaction(txId, tx);
+        if (!execution.isSuccess()) {
+          throw new io.xdag.store.rocksdb.transaction.TransactionException(execution.getError());
+        }
 
-        // 2.2 Update account states IN TRANSACTION
-        updateAccountStatesInTransaction(txId, tx);
-
-        // 2.3 Mark transaction as executed IN TRANSACTION
-        transactionStore.markTransactionExecutedInTransaction(txId, tx.getHash(),
-            block.getHash(), block.getInfo().getHeight());
+        // Mark executed IN TRANSACTION (delegate to TransactionPersister)
+        transactionPersister.markExecutedInTransaction(txId, tx, block);
 
         log.debug("Buffered transaction processing for {} in transaction {}",
             tx.getHash().toHexString().substring(0, 16), txId);
@@ -273,153 +287,6 @@ public class DagTransactionProcessor {
         transactions.size(), txId);
 
     return ProcessingResult.success();
-  }
-
-  // ==================== Private Helper Methods ====================
-
-  /**
-   * Validate transaction signature
-   *
-   * <p>Verifies ECDSA signature (secp256k1) using transaction's v/r/s components.
-   * The signature proves that the transaction was created by the owner of the "from" address.
-   *
-   * <p>Verification process (implemented in Transaction.verifySignature()):
-   * <ol>
-   *   <li>Reconstruct Signature from v/r/s components</li>
-   *   <li>Recover public key from signature using tx hash</li>
-   *   <li>Derive address from public key (SHA256 → RIPEMD160)</li>
-   *   <li>Compare derived address with "from" address</li>
-   * </ol>
-   *
-   * @param tx transaction to validate
-   * @return true if signature is valid and matches the "from" address
-   */
-  private boolean validateSignature(Transaction tx) {
-    try {
-      return tx.verifySignature();
-    } catch (Exception e) {
-      log.error("Signature verification exception for tx {}: {}",
-          tx.getHash().toHexString().substring(0, 16), e.getMessage());
-      return false;
-    }
-  }
-
-  /**
-   * Validate account state for transaction
-   *
-   * <p>Checks:
-   * <ul>
-   *   <li>Sender account exists</li>
-   *   <li>Sender has sufficient balance</li>
-   *   <li>Transaction nonce matches sender nonce</li>
-   *   <li>Transaction has not already been executed (double-spend protection)</li>
-   * </ul>
-   *
-   * @param tx transaction to validate
-   * @return validation result
-   */
-  private ValidationResult validateAccountState(Transaction tx) {
-    // 1. Check if sender account exists
-    if (!accountManager.hasAccount(tx.getFrom())) {
-      return ValidationResult.error("Sender account does not exist: " + tx.getFrom().toHexString());
-    }
-
-    // 2. Check sender balance
-    UInt256 balance = accountManager.getBalance(tx.getFrom());
-    // Convert XAmount to UInt256 (nano units)
-    UInt256 txAmount = UInt256.valueOf(tx.getAmount().toDecimal(0, NANO_XDAG).longValue());
-    UInt256 txFee = UInt256.valueOf(tx.getFee().toDecimal(0, NANO_XDAG).longValue());
-    UInt256 required = txAmount.add(txFee);
-
-    if (balance.compareTo(required) < 0) {
-      return ValidationResult.error(
-          String.format("Insufficient balance: address=%s, has=%s, needs=%s",
-              tx.getFrom().toHexString(),
-              balance.toDecimalString(),
-              required.toDecimalString())
-      );
-    }
-
-    // 3. Check nonce
-    UInt64 expectedNonce = accountManager.getNonce(tx.getFrom());
-    // Convert long nonce to UInt64
-    UInt64 txNonce = UInt64.valueOf(tx.getNonce());
-
-    if (!txNonce.equals(expectedNonce)) {
-      return ValidationResult.error(
-          String.format("Invalid nonce: address=%s, expected=%d, got=%d",
-              tx.getFrom().toHexString(),
-              expectedNonce.toLong(),
-              txNonce.toLong())
-      );
-    }
-
-    // 4. Check double-spend: ensure transaction has not already been executed
-    // This prevents the same transaction from being included in multiple blocks
-    // and executed multiple times (double-spending protection)
-    if (transactionStore.isTransactionExecuted(tx.getHash())) {
-      return ValidationResult.error(
-          String.format("Transaction already executed (double-spend attempt): %s",
-              tx.getHash().toHexString())
-      );
-    }
-
-    return ValidationResult.success();
-  }
-
-  /**
-   * Update account states based on transaction
-   *
-   * @param tx transaction to process
-   */
-  private void updateAccountStates(Transaction tx) {
-    // Convert XAmount to UInt256 (nano units)
-    UInt256 txAmount = UInt256.valueOf(tx.getAmount().toDecimal(0, NANO_XDAG).longValue());
-    UInt256 txFee = UInt256.valueOf(tx.getFee().toDecimal(0, NANO_XDAG).longValue());
-
-    // Update sender account
-    accountManager.subtractBalance(tx.getFrom(), txAmount.add(txFee));
-    accountManager.incrementNonce(tx.getFrom());
-
-    // Update receiver account
-    accountManager.addBalance(tx.getTo(), txAmount);
-
-    log.debug("Account state updated: from={}, to={}, amount={}, fee={}",
-        tx.getFrom().toHexString(),
-        tx.getTo().toHexString(),
-        tx.getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
-        tx.getFee().toDecimal(9, XUnit.XDAG).toPlainString());
-  }
-
-  /**
-   * Update account states based on transaction IN TRANSACTION (ATOMIC)
-   *
-   * <p>This is the NEW atomic version that buffers all account state updates
-   * in a transaction. It calls transactional methods on DagAccountManager.
-   *
-   * @param txId transaction ID from RocksDBTransactionManager
-   * @param tx   transaction to process
-   * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
-   */
-  private void updateAccountStatesInTransaction(String txId, Transaction tx)
-      throws io.xdag.store.rocksdb.transaction.TransactionException {
-    // Convert XAmount to UInt256 (nano units)
-    UInt256 txAmount = UInt256.valueOf(tx.getAmount().toDecimal(0, NANO_XDAG).longValue());
-    UInt256 txFee = UInt256.valueOf(tx.getFee().toDecimal(0, NANO_XDAG).longValue());
-
-    // Update sender account IN TRANSACTION
-    accountManager.subtractBalanceInTransaction(txId, tx.getFrom(), txAmount.add(txFee));
-    accountManager.incrementNonceInTransaction(txId, tx.getFrom());
-
-    // Update receiver account IN TRANSACTION
-    accountManager.addBalanceInTransaction(txId, tx.getTo(), txAmount);
-
-    log.debug("Buffered account state updates in transaction {}: from={}, to={}, amount={}, fee={}",
-        txId,
-        tx.getFrom().toHexString().substring(0, 16),
-        tx.getTo().toHexString().substring(0, 16),
-        tx.getAmount().toDecimal(9, XUnit.XDAG).toPlainString(),
-        tx.getFee().toDecimal(9, XUnit.XDAG).toPlainString());
   }
 
   /**

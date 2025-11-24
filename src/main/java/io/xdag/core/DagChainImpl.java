@@ -24,9 +24,6 @@
 
 package io.xdag.core;
 
-import static io.xdag.config.Constants.MAIN_CHAIN_PERIOD;
-import static io.xdag.config.Constants.MIN_GAS;
-
 import io.xdag.DagKernel;
 import io.xdag.config.Constants.MessageType;
 import io.xdag.core.listener.BlockMessage;
@@ -35,16 +32,12 @@ import io.xdag.core.listener.NewBlockListener;
 import io.xdag.store.DagStore;
 import io.xdag.store.TransactionStore;
 import io.xdag.store.cache.DagEntityResolver;
-import io.xdag.store.cache.ResolvedLinks;
 import io.xdag.utils.TimeUtils;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
@@ -82,40 +75,6 @@ public class DagChainImpl implements DagChain {
   private static final UInt256 DEVNET_DIFFICULTY_TARGET = UInt256.MAX_VALUE;
 
   /**
-   * Maximum blocks accepted per epoch (64 seconds)
-   * <p>
-   * Limits storage growth by only keeping top 16 blocks per epoch
-   * Rationale: New blocks reference top 16 from previous epoch (MAX_BLOCK_LINKS)
-   * Effect: 10,000 nodes → 16 accepted blocks → ~4 GB/year storage
-   */
-  private static final int MAX_BLOCKS_PER_EPOCH = 16;
-
-  /**
-   * Target blocks per epoch for difficulty adjustment
-   * <p>
-   * Set equal to MAX_BLOCKS_PER_EPOCH - target is to fill the capacity
-   * Difficulty will decrease if actual blocks < TARGET * 0.5 (8 blocks)
-   * Difficulty will increase if actual blocks > TARGET * 1.5 (24 blocks, but capped at 16)
-   */
-  private static final int TARGET_BLOCKS_PER_EPOCH = 16;
-
-  /**
-   * Difficulty adjustment interval (in epochs)
-   * <p>
-   * Adjust every 1000 epochs (~17.7 hours) Balances stability with adaptiveness to hashrate
-   * changes
-   */
-  private static final int DIFFICULTY_ADJUSTMENT_INTERVAL = 1000;
-
-  /**
-   * Orphan block retention window (in epochs)
-   * <p>
-   * XDAG rule: blocks can only reference blocks within 12 days (16384 epochs) After this window,
-   * orphan blocks cannot become main blocks anymore
-   */
-  private static final long ORPHAN_RETENTION_WINDOW = 16384;
-
-  /**
    * Node sync lag threshold (in epochs)
    * <p>
    * If local main chain epoch is behind current time epoch by more than this value, the node is
@@ -124,40 +83,6 @@ public class DagChainImpl implements DagChain {
    * 100 epochs ≈ 1.78 hours
    */
   private static final long SYNC_LAG_THRESHOLD = 100;
-
-  /**
-   * Maximum reference depth for normal mining (in epochs)
-   * <p>
-   * When node is up-to-date (not behind), new blocks can only reference blocks within the last 16
-   * epochs (≈17 minutes).
-   * <p>
-   * This prevents "ancient reference" attacks where malicious nodes reference very old blocks to
-   * create fake chains.
-   */
-  private static final long MINING_MAX_REFERENCE_DEPTH = 16;
-
-  /**
-   * Maximum reference depth for sync mode (in epochs)
-   * <p>
-   * When node is behind and syncing, blocks can reference up to 1000 epochs back. This allows
-   * importing historical blocks with reasonable parent references.
-   */
-  private static final long SYNC_MAX_REFERENCE_DEPTH = 1000;
-
-  /**
-   * Orphan cleanup interval (in epochs)
-   * <p>
-   * Run cleanup every 100 epochs (~1.78 hours)
-   */
-  private static final long ORPHAN_CLEANUP_INTERVAL = 100;
-
-  /**
-   * Maximum and minimum difficulty adjustment factors
-   * <p>
-   * Prevents drastic difficulty swings
-   */
-  private static final double MAX_ADJUSTMENT_FACTOR = 2.0;   // Max 2x increase
-  private static final double MIN_ADJUSTMENT_FACTOR = 0.5;   // Max 50% decrease
 
   // ==================== Instance Fields ====================
 
@@ -352,25 +277,6 @@ public class DagChainImpl implements DagChain {
     }
   }
 
-
-  /**
-   * Check if a block is a genesis block
-   * <p>
-   * SECURITY: Genesis block identification - Empty links (no parent blocks) - Difficulty exactly
-   * equals 1 (minimal difficulty)
-   *
-   * @param block block to check
-   * @return true if genesis block
-   */
-  private boolean isGenesisBlock(Block block) {
-    return block.getLinks().isEmpty() &&
-        block.getHeader().getDifficulty() != null &&
-        block.getHeader().getDifficulty().equals(UInt256.ONE);
-  }
-
-
-
-
   /**
    * Update chain statistics for new main block
    *
@@ -393,8 +299,6 @@ public class DagChainImpl implements DagChain {
     log.debug("Updated chain stats: mainBlockCount={}, difficulty={}",
         chainStats.getMainBlockCount(), chainStats.getDifficulty().toDecimalString());
   }
-
-
 
   /**
    * Notify listeners of new block
@@ -480,29 +384,6 @@ public class DagChainImpl implements DagChain {
   @Override
   public List<Block> listMainBlocks(int count) {
     return dagStore.listMainBlocks(count);
-  }
-
-  /**
-   * Find parent block with maximum cumulative difficulty
-   */
-  private Block findMaxDifficultyParent(Block block) {
-    Block maxDiffParent = null;
-    UInt256 maxDiff = UInt256.ZERO;
-
-    for (Link link : block.getLinks()) {
-      if (link.isBlock()) {
-        Block parent = dagStore.getBlockByHash(link.getTargetHash(), false);
-        if (parent != null && parent.getInfo() != null) {
-          UInt256 parentDiff = parent.getInfo().getDifficulty();
-          if (parentDiff.compareTo(maxDiff) > 0) {
-            maxDiff = parentDiff;
-            maxDiffParent = parent;
-          }
-        }
-      }
-    }
-
-    return maxDiffParent;
   }
 
   // ==================== Epoch Queries (Time-Based) ====================
@@ -771,7 +652,7 @@ public class DagChainImpl implements DagChain {
     List<Bytes32> hashes = dagStore.getBlockReferences(hash);
     return hashes.stream()
         .map(h -> dagStore.getBlockByHash(h, false))
-        .filter(block -> block != null)
+        .filter(Objects::nonNull)
         .collect(Collectors.toList());
   }
 
@@ -786,98 +667,11 @@ public class DagChainImpl implements DagChain {
         this::getWinnerBlockInEpoch);
   }
 
-
-
-
-
-
-
-
-
-
-
-
   // ==================== Statistics and State ====================
 
   @Override
   public ChainStats getChainStats() {
     return this.chainStats;
-  }
-
-  // ==================== Economic Model ====================
-
-  // ==================== Lifecycle Management ====================
-
-
-  /**
-   * Attach placeholder BlockInfo for blocks that have not been fully imported yet.
-   *
-   * <p>DagStore requires BlockInfo metadata to persist data. When blocks arrive out of order
-   * we still need to store their raw data so they can be retried once dependencies show up. This
-   * helper builds a zero-height placeholder that is overwritten during the successful import.
-   */
-  private Block ensurePersistableBlock(Block block) {
-    if (block.getInfo() != null) {
-      return block;
-    }
-
-    UInt256 placeholderDifficulty =
-        block.getHeader() != null && block.getHeader().getDifficulty() != null
-            ? block.getHeader().getDifficulty()
-            : UInt256.ZERO;
-
-    BlockInfo placeholderInfo = BlockInfo.builder()
-        .hash(block.getHash())
-        .epoch(block.getEpoch())
-        .height(0)
-        .difficulty(placeholderDifficulty)
-        .build();
-
-    return block.toBuilder().info(placeholderInfo).build();
-  }
-
-  /**
-   * Determine the natural height for a block based on its parents
-   * <p>
-   * This method finds the best parent block (highest cumulative difficulty) and returns its height
-   * + 1 as the natural height for this block.
-   * <p>
-   * If no parent blocks exist or are found, returns 1 (genesis height).
-   *
-   * @param block the block to determine natural height for
-   * @return the natural height (parent height + 1, or 1 for genesis)
-   */
-  private long determineNaturalHeight(Block block) {
-    // Genesis blocks always have height 1
-    if (isGenesisBlock(block)) {
-      return 1;
-    }
-
-    long maxParentHeight = 0;
-
-    // Find the highest parent block height
-    for (Link link : block.getLinks()) {
-      if (link.isBlock()) {
-        Block parent = dagStore.getBlockByHash(link.getTargetHash(), false);
-        if (parent != null && parent.getInfo() != null) {
-          long parentHeight = parent.getInfo().getHeight();
-          if (parentHeight > maxParentHeight) {
-            maxParentHeight = parentHeight;
-          }
-        }
-      }
-    }
-
-    // Natural height is parent height + 1
-    // If no parents found (orphan case), return 0 which will be handled by caller
-    long naturalHeight = maxParentHeight + 1;
-
-    log.debug("Block {} natural height: {} (max parent height: {})",
-        block.getHash().toHexString().substring(0, 16),
-        naturalHeight,
-        maxParentHeight);
-
-    return naturalHeight;
   }
 
 
