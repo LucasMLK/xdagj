@@ -13,6 +13,8 @@ if [ -f "xdag.pid" ]; then
         echo "正在停止节点 (PID: $PID)..."
         kill $PID
 
+        # BUG-STORAGE-002 fix: Wait up to 10 seconds for graceful shutdown
+        # This allows RocksDB to flush WAL properly before force kill
         # 等待进程结束
         for i in {1..10}; do
             if ! ps -p $PID > /dev/null 2>&1; then

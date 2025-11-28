@@ -23,6 +23,7 @@
  */
 package io.xdag.consensus.epoch;
 
+import io.xdag.consensus.miner.BlockGenerator;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
 import io.xdag.core.DagImportResult;
@@ -111,6 +112,16 @@ public class EpochConsensusManager {
     private final DagChain dagChain;
 
     /**
+     * DagStore for WAL synchronization (BUG-STORAGE-002 fix).
+     */
+    private final io.xdag.store.DagStore dagStore;
+
+    /**
+     * BlockGenerator for creating candidate blocks.
+     */
+    private final BlockGenerator blockGenerator;
+
+    /**
      * Minimum difficulty requirement for solutions.
      */
     private final UInt256 minimumDifficulty;
@@ -147,11 +158,20 @@ public class EpochConsensusManager {
      * Create a new EpochConsensusManager.
      *
      * @param dagChain            DagChain instance
+     * @param dagStore            DagStore instance (for WAL sync)
+     * @param blockGenerator      BlockGenerator for creating candidate blocks
      * @param backupMiningThreads Number of threads for backup mining
      * @param minimumDifficulty   Minimum difficulty for solutions
      */
-    public EpochConsensusManager(DagChain dagChain, int backupMiningThreads, UInt256 minimumDifficulty) {
+    public EpochConsensusManager(
+            DagChain dagChain,
+            io.xdag.store.DagStore dagStore,
+            BlockGenerator blockGenerator,
+            int backupMiningThreads,
+            UInt256 minimumDifficulty) {
         this.dagChain = dagChain;
+        this.dagStore = dagStore;
+        this.blockGenerator = blockGenerator;
         this.minimumDifficulty = minimumDifficulty;
 
         this.currentEpoch = new AtomicLong(0);
@@ -187,14 +207,22 @@ public class EpochConsensusManager {
         long epoch = getCurrentEpoch();
         currentEpoch.set(epoch);
 
-        // Create context for current epoch
+        // BUG FIX (BUG-CONSENSUS-005): Create context for both current and next epoch
+        // This ensures the next epoch has a context ready when current epoch ends
         createEpochContext(epoch);
+        log.info("✓ Created epoch context for current epoch {}", epoch);
+
+        // Also create context for next epoch to ensure miners can work
+        createEpochContext(epoch + 1);
+        log.info("✓ Created epoch context for next epoch {}", epoch + 1);
 
         // Start epoch timer (triggers onEpochEnd at 64-second boundaries)
         epochTimer.start(this::onEpochEnd);
 
         // Schedule backup miner trigger for current epoch
         scheduleBackupMinerTrigger(epoch);
+        // Also schedule for next epoch
+        scheduleBackupMinerTrigger(epoch + 1);
 
         running = true;
         log.info("✓ EpochConsensusManager started (epoch={}, duration={}ms, backup_threads={})",
@@ -268,11 +296,16 @@ public class EpochConsensusManager {
         long epochStartTime = epoch * EPOCH_DURATION_MS;
         long epochEndTime = epochStartTime + EPOCH_DURATION_MS;
 
+        // Generate candidate block for this epoch
+        Block candidateBlock = blockGenerator.generateCandidate();
+        log.debug("Generated candidate block for epoch {}: hash={}",
+                epoch, candidateBlock.getHash().toHexString().substring(0, 16) + "...");
+
         EpochContext context = new EpochContext(
                 epoch,
                 epochStartTime,
                 epochEndTime,
-                null  // candidateBlock will be set later if needed
+                candidateBlock  // ✅ Now has real candidate block!
         );
 
         epochContexts.put(epoch, context);
@@ -392,16 +425,29 @@ public class EpochConsensusManager {
 
         DagImportResult importResult = dagChain.tryToConnect(blockToImport);
 
-        if (importResult.isSuccess()) {
-            context.markBlockProduced();
-            log.info("✓ Epoch {} block imported successfully", epoch);
+        if (importResult != null) {
+            if (importResult.isSuccess()) {
+                context.markBlockProduced();
+                log.info("✓ Epoch {} block imported successfully", epoch);
+            } else {
+                String errorMsg = importResult.getErrorMessage();
+                log.error("✗ Failed to import epoch {} block: {}", epoch, errorMsg);
+            }
         } else {
-            log.error("✗ Failed to import epoch {} block: {}", epoch, importResult.getErrorMessage());
+            log.error("Block import returned null result for epoch {}", epoch);
         }
 
         // 7. Create context for next epoch
         createEpochContext(epoch + 1);
         scheduleBackupMinerTrigger(epoch + 1);
+
+        // 8. Sync WAL to disk (BUG-STORAGE-002 fix)
+        try {
+            dagStore.syncWal();
+            log.debug("WAL synced after epoch {} completion", epoch);
+        } catch (Exception e) {
+            log.error("Failed to sync WAL after epoch {}: {}", epoch, e.getMessage(), e);
+        }
     }
 
     /**

@@ -1121,6 +1121,37 @@ public class DagStoreImpl implements DagStore {
     }
   }
 
+  // ==================== Durability & WAL ====================
+
+  @Override
+  public void syncWal() {
+    if (closed || db == null) {
+      log.warn("Cannot sync WAL: DagStore is closed or DB is null");
+      return;
+    }
+
+    try {
+      long startTime = System.currentTimeMillis();
+
+      // Step 1: Flush MemTable to SST files
+      // This ensures all data in memory is written to disk
+      db.flush(new org.rocksdb.FlushOptions().setWaitForFlush(true));
+      long flushTime = System.currentTimeMillis() - startTime;
+
+      // Step 2: Sync WAL to disk
+      // This ensures WAL is also persisted
+      db.syncWal();
+      long totalTime = System.currentTimeMillis() - startTime;
+
+      log.info("MemTable flushed and WAL synced to disk (flush={}ms, total={}ms)",
+          flushTime, totalTime);
+
+    } catch (RocksDBException e) {
+      log.error("Failed to flush MemTable and sync WAL to disk", e);
+      throw new RuntimeException("Failed to sync data to disk", e);
+    }
+  }
+
   // ==================== Pending Blocks (Orphan Management) ====================
 
   @Override

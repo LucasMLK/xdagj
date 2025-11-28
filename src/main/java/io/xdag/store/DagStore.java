@@ -354,4 +354,32 @@ public interface DagStore extends XdagLifecycle {
    * Reset the database (for testing or migration)
    */
   void reset();
+
+  // ==================== Durability & WAL ====================
+
+  /**
+   * Synchronize Write-Ahead Log to disk
+   *
+   * <p>This method forces RocksDB to flush the WAL (Write-Ahead Log) to disk,
+   * ensuring data durability. It should be called:
+   * <ul>
+   *   <li>At epoch boundaries to ensure epoch data persistence</li>
+   *   <li>Before graceful shutdown to prevent data loss</li>
+   *   <li>After critical batch operations (e.g., initial sync)</li>
+   * </ul>
+   *
+   * <p><strong>Performance Impact</strong>:
+   * <ul>
+   *   <li>fsync() syscall: ~5-10ms on SSD</li>
+   *   <li>Should not be called for every block write</li>
+   *   <li>Recommended frequency: per-epoch (every 64 seconds)</li>
+   * </ul>
+   *
+   * <p><strong>BUG-STORAGE-002 Fix</strong>:
+   * This method fixes the data loss issue where blocks written with async writes
+   * (setSync(false)) are lost when node is force-killed before RocksDB flushes WAL.
+   *
+   * @see <a href="https://github.com/facebook/rocksdb/wiki/Write-Ahead-Log">RocksDB WAL</a>
+   */
+  void syncWal();
 }

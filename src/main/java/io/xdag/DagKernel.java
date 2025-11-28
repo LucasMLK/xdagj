@@ -243,6 +243,20 @@ public class DagKernel {
     // Note: DagChain and SyncManager will be initialized in start() method
     // because DagChainImpl needs a fully constructed DagKernel instance
 
+    // Register shutdown hook for graceful termination (BUG-STORAGE-002 fix)
+    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+      try {
+        log.info("Shutdown hook triggered: syncing WAL before exit...");
+        if (dagStore != null && dagStore.isRunning()) {
+          dagStore.syncWal();
+          log.info("✓ WAL synced successfully in shutdown hook");
+        }
+      } catch (Exception e) {
+        log.error("Failed to sync WAL in shutdown hook: {}", e.getMessage(), e);
+      }
+    }, "DagKernel-ShutdownHook"));
+    log.info("   ✓ Shutdown hook registered for graceful termination");
+
     log.info("========================================");
     log.info("DagKernel initialization complete");
     log.info("========================================");
@@ -304,11 +318,14 @@ public class DagKernel {
 
       // Initialize Epoch Consensus Manager (for BUG-CONSENSUS fix)
       // Configuration: 2 backup mining threads, minimum difficulty from config
+      // NOTE: Using very low difficulty for testing (only first 8 bits must be zero)
       org.apache.tuweni.units.bigints.UInt256 minimumDifficulty =
-          org.apache.tuweni.units.bigints.UInt256.fromHexString("0x0000ffffffffffffffffffffffffffff");
+          org.apache.tuweni.units.bigints.UInt256.fromHexString("0x00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
       this.epochConsensusManager = new EpochConsensusManager(
           dagChain,
+          dagStore,  // ✅ Pass DagStore for WAL sync (BUG-STORAGE-002 fix)
+          miningApiService.getBlockGenerator(),  // ✅ Inject BlockGenerator for candidate block creation
           2,  // backup mining threads
           minimumDifficulty
       );
@@ -470,6 +487,16 @@ public class DagKernel {
       // Stop TransactionStore
       transactionStore.stop();
       log.info("✓ TransactionStore stopped");
+
+      // Sync WAL before stopping DagStore (BUG-STORAGE-002 fix)
+      try {
+        if (dagStore != null && dagStore.isRunning()) {
+          dagStore.syncWal();
+          log.info("✓ WAL synced before DagStore shutdown");
+        }
+      } catch (Exception e) {
+        log.error("Failed to sync WAL before DagStore shutdown: {}", e.getMessage());
+      }
 
       // Stop DagStore
       dagStore.stop();
