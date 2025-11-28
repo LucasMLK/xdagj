@@ -96,9 +96,10 @@ public class BackupMiner {
             t.setDaemon(true);
             return t;
         });
-        // Set a lower backup target to ensure success
-        // This is much easier than normal difficulty
-        this.backupTarget = UInt256.fromHexString("0x0000ffffffffffffffffffffffffffff");
+        // Set a very low backup target for testing (allows most hashes to pass)
+        // For production, this should be adjusted based on network hash rate
+        // Current: only requires first 8 bits to be zero (very easy for testing)
+        this.backupTarget = UInt256.fromHexString("0x00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         this.random = new SecureRandom();
     }
 
