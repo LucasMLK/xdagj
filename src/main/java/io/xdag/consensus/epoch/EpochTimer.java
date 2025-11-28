@@ -108,24 +108,66 @@ public class EpochTimer {
         long now = System.currentTimeMillis();
         long currentEpochNum = TimeUtils.getCurrentEpochNumber();
 
-        // Get current and next epoch boundary in milliseconds
+        // Get current epoch boundary in milliseconds
         long currentEpochEndMs = TimeUtils.epochNumberToTimeMillis(currentEpochNum);
-        long nextEpochEndMs = TimeUtils.epochNumberToTimeMillis(currentEpochNum + 1);
 
-        // Calculate initial delay and epoch duration
-        long initialDelay = nextEpochEndMs - now;
-        long epochDurationMs = nextEpochEndMs - currentEpochEndMs;
+        // Calculate initial delay to current epoch end
+        long initialDelay = currentEpochEndMs - now;
 
-        log.info("EpochTimer starting: current_epoch_num={}, next_epoch_end={}ms, initial_delay={}ms, epoch_duration={}ms",
-                currentEpochNum, nextEpochEndMs, initialDelay, epochDurationMs);
+        // If current epoch already ended, move to next epoch
+        long targetEpochNum = currentEpochNum;
+        if (initialDelay <= 0) {
+            targetEpochNum = currentEpochNum + 1;
+            long nextEpochEndMs = TimeUtils.epochNumberToTimeMillis(targetEpochNum);
+            initialDelay = nextEpochEndMs - now;
+            log.info("EpochTimer: Current epoch {} already ended, targeting next epoch {}",
+                    currentEpochNum, targetEpochNum);
+        }
+
+        // Calculate epoch duration (should be ~64000ms)
+        long epochDurationMs = TimeUtils.epochNumberToTimeMillis(targetEpochNum) -
+                               TimeUtils.epochNumberToTimeMillis(targetEpochNum - 1);
+
+        log.info("EpochTimer starting: current_epoch={}, target_epoch={}, target_end={}ms, initial_delay={}ms, epoch_duration={}ms",
+                currentEpochNum, targetEpochNum, TimeUtils.epochNumberToTimeMillis(targetEpochNum),
+                initialDelay, epochDurationMs);
+
+        // Track last processed epoch to detect skipped epochs
+        final long[] lastProcessedEpoch = {currentEpochNum - 1};
 
         // Schedule at fixed rate to maintain epoch boundary alignment
         epochScheduler.scheduleAtFixedRate(
                 () -> {
                     try {
-                        long epochNum = getCurrentEpoch();
-                        log.info("═══════════ Epoch {} ended ═══════════", epochNum);
-                        onEpochEnd.accept(epochNum);
+                        // BUG FIX (BUG-CONSENSUS-006): Recalculate actual epoch on every trigger
+                        // to detect timer drift/pause (e.g., GC pauses, thread starvation)
+                        long actualCurrentEpoch = getCurrentEpoch();
+                        long endedEpochNum = actualCurrentEpoch - 1;
+
+                        // Detect skipped epochs (timer was paused/delayed)
+                        long expectedEpoch = lastProcessedEpoch[0] + 1;
+                        if (endedEpochNum > expectedEpoch) {
+                            long skippedCount = endedEpochNum - expectedEpoch;
+                            log.error("⚠️ EPOCH TIMER DRIFT DETECTED! Expected epoch {}, but actual is {}. Skipped {} epochs!",
+                                    expectedEpoch, endedEpochNum, skippedCount);
+                            log.error("This can happen due to: JVM GC pause, thread starvation, or system hibernation");
+
+                            // Process all skipped epochs to clean up their contexts
+                            for (long skipped = expectedEpoch; skipped < endedEpochNum; skipped++) {
+                                log.warn("Processing skipped epoch {} (late processing)", skipped);
+                                onEpochEnd.accept(skipped);
+                            }
+                        } else if (endedEpochNum < expectedEpoch) {
+                            // Timer fired early (rare, but possible with system clock adjustments)
+                            log.warn("⚠️ Timer fired early! Expected epoch {}, but actual is {}",
+                                    expectedEpoch, endedEpochNum);
+                            return; // Skip this trigger
+                        }
+
+                        log.info("═══════════ Epoch {} ended ═══════════", endedEpochNum);
+                        onEpochEnd.accept(endedEpochNum);
+                        lastProcessedEpoch[0] = endedEpochNum;
+
                     } catch (Exception e) {
                         log.error("Error processing epoch end", e);
                     }
