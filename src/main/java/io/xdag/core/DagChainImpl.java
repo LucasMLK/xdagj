@@ -236,11 +236,10 @@ public class DagChainImpl implements DagChain {
             block.getEpoch(),
             this::getCandidateBlocksInEpoch);
 
-        // Delegate to OrphanManager (P1 refactoring)
-        this.chainStats = orphanManager.cleanupOldOrphans(
-            this.chainStats,
-            block.getEpoch(),
-            this::getCandidateBlocksInEpoch);
+        // Note: OrphanManager.cleanupOldOrphans() removed
+        // Reason: Each epoch limited to 16 blocks, storage is bounded (~134MB for 16384 epochs)
+        // Deleting orphans risks breaking DAG references (see BUG-LINK-NOT-FOUND)
+        // Trade-off: Prioritize correctness over storage efficiency
       }
 
       // Delegate to OrphanManager (P1 refactoring)

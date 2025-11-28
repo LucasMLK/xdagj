@@ -35,28 +35,16 @@ import org.apache.tuweni.bytes.Bytes32;
  *
  * <p>负责孤块的管理和维护：
  * - 重试孤块导入（依赖满足后）
- * - 清理过期孤块（超过保留窗口）
- * - 跟踪孤块统计
  *
  * <p>从DagChainImpl提取，作为P1重构的一部分
+ *
+ * <p>Note: Orphan cleanup功能已移除
+ * 原因：每个epoch最多16个区块，存储量可控（约134MB for 16384 epochs）
+ * 删除孤块有破坏DAG引用的风险（见BUG-LINK-NOT-FOUND）
+ * 设计决策：优先保证正确性而非存储效率
  */
 @Slf4j
 public class OrphanManager {
-
-  /**
-   * Orphan block retention window (in epochs)
-   * <p>
-   * XDAG rule: blocks can only reference blocks within 12 days (16384 epochs) After this window,
-   * orphan blocks cannot become main blocks anymore
-   */
-  private static final long ORPHAN_RETENTION_WINDOW = 16384;
-
-  /**
-   * Orphan cleanup interval (in epochs)
-   * <p>
-   * Run cleanup every 100 epochs (~1.78 hours)
-   */
-  private static final long ORPHAN_CLEANUP_INTERVAL = 100;
 
   private final DagKernel dagKernel;
   private final DagStore dagStore;
@@ -176,91 +164,6 @@ public class OrphanManager {
     } finally {
       isRetryingOrphans.set(false);
     }
-  }
-
-  /**
-   * Clean up old orphan blocks beyond retention window
-   * <p>
-   * Periodically removes orphan blocks older than ORPHAN_RETENTION_WINDOW (16384 epochs = 12 days).
-   * According to XDAG rules, blocks can only reference blocks within 12 days, so older orphan
-   * blocks cannot become main blocks anymore and can be safely deleted.
-   * <p>
-   * Runs every ORPHAN_CLEANUP_INTERVAL (100) epochs to maintain manageable orphan pool size.
-   *
-   * @param chainStats            current chain statistics
-   * @param currentEpoch          current epoch number
-   * @param getCandidateBlocksInEpoch function to get candidate blocks in an epoch
-   * @return updated chain statistics
-   */
-  public ChainStats cleanupOldOrphans(
-      ChainStats chainStats,
-      long currentEpoch,
-      java.util.function.LongFunction<List<Block>> getCandidateBlocksInEpoch) {
-
-    long lastCleanupEpoch = chainStats.getLastOrphanCleanupEpoch();
-
-    // Check if cleanup interval reached
-    if (currentEpoch - lastCleanupEpoch < ORPHAN_CLEANUP_INTERVAL) {
-      return chainStats;  // Not time yet
-    }
-
-    log.info("Orphan cleanup triggered at epoch {} (last cleanup: epoch {})",
-        currentEpoch, lastCleanupEpoch);
-
-    long cutoffEpoch = currentEpoch - ORPHAN_RETENTION_WINDOW;
-    if (cutoffEpoch < 0) {
-      cutoffEpoch = 0;  // Don't go negative
-    }
-
-    int removedCount = 0;
-    long scanStartEpoch = Math.max(0, lastCleanupEpoch - ORPHAN_RETENTION_WINDOW);
-
-    // BUGFIX: Limit scan range to prevent scanning too many epochs
-    // In test scenarios, lastCleanupEpoch may be very old (tens of thousands of epochs ago)
-    // We don't need to scan ALL epochs since last cleanup - just cleanup the retention window
-    long maxScanRange = ORPHAN_RETENTION_WINDOW + ORPHAN_CLEANUP_INTERVAL;
-    if ((cutoffEpoch - scanStartEpoch) > maxScanRange) {
-      long originalStart = scanStartEpoch;
-      scanStartEpoch = Math.max(0, cutoffEpoch - maxScanRange);
-      log.warn("Large epoch gap detected in orphan cleanup: {} epochs between {} and {}",
-          cutoffEpoch - originalStart, originalStart, cutoffEpoch);
-      log.warn("Limiting cleanup scan to recent {} epochs (from epoch {} to {})",
-          maxScanRange, scanStartEpoch, cutoffEpoch);
-    }
-
-    // Scan epochs from last cleanup to cutoff epoch
-    for (long epoch = scanStartEpoch; epoch < cutoffEpoch; epoch++) {
-      List<Block> candidates = getCandidateBlocksInEpoch.apply(epoch);
-
-      for (Block block : candidates) {
-        // Remove orphan blocks (height = 0)
-        if (block.getInfo() != null && block.getInfo().getHeight() == 0) {
-          try {
-            dagStore.deleteBlock(block.getHash());
-            removedCount++;
-
-            if (removedCount % 1000 == 0) {
-              log.debug("Orphan cleanup progress: removed {} blocks so far", removedCount);
-            }
-          } catch (Exception e) {
-            log.warn("Failed to delete orphan block {}: {}",
-                formatHash(block.getHash()), e.getMessage());
-          }
-        }
-      }
-    }
-
-    log.info("Orphan cleanup completed: removed {} blocks from epochs {} to {} (~{} days old)",
-        removedCount, scanStartEpoch, cutoffEpoch,
-        (currentEpoch - cutoffEpoch) * 64 / 86400);
-
-    // Update last cleanup epoch
-    chainStats = chainStats.toBuilder()
-        .lastOrphanCleanupEpoch(currentEpoch)
-        .build();
-    dagStore.saveChainStats(chainStats);
-
-    return chainStats;
   }
 
   /**
