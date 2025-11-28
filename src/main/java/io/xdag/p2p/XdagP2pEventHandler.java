@@ -24,6 +24,8 @@
 package io.xdag.p2p;
 
 import io.xdag.DagKernel;
+import io.xdag.consensus.epoch.EpochConsensusManager;
+import io.xdag.consensus.epoch.SubmitResult;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
 import io.xdag.core.Transaction;
@@ -253,24 +255,62 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
 
   /**
    * Handle BLOCKS_REPLY - Received block data
+   *
+   * <p>P2P blocks are submitted to epoch consensus if they belong to the current epoch,
+   * allowing them to compete with locally mined blocks for best solution selection.
+   *
+   * <p>Historical or delayed blocks are imported directly without epoch competition.
    */
   private void handleBlocksReply(Channel channel, Bytes body) {
     try {
       BlocksReplyMessage reply = new BlocksReplyMessage(body.toArray());
       List<Block> blocks = reply.getBlocks();
 
-      log.debug("Received BLOCKS_REPLY from {} with {} blocks", 
+      log.info("📦 Received BLOCKS_REPLY from {} with {} blocks",
           channel.getRemoteAddress(), blocks.size());
 
       for (Block block : blocks) {
-        // Import block
-        // NOTE: In the future, we should check for missing transactions here and request them
-        // sending GET_TRANSACTIONS if needed. For now, we assume optimistic sync.
-        dagChain.tryToConnect(block);
+        long blockEpoch = block.getEpoch();
+
+        // Check if we have epoch consensus manager
+        EpochConsensusManager epochConsensusManager = dagKernel.getEpochConsensusManager();
+        if (epochConsensusManager != null && epochConsensusManager.isRunning()) {
+          long currentEpoch = epochConsensusManager.getCurrentEpoch();
+
+          log.info("🔍 Block epoch={}, current epoch={}, match={}",
+                   blockEpoch, currentEpoch, (blockEpoch == currentEpoch));
+
+          // Only submit current epoch blocks to solution pool
+          if (blockEpoch == currentEpoch) {
+            // Real-time block: participate in current epoch competition
+            String peerId = "P2P_" + channel.getRemoteAddress();
+            SubmitResult result = epochConsensusManager.submitSolution(block, peerId);
+
+            if (result.isAccepted()) {
+              log.info("✅ P2P block from {} submitted to epoch {} solution pool",
+                       peerId, blockEpoch);
+            } else {
+              // Submission failed (e.g., epoch ended), fallback to direct import
+              log.info("❌ submitSolution rejected: {}, falling back to direct import",
+                       result.getMessage());
+              dagChain.tryToConnect(block);
+            }
+          } else {
+            // Historical or delayed block: direct import
+            log.info("📥 Block epoch {} != current epoch {}, importing directly",
+                     blockEpoch, currentEpoch);
+            dagChain.tryToConnect(block);
+          }
+        } else {
+          // No epoch consensus manager: direct import (legacy behavior)
+          log.info("⚠ No EpochConsensusManager (running={}), direct import",
+                   epochConsensusManager != null && epochConsensusManager.isRunning());
+          dagChain.tryToConnect(block);
+        }
       }
 
     } catch (Exception e) {
-      log.error("Error handling BLOCKS_REPLY from {}: {}", channel.getRemoteAddress(), e.getMessage());
+      log.error("Error handling BLOCKS_REPLY from {}: {}", channel.getRemoteAddress(), e.getMessage(), e);
     }
   }
 
