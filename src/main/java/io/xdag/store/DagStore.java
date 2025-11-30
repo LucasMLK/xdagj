@@ -107,6 +107,22 @@ public interface DagStore extends XdagLifecycle {
    */
   byte ORPHAN_REASON = (byte) 0xb4;
 
+  /**
+   * Pending block data for missing dependencies
+   */
+  byte MISSING_DEP_BLOCK = (byte) 0xc0;
+
+  /**
+   * Missing parent index: parentHash + childHash → empty (reverse lookup)
+   */
+  byte MISSING_PARENT_INDEX = (byte) 0xc1;
+
+  /**
+   * Missing parents list: blockHash → List<parentHash> (forward lookup)
+   * Note: Uses different prefix than MISSING_PARENT_INDEX to avoid key collision
+   */
+  byte MISSING_PARENTS_LIST = (byte) 0xc2;
+
   // ==================== Block Operations ====================
 
   /**
@@ -307,30 +323,6 @@ public interface DagStore extends XdagLifecycle {
   // ==================== Pending Blocks (Orphan Management) ====================
 
   /**
-   * Get pending blocks (height=0) for retry
-   *
-   * <p>Returns blocks that are waiting to be connected to main chain, ordered by epoch.
-   * These blocks are either:
-   * <ul>
-   *   <li>Blocks with missing dependencies (waiting for parent blocks)</li>
-   *   <li>Epoch competition losers (candidates that may be promoted during reorganization)</li>
-   *   <li>Demoted blocks (blocks removed from main chain during reorganization)</li>
-   * </ul>
-   *
-   * <p>Use this for:
-   * <ul>
-   *   <li>Retrying block imports after new blocks arrive</li>
-   *   <li>Identifying missing dependencies during sync</li>
-   *   <li>Chain reorganization fork detection</li>
-   * </ul>
-   *
-   * @param maxCount maximum number of blocks to return
-   * @param fromEpoch start from this epoch (inclusive), use 0 to start from beginning
-   * @return list of block hashes ordered by epoch (oldest first), may be empty
-   */
-  List<Bytes32> getPendingBlocks(int maxCount, long fromEpoch);
-
-  /**
    * Get total count of pending blocks (height=0)
    *
    * <p>This is more efficient than getPendingBlocks().size() for large datasets.
@@ -367,23 +359,6 @@ public interface DagStore extends XdagLifecycle {
   io.xdag.core.OrphanReason getOrphanReason(Bytes32 blockHash);
 
   /**
-   * Get pending blocks by orphan reason (for selective retry)
-   *
-   * <p>This method returns only orphan blocks with a specific reason, allowing OrphanManager
-   * to retry only MISSING_DEPENDENCY blocks and skip LOST_COMPETITION blocks.
-   *
-   * <p>Blocks without recorded reason (legacy orphans) are treated as MISSING_DEPENDENCY
-   * for backward compatibility.
-   *
-   * @param reason orphan reason to filter by
-   * @param maxCount maximum number of blocks to return
-   * @param fromEpoch start from this epoch (inclusive), use 0 to start from beginning
-   * @return list of block hashes with the specified reason, ordered by epoch
-   */
-  List<Bytes32> getPendingBlocksByReason(
-      io.xdag.core.OrphanReason reason, int maxCount, long fromEpoch);
-
-  /**
    * Delete orphan reason for a block
    *
    * <p>Called when a block is promoted to main chain (height > 0) and no longer an orphan.
@@ -391,6 +366,68 @@ public interface DagStore extends XdagLifecycle {
    * @param blockHash block hash
    */
   void deleteOrphanReason(Bytes32 blockHash);
+
+  /**
+   * Count orphan entries by reason (for monitoring).
+   *
+   * @param reason orphan reason
+   * @return number of blocks recorded with this reason
+   */
+  long getOrphanCountByReason(io.xdag.core.OrphanReason reason);
+
+  // ==================== Missing Dependency Blocks ====================
+
+  /**
+   * Persist a block that failed due to missing dependencies.
+   *
+   * <p>Stores the raw block data (without adding it to epoch/height indexes) together with
+   * the missing parent hashes so the block can be retried when parents arrive.
+   *
+   * @param block block data to persist
+   * @param missingParents parent hashes that are currently missing (may be empty)
+   */
+  void saveMissingDependencyBlock(Block block, List<Bytes32> missingParents);
+
+  /**
+   * Get hashes of blocks waiting for missing dependencies.
+   *
+   * @param maxCount maximum number of hashes to return
+   * @return list of block hashes
+   */
+  List<Bytes32> getMissingDependencyBlockHashes(int maxCount);
+
+  /**
+   * Count blocks stored in the missing-dependency column family.
+   *
+   * <p>Each entry represents a block that could not be imported because one
+   * or more parents were missing at the time of validation.
+   *
+   * @return number of missing-dependency blocks currently persisted
+   */
+  long getMissingDependencyBlockCount();
+
+  /**
+   * Get recorded missing parent hashes for a pending block.
+   *
+   * @param blockHash orphan hash
+   * @return list of missing parent hashes (never null)
+   */
+  List<Bytes32> getMissingParents(Bytes32 blockHash);
+
+  /**
+   * Delete a block from the missing-dependency store.
+   *
+   * @param blockHash block hash to remove
+   */
+  void deleteMissingDependencyBlock(Bytes32 blockHash);
+
+  /**
+   * Get block hashes waiting for a specific parent.
+   *
+   * @param parentHash parent block hash
+   * @return list of orphan hashes waiting for this parent
+   */
+  List<Bytes32> getBlocksWaitingForParent(Bytes32 parentHash);
 
   // ==================== Statistics ====================
 

@@ -288,6 +288,10 @@ public class DagStoreImpl implements DagStore {
         byte[] blockKey = buildBlockKey(hash);
         byte[] blockData = db.get(readOptions, blockKey);
         if (blockData == null) {
+          byte[] pendingKey = buildMissingBlockKey(hash);
+          blockData = db.get(readOptions, pendingKey);
+        }
+        if (blockData == null) {
           return null;
         }
 
@@ -630,32 +634,40 @@ public class DagStoreImpl implements DagStore {
           byte[] key = iterator.key();
           scannedCount++;
 
-          // Check if still in epoch range
-          if (ByteBuffer.wrap(key).compareTo(ByteBuffer.wrap(endKey)) >= 0) {
-            log.debug("getCandidateBlocksInEpoch: reached end of epoch range after {} keys",
-                scannedCount);
+          // Validate key structure (1 byte prefix + 8 byte epoch + 32 byte hash)
+          if (key.length != 41 || key[0] != EPOCH_INDEX) {
+            iterator.next();
+            continue;
+          }
+
+          long keyEpoch = ByteBuffer.wrap(key, 1, Long.BYTES).getLong();
+          if (keyEpoch > epoch) {
+            log.debug("getCandidateBlocksInEpoch: reached epoch {} boundary after {} keys",
+                epoch, scannedCount);
             break;
+          }
+          if (keyEpoch < epoch) {
+            iterator.next();
+            continue;
           }
 
           // Extract block hash from key
-          if (key.length == 41) {  // 1 + 8 + 32
-            byte[] hashBytes = new byte[32];
-            System.arraycopy(key, 9, hashBytes, 0, 32);
-            Bytes32 hash = Bytes32.wrap(hashBytes);
+          byte[] hashBytes = new byte[32];
+          System.arraycopy(key, 9, hashBytes, 0, 32);
+          Bytes32 hash = Bytes32.wrap(hashBytes);
 
-            log.debug("getCandidateBlocksInEpoch: found hash in epoch index: {}",
+          log.debug("getCandidateBlocksInEpoch: found hash in epoch index: {}",
+              hash.toHexString().substring(0, 16));
+
+          Block block = getBlockByHash(hash, false);
+          if (block != null) {
+            candidates.add(block);
+            log.debug("getCandidateBlocksInEpoch: added candidate {} (height={})",
+                hash.toHexString().substring(0, 16),
+                block.getInfo() != null ? block.getInfo().getHeight() : "null");
+          } else {
+            log.warn("getCandidateBlocksInEpoch: block {} not found via getBlockByHash",
                 hash.toHexString().substring(0, 16));
-
-            Block block = getBlockByHash(hash, false);
-            if (block != null) {
-              candidates.add(block);
-              log.debug("getCandidateBlocksInEpoch: added candidate {} (height={})",
-                  hash.toHexString().substring(0, 16),
-                  block.getInfo() != null ? block.getInfo().getHeight() : "null");
-            } else {
-              log.warn("getCandidateBlocksInEpoch: block {} not found via getBlockByHash",
-                  hash.toHexString().substring(0, 16));
-            }
           }
 
           iterator.next();
@@ -965,6 +977,39 @@ public class DagStoreImpl implements DagStore {
     return key;
   }
 
+  private byte[] buildMissingBlockKey(Bytes32 hash) {
+    byte[] key = new byte[33];
+    key[0] = MISSING_DEP_BLOCK;
+    System.arraycopy(hash.toArray(), 0, key, 1, 32);
+    return key;
+  }
+
+  /**
+   * Build key for storing missing parents list for a block
+   * Uses MISSING_PARENTS_LIST (0xc2) prefix to avoid collision with MISSING_PARENT_INDEX (0xc1)
+   */
+  private byte[] buildMissingParentKey(Bytes32 hash) {
+    byte[] key = new byte[33];
+    key[0] = MISSING_PARENTS_LIST;  // 0xc2, different from MISSING_PARENT_INDEX (0xc1)
+    System.arraycopy(hash.toArray(), 0, key, 1, 32);
+    return key;
+  }
+
+  private byte[] buildMissingParentPrefix(Bytes32 parent) {
+    byte[] key = new byte[33];
+    key[0] = MISSING_PARENT_INDEX;
+    System.arraycopy(parent.toArray(), 0, key, 1, 32);
+    return key;
+  }
+
+  private byte[] buildMissingParentIndexKey(Bytes32 parent, Bytes32 child) {
+    byte[] key = new byte[65];
+    key[0] = MISSING_PARENT_INDEX;
+    System.arraycopy(parent.toArray(), 0, key, 1, 32);
+    System.arraycopy(child.toArray(), 0, key, 33, 32);
+    return key;
+  }
+
   private byte[] buildEpochIndexKey(long epoch, Bytes32 hash) {
     byte[] key = new byte[41];  // 1 + 8 + 32
     key[0] = EPOCH_INDEX;
@@ -1090,6 +1135,39 @@ public class DagStoreImpl implements DagStore {
         .build();
   }
 
+  private byte[] serializeMissingParents(List<Bytes32> parents) {
+    if (parents == null || parents.isEmpty()) {
+      return new byte[0];
+    }
+
+    ByteBuffer buffer = ByteBuffer.allocate(4 + parents.size() * 32);
+    buffer.putInt(parents.size());
+    for (Bytes32 parent : parents) {
+      buffer.put(parent.toArray());
+    }
+    return buffer.array();
+  }
+
+  private List<Bytes32> deserializeMissingParents(byte[] data) {
+    List<Bytes32> parents = new ArrayList<>();
+    if (data == null || data.length == 0) {
+      return parents;
+    }
+
+    try {
+      ByteBuffer buffer = ByteBuffer.wrap(data);
+      int count = buffer.getInt();
+      for (int i = 0; i < count && buffer.remaining() >= 32; i++) {
+        byte[] parent = new byte[32];
+        buffer.get(parent);
+        parents.add(Bytes32.wrap(parent));
+      }
+    } catch (Exception e) {
+      log.error("Failed to deserialize missing parent list", e);
+    }
+    return parents;
+  }
+
   /**
    * Serialize ChainStats to bytes
    *
@@ -1175,70 +1253,6 @@ public class DagStoreImpl implements DagStore {
     } catch (RocksDBException e) {
       log.error("Failed to flush MemTable and sync WAL to disk", e);
       throw new RuntimeException("Failed to sync data to disk", e);
-    }
-  }
-
-  // ==================== Pending Blocks (Orphan Management) ====================
-
-  @Override
-  public List<Bytes32> getPendingBlocks(int maxCount, long fromEpoch) {
-    List<Bytes32> result = new ArrayList<>();
-
-    if (maxCount <= 0) {
-      return result;
-    }
-
-    try {
-      // Strategy: Scan BLOCK_INFO (0xa1) entries for blocks with height=0
-      // Filter by epoch >= fromEpoch, sort by epoch, limit to maxCount
-      byte[] prefix = new byte[]{BLOCK_INFO};
-
-      // Use RocksDB iterator to scan all BLOCK_INFO entries
-      List<BlockInfo> pendingInfos = new ArrayList<>();
-
-      try (RocksIterator iterator = db.newIterator(scanReadOptions)) {
-        iterator.seek(prefix);
-
-        while (iterator.isValid()) {
-          byte[] key = iterator.key();
-
-          // Check if still in BLOCK_INFO prefix
-          if (key.length < 1 || key[0] != BLOCK_INFO) {
-            break;  // Moved past BLOCK_INFO entries
-          }
-
-          // Get value and deserialize
-          byte[] value = iterator.value();
-          if (value != null && value.length > 0) {
-            try {
-              BlockInfo info = deserializeBlockInfo(value);
-              // Filter: height=0 and epoch >= fromEpoch
-              if (info != null && info.getHeight() == 0 && info.getEpoch() >= fromEpoch) {
-                pendingInfos.add(info);
-              }
-            } catch (Exception e) {
-              log.warn("Failed to deserialize BlockInfo for pending block query", e);
-            }
-          }
-
-          iterator.next();
-        }
-      }
-
-      // Sort by epoch (oldest first) and limit
-      pendingInfos.stream()
-          .sorted(java.util.Comparator.comparingLong(BlockInfo::getEpoch))
-          .limit(maxCount)
-          .forEach(info -> result.add(info.getHash()));
-
-      log.debug("Found {} pending blocks (from epoch {}, limit {})",
-          result.size(), fromEpoch, maxCount);
-
-      return result;
-
-    } catch (Exception e) {
-      log.error("Failed to query pending blocks", e);
-      return result;
     }
   }
 
@@ -1334,77 +1348,6 @@ public class DagStoreImpl implements DagStore {
   }
 
   @Override
-  public List<Bytes32> getPendingBlocksByReason(
-      io.xdag.core.OrphanReason reason, int maxCount, long fromEpoch) {
-
-    List<Bytes32> result = new ArrayList<>();
-
-    if (maxCount <= 0) {
-      return result;
-    }
-
-    try {
-      // Strategy: Scan BLOCK_INFO for height=0 blocks, filter by orphan reason
-      byte[] prefix = new byte[]{BLOCK_INFO};
-      List<Bytes32> candidates = new ArrayList<>();
-
-      // First pass: collect all pending blocks
-      try (RocksIterator iterator = db.newIterator(scanReadOptions)) {
-        iterator.seek(prefix);
-
-        while (iterator.isValid() && candidates.size() < maxCount * 2) {
-          byte[] key = iterator.key();
-
-          if (key.length < 1 || key[0] != BLOCK_INFO) {
-            break;
-          }
-
-          byte[] value = iterator.value();
-          if (value != null && value.length > 0) {
-            try {
-              BlockInfo info = deserializeBlockInfo(value);
-              if (info != null && info.getHeight() == 0 && info.getEpoch() >= fromEpoch) {
-                candidates.add(info.getHash());
-              }
-            } catch (Exception e) {
-              // Skip invalid entries
-            }
-          }
-
-          iterator.next();
-        }
-      }
-
-      // Second pass: filter by orphan reason
-      for (Bytes32 hash : candidates) {
-        if (result.size() >= maxCount) {
-          break;
-        }
-
-        io.xdag.core.OrphanReason orphanReason = getOrphanReason(hash);
-
-        // Backward compatibility: blocks without recorded reason are treated as MISSING_DEPENDENCY
-        if (orphanReason == null) {
-          orphanReason = io.xdag.core.OrphanReason.MISSING_DEPENDENCY;
-        }
-
-        if (orphanReason == reason) {
-          result.add(hash);
-        }
-      }
-
-      log.debug("Found {} pending blocks with reason {} (from epoch {})",
-          result.size(), reason, fromEpoch);
-
-      return result;
-
-    } catch (Exception e) {
-      log.error("Failed to get pending blocks by reason: {}", e.getMessage());
-      return result;
-    }
-  }
-
-  @Override
   public void deleteOrphanReason(Bytes32 blockHash) {
     if (blockHash == null) {
       return;
@@ -1421,5 +1364,208 @@ public class DagStoreImpl implements DagStore {
       log.error("Failed to delete orphan reason for block {}: {}",
           blockHash.toHexString().substring(0, 16), e.getMessage());
     }
+  }
+
+  @Override
+  public long getOrphanCountByReason(io.xdag.core.OrphanReason reason) {
+    if (reason == null) {
+      return 0;
+    }
+
+    long count = 0;
+    try (RocksIterator iterator = db.newIterator(scanReadOptions)) {
+      byte[] prefix = new byte[]{ORPHAN_REASON};
+      iterator.seek(prefix);
+
+      while (iterator.isValid()) {
+        byte[] key = iterator.key();
+        if (key.length < 1 || key[0] != ORPHAN_REASON) {
+          break;
+        }
+        byte[] value = iterator.value();
+        if (value != null && value.length > 0 && value[0] == reason.getCode()) {
+          count++;
+        }
+        iterator.next();
+      }
+    } catch (Exception e) {
+      log.error("Failed to count orphan reason {} entries", reason, e);
+    }
+    return count;
+  }
+
+  // ==================== Missing Dependency Blocks ====================
+
+  @Override
+  public void saveMissingDependencyBlock(Block block, List<Bytes32> missingParents) {
+    if (block == null || block.getHash() == null) {
+      return;
+    }
+
+    try {
+      deleteMissingDependencyBlock(block.getHash());
+
+      byte[] blockKey = buildMissingBlockKey(block.getHash());
+      byte[] blockData = serializeBlock(block);
+      db.put(writeOptions, blockKey, blockData);
+
+      byte[] parentKey = buildMissingParentKey(block.getHash());
+      byte[] parentData = serializeMissingParents(missingParents);
+      if (parentData.length > 0) {
+        db.put(writeOptions, parentKey, parentData);
+      } else {
+        db.delete(writeOptions, parentKey);
+      }
+
+      if (missingParents != null) {
+        for (Bytes32 parent : missingParents) {
+          byte[] indexKey = buildMissingParentIndexKey(parent, block.getHash());
+          db.put(writeOptions, indexKey, EMPTY_VALUE);
+        }
+      }
+
+      log.debug("Saved missing dependency block {} (missing parents={})",
+          block.getHash().toHexString().substring(0, 16),
+          missingParents != null ? missingParents.size() : 0);
+
+    } catch (Exception e) {
+      log.error("Failed to save missing dependency block {}", block.getHash().toHexString(), e);
+      throw new RuntimeException("Failed to save missing dependency block", e);
+    }
+  }
+
+  @Override
+  public List<Bytes32> getMissingDependencyBlockHashes(int maxCount) {
+    List<Bytes32> hashes = new ArrayList<>();
+    if (maxCount <= 0) {
+      return hashes;
+    }
+
+    try (RocksIterator iterator = db.newIterator(scanReadOptions)) {
+      byte[] prefix = new byte[]{MISSING_DEP_BLOCK};
+      iterator.seek(prefix);
+
+      while (iterator.isValid() && hashes.size() < maxCount) {
+        byte[] key = iterator.key();
+        if (key.length < 33 || key[0] != MISSING_DEP_BLOCK) {
+          break;
+        }
+
+        byte[] hashBytes = new byte[32];
+        System.arraycopy(key, 1, hashBytes, 0, 32);
+        hashes.add(Bytes32.wrap(hashBytes));
+        iterator.next();
+      }
+
+    } catch (Exception e) {
+      log.error("Failed to scan missing dependency blocks", e);
+    }
+
+    return hashes;
+  }
+
+  @Override
+  public long getMissingDependencyBlockCount() {
+    long count = 0;
+    try (RocksIterator iterator = db.newIterator(scanReadOptions)) {
+      byte[] prefix = new byte[]{MISSING_DEP_BLOCK};
+      iterator.seek(prefix);
+
+      while (iterator.isValid()) {
+        byte[] key = iterator.key();
+        if (key.length < 33 || key[0] != MISSING_DEP_BLOCK) {
+          break;
+        }
+        count++;
+        iterator.next();
+      }
+    } catch (Exception e) {
+      log.error("Failed to count missing dependency blocks", e);
+    }
+    return count;
+  }
+
+  @Override
+  public List<Bytes32> getMissingParents(Bytes32 blockHash) {
+    if (blockHash == null) {
+      return new ArrayList<>();
+    }
+
+    try {
+      byte[] key = buildMissingParentKey(blockHash);
+      byte[] data = db.get(readOptions, key);
+      return deserializeMissingParents(data);
+    } catch (RocksDBException e) {
+      log.error("Failed to load missing parents for {}", blockHash.toHexString(), e);
+      return new ArrayList<>();
+    }
+  }
+
+  @Override
+  public void deleteMissingDependencyBlock(Bytes32 blockHash) {
+    if (blockHash == null) {
+      return;
+    }
+
+    try {
+      List<Bytes32> parents = getMissingParents(blockHash);
+      byte[] blockKey = buildMissingBlockKey(blockHash);
+      db.delete(writeOptions, blockKey);
+
+      byte[] parentKey = buildMissingParentKey(blockHash);
+      db.delete(writeOptions, parentKey);
+
+      if (parents != null) {
+        for (Bytes32 parent : parents) {
+          byte[] indexKey = buildMissingParentIndexKey(parent, blockHash);
+          db.delete(writeOptions, indexKey);
+        }
+      }
+
+      log.debug("Deleted missing dependency block {}", blockHash.toHexString().substring(0, 16));
+
+    } catch (RocksDBException e) {
+      log.error("Failed to delete missing dependency block {}", blockHash.toHexString(), e);
+    }
+  }
+
+  @Override
+  public List<Bytes32> getBlocksWaitingForParent(Bytes32 parentHash) {
+    List<Bytes32> dependents = new ArrayList<>();
+    if (parentHash == null) {
+      return dependents;
+    }
+
+    try (RocksIterator iterator = db.newIterator(scanReadOptions)) {
+      byte[] prefix = buildMissingParentPrefix(parentHash);
+      iterator.seek(prefix);
+
+      while (iterator.isValid()) {
+        byte[] key = iterator.key();
+        if (key.length < 65 || key[0] != MISSING_PARENT_INDEX) {
+          break;
+        }
+
+        boolean sameParent = true;
+        for (int i = 1; i <= 32; i++) {
+          if (key[i] != prefix[i]) {
+            sameParent = false;
+            break;
+          }
+        }
+        if (!sameParent) {
+          break;
+        }
+
+        byte[] childBytes = new byte[32];
+        System.arraycopy(key, 33, childBytes, 0, 32);
+        dependents.add(Bytes32.wrap(childBytes));
+        iterator.next();
+      }
+    } catch (Exception e) {
+      log.error("Failed to get blocks waiting for parent {}", parentHash.toHexString(), e);
+    }
+
+    return dependents;
   }
 }

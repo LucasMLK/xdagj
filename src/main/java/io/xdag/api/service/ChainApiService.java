@@ -74,12 +74,19 @@ public class ChainApiService {
       }
 
       // Get pending block count from DagStore (blocks with height=0)
-      long pendingCount = 0;
+      long orphanCount = 0;
+      long missingDependencyCount = 0;
       try {
-        pendingCount = dagKernel.getDagStore().getPendingBlockCount();
+        orphanCount = dagKernel.getDagStore().getPendingBlockCount();
       } catch (Exception e) {
         log.warn("Failed to get pending block count: {}", e.getMessage());
       }
+      try {
+        missingDependencyCount = dagKernel.getDagStore().getMissingDependencyBlockCount();
+      } catch (Exception e) {
+        log.warn("Failed to get missing dependency block count: {}", e.getMessage());
+      }
+      long pendingCount = orphanCount + missingDependencyCount;
 
       // Total block count = main blocks + pending blocks
       long totalBlockCount = chainStats.getMainBlockCount() + pendingCount;
@@ -111,7 +118,7 @@ public class ChainApiService {
           .currentEpoch(dagKernel.getDagChain().getCurrentEpoch())
           .currentDifficulty(chainStats.getDifficulty())
           .maxDifficulty(chainStats.getDifficulty())  // Same as current difficulty (heaviest chain)
-          .orphanCount(pendingCount)  // Use pending block count (blocks with height=0)
+          .orphanCount(orphanCount)
           .waitingSyncCount(waitingSyncCount)
           .syncProgress(syncProgress)
           .connectedPeers(connectedPeers)
