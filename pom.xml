@@ -18,7 +18,7 @@
 
         <xdagj-crypto.version>0.1.5</xdagj-crypto.version>
         <xdagj-native-randomx.version>0.2.6</xdagj-native-randomx.version>
-        <xdagj-p2p.version>0.1.6</xdagj-p2p.version>
+        <xdagj-p2p.version>0.1.7</xdagj-p2p.version>
         <netty.version>4.2.1.Final</netty.version>
         <jackson.version>2.18.2</jackson.version>
         <lombok.version>1.18.42</lombok.version>
