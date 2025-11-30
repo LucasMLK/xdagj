@@ -542,10 +542,11 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
   }
 
   /**
-   * Get list of active channels from P2P service
+   * Get list of unique connected channels from P2P service, deduplicated by Node ID.
+   * This ensures we only send one message per unique peer, not per connection.
    *
    * @param p2pService P2P service instance
-   * @return list of active channels
+   * @return list of unique connected channels
    */
   private List<Channel> getActiveChannels(P2pService p2pService) {
     if (p2pService == null) {
@@ -558,13 +559,9 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
         return new ArrayList<>();
       }
 
-      Map<InetSocketAddress, Channel> channels = channelManager.getChannels();
-
-      if (channels == null || channels.isEmpty()) {
-        return new ArrayList<>();
-      }
-
-      return new ArrayList<>(channels.values());
+      // Use getUniqueConnectedChannels() to get deduplicated channels by NodeId
+      // This prevents sending duplicate messages to the same peer via different ephemeral ports
+      return channelManager.getUniqueConnectedChannels();
 
     } catch (Exception e) {
       log.error("Error getting active channels", e);
