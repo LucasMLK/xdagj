@@ -102,6 +102,11 @@ public interface DagStore extends XdagLifecycle {
    */
   byte BLOCK_REFS_INDEX = (byte) 0xb3;
 
+  /**
+   * Orphan reason: blockHash → OrphanReason (BUG-ORPHAN-001 fix)
+   */
+  byte ORPHAN_REASON = (byte) 0xb4;
+
   // ==================== Block Operations ====================
 
   /**
@@ -334,6 +339,59 @@ public interface DagStore extends XdagLifecycle {
    */
   long getPendingBlockCount();
 
+  // ==================== Orphan Reason Management (BUG-ORPHAN-001 fix) ====================
+
+  /**
+   * Save orphan reason for a block
+   *
+   * <p>This method records WHY a block is an orphan (height=0):
+   * <ul>
+   *   <li><strong>MISSING_DEPENDENCY</strong>: Block is waiting for parent blocks to arrive</li>
+   *   <li><strong>LOST_COMPETITION</strong>: Block lost epoch competition and will never become main</li>
+   * </ul>
+   *
+   * <p>This distinction allows OrphanManager to only retry MISSING_DEPENDENCY orphans,
+   * avoiding wasteful retry of LOST_COMPETITION orphans.
+   *
+   * @param blockHash block hash
+   * @param reason orphan reason
+   */
+  void saveOrphanReason(Bytes32 blockHash, io.xdag.core.OrphanReason reason);
+
+  /**
+   * Get orphan reason for a block
+   *
+   * @param blockHash block hash
+   * @return orphan reason, or null if not recorded (legacy orphans before this feature)
+   */
+  io.xdag.core.OrphanReason getOrphanReason(Bytes32 blockHash);
+
+  /**
+   * Get pending blocks by orphan reason (for selective retry)
+   *
+   * <p>This method returns only orphan blocks with a specific reason, allowing OrphanManager
+   * to retry only MISSING_DEPENDENCY blocks and skip LOST_COMPETITION blocks.
+   *
+   * <p>Blocks without recorded reason (legacy orphans) are treated as MISSING_DEPENDENCY
+   * for backward compatibility.
+   *
+   * @param reason orphan reason to filter by
+   * @param maxCount maximum number of blocks to return
+   * @param fromEpoch start from this epoch (inclusive), use 0 to start from beginning
+   * @return list of block hashes with the specified reason, ordered by epoch
+   */
+  List<Bytes32> getPendingBlocksByReason(
+      io.xdag.core.OrphanReason reason, int maxCount, long fromEpoch);
+
+  /**
+   * Delete orphan reason for a block
+   *
+   * <p>Called when a block is promoted to main chain (height > 0) and no longer an orphan.
+   *
+   * @param blockHash block hash
+   */
+  void deleteOrphanReason(Bytes32 blockHash);
+
   // ==================== Statistics ====================
 
   /**
@@ -382,4 +440,13 @@ public interface DagStore extends XdagLifecycle {
    * @see <a href="https://github.com/facebook/rocksdb/wiki/Write-Ahead-Log">RocksDB WAL</a>
    */
   void syncWal();
+
+  /**
+   * Flush in-memory writes to SST files to guarantee read-your-write visibility.
+   *
+   * <p>Used by consensus code before running integrity verification so that
+   * range scans (new iterators) observe the latest demotions/promotions without
+   * forcing a full WAL fsync.
+   */
+  void flushMemTable();
 }

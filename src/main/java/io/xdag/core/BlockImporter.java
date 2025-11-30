@@ -102,7 +102,25 @@ public class BlockImporter {
    */
   public ImportResult importBlock(Block block, ChainStats chainStats) {
     try {
-      log.debug("Importing block: {}", formatHash(block.getHash()));
+      Bytes32 blockHash = block.getHash();
+      log.debug("Importing block: {}", formatHash(blockHash));
+
+      // Step 0: Check if block already exists (BUG-P2P-001 fix)
+      // Prevent redundant imports that waste CPU and cause log pollution
+      Block existingBlock = dagStore.getBlockByHash(blockHash, false);
+      if (existingBlock != null && existingBlock.getInfo() != null) {
+        BlockInfo info = existingBlock.getInfo();
+        log.debug("Block {} already exists (height={}), skipping import",
+            formatHash(blockHash), info.getHeight());
+
+        // Return success with existing block's info
+        return ImportResult.success(
+            info.getEpoch(),
+            info.getHeight(),
+            info.getDifficulty(),
+            info.getHeight() > 0,  // isBestChain
+            false);  // not newly imported
+      }
 
       // Step 1: Validate block (delegated to BlockValidator)
       DagImportResult validationResult = validator.validate(block, chainStats);
@@ -183,6 +201,11 @@ public class BlockImporter {
         dagStore.saveBlock(finalBlock);
         log.debug("Updated block {} with final height={}",
             formatHash(block.getHash()), finalHeight);
+
+        // BUG-ORPHAN-001 fix: Delete orphan reason when block becomes main
+        if (finalHeight > 0) {
+          dagStore.deleteOrphanReason(block.getHash());
+        }
       }
 
       // Step 6: Process transactions if main block
@@ -190,9 +213,11 @@ public class BlockImporter {
         processBlockTransactions(finalBlock);
       }
 
-      // Step 7: Verify epoch integrity (BUG-CONSENSUS-007 fix)
+      // Step 7: Verify epoch integrity (BUG-CONSENSUS-008 dual verification)
+      // Quick verification without flush - catches most issues immediately
+      // Epoch-end verification (in EpochTimer) provides guaranteed cleanup
       if (isBestChain) {
-        verifyEpochSingleWinner(blockEpoch, block);
+        verifyEpochSingleWinner(blockEpoch, finalBlock);
       }
 
       log.info("Successfully imported block {}: height={}, difficulty={}, isBestChain={}",
@@ -301,15 +326,19 @@ public class BlockImporter {
       }
 
     } else {
-      // Lost epoch competition - orphan
-      log.warn("❌ EPOCH COMPETITION: Block {} LOSES epoch {} competition",
+      // Lost epoch competition - orphan (BUG-LOGGING-001 fix: use DEBUG instead of WARN)
+      log.debug("❌ EPOCH COMPETITION: Block {} LOSES epoch {} competition",
           formatHash(block.getHash()), blockEpoch);
-      log.warn("   Loser hash:  {} (larger) - will be orphan", formatHash(block.getHash()));
-      log.warn("   Winner hash: {} (smaller) - remains at height {}",
+      log.debug("   Loser hash:  {} (larger) - will be orphan", formatHash(block.getHash()));
+      log.debug("   Winner hash: {} (smaller) - remains at height {}",
           formatHash(currentWinner.getHash()),
           currentWinner.getInfo() != null ? currentWinner.getInfo().getHeight() : 0);
       height = 0;
       isBestChain = false;
+
+      // BUG-ORPHAN-001 fix: Record orphan reason for selective retry
+      // This block lost competition and will never become main (unless chain reorganization)
+      dagStore.saveOrphanReason(block.getHash(), OrphanReason.LOST_COMPETITION);
     }
 
     return new EpochCompetitionResult(height, isBestChain, isEpochWinner, demotedBlock);
@@ -397,6 +426,10 @@ public class BlockImporter {
     dagStore.saveBlockInfo(orphanInfo);
     dagStore.saveBlock(orphanBlock);
 
+    // BUG-ORPHAN-001 fix: Record orphan reason
+    // Demoted blocks lost epoch competition (to a better block that arrived later)
+    dagStore.saveOrphanReason(block.getHash(), OrphanReason.LOST_COMPETITION);
+
     log.info("Block {} demoted to orphan (previous height={})",
         formatHash(block.getHash()), previousHeight);
   }
@@ -475,6 +508,44 @@ public class BlockImporter {
         .filter(block -> block.getInfo() != null)
         .min(Comparator.comparing(Block::getHash))
         .orElse(null);
+  }
+
+  /**
+   * Public hook for asynchronous epoch verification (epoch timer).
+   *
+   * <p><strong>BUG-CONSENSUS-008 Fix:</strong>
+   * Provides guaranteed cleanup of epoch integrity violations by flushing
+   * MemTable before verification. This ensures all writes are visible.
+   *
+   * <p>This method is called at epoch boundaries (every 64 seconds) to:
+   * <ul>
+   *   <li>Force all pending writes to be visible (flushMemTable)</li>
+   *   <li>Verify epoch has only one main block</li>
+   *   <li>Auto-demote any redundant winners that slipped through</li>
+   * </ul>
+   *
+   * <p>Complements the immediate verification in importBlock() which catches
+   * most issues quickly but may miss race conditions due to RocksDB snapshot
+   * isolation. This delayed verification provides 100% guarantee.
+   *
+   * @param epoch epoch number that just finished
+   */
+  public void verifyEpochIntegrity(long epoch) {
+    // Force MemTable flush to ensure visibility of all recent writes
+    // This is the critical fix for BUG-CONSENSUS-008 (RocksDB snapshot isolation)
+    log.info("🔍 Epoch {} integrity check: flushing MemTable...", epoch);
+    dagStore.flushMemTable();
+
+    Block expectedWinner = getWinnerBlockInEpoch(epoch);
+    if (expectedWinner == null) {
+      log.warn("⚠️  Epoch {} integrity check: no winner found, skipping verification", epoch);
+      return;
+    }
+
+    log.info("🔍 Epoch {} integrity check: verifying winner {} (BUG-CONSENSUS-008 fix)",
+        epoch, formatHash(expectedWinner.getHash()));
+    verifyEpochSingleWinner(epoch, expectedWinner);
+    log.info("✅ Epoch {} integrity verification complete", epoch);
   }
 
   /**

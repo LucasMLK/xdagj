@@ -47,6 +47,7 @@ import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.DBOptions;
+import org.rocksdb.FlushOptions;
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
@@ -986,6 +987,16 @@ public class DagStoreImpl implements DagStore {
     return key;
   }
 
+  /**
+   * Build orphan reason key (BUG-ORPHAN-001 fix)
+   */
+  private byte[] buildOrphanReasonKey(Bytes32 hash) {
+    byte[] key = new byte[33];
+    key[0] = ORPHAN_REASON;
+    System.arraycopy(hash.toArray(), 0, key, 1, 32);
+    return key;
+  }
+
   // ==================== Serialization Methods ====================
 
   /**
@@ -1124,6 +1135,22 @@ public class DagStoreImpl implements DagStore {
   // ==================== Durability & WAL ====================
 
   @Override
+  public void flushMemTable() {
+    if (closed || db == null) {
+      log.warn("Cannot flush MemTable: DagStore is closed or DB is null");
+      return;
+    }
+
+    try (FlushOptions options = new FlushOptions().setWaitForFlush(true)) {
+      db.flush(options);
+      log.debug("MemTable flushed to SST (visibility barrier)");
+    } catch (RocksDBException e) {
+      log.error("Failed to flush MemTable to disk", e);
+      throw new RuntimeException("Failed to flush MemTable", e);
+    }
+  }
+
+  @Override
   public void syncWal() {
     if (closed || db == null) {
       log.warn("Cannot sync WAL: DagStore is closed or DB is null");
@@ -1133,9 +1160,8 @@ public class DagStoreImpl implements DagStore {
     try {
       long startTime = System.currentTimeMillis();
 
-      // Step 1: Flush MemTable to SST files
-      // This ensures all data in memory is written to disk
-      db.flush(new org.rocksdb.FlushOptions().setWaitForFlush(true));
+      // Step 1: Flush in-memory updates to SST files for visibility/durability
+      flushMemTable();
       long flushTime = System.currentTimeMillis() - startTime;
 
       // Step 2: Sync WAL to disk
@@ -1259,6 +1285,141 @@ public class DagStoreImpl implements DagStore {
     } catch (Exception e) {
       log.error("Failed to count pending blocks", e);
       return 0;
+    }
+  }
+
+  // ==================== Orphan Reason Management (BUG-ORPHAN-001 fix) ====================
+
+  @Override
+  public void saveOrphanReason(Bytes32 blockHash, io.xdag.core.OrphanReason reason) {
+    if (blockHash == null || reason == null) {
+      return;
+    }
+
+    try {
+      byte[] key = buildOrphanReasonKey(blockHash);
+      byte[] value = new byte[]{reason.getCode()};
+      db.put(writeOptions, key, value);
+
+      log.debug("Saved orphan reason for block {}: {}",
+          blockHash.toHexString().substring(0, 16), reason);
+
+    } catch (RocksDBException e) {
+      log.error("Failed to save orphan reason for block {}: {}",
+          blockHash.toHexString().substring(0, 16), e.getMessage());
+    }
+  }
+
+  @Override
+  public io.xdag.core.OrphanReason getOrphanReason(Bytes32 blockHash) {
+    if (blockHash == null) {
+      return null;
+    }
+
+    try {
+      byte[] key = buildOrphanReasonKey(blockHash);
+      byte[] value = db.get(readOptions, key);
+
+      if (value == null || value.length == 0) {
+        return null;  // No reason recorded (legacy orphan)
+      }
+
+      return io.xdag.core.OrphanReason.fromCode(value[0]);
+
+    } catch (RocksDBException e) {
+      log.error("Failed to get orphan reason for block {}: {}",
+          blockHash.toHexString().substring(0, 16), e.getMessage());
+      return null;
+    }
+  }
+
+  @Override
+  public List<Bytes32> getPendingBlocksByReason(
+      io.xdag.core.OrphanReason reason, int maxCount, long fromEpoch) {
+
+    List<Bytes32> result = new ArrayList<>();
+
+    if (maxCount <= 0) {
+      return result;
+    }
+
+    try {
+      // Strategy: Scan BLOCK_INFO for height=0 blocks, filter by orphan reason
+      byte[] prefix = new byte[]{BLOCK_INFO};
+      List<Bytes32> candidates = new ArrayList<>();
+
+      // First pass: collect all pending blocks
+      try (RocksIterator iterator = db.newIterator(scanReadOptions)) {
+        iterator.seek(prefix);
+
+        while (iterator.isValid() && candidates.size() < maxCount * 2) {
+          byte[] key = iterator.key();
+
+          if (key.length < 1 || key[0] != BLOCK_INFO) {
+            break;
+          }
+
+          byte[] value = iterator.value();
+          if (value != null && value.length > 0) {
+            try {
+              BlockInfo info = deserializeBlockInfo(value);
+              if (info != null && info.getHeight() == 0 && info.getEpoch() >= fromEpoch) {
+                candidates.add(info.getHash());
+              }
+            } catch (Exception e) {
+              // Skip invalid entries
+            }
+          }
+
+          iterator.next();
+        }
+      }
+
+      // Second pass: filter by orphan reason
+      for (Bytes32 hash : candidates) {
+        if (result.size() >= maxCount) {
+          break;
+        }
+
+        io.xdag.core.OrphanReason orphanReason = getOrphanReason(hash);
+
+        // Backward compatibility: blocks without recorded reason are treated as MISSING_DEPENDENCY
+        if (orphanReason == null) {
+          orphanReason = io.xdag.core.OrphanReason.MISSING_DEPENDENCY;
+        }
+
+        if (orphanReason == reason) {
+          result.add(hash);
+        }
+      }
+
+      log.debug("Found {} pending blocks with reason {} (from epoch {})",
+          result.size(), reason, fromEpoch);
+
+      return result;
+
+    } catch (Exception e) {
+      log.error("Failed to get pending blocks by reason: {}", e.getMessage());
+      return result;
+    }
+  }
+
+  @Override
+  public void deleteOrphanReason(Bytes32 blockHash) {
+    if (blockHash == null) {
+      return;
+    }
+
+    try {
+      byte[] key = buildOrphanReasonKey(blockHash);
+      db.delete(writeOptions, key);
+
+      log.debug("Deleted orphan reason for block {}",
+          blockHash.toHexString().substring(0, 16));
+
+    } catch (RocksDBException e) {
+      log.error("Failed to delete orphan reason for block {}: {}",
+          blockHash.toHexString().substring(0, 16), e.getMessage());
     }
   }
 }

@@ -88,15 +88,17 @@ public class OrphanManager {
       do {
         madeProgress = false;
 
-        // Get up to 100 pending blocks (height=0) to retry
-        // fromEpoch=0 means start from earliest epoch
-        List<Bytes32> pendingHashes = dagStore.getPendingBlocks(100, 0);
+        // BUG-ORPHAN-001 fix: Only retry MISSING_DEPENDENCY orphans
+        // LOST_COMPETITION orphans will never become main blocks, no need to retry
+        List<Bytes32> pendingHashes = dagStore.getPendingBlocksByReason(
+            OrphanReason.MISSING_DEPENDENCY, 100, 0);
 
         if (pendingHashes == null || pendingHashes.isEmpty()) {
           break;  // No pending blocks to retry
         }
 
-        log.debug("Pending block retry pass {}: {} blocks to process", pass, pendingHashes.size());
+        log.debug("Pending block retry pass {}: {} MISSING_DEPENDENCY blocks to process",
+            pass, pendingHashes.size());
 
         int successCount = 0;
         int failCount = 0;
@@ -149,7 +151,8 @@ public class OrphanManager {
         }
 
         if (successCount > 0) {
-          log.info("Orphan retry pass {} completed: {} succeeded, {} still pending",
+          // BUG-LOGGING-002 fix: Changed to DEBUG level to reduce log noise
+          log.debug("Orphan retry pass {} completed: {} succeeded, {} still pending",
               pass, successCount, failCount);
         }
 
