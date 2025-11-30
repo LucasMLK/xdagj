@@ -126,7 +126,7 @@ public class HttpApiServer {
       ServerBootstrap b = new ServerBootstrap();
       b.group(bossGroup, workerGroup)
           .channel(NioServerSocketChannel.class)
-          .handler(new LoggingHandler(LogLevel.INFO))
+          .handler(new LoggingHandler(LogLevel.DEBUG))  // BUG-LOGGING-002 fix: DEBUG instead of INFO
           .childOption(ChannelOption.SO_KEEPALIVE, true)
           .childHandler(new ChannelInitializer<SocketChannel>() {
             @Override

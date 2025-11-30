@@ -480,7 +480,7 @@ public class DagKernel {
 
       // Stop DagChain (if present)
       if (dagChain != null) {
-        // DagChain cleanup if needed (currently stateless)
+        dagChain.stop();
         log.info("✓ DagChain stopped");
       }
 

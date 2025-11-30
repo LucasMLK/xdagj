@@ -32,13 +32,16 @@ import io.xdag.core.Transaction;
 import io.xdag.core.TransactionBroadcastManager;
 import io.xdag.core.TransactionPool;
 import io.xdag.p2p.channel.Channel;
+import io.xdag.p2p.channel.ChannelManager;
 import io.xdag.p2p.message.BlocksReplyMessage;
 import io.xdag.p2p.message.EpochHashesReplyMessage;
 import io.xdag.p2p.message.GetBlocksMessage;
 import io.xdag.p2p.message.GetEpochHashesMessage;
+import io.xdag.p2p.message.Message;
 import io.xdag.p2p.message.NewBlockHashMessage;
 import io.xdag.p2p.message.NewTransactionMessage;
 import io.xdag.p2p.message.XdagMessageCode;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -92,21 +95,24 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
 
       // Create Inv message with default TTL=3
       // Using hash + epoch is enough for peers to check if they need it
-      NewBlockHashMessage msg = 
+      NewBlockHashMessage msg =
           new NewBlockHashMessage(block.getHash(), block.getEpoch(), 3);
-      
+
       // Broadcast to all connected peers
       // Use a custom broadcast method that doesn't exclude anyone (since this is a new event)
       List<Channel> channels = getActiveChannels(p2pService);
+      log.info("📤 Broadcasting NEW_BLOCK_HASH {} to {} peers",
+          block.getHash().toHexString().substring(0, 16), channels.size());
       for (Channel channel : channels) {
         try {
+          log.info("  → Sending NEW_BLOCK_HASH to {}", channel.getRemoteAddress());
           channel.send(msg);
         } catch (Exception e) {
           log.warn("Failed to send NewBlockHash to {}: {}", channel.getRemoteAddress(), e.getMessage());
         }
       }
-      
-      log.debug("Broadcasted NewBlockHash {} to {} peers", 
+
+      log.debug("Broadcasted NewBlockHash {} to {} peers",
           block.getHash().toHexString().substring(0, 16), channels.size());
           
     } catch (Exception e) {
@@ -128,7 +134,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
 
   @Override
   public void onMessage(Channel channel, Bytes data) {
-    // 5 DEBUG: Log all message receptions at INFO level
+    // Temporary: INFO level for P2P message debugging
     log.info("⚡ onMessage() called from {} (data size: {} bytes)",
         channel.getRemoteAddress(), data.size());
 
@@ -228,6 +234,9 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
   private void handleGetBlocks(Channel channel, Bytes body) {
     try {
       GetBlocksMessage request = new GetBlocksMessage(body.toArray());
+      log.info("📥 Handling GET_BLOCKS from {}: requesting {} block(s)",
+          channel.getRemoteAddress(), request.getHashes().size());
+
       List<Block> foundBlocks = new ArrayList<>();
 
       for (Bytes32 hash : request.getHashes()) {
@@ -239,13 +248,14 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
       }
 
       if (!foundBlocks.isEmpty()) {
-        log.debug("Replying to GET_BLOCKS from {} with {} blocks", 
+        log.info("📤 Sending BLOCKS_REPLY to {} with {} blocks",
             channel.getRemoteAddress(), foundBlocks.size());
-        
+
         BlocksReplyMessage reply = new BlocksReplyMessage(foundBlocks);
         channel.send(reply);
       } else {
-        log.debug("GET_BLOCKS from {} yielded 0 blocks", channel.getRemoteAddress());
+        log.info("📤 GET_BLOCKS from {} yielded 0 blocks (not sending reply)",
+            channel.getRemoteAddress());
       }
 
     } catch (Exception e) {
@@ -328,7 +338,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
         end = start + 1000;
       }
 
-      log.debug("Received GET_EPOCH_HASHES from {}: range [{}, {}]", 
+      log.info("📥 Handling GET_EPOCH_HASHES from {}: range [{}, {}]",
           channel.getRemoteAddress(), start, end);
 
       Map<Long, List<Bytes32>> epochMap = new LinkedHashMap<>();
@@ -342,7 +352,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
         }
       }
 
-      log.debug("Replying to GET_EPOCH_HASHES from {} with {} epochs ({} hashes)", 
+      log.info("📤 Sending EPOCH_HASHES_REPLY to {} with {} epochs ({} hashes)",
           channel.getRemoteAddress(), epochMap.size(), totalHashes);
 
       channel.send(new EpochHashesReplyMessage(epochMap));
@@ -359,8 +369,8 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
     try {
       EpochHashesReplyMessage reply = new EpochHashesReplyMessage(body.toArray());
       Map<Long, List<Bytes32>> data = reply.getEpochHashes();
-      
-      log.debug("Received EPOCH_HASHES_REPLY from {}: {} epochs", 
+
+      log.info("📦 Received EPOCH_HASHES_REPLY from {}: {} epochs",
           channel.getRemoteAddress(), data.size());
 
       List<Bytes32> missingHashes = new ArrayList<>();
@@ -374,17 +384,20 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
       }
 
       if (!missingHashes.isEmpty()) {
-        log.debug("Found {} missing blocks from epoch sync, requesting data...", missingHashes.size());
-        
+        log.info("📤 Found {} missing blocks from epoch sync, sending GET_BLOCKS request(s)...",
+            missingHashes.size());
+
         // Batch requests (max 500 per message)
         int batchSize = 500;
         for (int i = 0; i < missingHashes.size(); i += batchSize) {
             int end = Math.min(i + batchSize, missingHashes.size());
             List<Bytes32> batch = missingHashes.subList(i, end);
+            log.info("  → Sending GET_BLOCKS batch {} hashes to {}",
+                batch.size(), channel.getRemoteAddress());
             channel.send(new GetBlocksMessage(batch));
         }
       } else {
-        log.debug("Epoch sync complete: no missing blocks in this range");
+        log.info("📦 Epoch sync complete: no missing blocks in this range");
       }
 
     } catch (Exception e) {
@@ -507,14 +520,19 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
     }
   }
 
-  private void broadcastMessage(io.xdag.p2p.message.Message msg, Channel excludeChannel) {
+  private void broadcastMessage(Message msg, Channel excludeChannel) {
     try {
       io.xdag.p2p.P2pService p2pService = dagKernel.getP2pService();
       if (p2pService == null) return;
 
       List<Channel> channels = getActiveChannels(p2pService);
+      log.info("📤 Broadcasting message type 0x{} to {} peer(s) (excluding: {})",
+          String.format("%02X", msg.getCode().toByte()),
+          excludeChannel != null ? channels.size() - 1 : channels.size(),
+          excludeChannel != null ? excludeChannel.getRemoteAddress() : "none");
       for (Channel channel : channels) {
         if (channel != excludeChannel) {
+          log.info("  → Sending to {}", channel.getRemoteAddress());
           channel.send(msg);
         }
       }
@@ -529,19 +547,18 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
    * @param p2pService P2P service instance
    * @return list of active channels
    */
-  private List<Channel> getActiveChannels(io.xdag.p2p.P2pService p2pService) {
+  private List<Channel> getActiveChannels(P2pService p2pService) {
     if (p2pService == null) {
       return new ArrayList<>();
     }
 
     try {
-      io.xdag.p2p.channel.ChannelManager channelManager = p2pService.getChannelManager();
+      ChannelManager channelManager = p2pService.getChannelManager();
       if (channelManager == null) {
         return new ArrayList<>();
       }
 
-      java.util.Map<java.net.InetSocketAddress, Channel> channels =
-          channelManager.getChannels();
+      Map<InetSocketAddress, Channel> channels = channelManager.getChannels();
 
       if (channels == null || channels.isEmpty()) {
         return new ArrayList<>();

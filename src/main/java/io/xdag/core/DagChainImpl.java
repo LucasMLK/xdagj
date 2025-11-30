@@ -97,7 +97,6 @@ public class DagChainImpl implements DagChain {
 
   // Refactored components (P1 phase)
   private final BlockBuilder blockBuilder;
-  private final ChainReorganizer chainReorganizer;
   private final DifficultyAdjuster difficultyAdjuster;
   private final OrphanManager orphanManager;
 
@@ -169,15 +168,16 @@ public class DagChainImpl implements DagChain {
         entityResolver,
         dagKernel.getConfig());
 
+    this.orphanManager = new OrphanManager(dagKernel);
+
     this.blockImporter = new BlockImporter(
         dagKernel,
-        blockValidator);
+        blockValidator,
+        orphanManager);
 
     // Initialize refactored components (P1 phase)
     this.blockBuilder = new BlockBuilder(dagKernel);
-    this.chainReorganizer = new ChainReorganizer(dagKernel);
     this.difficultyAdjuster = new DifficultyAdjuster(dagKernel);
-    this.orphanManager = new OrphanManager(dagKernel);
 
     log.info("DagChainImpl initialized with DagKernel");
     log.info("  - DagStore: {}", dagStore.getClass().getSimpleName());
@@ -186,9 +186,10 @@ public class DagChainImpl implements DagChain {
     log.info("  - BlockValidator: initialized (P0 refactoring)");
     log.info("  - BlockImporter: initialized (P0 refactoring)");
     log.info("  - BlockBuilder: initialized (P1 refactoring)");
-    log.info("  - ChainReorganizer: initialized (P1 refactoring)");
     log.info("  - DifficultyAdjuster: initialized (P1 refactoring)");
     log.info("  - OrphanManager: initialized (P1 refactoring)");
+
+    this.orphanManager.start(this::tryToConnect);
   }
 
   // ==================== Block Import Operations ====================
@@ -202,7 +203,10 @@ public class DagChainImpl implements DagChain {
       BlockImporter.ImportResult importResult = blockImporter.importBlock(block, chainStats);
 
       if (!importResult.isSuccess()) {
-        // Import failed - return error
+        DagImportResult failure = importResult.getFailureResult();
+        if (failure != null) {
+          return failure;
+        }
         return DagImportResult.error(
             new Exception(importResult.getErrorMessage()),
             importResult.getErrorMessage());
@@ -240,10 +244,10 @@ public class DagChainImpl implements DagChain {
         // Reason: Each epoch limited to 16 blocks, storage is bounded (~134MB for 16384 epochs)
         // Deleting orphans risks breaking DAG references (see BUG-LINK-NOT-FOUND)
         // Trade-off: Prioritize correctness over storage efficiency
+
       }
 
-      // Delegate to OrphanManager (P1 refactoring)
-      orphanManager.retryOrphanBlocks(this::tryToConnect);
+      orphanManager.onBlockImported(blockWithInfo);
 
       log.info("Successfully imported block {}: height={}, difficulty={}",
           block.getHash().toHexString(),
@@ -274,6 +278,11 @@ public class DagChainImpl implements DagChain {
       log.error("Error importing block {}: {}", block.getHash().toHexString(), e.getMessage(), e);
       return DagImportResult.error(e, "Exception during import: " + e.getMessage());
     }
+  }
+
+  @Override
+  public void stop() {
+    orphanManager.stop();
   }
 
   /**
@@ -496,6 +505,15 @@ public class DagChainImpl implements DagChain {
   }
 
   @Override
+  public void verifyEpochIntegrity(long epoch) {
+    try {
+      blockImporter.verifyEpochIntegrity(epoch);
+    } catch (Exception e) {
+      log.error("Failed to verify epoch {} integrity", epoch, e);
+    }
+  }
+
+  @Override
   public EpochStats getEpochStats(long epoch) {
     List<Block> candidates = getCandidateBlocksInEpoch(epoch);
     Block winner = getWinnerBlockInEpoch(epoch);
@@ -653,17 +671,6 @@ public class DagChainImpl implements DagChain {
         .map(h -> dagStore.getBlockByHash(h, false))
         .filter(Objects::nonNull)
         .collect(Collectors.toList());
-  }
-
-  // ==================== Chain Management ====================
-
-  @Override
-  public synchronized void checkNewMain() {
-    // Delegate to ChainReorganizer (P1 refactoring)
-    this.chainStats = chainReorganizer.checkNewMain(
-        this.chainStats,
-        this::getCurrentEpoch,
-        this::getWinnerBlockInEpoch);
   }
 
   // ==================== Statistics and State ====================

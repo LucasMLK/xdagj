@@ -27,9 +27,12 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.p2p.P2pService;
 import io.xdag.p2p.channel.Channel;
+import io.xdag.p2p.channel.ChannelManager;
 import io.xdag.p2p.message.NewTransactionMessage;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
@@ -328,13 +331,12 @@ public class TransactionBroadcastManager {
     }
 
     try {
-      io.xdag.p2p.channel.ChannelManager channelManager = p2pService.getChannelManager();
+      ChannelManager channelManager = p2pService.getChannelManager();
       if (channelManager == null) {
         return new ArrayList<>();
       }
 
-      java.util.Map<java.net.InetSocketAddress, Channel> channels =
-          channelManager.getChannels();
+      Map<InetSocketAddress, Channel> channels = channelManager.getChannels();
 
       if (channels == null || channels.isEmpty()) {
         return new ArrayList<>();

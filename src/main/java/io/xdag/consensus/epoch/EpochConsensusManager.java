@@ -448,6 +448,13 @@ public class EpochConsensusManager {
         } catch (Exception e) {
             log.error("Failed to sync WAL after epoch {}: {}", epoch, e.getMessage(), e);
         }
+
+        // 9. Run a slow-path integrity verification to demote any stale winners
+        try {
+            dagChain.verifyEpochIntegrity(epoch);
+        } catch (Exception e) {
+            log.error("Failed to run epoch {} integrity verification after import", epoch, e);
+        }
     }
 
     /**

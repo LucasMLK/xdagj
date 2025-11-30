@@ -446,6 +446,17 @@ public interface DagChain {
   Block getWinnerBlockInEpoch(long epoch);
 
   /**
+   * Verify that a given epoch only has a single main block.
+   *
+   * <p>Used both during block import (fast path) and at epoch end as a
+   * best-effort cleanup to demote any stale winners left behind by
+   * concurrent imports (see BUG-CONSENSUS-008).
+   *
+   * @param epoch epoch number that needs verification
+   */
+  void verifyEpochIntegrity(long epoch);
+
+  /**
    * Get statistics for a specific epoch
    *
    * <p>Returns detailed statistics for the given epoch:
@@ -642,26 +653,6 @@ public interface DagChain {
    */
   List<Block> getBlockReferences(Bytes32 hash);
 
-  // ==================== Chain Management ====================
-
-  /**
-   * Check and update the main chain
-   *
-   * <p>In XDAG, this method performs periodic main chain maintenance:
-   * <ol>
-   *   <li><strong>Scan Recent Epochs</strong>: Check recent epochs for winners (smallest hash)</li>
-   *   <li><strong>Calculate Cumulative Difficulty</strong>: Compare competing chains</li>
-   *   <li><strong>Chain Reorganization</strong>: Switch to chain with maximum cumulative difficulty if needed</li>
-   *   <li><strong>Update Statistics</strong>: Update ChainStats with latest information</li>
-   * </ol>
-   *
-   * <p>This method is typically called periodically by a background thread (e.g., every 1024ms).
-   *
-   * @see #tryToConnect(Block)
-   * @see #calculateCumulativeDifficulty(Block)
-   */
-  void checkNewMain();
-
   // ==================== Statistics and State ====================
 
   /**
@@ -728,4 +719,9 @@ public interface DagChain {
    * @param listener the listener to register
    */
   void registerNewBlockListener(io.xdag.core.listener.NewBlockListener listener);
+
+  /**
+   * Stop DagChain and release background resources.
+   */
+  void stop();
 }

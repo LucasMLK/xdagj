@@ -64,20 +64,24 @@ public class BlockImporter {
   private final DagStore dagStore;
   private final TransactionStore transactionStore;
   private final BlockValidator validator;
+  private final OrphanManager orphanManager;
 
   /**
    * Creates a BlockImporter with required dependencies
    *
    * @param dagKernel       DAG kernel providing storage and services
    * @param validator       block validation service
+   * @param orphanManager   orphan tracker/manager
    */
   public BlockImporter(
       DagKernel dagKernel,
-      BlockValidator validator) {
+      BlockValidator validator,
+      OrphanManager orphanManager) {
     this.dagKernel = dagKernel;
     this.dagStore = dagKernel.getDagStore();
     this.transactionStore = dagKernel.getTransactionStore();
     this.validator = validator;
+    this.orphanManager = orphanManager;
   }
 
   /**
@@ -125,8 +129,13 @@ public class BlockImporter {
       // Step 1: Validate block (delegated to BlockValidator)
       DagImportResult validationResult = validator.validate(block, chainStats);
       if (validationResult != null) {
-        // Validation failed
-        return ImportResult.fromDagImportResult(validationResult);
+        if (validationResult.getStatus() == DagImportResult.ImportStatus.MISSING_DEPENDENCY) {
+          List<Bytes32> missingParents = extractMissingParents(validationResult);
+          orphanManager.registerMissingDependency(block, missingParents);
+          return ImportResult.fromDagImportResult(validationResult, missingParents);
+        }
+        orphanManager.clearMissingDependency(block.getHash());
+        return ImportResult.fromDagImportResult(validationResult, null);
       }
 
       // Step 2: Calculate cumulative difficulty
@@ -207,6 +216,8 @@ public class BlockImporter {
           dagStore.deleteOrphanReason(block.getHash());
         }
       }
+      // Block successfully stored in main DAG - remove any missing-dependency artifacts
+      orphanManager.clearMissingDependency(block.getHash());
 
       // Step 6: Process transactions if main block
       if (isBestChain) {
@@ -232,6 +243,7 @@ public class BlockImporter {
           competition.isEpochWinner());
 
     } catch (Exception e) {
+      orphanManager.clearMissingDependency(block.getHash());
       log.error("Error importing block {}: {}",
           formatHash(block.getHash()), e.getMessage(), e);
       return ImportResult.error("Exception during import: " + e.getMessage());
@@ -426,6 +438,11 @@ public class BlockImporter {
     dagStore.saveBlockInfo(orphanInfo);
     dagStore.saveBlock(orphanBlock);
 
+    // BUG-HEIGHT-INDEX-001 fix: Delete height-to-hash mapping when demoting block
+    // This prevents orphan blocks from appearing in height queries
+    dagStore.deleteHeightMapping(previousHeight);
+    log.debug("Deleted height mapping for demoted block at height {}", previousHeight);
+
     // BUG-ORPHAN-001 fix: Record orphan reason
     // Demoted blocks lost epoch competition (to a better block that arrived later)
     dagStore.saveOrphanReason(block.getHash(), OrphanReason.LOST_COMPETITION);
@@ -508,6 +525,19 @@ public class BlockImporter {
         .filter(block -> block.getInfo() != null)
         .min(Comparator.comparing(Block::getHash))
         .orElse(null);
+  }
+
+  private List<Bytes32> extractMissingParents(DagImportResult dagResult) {
+    if (dagResult == null || dagResult.getErrorDetails() == null) {
+      return Collections.emptyList();
+    }
+
+    Bytes32 missing = dagResult.getErrorDetails().getMissingDependency();
+    if (missing == null) {
+      return Collections.emptyList();
+    }
+
+    return Collections.singletonList(missing);
   }
 
   /**
@@ -710,6 +740,8 @@ public class BlockImporter {
     private final boolean isBestChain;
     private final boolean isEpochWinner;
     private final String errorMessage;
+    private final DagImportResult failureResult;
+    private final List<Bytes32> missingParents;
 
     private ImportResult(
         boolean success,
@@ -718,7 +750,9 @@ public class BlockImporter {
         UInt256 cumulativeDifficulty,
         boolean isBestChain,
         boolean isEpochWinner,
-        String errorMessage) {
+        String errorMessage,
+        DagImportResult failureResult,
+        List<Bytes32> missingParents) {
       this.success = success;
       this.epoch = epoch;
       this.height = height;
@@ -726,6 +760,8 @@ public class BlockImporter {
       this.isBestChain = isBestChain;
       this.isEpochWinner = isEpochWinner;
       this.errorMessage = errorMessage;
+      this.failureResult = failureResult;
+      this.missingParents = missingParents != null ? missingParents : List.of();
     }
 
     public static ImportResult success(
@@ -735,15 +771,17 @@ public class BlockImporter {
         boolean isBestChain,
         boolean isEpochWinner) {
       return new ImportResult(true, epoch, height, cumulativeDifficulty,
-          isBestChain, isEpochWinner, null);
+          isBestChain, isEpochWinner, null, null, null);
     }
 
     public static ImportResult error(String errorMessage) {
-      return new ImportResult(false, 0, 0, UInt256.ZERO, false, false, errorMessage);
+      DagImportResult failure = DagImportResult.error(new Exception(errorMessage), errorMessage);
+      return new ImportResult(false, 0, 0, UInt256.ZERO, false, false, errorMessage, failure, null);
     }
 
-    public static ImportResult fromDagImportResult(DagImportResult dagResult) {
-      return error(dagResult.getErrorMessage());
+    public static ImportResult fromDagImportResult(DagImportResult dagResult, List<Bytes32> missingParents) {
+      String message = dagResult != null ? dagResult.getErrorMessage() : "Import failed";
+      return new ImportResult(false, 0, 0, UInt256.ZERO, false, false, message, dagResult, missingParents);
     }
   }
 
