@@ -160,7 +160,7 @@ public class ValidationResultTest {
     @Test
     public void testErrorMessageWithSpecialCharacters() {
         // Create error with special characters
-        String specialMessage = "Error: balance=100, required=200 (差额: -100)";
+        String specialMessage = "Error: balance=100, required=200 (shortfall: -100)";
         ValidationResult result = ValidationResult.error(specialMessage);
 
         // Verify

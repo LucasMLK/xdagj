@@ -31,17 +31,31 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * BlockInfo - Block metadata (极简设计)
+ * BlockInfo - minimal block metadata DTO.
  * <p>
- * Design principles (from CORE_DATA_STRUCTURES.md): 1. 职责单一：只包含Block的元信息（索引、状态判断、PoW验证） 2.
- * 极简设计：只有4个必需字段 3. DRY原则：所有可推导的数据都不存储
- * <p>
- * 4 core fields: - hash: 区块哈希（唯一标识） - height: 主链高度（height > 0 = 主块，= 0 = 孤块） - difficulty: PoW难度 -
- * epoch: XDAG epoch number (NOT Unix timestamp!)
- * <p>
- * DRY principle - DO NOT store: - prevMainBlock → query via getBlockByHeight(height - 1) -
- * amount/fee → calculate from Block's Transactions - snapshot → managed by independent
- * SnapshotManager - type, flags, ref, maxDiffLink → removed
+ * Design principles (see CORE_DATA_STRUCTURES.md):
+ * <ol>
+ *   <li>Single responsibility – only hold the metadata required for indexing, status checks, and
+ *   PoW verification.</li>
+ *   <li>Minimal fields – just the four values that cannot be derived anywhere else.</li>
+ *   <li>DRY – never persist values that can be recalculated.</li>
+ * </ol>
+ *
+ * <p>The four core fields are:
+ * <ul>
+ *   <li><strong>hash</strong>: unique block identifier (full 32 bytes)</li>
+ *   <li><strong>height</strong>: main-chain height (0 indicates orphan/candidate)</li>
+ *   <li><strong>difficulty</strong>: PoW difficulty value</li>
+ *   <li><strong>epoch</strong>: XDAG epoch number (not Unix time)</li>
+ * </ul>
+ *
+ * <p>DRY reminders – do NOT store:
+ * <ul>
+ *   <li>Previous main block → query via {@code getBlockByHeight(height - 1)}</li>
+ *   <li>Amount/Fee → derived from the block transactions</li>
+ *   <li>Snapshot metadata → handled by {@code SnapshotManager}</li>
+ *   <li>Type/flags/ref/maxDiffLink → obsolete, removed in the refactor</li>
+ * </ul>
  *
  * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">Design</a>
  */
@@ -49,21 +63,20 @@ import org.apache.tuweni.units.bigints.UInt256;
 @Builder(toBuilder = true)
 public class BlockInfo implements Serializable {
 
-  /**
-   * 区块哈希（完整32字节，唯一标识）
-   */
+  /** Full block hash (32 bytes) used as unique identifier. */
   Bytes32 hash;
 
   /**
-   * 主链高度 - height > 0: 主块（在main chain上） - height = 0: 孤块（候选块，未被选为主块）
+   * Main chain height.
    * <p>
-   * This is the key field for determining if a block is on the main chain.
+   * {@code height > 0} → block is part of the main chain.
+   * <br>{@code height = 0} → block is an orphan/candidate that never won an epoch.
+   * <p>
+   * This flag is the canonical way to determine whether a block is in the best chain.
    */
   long height;
 
-  /**
-   * PoW难度（32 bytes）
-   */
+  /** PoW difficulty value (32 bytes). */
   UInt256 difficulty;
 
   /**
@@ -82,22 +95,16 @@ public class BlockInfo implements Serializable {
    *   long unixMillis = TimeUtils.epochToMs(epoch);
    *   Date date = new Date(unixMillis);
    * </pre>
-   * <p>
-   * <p>
-   * -- GETTER --
-   *  获取所属epoch
-   *  <p>Simply returns the epoch field. This method is kept for backward compatibility.
+   * <p>Getter simply returns the raw epoch value and is retained for backward compatibility.
    *
    * @see TimeUtils#getEpoch(long)
    * @see TimeUtils#epochToTimeMillis(long)
-   */
+  */
   long epoch;
 
-  // ========== 辅助方法 ==========
+  // ========== helper methods ==========
 
-  /**
-   * 是否为主块 Simply check height > 0
-   */
+  /** @return {@code true} when the block belongs to the main chain. */
   public boolean isMainBlock() {
     return height > 0;
   }

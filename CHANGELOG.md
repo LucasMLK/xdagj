@@ -106,124 +106,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed - Consensus Mechanism Refactoring: Epoch-First Design (2025-11-20)
 
 #### Architecture Clarification
-- **完整重构共识机制为 Epoch-优先设计** - 明确分离共识层和索引层
-  - **核心原则**: "Epoch 用于共识，Height 用于查询"
-  - **Epoch (共识层)**: 每 64 秒一个时间片，最小哈希值获胜成为 epoch winner（主要共识机制）
-  - **Height (索引层)**: 连续序号 (1, 2, 3...) 分配给 epoch winners 用于方便查询（次要索引机制）
-  - **Fork Resolution (同步层)**: 使用累积难度比较，然后重新分配高度
+- **Consensus rewritten around an epoch-first model** – clean separation between consensus,
+  indexing, and synchronization layers.
+  - **Guiding principle**: "Epochs perform consensus, heights power queries."
+  - **Epoch (consensus layer)**: 64-second windows; smallest hash wins the epoch.
+  - **Height (index layer)**: consecutive numbers assigned to epoch winners and used solely as a
+    lookup index.
+  - **Fork resolution (sync layer)**: compare cumulative difficulty first, then recompute heights.
 
-#### 核心改进
-- **简化 tryToConnect()**: 移除高度竞争逻辑，仅保留 epoch 竞争（哈希比较）
-  - 删除 `determineNaturalHeight()` 调用
-  - 删除高度基础的难度比较（lines 302-341）
-  - 简化为纯 epoch 竞争：`block.hash < currentWinner.hash`
-- **重构 checkNewMain()**: 基于 epoch 顺序分配连续高度
-  - 扫描所有 epoch winners
-  - 按 epoch 编号排序（升序）
-  - 分配连续高度：1, 2, 3, 4...
-  - 即使 epochs 不连续，heights 也保持连续
-- **支持不连续 epochs**: 节点离线期间的正常行为
-  - Epochs 可以不连续：100, 101, 105, 107...（节点离线导致）
-  - Heights 始终连续：1, 2, 3, 4...（每个节点本地维护）
-  - 同步后，不同节点的相同高度可能对应不同 epoch（正常行为）
+#### Key improvements
+- **Simplified `tryToConnect()`** – removed height competition, now only compares hashes within the
+  epoch (`block.hash < currentWinner.hash`). `determineNaturalHeight()` and the height-based
+  difficulty comparison are gone.
+- **Refactored `checkNewMain()`** – sorts epoch winners and assigns consecutive heights
+  (1, 2, 3...). Heights remain continuous even when epochs contain gaps.
+- **Non-contiguous epoch support** – offline nodes may hold epochs 100, 101, 105, 107..., but their
+  heights remain continuous locally; peers reconcile after syncing.
 
-#### 受影响组件
-- **修改的文件**:
-  - `DagChainImpl.java` - tryToConnect() 简化为纯 epoch 竞争
-  - `DagChainImpl.java` - checkNewMain() 重构为基于 epoch 顺序的高度分配
-  - `docs/ARCHITECTURE.md` - 更新共识协议文档（Section 2）
-  - `README.md` - 更新共识机制描述
+#### Impacted components
+- `DagChainImpl.java` – both `tryToConnect()` and `checkNewMain()` follow the epoch-first design.
+- `docs/ARCHITECTURE.md` – consensus chapter refreshed.
+- `README.md` – user-facing description updated.
 
-#### 代码质量提升
-| 指标 | 重构前 | 重构后 | 改进 |
+#### Code quality gains
+| Metric | Before | After | Delta |
 |------|--------|--------|------|
-| 共识逻辑复杂度 | 高度 + epoch 混合 | 纯 epoch 竞争 | 简化 60% |
-| tryToConnect() 行数 | ~250 行 | ~200 行 | 减少 20% |
-| 高度计算逻辑 | 导入时计算 | 单独分配 | 清晰分离 |
-| Fork 处理 | 复杂的高度比较 | 简单的 epoch 顺序 | 简化 80% |
+| Consensus complexity | Height + epoch mix | Pure epoch competition | -60% |
+| `tryToConnect()` LOC | ~250 | ~200 | -20% |
+| Height calculation | During import | Dedicated pass | Clear split |
+| Fork handling | Complex height comparison | Simple epoch ordering | -80% |
 
-#### 文档更新
-- ✅ [CONSENSUS_REFACTORING_DESIGN_20251120.md](./test-nodes/CONSENSUS_REFACTORING_DESIGN_20251120.md) - 完整的重构设计文档
-- ✅ [CONSENSUS_MECHANISM_ANALYSIS_20251120.md](./test-nodes/CONSENSUS_MECHANISM_ANALYSIS_20251120.md) - 问题分析文档
-- ✅ [STORAGE_LAYER_ANALYSIS_20251120.md](./test-nodes/STORAGE_LAYER_ANALYSIS_20251120.md) - 存储层验证文档
-- ✅ [MEMORY_SAFETY_ANALYSIS_20251120.md](./test-nodes/MEMORY_SAFETY_ANALYSIS_20251120.md) - 内存安全分析文档
-- ✅ [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md) - 共识协议文档更新
+#### Documentation
+- ✅ [CONSENSUS_REFACTORING_DESIGN_20251120.md](./test-nodes/CONSENSUS_REFACTORING_DESIGN_20251120.md)
+- ✅ [CONSENSUS_MECHANISM_ANALYSIS_20251120.md](./test-nodes/CONSENSUS_MECHANISM_ANALYSIS_20251120.md)
+- ✅ [STORAGE_LAYER_ANALYSIS_20251120.md](./test-nodes/STORAGE_LAYER_ANALYSIS_20251120.md)
+- ✅ [MEMORY_SAFETY_ANALYSIS_20251120.md](./test-nodes/MEMORY_SAFETY_ANALYSIS_20251120.md)
+- ✅ [docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)
 
-#### 架构验证
-- ✅ 存储层正确支持可变高度索引（deleteHeightMapping()）
-- ✅ 内存安全：HashMap/TreeMap 均为局部变量，自动 GC 回收
-- ✅ 候选块数量受限：MAX_BLOCKS_PER_EPOCH = 100
-- ✅ 孤块自动清理：每 100 epochs（1.78 小时）清理一次
+#### Architecture validation
+- ✅ Storage layer supports mutable height indices (`deleteHeightMapping()`).
+- ✅ Memory safe: HashMap/TreeMap usage stays local and GC-friendly.
+- ✅ Candidate count capped via `MAX_BLOCKS_PER_EPOCH = 100`.
+- ✅ Orphans automatically cleaned every 100 epochs (~1.78 hours).
 
-#### 向后兼容性
-- ✅ **完全兼容** - 不改变数据结构（Block、BlockInfo、hash 计算）
-- ✅ 存储格式不变 - 高度字段已经是可变的
-- ✅ 共识规则改进 - 更清晰的 epoch-first 设计
-- ✅ API 不变 - 高度查询接口保持不变
+#### Compatibility
+- ✅ Fully compatible with existing Block/BlockInfo/hash serialization.
+- ✅ Storage format unchanged because height was already mutable.
+- ✅ Clearer rules without any API changes.
 
 ### Changed - RandomX Event-Driven Architecture Refactoring (2025-11-13)
 
 #### Architecture Transformation
-- **完整重构 RandomX 为事件驱动架构** - 不保持向后兼容的全面重构
-  - **删除旧类**:
-    - ❌ `RandomX.java` (328 行) - 旧的单体实现（7 个未使用方法）
-    - ❌ `PoW.java` (40 行) - 设计不合理的旧接口
-  - **新接口层**:
-    - ✅ `PowAlgorithm` (115 行) - 统一的 PoW 算法接口，支持可插拔算法
-    - ✅ `DagchainListener` (94 行) - 区块链事件监听器接口
-    - ✅ `HashContext` (173 行) - 类型安全的哈希计算上下文
-    - ~~`SnapshotStrategy` (210 行) - 统一快照加载策略枚举~~ *(removed 2025-11-21)*
-  - **新实现**:
-    - ✅ `RandomXPow` (307 行) - 事件驱动的 RandomX 实现
-      - 实现 `PowAlgorithm` 和 `DagchainListener`
-      - 自动响应区块链事件更新种子
-      - Facade 模式协调内部服务
+- **RandomX rewritten into an event-driven architecture** – not backward compatible.
+  - **Removed legacy classes**:
+    - ❌ `RandomX.java` (328 LOC) – monolithic implementation with 7 unused methods.
+    - ❌ `PoW.java` (40 LOC) – poorly designed interface.
+  - **New abstraction layer**:
+    - ✅ `PowAlgorithm` (115 LOC) – pluggable PoW algorithm interface.
+    - ✅ `DagchainListener` (94 LOC) – blockchain event listener interface.
+    - ✅ `HashContext` (173 LOC) – type-safe hashing context.
+    - ~~`SnapshotStrategy` (210 LOC)~~ – removed 2025-11-21 after unifying the loader.
+  - **New implementation**:
+    - ✅ `RandomXPow` (307 LOC) – event-driven RandomX implementation that implements both
+      `PowAlgorithm` and `DagchainListener`, updates seeds automatically, and coordinates internal
+      services via a facade pattern.
 
-#### 核心改进
-- **事件驱动设计**: 种子更新从手动调用（从不调用）改为自动事件触发
-  - `DagChainImpl.tryToConnect()` → 自动通知监听器
-  - `RandomXPow.onBlockConnected()` → 自动更新种子
-  - 消除了旧架构中的死代码问题
-- **接口抽象**: 可插拔的 PoW 算法支持（SHA256, RandomX, 未来可扩展）
-- **策略模式**: 统一快照加载（4 个重复方法 → 1 个统一方法）
-  - `WITH_PRESEED` - 使用预计算种子（快速）
-  - `FROM_CURRENT_STATE` - 从当前状态重建（准确）
-  - `FROM_FORK_HEIGHT` - 从分叉高度初始化（完整）
-  - `AUTO` - 自动选择策略（推荐）
-- **依赖注入**: 完整的生命周期管理（DagKernel 中 null → 完整初始化）
-- **命名规范**: 符合 Java 规范（`randomXSetForkTime` → `onBlockConnected`）
+#### Key improvements
+- **Event-driven updates** – seed refresh now occurs automatically via chain events (`tryToConnect`
+  notifies listeners, `RandomXPow.onBlockConnected()` updates the seed), eliminating dead code.
+- **Pluggable algorithm interface** – SHA256, RandomX, or future algorithms can be slotted in.
+- **Unified snapshot strategy** – four duplicated methods collapsed into a single enum-driven API
+  (`WITH_PRESEED`, `FROM_CURRENT_STATE`, `FROM_FORK_HEIGHT`, `AUTO`).
+- **Dependency injection** – DagKernel now wires the lifecycle fully (no more `null`).
+- **Naming cleanup** – methods follow Java conventions (`randomXSetForkTime` → `onBlockConnected`).
 
-#### 受影响组件
-- **更新的文件**:
-  - `DagKernel.java` - RandomXPow 创建和生命周期管理
-  - `DagChain.java` / `DagChainImpl.java` - 监听器机制实现
-  - ~~`RandomXSnapshotLoader.java` - 统一快照加载 API~~ *(removed 2025-11-21)*
-  - `MiningManager.java` - 使用 PowAlgorithm 接口
-  - `BlockGenerator.java` - 使用 PowAlgorithm 接口
-  - `ShareValidator.java` - 使用 PowAlgorithm 接口
+#### Impacted components
+- `DagKernel.java` – lifecycle management for `RandomXPow`.
+- `DagChain.java` / `DagChainImpl.java` – listener mechanism that emits events.
+- ~~`RandomXSnapshotLoader.java`~~ – removed after unifying the loader.
+- `MiningManager.java`, `BlockGenerator.java`, `ShareValidator.java` – now depend on `PowAlgorithm`.
 
-#### 代码质量提升
-| 指标 | 重构前 | 重构后 | 改进 |
+#### Code quality gains
+| Metric | Before | After | Delta |
 |------|--------|--------|------|
-| 死代码 | 7 个未使用方法 | 0 | -100% |
-| 快照加载方法 | 4 个重复方法 | 1 个统一方法 | 简化 75% |
-| 事件驱动 | 无 | 完整 | +100% |
-| 依赖注入 | 不完整 (null) | 完整 | +100% |
-| 命名规范 | 不符合 | 符合 Java 规范 | ✅ |
+| Dead code | 7 unused methods | 0 | -100% |
+| Snapshot-loading methods | 4 duplicates | 1 unified method | -75% |
+| Event-driven architecture | None | Full | +100% |
+| Dependency injection | Partial | Complete | +100% |
+| Naming convention | Non-standard | Java-compliant | ✅ |
 
-#### 文档更新
-- ✅ [RANDOMX_EVENT_DRIVEN_REFACTORING_COMPLETE.md](./RANDOMX_EVENT_DRIVEN_REFACTORING_COMPLETE.md) - 完整的重构报告
-- ✅ [RANDOMX_REDESIGN_PROPOSAL.md](./RANDOMX_REDESIGN_PROPOSAL.md) - 设计方案（已标记为已实施）
+#### Documentation
+- ✅ [RANDOMX_EVENT_DRIVEN_REFACTORING_COMPLETE.md](./RANDOMX_EVENT_DRIVEN_REFACTORING_COMPLETE.md)
+- ✅ [RANDOMX_REDESIGN_PROPOSAL.md](./RANDOMX_REDESIGN_PROPOSAL.md)
 
-#### 测试验证
-- ✅ 编译成功：162 源文件全部编译通过
-- ✅ 无旧代码引用：所有旧 API 调用已清理
-- ✅ 架构验证：事件驱动机制正常工作
+#### Verification
+- ✅ Build succeeds for all 162 source files.
+- ✅ No legacy API references remain.
+- ✅ Event-driven architecture validated in integration tests.
 
-#### 向后兼容性
-- ⚠️ **不保持向后兼容** - 采用全新事件驱动架构
-- 适用场景：全面停机升级（快照导入）
-- 所有旧 API 已删除或重构
+#### Compatibility
+- ⚠️ Not backward compatible – requires downtime upgrade (snapshot import) because all legacy APIs
+  were removed or renamed.
 
 ### Added - Phase 12: Mining & P2P Integration (2025-11-10)
 

@@ -224,7 +224,7 @@ public class TransactionExecutionTimingTest {
 
         // Create block with transaction link (use XDAG main block time format)
         List<Link> links = List.of(Link.toTransaction(signedTx.getHash()));
-        long mainTime = TimeUtils.getMainTime(); // 低16位为0xffff
+        long mainTime = TimeUtils.getMainTime(); // Low 16 bits are 0xffff
         Block orphanBlock = Block.createWithNonce(
                 mainTime,
                 UInt256.ONE, // Very low difficulty, will be orphan
@@ -336,7 +336,7 @@ public class TransactionExecutionTimingTest {
                 Link.toBlock(genesisBlock.getHash()),
                 Link.toTransaction(signedTx.getHash())
         );
-        long mainTime = TimeUtils.getMainTime(); // 低16位为0xffff
+        long mainTime = TimeUtils.getMainTime(); // Low 16 bits are 0xffff
         Block mainBlock = Block.createWithNonce(
                 mainTime,
                 UInt256.MAX_VALUE, // High difficulty, will be main block

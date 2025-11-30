@@ -77,8 +77,8 @@ Configuration: `test-nodes/devnet-manager.json` defines suite count, ports, and 
 ### Core Architectural Principle: Epoch vs Height
 
 **Critical**: Understand the two-layer architecture:
-- **Epoch (共识层)**: 64-second intervals for consensus. Block with smallest hash wins each epoch. Epochs may be discontinuous (100, 101, 105, 107...) when nodes go offline.
-- **Height (索引层)**: Sequential numbering (1, 2, 3...) assigned to epoch winners for querying. Heights are continuous even when epochs are discontinuous. Heights are node-local and NOT used for consensus decisions.
+- **Epoch (consensus layer)**: 64-second intervals for consensus. Block with smallest hash wins each epoch. Epochs may be discontinuous (100, 101, 105, 107...) when nodes go offline.
+- **Height (index layer)**: Sequential numbering (1, 2, 3...) assigned to epoch winners for querying. Heights are continuous even when epochs are discontinuous. Heights are node-local and NOT used for consensus decisions.
 
 Example: Node offline from epoch 102-104
 - Epochs: 100, 101, [offline], 105, 106

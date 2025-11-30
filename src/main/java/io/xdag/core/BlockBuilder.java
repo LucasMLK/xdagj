@@ -38,15 +38,17 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * Block Builder - 候选区块构建器
+ * Block Builder - candidate block factory.
  *
- * <p>负责创建新的区块：
- * - 创建候选区块（用于挖矿）
- * - 创建创世区块
- * - 收集候选链接（区块引用+交易引用）
- * - 管理mining coinbase地址
+ * <p>Responsibilities:
+ * <ul>
+ *   <li>Create candidate blocks used for mining</li>
+ *   <li>Create the genesis block</li>
+ *   <li>Collect candidate links (block references + transaction references)</li>
+ *   <li>Manage the mining coinbase address</li>
+ * </ul>
  *
- * <p>从DagChainImpl提取，作为P1重构的一部分
+ * <p>Extracted from {@link DagChainImpl} in Phase 1 of the refactor.</p>
  */
 @Slf4j
 public class BlockBuilder {
@@ -71,9 +73,9 @@ public class BlockBuilder {
   private volatile Bytes miningCoinbase = Bytes.wrap(new byte[20]); // Default: zero address
 
   /**
-   * 创建BlockBuilder
+   * Create a new builder.
    *
-   * @param dagKernel DAG内核
+   * @param dagKernel DAG kernel that exposes shared services
    */
   public BlockBuilder(DagKernel dagKernel) {
     this.dagKernel = dagKernel;
@@ -82,10 +84,10 @@ public class BlockBuilder {
   }
 
   /**
-   * 创建候选区块（用于挖矿）
+   * Create a candidate block for mining.
    *
-   * @param chainStats 当前链统计信息
-   * @return 新的候选区块
+   * @param chainStats current chain statistics
+   * @return freshly built candidate block
    */
   public Block createCandidateBlock(ChainStats chainStats) {
     log.info("Creating candidate block for mining");
@@ -313,10 +315,10 @@ public class BlockBuilder {
   }
 
   /**
-   * 创建创世区块
+   * Create the genesis block for the provided epoch.
    *
-   * @param epoch 创世区块的epoch
-   * @return 创世区块
+   * @param epoch epoch assigned to the genesis block
+   * @return genesis block
    */
   public Block createGenesisBlock(long epoch) {
     log.info("Creating genesis block at epoch {}", epoch);

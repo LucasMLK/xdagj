@@ -1,197 +1,74 @@
-================================================================================
-                Pool难度优化测试报告
-================================================================================
+===============================================================================
+                Pool Difficulty Optimization Test Report
+===============================================================================
 
-测试时间: 2025-11-23 13:06 - 13:12
-测试目的: 验证提高Pool难度是否能降低区块拒绝率
+**Date**: 2025-11-23 13:06–13:12  
+**Goal**: Determine whether increasing pool difficulty lowers the block rejection rate.
 
-================================================================================
-一、测试配置
-================================================================================
+---
 
-修改前（Baseline）:
-  • Pool initialDifficulty = 1000
-  • Miner nonceRange = 10000
-  • Miner threads = 2
+## 1. Configuration
 
-修改后（Optimized）:
-  • Pool initialDifficulty = 50000  ← 提高50倍
-  • Miner nonceRange = 10000        ← 未修改
-  • Miner threads = 2               ← 未修改
+Baseline:
+- `pool.initialDifficulty = 1000`
+- `miner.nonceRange = 10000`
+- `miner.threads = 2`
 
-================================================================================
-二、测试结果
-================================================================================
+Optimized:
+- `pool.initialDifficulty = 50000` (50× higher)
+- Miner settings unchanged
 
-┌─────────────────────────────────────────────────────────────────────────┐
-│ 指标                   │ 修改前（1000）  │ 修改后（50000） │ 变化     │
-├─────────────────────────────────────────────────────────────────────────┤
-│ 区块接受数             │ 43              │ 19              │ -56%     │
-│ 区块拒绝数             │ 150             │ 81              │ -46%     │
-│ 拒绝率                │ 77.6%           │ 81.0%           │ +3.4%    │
-│ Share提交频率          │ ~50-100/秒      │ ~50/秒          │ -50%     │
-│ CPU负载（Pool）        │ 191%            │ 179%            │ -6%      │
-└─────────────────────────────────────────────────────────────────────────┘
+---
 
-结论: ❌ Pool难度优化对拒绝率影响不大
+## 2. Results
 
-================================================================================
-三、原因分析
-================================================================================
+| Metric                | Baseline (1000) | Optimized (50000) | Delta |
+|-----------------------|-----------------|-------------------|-------|
+| Accepted blocks       | 43              | 19                | -56%  |
+| Rejected blocks       | 150             | 81                | -46%  |
+| Rejection rate        | 77.6%           | 81.0%             | +3.4% |
+| Share submission rate | ~50–100/s       | ~50/s             | -50%  |
+| Pool CPU usage        | 191%            | 179%              | -6%   |
 
-为什么提高Pool难度50倍，拒绝率却没有明显改善？
+Conclusion: **Pool difficulty alone does not reduce the rejection rate.**
 
-根本原因: Miner的nonceRange配置
+---
 
-  nonceRange = 10000 的含义:
-    • Miner每次最多尝试10000个nonce值
-    • 无论是否找到符合难度的share
-    • 10000次尝试后立即向Pool请求新工作
-    • 这导致Miner以固定频率提交工作
+## 3. Root cause
 
-  实际行为:
-    • Miner每0.02秒完成10000次哈希计算
-    • 每0.02秒向Pool请求新工作
-    • 提交频率：50次/秒（固定）
-    • 与Pool难度设置无关！
+`nonceRange = 10000` forces the miner to request new work after 10k nonces regardless of whether a
+valid share is found. As a result:
+- Miner completes 10k hashes every 0.02s and requests new work.
+- Submission frequency stays fixed (~50 per second) regardless of pool difficulty.
+- Shares arrive in bursts and most become stale after the candidate changes.
 
-  对比正常挖矿:
-    • 正常情况：找到符合难度的share才提交
-    • 当前情况：时间到了就提交（无论是否找到）
+The real culprit is **candidate competition**:
+1. Pool builds candidate A.
+2. Miner finds multiple nonces that meet block difficulty.
+3. First accepted share updates the candidate to B.
+4. Remaining shares still reference A → rejected.
+5. Additional blocks from other nodes cause more candidate switches → even more rejections.
 
-================================================================================
-四、区块拒绝的真正原因
-================================================================================
+Mathematically, if 10 valid shares appear within an epoch, 1 is accepted and 9 are rejected,
+yielding ~90% rejection rate independent of pool difficulty.
 
-拒绝率高不是因为Pool难度设置：
+---
 
-  真正原因是 "候选区块竞争":
+## 4. Observations
 
-    1. Pool基于Candidate A生成挖矿任务
-    2. Miner找到多个符合区块难度的nonce
-    3. Pool提交第1个 → ✅ 被接受
-    4. Candidate立即更新为B
-    5. Pool提交第2、3、4个... → ❌ 全部拒绝（基于旧Candidate A）
+- Increasing pool difficulty reduces share submission frequency (100/s → 50/s) and lowers pool CPU
+  usage slightly, but rejection rate remains high because shares still target outdated candidates.
+- Two-node competition accelerates candidate rotation (Suite1 + Suite2 both producing blocks).
 
-  数学模型:
-    • 假设64秒内找到10个符合区块难度的nonce
-    • 第1个被接受
-    • 剩余9个在提交前candidate已更新
-    • 拒绝率 = 9/10 = 90%
+---
 
-  两节点竞争:
-    • Suite1产生区块 → Suite1 candidate更新
-    • Suite2产生区块 → 通过P2P传播 → Suite1 candidate更新
-    • 更频繁的candidate更新 → 更高的拒绝率
+## 5. Next steps
 
-================================================================================
-五、实验验证
-================================================================================
+**Option A – increase `nonceRange` (recommended)**  
+`nonceRange = 10000 → 1000000` would:
+- Reduce submission rate from ~50/s to ~0.5/s.
+- Allow miners to keep working on the same candidate longer, drastically reducing stale shares.
 
-测试1: Pool难度 1000 → 50000
-  结果: 拒绝率 77.6% → 81.0% (无明显改善)
-  原因: nonceRange=10000 限制了优化效果
-
-测试2: 观察Share提交频率
-  修改前: ~100 shares/秒
-  修改后: ~50 shares/秒
-  改善: 50% ✓
-
-测试3: CPU负载
-  修改前: Pool 191%
-  修改后: Pool 179%
-  改善: 6% ✓
-
-结论:
-  ✅ Pool难度提高确实降低了Share提交频率
-  ✅ Pool的CPU负载有所降低
-  ❌ 但对区块拒绝率影响甚微
-
-================================================================================
-六、进一步优化方案
-================================================================================
-
-方案A: 修改Miner nonceRange（推荐）
-
-  修改 miner-config.conf:
-    nonceRange = 10000  →  1000000  (100倍)
-
-  预期效果:
-    • Share提交频率: 50/秒 → 0.5/秒 (降低100倍)
-    • 每个candidate使用更充分
-    • 减少无效提交
-
-方案B: 同时优化Pool和Miner
-
-  Pool: initialDifficulty = 100000
-  Miner: nonceRange = 1000000
-
-  预期效果:
-    • Share提交频率: < 1次/秒
-    • 系统负载大幅降低
-    • 拒绝率可能降低到20-30%
-
-方案C: 实现动态难度调整
-
-  让Pool根据实际share提交频率动态调整难度
-  目标: 保持每5-10秒收到1个share
-
-================================================================================
-七、系统验证结果
-================================================================================
-
-虽然拒绝率没有改善，但测试验证了:
-
-  ✅ 系统在高频提交下稳定运行
-  ✅ 区块验证机制正确（正确拒绝过时区块）
-  ✅ Candidate管理机制正确（及时更新）
-  ✅ P2P同步正常（节点间正确传播区块）
-  ✅ 两节点数据保持100%一致
-
-这是一次成功的压力测试！
-
-================================================================================
-八、最终建议
-================================================================================
-
-对于生产环境:
-
-  1. 修改Miner nonceRange到1000000+
-     → 降低无效提交
-     → 减少网络开销
-     → 降低系统负载
-
-  2. Pool难度保持50000或更高
-     → 适当的share提交频率
-     → 合理的服务器负载
-
-  3. 监控拒绝率
-     → 正常范围: 10-30%
-     → 如果超过50%需要调查
-
-对于测试环境:
-
-  ✅ 当前配置很好地验证了系统健壮性
-  ✅ 可以保持继续进行压力测试
-  ✅ 已证明系统在极端条件下的稳定性
-
-================================================================================
-九、结论
-================================================================================
-
-┌────────────────────────────────────────────────────────────────────────┐
-│                                                                        │
-│  测试结果: Pool难度优化对拒绝率影响不大                                │
-│                                                                        │
-│  根本原因: Miner的nonceRange配置限制了优化效果                         │
-│                                                                        │
-│  意外收获: 验证了系统在高频竞争下的稳定性和正确性                      │
-│                                                                        │
-│  下一步: 需要同时优化Miner的nonceRange配置                            │
-│                                                                        │
-└────────────────────────────────────────────────────────────────────────┘
-
-================================================================================
-报告生成时间: 2025-11-23 13:12
-测试工程师: Claude AI Assistant
-================================================================================
+**Option B – adaptive pool difficulty**  
+Add logic to raise pool difficulty dynamically when share frequency exceeds a safe threshold, but
+this must be combined with a larger `nonceRange` to be effective.

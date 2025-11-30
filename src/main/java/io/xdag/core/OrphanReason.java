@@ -24,44 +24,48 @@
 package io.xdag.core;
 
 /**
- * OrphanReason - 孤块原因分类
+ * OrphanReason - classifies different orphan categories.
  *
- * <p>区分两种完全不同的orphan blocks：
+ * <p>We distinguish two entirely different orphan block types:
  * <ul>
- *   <li><strong>MISSING_DEPENDENCY</strong>: 缺少父block，等待依赖到达后需要重试</li>
- *   <li><strong>LOST_COMPETITION</strong>: 输掉epoch竞争，永远不会成为main block</li>
+ *   <li><strong>MISSING_DEPENDENCY</strong>: the parent block is missing, so the orphan must be
+ *   retried after dependencies arrive.</li>
+ *   <li><strong>LOST_COMPETITION</strong>: the block lost the epoch competition; it will never
+ *   become a main block.</li>
  * </ul>
  *
- * <h2>为什么需要区分？</h2>
- * <p>在XDAG 1.0b中，每个epoch（64秒）最多16个候选blocks，只有1个能成为main block。
- * 其他15个会永久成为orphans（输掉竞争），但它们的父blocks都存在，不需要重试。
+ * <h2>Why draw the boundary?</h2>
+ * <p>In XDAG 1.0b each epoch (64 seconds) stores at most 16 candidate blocks, and only one can
+ * become the main block. The remaining 15 are orphans because they lost the competition, not because
+ * they miss parents, so re-importing them is pointless.</p>
  *
- * <p><strong>BUG-ORPHAN-001修复</strong>：OrphanManager只应该重试MISSING_DEPENDENCY类型的orphans，
- * 而不应该重试LOST_COMPETITION类型的orphans。
+ * <p><strong>BUG-ORPHAN-001</strong> fix: OrphanManager must only retry
+ * {@link OrphanReason#MISSING_DEPENDENCY} blocks and should never retry
+ * {@link OrphanReason#LOST_COMPETITION} blocks.</p>
  *
  * @since XDAGJ 5.2.0
  * @see OrphanManager
  */
 public enum OrphanReason {
   /**
-   * 缺少父block依赖
+   * Parent block is missing so we must retry later.
    *
-   * <p>场景：P2P网络中blocks乱序到达，子block先到，父block还未到达
-   * <p>示例：Block C引用Block B，但Block B还未从网络同步到本地
-   * <p>行为：需要重试，等父block到达后会成功导入
+   * <p>Scenario: blocks arrive out of order and the child reaches the node before the parent.</p>
+   * <p>Example: Block C references Block B, but Block B has not been received from the network.</p>
+   * <p>Expected handling: enqueue the block and retry after the parent is imported.</p>
    */
   MISSING_DEPENDENCY((byte) 0),
 
   /**
-   * 输掉epoch竞争
+   * Lost the epoch competition even though all parents exist.
    *
-   * <p>场景：同一个epoch内有多个候选blocks，只有difficulty最小的能成为main block
-   * <p>示例：Epoch 27569886有2个blocks：
+   * <p>Scenario: multiple candidates are mined in the same epoch and only the smallest hash wins.</p>
+   * <p>Example: epoch 27,569,886 contains two blocks:</p>
    * <ul>
-   *   <li>Block A (difficulty=20) - 输家，成为orphan</li>
-   *   <li>Block B (difficulty=36) - 赢家，成为main block</li>
+   *   <li>Block A (difficulty = 20) - loses and becomes an orphan.</li>
+   *   <li>Block B (difficulty = 36) - wins and becomes the main block.</li>
    * </ul>
-   * <p>行为：不需要重试，永远不会成为main block（除非chain reorganization）
+   * <p>Expected handling: no retry unless a chain reorganization later promotes it.</p>
    */
   LOST_COMPETITION((byte) 1);
 
@@ -71,21 +75,17 @@ public enum OrphanReason {
     this.code = code;
   }
 
-  /**
-   * 获取存储编码
-   *
-   * @return 1字节编码
-   */
+  /** Byte code used when persisting the reason. */
   public byte getCode() {
     return code;
   }
 
   /**
-   * 从存储编码解析
+   * Parse the persisted reason code.
    *
-   * @param code 1字节编码
-   * @return OrphanReason枚举值
-   * @throws IllegalArgumentException 如果编码无效
+   * @param code the serialized byte
+   * @return reason enum
+   * @throws IllegalArgumentException when the code is invalid
    */
   public static OrphanReason fromCode(byte code) {
     switch (code) {
@@ -98,11 +98,7 @@ public enum OrphanReason {
     }
   }
 
-  /**
-   * 是否需要重试
-   *
-   * @return true表示需要重试
-   */
+  /** @return {@code true} if the orphan should be retried. */
   public boolean shouldRetry() {
     return this == MISSING_DEPENDENCY;
   }

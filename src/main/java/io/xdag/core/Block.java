@@ -53,7 +53,7 @@ import org.apache.tuweni.units.bigints.UInt256;
  * links: List<Link>    (references to Transactions and other Blocks) info: BlockInfo      (runtime
  * metadata, not serialized) } ```
  * <p>
- * Capacity (48MB block): - 48MB / 33 bytes per link ≈ 1,485,000 links - TPS: 1,485,000 txs / 64秒 ≈
+ * Capacity (48MB block): - 48MB / 33 bytes per link ≈ 1,485,000 links - TPS: 1,485,000 txs / 64 seconds ≈
  * 23,200 TPS (96.7% Visa level)
  *
  * @see <a href="docs/refactor-design/CORE_DATA_STRUCTURES.md">Design</a>

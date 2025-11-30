@@ -1,26 +1,26 @@
 #!/bin/bash
 
-echo "停止 XDAG 节点..."
+echo "Stopping XDAG node..."
 
 if [ ! -f "xdag.pid" ]; then
-    echo "⚠ 未找到 PID 文件"
+    echo "⚠ PID file not found"
     exit 1
 fi
 
 PID=$(cat xdag.pid)
 
 if ps -p $PID > /dev/null 2>&1; then
-    echo "停止进程 $PID (SIGTERM)..."
+    echo "Stopping process $PID (SIGTERM)..."
     kill $PID
 
     # BUG-STORAGE-002 fix: Increase wait time from 2s to 10s
     # This allows RocksDB to flush WAL properly before force kill
-    echo "等待节点正常关闭 (最多10秒)..."
+    echo "Waiting for a graceful shutdown (up to 10s)..."
 
     for i in {1..10}; do
         sleep 1
         if ! ps -p $PID > /dev/null 2>&1; then
-            echo "✅ 节点已正常停止 (用时 ${i} 秒)"
+            echo "✅ Node stopped gracefully (took ${i}s)"
             rm -f xdag.pid
             exit 0
         fi
@@ -28,13 +28,13 @@ if ps -p $PID > /dev/null 2>&1; then
     done
 
     echo ""
-    echo "⚠ 节点未在10秒内停止，强制终止..."
+    echo "⚠ Node did not stop within 10s, forcing termination..."
     if ps -p $PID > /dev/null 2>&1; then
         kill -9 $PID
-        echo "✅ 节点已强制停止"
+        echo "✅ Node was killed forcefully"
     fi
 else
-    echo "⚠ 进程 $PID 不存在"
+    echo "⚠ Process $PID does not exist"
 fi
 
 rm -f xdag.pid

@@ -32,14 +32,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /**
- * Difficulty Adjuster - 难度调整器
+ * Difficulty Adjuster - adjusts the base target at fixed intervals.
  *
- * <p>负责网络难度的定期调整：
- * - 监控区块生产速率
- * - 计算难度调整因子
- * - 更新网络难度目标
+ * <p>Responsibilities:
+ * <ul>
+ *   <li>Monitor block production rate</li>
+ *   <li>Calculate the adjustment factor</li>
+ *   <li>Update the network difficulty target</li>
+ * </ul>
  *
- * <p>从DagChainImpl提取，作为P1重构的一部分
+ * <p>Extracted from {@code DagChainImpl} during the Phase 1 refactor.</p>
  */
 @Slf4j
 public class DifficultyAdjuster {
@@ -73,9 +75,9 @@ public class DifficultyAdjuster {
   private final DagStore dagStore;
 
   /**
-   * 创建DifficultyAdjuster
+   * Create a new adjuster.
    *
-   * @param dagKernel DAG内核，提供所有必要的组件访问
+   * @param dagKernel DAG kernel that provides access to shared components
    */
   public DifficultyAdjuster(DagKernel dagKernel) {
     this.dagKernel = dagKernel;

@@ -46,8 +46,8 @@ XDAG uses an epoch-based DAG where every 64 seconds all miners compete to produc
 
 **Core Principle**: **Epoch is for consensus, Height is for querying**.
 
-- **Epoch** (共识层) – Every 64 seconds = 1 epoch. Within each epoch, the block with the **smallest hash wins** and becomes the epoch winner. This is the PRIMARY consensus mechanism. Epochs may be discontinuous (100, 101, 105, 107...) when nodes are offline.
-- **Height** (索引层) – Sequential numbering (1, 2, 3...) assigned to epoch winners for convenient querying. Heights are node-local, mutable, and NOT used for consensus decisions. Each node maintains continuous heights even when epochs are discontinuous.
+- **Epoch** (consensus layer) – Every 64 seconds = 1 epoch. Within each epoch, the block with the **smallest hash wins** and becomes the epoch winner. This is the PRIMARY consensus mechanism. Epochs may be discontinuous (100, 101, 105, 107...) when nodes are offline.
+- **Height** (index layer) – Sequential numbering (1, 2, 3...) assigned to epoch winners for convenient querying. Heights are node-local, mutable, and NOT used for consensus decisions. Each node maintains continuous heights even when epochs are discontinuous.
 
 ### 2.1 Consensus Rules
 

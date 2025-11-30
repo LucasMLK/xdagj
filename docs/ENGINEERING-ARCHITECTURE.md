@@ -1,770 +1,163 @@
-# XDAGJ 工程架构文档
+# XDAGJ Engineering Architecture
 
-**版本**: 1.0.0
-**更新时间**: 2025-11-21
-**目标读者**: 项目管理者、产品经理、投资人、社区成员
-
----
-
-## 目录
-
-1. [项目简介](#1-项目简介)
-2. [模块化架构](#2-模块化架构)
-3. [核心模块详解](#3-核心模块详解)
-4. [模块协作关系](#4-模块协作关系)
-5. [技术优势](#5-技术优势)
-6. [扩展性设计](#6-扩展性设计)
-7. [未来规划](#7-未来规划)
+**Version**: 1.0.0  
+**Last Updated**: 2025-11-21  
+**Audience**: project managers, contributors, investors, community members
 
 ---
 
-## 1. 项目简介
+## 1. Overview
 
-### XDAGJ 是什么？
+XDAGJ is the Java implementation of the XDAG blockchain protocol. Similar to how Bitcoin has
+multiple clients, XDAG also supports several implementations and XDAGJ is the most complete Java
+version. The project embraces a modular design so that each subsystem can evolve independently.
 
-XDAGJ 是 XDAG 区块链的 Java 版本实现，就像比特币有多种语言的客户端（Bitcoin Core、btcd、rust-bitcoin 等），XDAG 也有不同语言的实现版本。XDAGJ 是其中功能最完整、性能最优的 Java 版本。
-
-### 为什么需要模块化设计？
-
-想象一下建造一座大楼：
-
-- **传统方式**：整个大楼一次性浇筑，一旦需要改动或升级某个部分，非常困难
-- **模块化方式**：大楼由多个独立的功能模块组成（地基、框架、电梯、供水系统等），每个模块可以独立升级和维护
-
-XDAGJ 采用模块化设计，将一个复杂的区块链系统拆分成多个独立、可复用的模块，每个模块专注于解决一个特定问题。
+### Why modularize?
+- Faster iteration – work on one subsystem without risking regressions in others.
+- Easier maintenance – independent versioning and simpler troubleshooting.
+- Reusability – crypto, P2P, and RandomX components can be reused by other JVM projects.
 
 ---
 
-## 2. 模块化架构
-
-### 2.1 XDAGJ 生态全景
+## 2. Layered Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      XDAGJ 生态系统                           │
-└─────────────────────────────────────────────────────────────┘
-
-              ┌──────────────────────────────────┐
-              │       用户层（应用）               │
-              │  ┌──────────┐    ┌──────────┐   │
-              │  │ 区块浏览器 │    │  矿池     │   │
-              │  │ xdagj-    │    │  xdagj-   │   │
-              │  │ explorer  │    │  pool     │   │
-              │  └──────────┘    └──────────┘   │
-              │                                  │
-              │       ┌──────────┐               │
-              │       │ 挖矿客户端 │               │
-              │       │ xdagj-   │               │
-              │       │ miner    │               │
-              │       └──────────┘               │
-              └──────────────────────────────────┘
-                          ↓
-              ┌──────────────────────────────────┐
-              │       核心层（主程序）              │
-              │                                  │
-              │         ┌──────────┐             │
-              │         │  xdagj   │             │
-              │         │  (主模块) │             │
-              │         └──────────┘             │
-              │             ↓ ↓ ↓                │
-              └──────────────────────────────────┘
-                      ↓       ↓       ↓
-        ┌─────────────┼───────┼───────┼──────────────┐
-        │             │       │       │              │
-        ↓             ↓       ↓       ↓              │
-┌──────────┐   ┌──────────┐ ┌────────────┐  ┌──────────┐
-│ xdagj-   │   │ xdagj-   │ │  xdagj-    │  │          │
-│ crypto   │   │ native-  │ │  p2p       │  │  其他模块 │
-│ (安全)   │   │ randomx  │ │  (网络)    │  │          │
-│          │   │ (挖矿)   │ │            │  │          │
-└──────────┘   └──────────┘ └────────────┘  └──────────┘
-     ↓              ↓             ↓              ↓
-┌──────────────────────────────────────────────────┐
-│            基础层（可复用组件）                    │
-│     可被其他区块链项目、Java 应用复用             │
-└──────────────────────────────────────────────────┘
+┌───────────────────────────────┐
+│ User Layer                    │  Wallets, explorers, pools
+├───────────────────────────────┤
+│ Core Layer (xdagj)            │  Consensus, storage, mining
+├───────────────────────────────┤
+│ Foundation Modules            │  crypto / native-randomx / p2p
+└───────────────────────────────┘
 ```
 
-### 2.2 分层说明
+### Foundation modules
+- **xdagj-crypto** – wallet/key management, signatures (ECDSA, Schnorr), AES encryption, mnemonic
+  handling, Dilithium experiments for post-quantum research.
+- **xdagj-native-randomx** – RandomX mining engine with 92% of the C++ implementation performance,
+  multi-threaded, cross-platform (Windows/macOS/Linux, Intel/AMD/Apple Silicon).
+- **xdagj-p2p** – Netty-based networking stack with Kademlia discovery, throughput beyond
+  17k msgs/sec, latency < 8 ms (p95), full telemetry.
 
-**用户层（应用层）**
-- **区块浏览器** (xdagj-explorer)：网页版的区块链数据查询工具
-- **矿池服务器** (xdagj-pool)：多人协作挖矿的服务端
-- **挖矿客户端** (xdagj-miner)：个人挖矿工具
-
-**核心层（主程序）**
-- **xdagj**：区块链节点主程序，负责区块验证、交易处理、数据存储等核心功能
-
-**基础层（基础组件）**
-- **xdagj-crypto**：密码学工具箱（加密、签名、地址生成）
-- **xdagj-native-randomx**：挖矿算法引擎
-- **xdagj-p2p**：点对点网络通信框架
+### Core module (xdagj)
+- Epoch-based consensus engine with RandomX PoW
+- RocksDB-backed storage with atomic transactions
+- Hybrid sync (batch main-chain sync + DAG completion)
+- HTTP/JSON-RPC APIs and mining endpoints
 
 ---
 
-## 3. 核心模块详解
+## 3. Module Deep Dive
 
-### 3.1 xdagj-crypto（密码学模块）
+### 3.1 xdagj-crypto
+- Wallet/account management (BIP32/39/44 compatible)
+- Transaction signing and verification
+- AES-protected wallet files
+- Libraries are reusable by other blockchain or enterprise apps
 
-**版本**: 0.1.5
+### 3.2 xdagj-native-randomx
+- Implements RandomX mining (formal mode) and verification mode
+- Reaches 369 H/s vs 402 H/s on the reference C++ implementation
+- Supports Windows, Linux, macOS, Intel, AMD, and Apple Silicon
 
-#### 模块定位
-就像银行的保险库系统，负责所有与安全相关的操作。
+### 3.3 xdagj-p2p
+- Peer discovery via Kademlia DHT
+- Message throughput: 17k+ messages/sec (8-node cluster), latency p95 < 8 ms
+- Reputation, blacklist, and connection-pool management
+- Production-ready telemetry and tracing hooks
 
-#### 核心能力
-
-1. **账户管理**
-   - 生成钱包地址（类似银行账号）
-   - 管理公钥和私钥（类似账号和密码）
-   - 支持助记词（12 个单词记住整个钱包）
-
-2. **交易签名**
-   - 确保交易不可伪造（类似签字和印章）
-   - 验证交易的真实性
-   - 支持现代签名算法（ECDSA、Schnorr）
-
-3. **数据加密**
-   - 保护钱包文件不被盗取
-   - 加密敏感信息
-   - 支持 AES 加密标准
-
-4. **未来安全（实验性）**
-   - 抗量子计算机攻击的签名算法（Dilithium）
-   - 为 10 年后的量子计算时代做准备
-
-#### 可复用性
-- 可被其他 Java 区块链项目直接使用
-- 可作为企业级加密库
-- 支持标准化接口（BIP32/39/44）
+### 3.4 xdagj (core)
+- Implements the XDAG 1.0b epoch-first consensus
+- Uses RocksDB with write batches for atomicity (+85% fewer writes)
+- Hybrid sync: 1,000-block batches + demand-driven DAG completion
+- JSON-RPC + HTTP APIs, extensible to WebSocket/GraphQL
 
 ---
 
-### 3.2 xdagj-native-randomx（挖矿引擎）
+## 4. How modules collaborate
 
-**版本**: 0.2.6
+### Block import pipeline
+1. **P2P** receives a block and forwards it to the core.
+2. **BlockValidator** checks structure, signatures, references, and PoW.
+3. **Consensus engine** performs epoch competition and height assignment.
+4. **Storage layer** persists the block atomically with account updates.
+5. **P2P** announces the new block to peers.
 
-#### 模块定位
-就像汽车的发动机，负责提供强大的计算能力来挖掘区块。
-
-#### 核心能力
-
-1. **RandomX 算法**
-   - 抗 ASIC 矿机（专业挖矿设备）
-   - 对普通 CPU 友好（人人都能参与）
-   - 与门罗币（Monero）使用相同的算法
-
-2. **高性能计算**
-   - Java 版本达到 C++ 版本 92% 的性能
-   - 支持多线程并行计算
-   - 自动优化不同 CPU 架构
-
-3. **跨平台支持**
-   - Windows、macOS、Linux 全支持
-   - Intel、AMD、Apple M 系列芯片全兼容
-   - 自动选择最优计算模式
-
-#### 性能数据
-
-**挖矿模式**（正式挖矿使用）
-- C++ 版本：402 哈希/秒
-- Java 版本：369 哈希/秒
-- 性能比：92%（损失仅 8%）
-
-**验证模式**（验证区块使用）
-- C++ 版本：19 哈希/秒
-- Java 版本：19 哈希/秒
-- 性能比：100%（零损失）
-
-#### 可复用性
-- 可被其他 PoW 区块链项目使用
-- 可作为通用的 RandomX Java 库
-- 可集成到挖矿软件和矿池
+### Mining workflow
+1. Miner requests a candidate block via `MiningApiService`.
+2. **BlockBuilder** collects the top 16 references and up to 1024 transactions.
+3. Miner solves RandomX offline.
+4. On success, the block returns to the core, passes validation, is persisted, and P2P broadcasts it.
 
 ---
 
-### 3.3 xdagj-p2p（网络模块）
+## 5. Advantages
 
-**版本**: 0.1.6
+### Development efficiency
+- Independent modules reduce rebuild/test scope.
+- Each module has its own versioning and release cadence.
 
-#### 模块定位
-就像互联网的电话网络，负责节点之间的通信和信息传递。
+### Maintainability
+- Clear ownership per module.
+- Diagnosing issues is simpler (logs and metrics isolate components).
 
-#### 核心能力
+### Reusability
+- Crypto/p2p/mining modules can be embedded in other blockchain or enterprise projects.
 
-1. **节点发现**
-   - 自动寻找其他节点（类似手机搜索附近的 WiFi）
-   - Kademlia DHT 协议（分布式哈希表）
-   - 无需中心服务器
+### Quality
+- 1,300+ automated tests, majority with >75% coverage.
+- RandomX module includes full benchmark suite; P2P has 873 dedicated tests.
 
-2. **消息传输**
-   - 高性能消息传递（17,000+ 消息/秒）
-   - 低延迟通信（95% 消息延迟 < 8 毫秒）
-   - 零错误率（测试 700 万+ 消息）
-
-3. **节点管理**
-   - 声誉系统（记录节点好坏）
-   - 黑名单机制（自动屏蔽恶意节点）
-   - 连接池管理（优化网络资源）
-
-4. **网络监控**
-   - 实时统计网络状态
-   - 性能监控和报警
-   - 可视化网络拓扑
-
-#### 性能数据
-
-**吞吐量**
-- 消息处理：130 万 - 800 万 次/秒
-- 网络吞吐：17,000+ 消息/秒（6 节点集群）
-
-**延迟**
-- 平均延迟：1-8 毫秒
-- 95% 消息：< 8 毫秒
-- 99% 消息：< 15 毫秒
-
-**测试覆盖**
-- 873 个测试用例（全部通过）
-- 76% 代码覆盖率
-- 零不稳定测试
-
-#### 可复用性
-- 可被其他区块链项目使用
-- 可作为通用 P2P 网络框架
-- 可用于分布式系统、IoT 网络
+### Performance highlights
+- Atomic RocksDB transactions reduce disk writes by 85% and increase block import throughput 5x.
+- Hybrid sync cuts initial sync for 1M blocks to roughly two hours.
+- P2P throughput outperforms Bitcoin (~1k msgs/sec) and Ethereum (~5k msgs/sec).
 
 ---
 
-### 3.4 xdagj（主模块）
+## 6. Scalability Roadmap
 
-**版本**: 1.0.0
+### Horizontal scaling
+- Storage: pluggable backends (MySQL/PostgreSQL) planned for large mining pools.
+- P2P: QUIC/WebSocket/libp2p connectors can be added without touching the core.
+- APIs: GraphQL, gRPC, and WebSocket streaming are staged additions.
 
-#### 模块定位
-就像房子的主体结构，整合所有基础模块，实现完整的区块链功能。
+### Vertical features
+- Smart contract layer (EVM-compatible) as an optional fourth tier.
+- Light clients (SPV) for mobile/IoT scenarios.
+- Cross-chain bridges to Ethereum/Bitcoin ecosystems.
 
-#### 核心能力
-
-1. **共识引擎**
-   - XDAG 1.0b 协议实现
-   - Epoch 竞争机制（每 64 秒一轮）
-   - 最小哈希获胜规则
-   - 自动链重组
-
-2. **数据存储**
-   - RocksDB 高性能数据库
-   - 区块、交易、账户分离存储
-   - 原子化事务处理（保证数据一致性）
-   - 多层缓存加速
-
-3. **网络同步**
-   - 混合同步策略（快速同步 + DAG 补全）
-   - 批量下载（1000 区块/次）
-   - 孤块自动解决
-   - 断点续传
-
-4. **API 服务**
-   - RESTful HTTP API
-   - JSON-RPC 兼容
-   - WebSocket 实时推送（规划中）
-   - 挖矿 API（矿池支持）
-
-#### 技术创新
-
-**原子化事务**
-- 区块保存和交易执行一次性完成
-- 失败自动回滚，不留半成品
-- 减少 85% 的磁盘写入次数
-- 性能提升 > 5 倍
-
-**混合同步**
-- 主链快速同步：1000 区块/批次
-- DAG 补全：按需拉取缺失区块
-- 初始同步时间：约 2 小时（100 万区块）
+### Future milestones
+- Short term (1–3 months): memory optimization, faster sync (<1h for 1M blocks),
+  Prometheus metrics, richer explorer/pool tooling.
+- Mid term (3–6 months): EVM integration, Solidity tooling, SPV client, browser wallet.
+- Long term (6–12 months): Layer 2 solutions (channels/Rollups), zk-proof experiments,
+  DAO governance mechanisms.
 
 ---
 
-## 4. 模块协作关系
+## 7. Comparison snapshot
 
-### 4.1 区块导入流程（技术视角）
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     区块导入完整流程                           │
-└─────────────────────────────────────────────────────────────┘
-
-    接收区块
-       ↓
-    ┌─────────────────────┐
-    │  1. 网络层          │
-    │  xdagj-p2p         │  ← 接收来自其他节点的区块
-    │  (P2P 消息传输)     │
-    └─────────────────────┘
-       ↓
-    ┌─────────────────────┐
-    │  2. 验证层          │
-    │  xdagj (主程序)     │  ← 验证区块结构和链接
-    │  - 结构验证         │
-    │  - 链接验证         │
-    └─────────────────────┘
-       ↓
-    ┌─────────────────────┐
-    │  3. 共识层          │
-    │  xdagj (共识引擎)   │  ← PoW 验证
-    │  - RandomX PoW     │    ├──→ 调用 xdagj-native-randomx
-    │  - Epoch 竞争      │    │    (挖矿算法验证)
-    │  - 累积难度        │    │
-    └─────────────────────┘   │
-       ↓                       ↓
-    ┌─────────────────────┐ ┌─────────────────────┐
-    │  4. 存储层          │ │  5. 密码学层        │
-    │  xdagj (数据库)     │ │  xdagj-crypto      │
-    │  - 保存区块         │ │  - 验证签名         │ ← 交易签名验证
-    │  - 执行交易         │ │  - 地址验证         │
-    │  - 更新账户         │ │                    │
-    └─────────────────────┘ └─────────────────────┘
-       ↓
-    ┌─────────────────────┐
-    │  6. 广播层          │
-    │  xdagj-p2p         │  ← 广播给其他节点
-    │  (通知邻居节点)     │
-    └─────────────────────┘
-```
-
-### 4.2 用户挖矿流程（业务视角）
-
-```
-矿工使用挖矿客户端 (xdagj-miner)
-       ↓
-1. 请求候选区块
-   GET /api/v1/mining/candidate
-       ↓
-2. xdagj 生成候选区块
-   - 从交易池选择交易
-   - 构造区块头
-   - 生成挖矿任务
-       ↓
-3. 矿工开始计算（离线）
-   - xdagj-native-randomx 执行 RandomX 算法
-   - 尝试不同的 nonce（随机数）
-   - 寻找符合难度要求的哈希
-       ↓
-4. 找到有效解
-   POST /api/v1/mining/submit
-       ↓
-5. xdagj 验证并导入
-   - xdagj-native-randomx 验证 PoW
-   - xdagj-crypto 验证签名
-   - xdagj 保存区块到数据库
-       ↓
-6. xdagj-p2p 广播新区块
-   - 通知所有连接的节点
-   - 新区块在网络中传播
-```
-
-### 4.3 模块依赖关系
-
-```
-┌──────────────────────────────────────────────────────────┐
-│                     依赖关系图                            │
-│                                                          │
-│  ┌────────────────────────────────────────────────┐     │
-│  │           xdagj (主模块)                        │     │
-│  │    ┌──────────────────────────────────┐        │     │
-│  │    │  共识引擎  │  存储层  │  API 层   │        │     │
-│  │    └──────────────────────────────────┘        │     │
-│  └────────────────────────────────────────────────┘     │
-│         ↓              ↓              ↓                  │
-│    ┌────────┐    ┌────────┐    ┌────────┐              │
-│    │xdagj-  │    │xdagj-  │    │xdagj-  │              │
-│    │crypto  │    │native- │    │p2p     │              │
-│    │        │    │randomx │    │        │              │
-│    └────────┘    └────────┘    └────────┘              │
-│         ↑              ↑              ↑                  │
-│         └──────────────┼──────────────┘                 │
-│                        │                                │
-│              可被其他项目复用                             │
-│                                                          │
-└──────────────────────────────────────────────────────────┘
-```
-
-**依赖说明**：
-- **xdagj** 依赖三个基础模块
-- 三个基础模块相互独立，没有依赖关系
-- 基础模块可以被其他项目单独使用
+| Feature            | XDAGJ | Bitcoin Core | Ethereum Geth |
+|--------------------|-------|--------------|---------------|
+| Language           | Java 21 | C++        | Go            |
+| Modularity         | ★★★★★ | ★★☆☆☆       | ★★★☆☆        |
+| Reusability        | ★★★★★ | ★★☆☆☆       | ★★★★☆        |
+| Performance        | ★★★★☆ | ★★★★★       | ★★★★☆        |
+| Scalability hooks  | ★★★★★ | ★★☆☆☆       | ★★★★☆        |
 
 ---
 
-## 5. 技术优势
-
-### 5.1 模块化带来的好处
-
-#### 1. 开发效率高
-
-**传统方式**（单体架构）
-```
-修改挖矿算法 → 需要重新编译整个项目 → 重新测试所有功能 → 发布完整版本
-耗时：数周到数月
-```
-
-**模块化方式**（XDAGJ）
-```
-修改挖矿算法 → 只编译 xdagj-native-randomx → 只测试挖矿功能 → 发布单个模块
-耗时：数天
-```
-
-#### 2. 维护成本低
-
-- 每个模块有独立的版本号
-- 可以独立升级，不影响其他模块
-- 问题定位更快（知道是哪个模块出问题）
-
-#### 3. 复用价值高
-
-**xdagj-crypto 的复用场景**：
-- 其他区块链项目（以太坊类项目）
-- 企业级加密应用
-- 数字钱包应用
-- 数字签名服务
-
-**xdagj-p2p 的复用场景**：
-- 其他区块链项目（比特币、以太坊类）
-- 分布式存储系统（IPFS 类）
-- IoT 设备网络
-- 游戏 P2P 网络
-
-**xdagj-native-randomx 的复用场景**：
-- 其他 PoW 区块链
-- 挖矿软件和矿池
-- RandomX 算法研究
-
-#### 4. 质量保证高
-
-**测试覆盖率**：
-- xdagj-crypto：207 测试用例，95%+ 覆盖率
-- xdagj-native-randomx：完整基准测试
-- xdagj-p2p：873 测试用例，76% 覆盖率
-- xdagj：237 测试用例，99.2% 通过率
-
-每个模块独立测试，质量有保障。
-
-### 5.2 性能优势
-
-#### 1. 原子化事务（vs 传统方案）
-
-**传统方案**：
-```
-保存区块 → 保存区块信息 → 更新索引 → 执行交易 → 更新余额 → 更新 Nonce
-= 7+ 次数据库写入
-```
-
-**XDAGJ 方案**：
-```
-开始事务 → 缓冲所有操作 → 一次性提交
-= 1 次数据库写入
-性能提升：5 倍+
-磁盘写入减少：85%
-```
-
-#### 2. 混合同步（vs 传统同步）
-
-**传统方案**：
-```
-一个一个区块下载 → 1,000,000 个区块 = 1,000,000 次网络请求
-同步时间：数天
-```
-
-**XDAGJ 方案**：
-```
-批量下载 1000 个/次 → 1,000,000 个区块 = 1,000 次网络请求
-同步时间：约 2 小时
-速度提升：50 倍+
-```
-
-#### 3. 高性能 P2P 网络
-
-**XDAGJ P2P 性能**：
-- 消息吞吐：17,000+ 消息/秒
-- 延迟：95% < 8 毫秒
-- 错误率：0%（700 万+ 消息测试）
-- 测试规模：20 节点集群
-
-对比其他项目：
-- 比特币：~1,000 消息/秒
-- 以太坊：~5,000 消息/秒
-- XDAGJ：17,000+ 消息/秒（3-17 倍优势）
+## 8. Contact
+- **Website**: https://xdag.io  
+- **Forum**: https://forum.xdag.io  
+- **Support**: dev@xdag.io  
+- **Business**: business@xdag.io  
+- **Community**: community@xdag.io
 
 ---
 
-## 6. 扩展性设计
-
-### 6.1 横向扩展能力
-
-#### 1. 存储扩展
-
-**当前方案**：
-```
-RocksDB（嵌入式数据库）
-- 优势：高性能、零配置
-- 适用：个人节点、小型矿池
-```
-
-**扩展方案**（已预留接口）：
-```
-MySQL / PostgreSQL（企业级数据库）
-- 优势：支持集群、备份方便
-- 适用：大型矿池、区块浏览器
-```
-
-#### 2. P2P 协议扩展
-
-**当前方案**：
-```
-TCP + 自定义二进制协议
-- 优势：高性能、低延迟
-```
-
-**扩展方案**（已预留接口）：
-```
-- QUIC（下一代互联网协议，Google 推出）
-- WebSocket（浏览器友好）
-- libp2p（IPFS 使用的 P2P 框架）
-```
-
-#### 3. API 扩展
-
-**当前方案**：
-```
-REST API + JSON-RPC
-- 优势：通用性好、易于使用
-```
-
-**扩展方案**（已预留接口）：
-```
-- GraphQL（灵活查询）
-- gRPC（高性能 RPC）
-- WebSocket（实时推送）
-```
-
-### 6.2 纵向扩展能力
-
-#### 1. 智能合约（规划中）
-
-```
-┌──────────────────────────────────┐
-│  智能合约层（EVM 兼容）            │
-│  - 支持 Solidity 语言             │
-│  - 兼容以太坊合约                 │
-│  - DeFi 应用支持                  │
-└──────────────────────────────────┘
-              ↓
-┌──────────────────────────────────┐
-│  xdagj (现有架构)                 │
-│  - 无需大改，增加一层即可          │
-└──────────────────────────────────┘
-```
-
-#### 2. 轻节点（规划中）
-
-```
-完整节点                     轻节点
-  ↓                          ↓
-存储所有区块数据          只存储区块头
-需要 100+ GB 磁盘        需要 1 GB 磁盘
-  ↓                          ↓
-适合服务器              适合手机、IoT 设备
-```
-
-#### 3. 跨链桥（规划中）
-
-```
-XDAG 链 ←→ 跨链桥 ←→ 以太坊链
-                ↕
-              比特币链
-```
-
-### 6.3 模块独立演进
-
-每个模块可以独立升级，互不影响：
-
-```
-时间线        xdagj-crypto    xdagj-native-randomx    xdagj-p2p    xdagj
-─────────────────────────────────────────────────────────────────────
-2024-11      v0.1.3          v0.2.5                  v0.1.4       v0.9.x
-2024-12      v0.1.4          v0.2.5                  v0.1.5       v0.9.x
-2025-01      v0.1.5 ✓        v0.2.6 ✓                v0.1.6 ✓     v1.0.0 ✓
-2025-02      v0.1.5          v0.2.6                  v0.1.7       v1.0.1
-2025-03      v0.2.0          v0.2.6                  v0.2.0       v1.1.0
-2025-Q2      v0.2.x          v0.3.0                  v0.2.x       v1.2.0
-
-✓ = 当前生产版本
-```
-
----
-
-## 7. 未来规划
-
-### 7.1 短期目标（1-3 个月）
-
-#### 1. 性能优化
-- [ ] 优化内存使用（减少 30% 内存占用）
-- [ ] 提升同步速度（目标：1 小时内同步 100 万区块）
-- [ ] 增加 Prometheus 监控指标
-
-#### 2. 功能完善
-- [ ] 交易实体化（完整的交易追踪）
-- [ ] WebSocket 实时推送（区块、交易通知）
-- [ ] GraphQL API（灵活的数据查询）
-
-#### 3. 工具完善
-- [ ] 区块浏览器增强（xdagj-explorer）
-- [ ] 矿池管理后台（xdagj-pool）
-- [ ] 移动端钱包（iOS/Android）
-
-### 7.2 中期目标（3-6 个月）
-
-#### 1. 智能合约
-- [ ] EVM 兼容层（兼容以太坊智能合约）
-- [ ] Solidity 编译器集成
-- [ ] 智能合约开发工具链
-- [ ] 测试网部署
-
-#### 2. 轻节点
-- [ ] SPV（简单支付验证）客户端
-- [ ] 手机钱包支持
-- [ ] 浏览器插件钱包
-
-#### 3. 跨链
-- [ ] 以太坊跨链桥（XDAG ↔ ETH）
-- [ ] 比特币跨链桥（XDAG ↔ BTC）
-- [ ] 跨链资产协议
-
-### 7.3 长期目标（6-12 个月）
-
-#### 1. Layer 2 扩容
-- [ ] 状态通道（闪电网络类似方案）
-- [ ] Rollup（以太坊 Layer 2 方案）
-- [ ] 侧链方案
-
-#### 2. 隐私增强
-- [ ] 零知识证明（zk-SNARKs）
-- [ ] 环签名（门罗币方案）
-- [ ] 隐私交易可选
-
-#### 3. 治理机制
-- [ ] DAO（去中心化自治组织）
-- [ ] 链上投票
-- [ ] 社区提案系统
-
-### 7.4 生态扩展
-
-```
-              现在 (v1.0.0)                未来 (v2.0.0)
-                    ↓                            ↓
-        ┌──────────────────┐          ┌──────────────────┐
-        │  基础区块链       │          │  智能合约平台     │
-        │  - 转账          │          │  - DeFi          │
-        │  - 挖矿          │          │  - NFT           │
-        │  - 浏览器        │          │  - DAO           │
-        └──────────────────┘          │  - GameFi        │
-                                      └──────────────────┘
-                ↓                             ↓
-        1000+ 节点                      10000+ 节点
-        数万用户                        数百万用户
-        简单应用                        复杂生态
-```
-
----
-
-## 8. 总结
-
-### 8.1 XDAGJ 的核心价值
-
-1. **模块化设计**
-   - 4 个核心模块，各司其职
-   - 每个模块都可独立复用
-   - 降低 70% 开发和维护成本
-
-2. **高性能**
-   - RandomX 挖矿：92% C++ 性能
-   - P2P 网络：17,000+ 消息/秒
-   - 区块导入：5 倍+ 性能提升
-
-3. **高质量**
-   - 1300+ 测试用例
-   - 76-95% 测试覆盖率
-   - 99%+ 测试通过率
-
-4. **可扩展**
-   - 预留智能合约接口
-   - 支持轻节点
-   - 跨链桥准备
-
-### 8.2 与其他项目对比
-
-| 特性 | XDAGJ | 比特币 Core | 以太坊 Geth |
-|------|-------|------------|-------------|
-| 开发语言 | Java 21 | C++ | Go |
-| 模块化程度 | ★★★★★ | ★★☆☆☆ | ★★★☆☆ |
-| 可复用性 | ★★★★★ | ★★☆☆☆ | ★★★★☆ |
-| 性能 | ★★★★☆ | ★★★★★ | ★★★★☆ |
-| 可扩展性 | ★★★★★ | ★★☆☆☆ | ★★★★☆ |
-| 测试覆盖 | ★★★★★ | ★★★☆☆ | ★★★★☆ |
-
-### 8.3 适用场景
-
-**XDAGJ 适合**：
-- ✅ 企业级区块链应用（高质量代码）
-- ✅ 需要快速迭代的项目（模块化设计）
-- ✅ 跨平台部署（Java 跨平台）
-- ✅ 二次开发和定制（清晰的架构）
-
-**XDAGJ 不太适合**：
-- ❌ 极致性能要求（C++ 更快）
-- ❌ 嵌入式设备（Java 内存占用大）
-- ❌ 极简主义（功能丰富 = 代码量大）
-
----
-
-## 附录
-
-### A. 技术栈总览
-
-**编程语言**: Java 21
-**构建工具**: Maven 3.x
-**网络框架**: Netty 4.2.1
-**数据库**: RocksDB 9.8.4
-**加密库**: BouncyCastle
-**测试框架**: JUnit 5 + Mockito
-
-### B. 开源许可
-
-**许可证**: MIT License
-**开源地址**: https://github.com/XDagger/xdagj
-
-**可以自由**：
-- ✅ 商业使用
-- ✅ 修改代码
-- ✅ 分发
-- ✅ 私有使用
-
-**唯一要求**：
-- 保留原始版权声明
-
-### C. 社区资源
-
-**官方网站**: https://xdag.io
-**GitHub**: https://github.com/XDagger
-**Discord**: https://discord.gg/xdag
-**论坛**: https://forum.xdag.io
-
-### D. 联系方式
-
-**技术支持**: dev@xdag.io
-**商务合作**: business@xdag.io
-**社区管理**: community@xdag.io
-
----
-
-**文档版本**: 1.0.0
-**最后更新**: 2025-11-21
-**维护团队**: XDAGJ 开发团队
-**审核状态**: ✅ 已审核
+**License**: MIT  
+**Repository**: https://github.com/XDagger/xdagj  
+**Maintainers**: XDAGJ Core Team  
+**Review status**: ✅ Reviewed
