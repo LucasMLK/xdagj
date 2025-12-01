@@ -23,10 +23,12 @@
  */
 package io.xdag.consensus.epoch;
 
+import io.xdag.DagKernel;
 import io.xdag.consensus.miner.BlockGenerator;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
 import io.xdag.core.DagImportResult;
+import io.xdag.p2p.SyncManager;
 import org.apache.tuweni.units.bigints.UInt256;
 import lombok.extern.slf4j.Slf4j;
 
@@ -107,6 +109,11 @@ public class EpochConsensusManager {
     // ========== Dependencies ==========
 
     /**
+     * DagKernel for accessing SyncManager (BUG-SYNC-001 fix).
+     */
+    private final DagKernel dagKernel;
+
+    /**
      * DagChain for block import.
      */
     private final DagChain dagChain;
@@ -157,6 +164,7 @@ public class EpochConsensusManager {
     /**
      * Create a new EpochConsensusManager.
      *
+     * @param dagKernel           DagKernel instance (for SyncManager access)
      * @param dagChain            DagChain instance
      * @param dagStore            DagStore instance (for WAL sync)
      * @param blockGenerator      BlockGenerator for creating candidate blocks
@@ -164,11 +172,13 @@ public class EpochConsensusManager {
      * @param minimumDifficulty   Minimum difficulty for solutions
      */
     public EpochConsensusManager(
+            DagKernel dagKernel,
             DagChain dagChain,
             io.xdag.store.DagStore dagStore,
             BlockGenerator blockGenerator,
             int backupMiningThreads,
             UInt256 minimumDifficulty) {
+        this.dagKernel = dagKernel;
         this.dagChain = dagChain;
         this.dagStore = dagStore;
         this.blockGenerator = blockGenerator;
@@ -338,12 +348,25 @@ public class EpochConsensusManager {
     /**
      * Trigger backup miner if no solutions have been collected.
      *
+     * <p>BUG-SYNC-001 fix: Skip backup mining if node is not synchronized.
+     * This prevents new nodes from mining before catching up with the network.
+     *
      * @param epoch Epoch number
      */
     private void triggerBackupMinerIfNeeded(long epoch) {
         EpochContext context = epochContexts.get(epoch);
         if (context == null) {
             log.warn("Cannot trigger backup miner: epoch context not found for epoch {}", epoch);
+            return;
+        }
+
+        // BUG-SYNC-001 fix: Check sync status before backup mining
+        SyncManager syncManager = dagKernel != null ? dagKernel.getSyncManager() : null;
+        if (syncManager != null && !syncManager.isSynchronized()) {
+            log.info("⏸ Skipping backup miner for epoch {}: node not synchronized " +
+                    "(localEpoch={}, remoteEpoch={}; localHeight={}, remoteHeight={})",
+                    epoch, syncManager.getLocalTipEpoch(), syncManager.getRemoteTipEpoch(),
+                    dagChain.getMainChainLength(), syncManager.getRemoteTipHeight());
             return;
         }
 
@@ -390,6 +413,19 @@ public class EpochConsensusManager {
 
         // 4. Wait briefly for backup miner if no solutions yet
         if (solutions.isEmpty()) {
+            // BUG-SYNC-001 fix: Check sync status before waiting for backup miner
+            SyncManager syncManager = dagKernel != null ? dagKernel.getSyncManager() : null;
+            if (syncManager != null && !syncManager.isSynchronized()) {
+                log.info("⏸ Skipping backup miner wait for epoch {}: node not synchronized " +
+                        "(localEpoch={}, remoteEpoch={}; localHeight={}, remoteHeight={})",
+                        epoch, syncManager.getLocalTipEpoch(), syncManager.getRemoteTipEpoch(),
+                        dagChain.getMainChainLength(), syncManager.getRemoteTipHeight());
+                // Create context for next epoch without producing block
+                createEpochContext(epoch + 1);
+                scheduleBackupMinerTrigger(epoch + 1);
+                return;
+            }
+
             log.warn("⚠ No solutions collected for epoch {}, waiting for backup miner", epoch);
             waitForBackupMiner(context);
             solutions = context.getSolutions();

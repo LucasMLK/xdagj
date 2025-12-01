@@ -323,6 +323,7 @@ public class DagKernel {
           org.apache.tuweni.units.bigints.UInt256.fromHexString("0x00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
       this.epochConsensusManager = new EpochConsensusManager(
+          this,  // ✅ Pass DagKernel for SyncManager access (BUG-SYNC-001 fix)
           dagChain,
           dagStore,  // ✅ Pass DagStore for WAL sync (BUG-STORAGE-002 fix)
           miningApiService.getBlockGenerator(),  // ✅ Inject BlockGenerator for candidate block creation
@@ -633,6 +634,12 @@ public class DagKernel {
       }
       this.syncManager.start();
       log.info("✓ FastDAG SyncManager started");
+
+      // BUG-SYNC-001 fix: Connect SyncManager to MiningApiService for sync gate
+      if (this.miningApiService != null) {
+        this.miningApiService.setSyncManager(this.syncManager);
+        log.info("✓ SyncManager connected to MiningApiService (mining blocked until synchronized)");
+      }
 
       log.info("✓ P2P service started (broadcasting enabled)");
 

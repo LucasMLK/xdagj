@@ -36,6 +36,7 @@ import io.xdag.consensus.pow.PowAlgorithm;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
 import io.xdag.core.DagImportResult;
+import io.xdag.p2p.SyncManager;
 import io.xdag.utils.TimeUtils;
 import java.time.Duration;
 import lombok.Getter;
@@ -117,6 +118,12 @@ public class MiningApiService {
    */
   private volatile EpochConsensusManager epochConsensusManager;
 
+  /**
+   * Sync manager for checking synchronization status (BUG-SYNC-001 fix)
+   * Mining is blocked until node is synchronized with the network
+   */
+  private volatile SyncManager syncManager;
+
   // ========== State ==========
 
   /**
@@ -167,6 +174,21 @@ public class MiningApiService {
     }
   }
 
+  /**
+   * Set the sync manager (for BUG-SYNC-001 fix)
+   *
+   * <p>This method is called by DagKernel during initialization to enable
+   * synchronization checks before mining.
+   *
+   * @param syncManager The SyncManager instance
+   */
+  public void setSyncManager(SyncManager syncManager) {
+    this.syncManager = syncManager;
+    if (syncManager != null) {
+      log.info("✓ SyncManager enabled - mining will be blocked until synchronized");
+    }
+  }
+
   // ========== API Methods ==========
 
   /**
@@ -181,6 +203,15 @@ public class MiningApiService {
   public Block getCandidateBlock(String poolId) {
     try {
       log.info("Pool '{}' requesting candidate block", poolId);
+
+      // BUG-SYNC-001 fix: Block mining until synchronized
+      if (syncManager != null && !syncManager.isSynchronized()) {
+        log.warn("⏸ Pool '{}' cannot get candidate: node not synchronized " +
+            "(localEpoch={}, remoteEpoch={}; localHeight={}, remoteHeight={})",
+            poolId, syncManager.getLocalTipEpoch(), syncManager.getRemoteTipEpoch(),
+            dagChain.getMainChainLength(), syncManager.getRemoteTipHeight());
+        return null;
+      }
 
       // Generate candidate block via BlockGenerator
       Block candidate = blockGenerator.generateCandidate();
@@ -223,6 +254,15 @@ public class MiningApiService {
       log.info("Pool '{}' submitting mined block: hash={}",
           poolId,
           block.getHash().toHexString().substring(0, 18) + "...");
+
+      // BUG-SYNC-001 fix: Reject mining submissions until synchronized
+      if (syncManager != null && !syncManager.isSynchronized()) {
+        log.warn("⏸ Pool '{}' submission rejected: node not synchronized " +
+            "(localEpoch={}, remoteEpoch={}; localHeight={}, remoteHeight={})",
+            poolId, syncManager.getLocalTipEpoch(), syncManager.getRemoteTipEpoch(),
+            dagChain.getMainChainLength(), syncManager.getRemoteTipHeight());
+        return BlockSubmitResult.rejected("Node not synchronized", "NOT_SYNCHRONIZED");
+      }
 
       // Step 1: Validate that block is based on a known candidate
       Bytes32 hashWithoutNonce = calculateHashWithoutNonce(block);

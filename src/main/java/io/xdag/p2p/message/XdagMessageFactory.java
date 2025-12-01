@@ -59,14 +59,18 @@ public class XdagMessageFactory {
       return switch (c) {
         //  Transaction broadcast message (Phase 3)
         case NEW_TRANSACTION -> new NewTransactionMessage(body);
-        
+
         // FastDAG Sync Protocol Messages (v3.0)
         case NEW_BLOCK_HASH -> new NewBlockHashMessage(body);
         case GET_BLOCKS -> new GetBlocksMessage(body);
         case BLOCKS_REPLY -> new BlocksReplyMessage(body);
         case GET_EPOCH_HASHES -> new GetEpochHashesMessage(body);
         case EPOCH_HASHES_REPLY -> new EpochHashesReplyMessage(body);
-        
+
+        // Status exchange messages (BUG-SYNC-001 fix)
+        case GET_STATUS -> new GetStatusMessage(body);
+        case STATUS_REPLY -> new StatusReplyMessage(body);
+
         default -> {
             log.warn("Received deprecated or unknown message code: {}", c);
             yield null;

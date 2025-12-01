@@ -75,6 +75,18 @@ public enum XdagMessageCode implements IMessageCode {
    */
   EPOCH_HASHES_REPLY(0x34),
 
+  /**
+   * [0x35] GET_STATUS - Request peer's sync status (tip epoch, height, difficulty)
+   * Used when a new peer connects to determine sync state.
+   */
+  GET_STATUS(0x35),
+
+  /**
+   * [0x36] STATUS_REPLY - Reply with current sync status
+   * Contains tip epoch, main chain height, and cumulative difficulty.
+   */
+  STATUS_REPLY(0x36),
+
   // =======================================
   // [0x27] Transaction Broadcast
   // =======================================
