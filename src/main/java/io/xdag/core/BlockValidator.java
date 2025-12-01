@@ -372,7 +372,7 @@ public class BlockValidator {
     if (!resolved.hasAllReferences()) {
       boolean allowBootstrap = chainStats.getMainBlockCount() <= 1;
       if (!allowBootstrap) {
-        Bytes32 missing = resolved.getMissingReferences().get(0);
+        Bytes32 missing = resolved.getMissingReferences().getFirst();
         log.debug("Block {} has missing dependency: {}",
             formatHash(block.getHash()), formatHash(missing));
 

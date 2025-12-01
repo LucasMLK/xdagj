@@ -27,7 +27,6 @@ package io.xdag.core;
 import io.xdag.DagKernel;
 import io.xdag.store.DagStore;
 import io.xdag.store.TransactionStore;
-import io.xdag.utils.TimeUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -313,7 +312,7 @@ public class BlockImporter {
               formatHash(block.getHash()), blockEpoch, otherMainBlocks.size());
 
           // Take height from the first one (they should all be in sequence)
-          Block firstDemoted = otherMainBlocks.get(0);
+          Block firstDemoted = otherMainBlocks.getFirst();
           height = firstDemoted.getInfo().getHeight();
 
           // Return ALL demoted blocks (BUG-CONSENSUS-007 fix)
@@ -355,25 +354,6 @@ public class BlockImporter {
     }
 
     return new EpochCompetitionResult(height, isBestChain, isEpochWinner, demotedBlock);
-  }
-
-  /**
-   * Find other main blocks in the same epoch (excluding the specified block)
-   *
-   * @deprecated Use {@link #findAllOtherMainBlocksInEpoch(List, Block)} instead.
-   *             This method only returns the first main block found, which can cause
-   *             BUG-CONSENSUS-007 when multiple main blocks exist in the same epoch.
-   */
-  @Deprecated
-  private Block findOtherMainBlockInEpoch(List<Block> candidates, Block excludeBlock) {
-    for (Block candidate : candidates) {
-      if (candidate.getInfo() != null &&
-          candidate.getInfo().getHeight() > 0 &&
-          !candidate.getHash().equals(excludeBlock.getHash())) {
-        return candidate;
-      }
-    }
-    return null;
   }
 
   /**
@@ -495,11 +475,11 @@ public class BlockImporter {
           epoch, formatHash(expectedWinner.getHash()));
 
     } else if (mainBlocks.size() == 1) {
-      if (!mainBlocks.get(0).getHash().equals(expectedWinner.getHash())) {
+      if (!mainBlocks.getFirst().getHash().equals(expectedWinner.getHash())) {
         log.error("⚠️  EPOCH INTEGRITY VIOLATION: Epoch {} main block mismatch:",
             epoch);
         log.error("   Expected: {}", formatHash(expectedWinner.getHash()));
-        log.error("   Actual: {}", formatHash(mainBlocks.get(0).getHash()));
+        log.error("   Actual: {}", formatHash(mainBlocks.getFirst().getHash()));
       } else {
         log.debug("✓ Epoch {} integrity verified: single winner {}",
             epoch, formatHash(expectedWinner.getHash()));
@@ -895,6 +875,10 @@ public class BlockImporter {
     private final boolean winner;
     private final boolean epochWinner;
     private final Block demotedBlock;         // Single block (for backward compatibility)
+    /**
+     * -- GETTER --
+     *  Get ALL blocks that need demotion (BUG-CONSENSUS-007 fix)
+     */
     private final List<Block> demotedBlocks;  // ALL blocks that need demotion (BUG-CONSENSUS-007 fix)
 
     /**
@@ -910,7 +894,7 @@ public class BlockImporter {
      */
     public EpochCompetitionResult(long height, boolean winner, boolean epochWinner, List<Block> demotedBlocks) {
       this(height, winner, epochWinner,
-           demotedBlocks != null && !demotedBlocks.isEmpty() ? demotedBlocks.get(0) : null,
+           demotedBlocks != null && !demotedBlocks.isEmpty() ? demotedBlocks.getFirst() : null,
            demotedBlocks != null ? demotedBlocks : Collections.emptyList());
     }
 
@@ -926,27 +910,5 @@ public class BlockImporter {
       this.demotedBlocks = demotedBlocks;
     }
 
-    public long getHeight() {
-      return height;
-    }
-
-    public boolean isWinner() {
-      return winner;
-    }
-
-    public boolean isEpochWinner() {
-      return epochWinner;
-    }
-
-    public Block getDemotedBlock() {
-      return demotedBlock;
-    }
-
-    /**
-     * Get ALL blocks that need demotion (BUG-CONSENSUS-007 fix)
-     */
-    public List<Block> getDemotedBlocks() {
-      return demotedBlocks;
-    }
   }
 }

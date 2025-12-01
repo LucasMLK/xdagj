@@ -366,7 +366,7 @@ public class BlockBuilder {
 
   /**
    * Calculate block work
-   *
+   * <p>
    * XDAG rule: blockWork = MAX_UINT256 / hash
    */
   private UInt256 calculateBlockWork(Bytes32 hash) {

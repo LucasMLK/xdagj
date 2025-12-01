@@ -292,36 +292,6 @@ public class Account {
         .build();
   }
 
-  /**
-   * Create a new contract account
-   *
-   * @param address     account address (20 bytes, hash160)
-   * @param codeHash    hash of contract code
-   * @param storageRoot root of contract storage
-   * @return new contract Account
-   * @throws IllegalArgumentException if address is not exactly 20 bytes
-   */
-  public static Account createContract(Bytes address, Bytes32 codeHash, Bytes32 storageRoot) {
-    if (address.size() != 20) {
-      throw new IllegalArgumentException(
-          "Address must be exactly 20 bytes, got: " + address.size());
-    }
-    // BUGFIX BUG-079: Validate contract parameters
-    if (codeHash == null) {
-      throw new IllegalArgumentException("Contract codeHash cannot be null");
-    }
-    if (storageRoot == null) {
-      throw new IllegalArgumentException("Contract storageRoot cannot be null");
-    }
-    return Account.builder()
-        .address(address)
-        .balance(UInt256.ZERO)
-        .nonce(UInt64.ONE)  // Contract nonce starts at 1
-        .codeHash(codeHash)
-        .storageRoot(storageRoot)
-        .build();
-  }
-
   @Override
   public String toString() {
     StringBuilder sb = new StringBuilder();
