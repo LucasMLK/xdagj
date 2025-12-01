@@ -37,9 +37,11 @@ import io.xdag.p2p.message.BlocksReplyMessage;
 import io.xdag.p2p.message.EpochHashesReplyMessage;
 import io.xdag.p2p.message.GetBlocksMessage;
 import io.xdag.p2p.message.GetEpochHashesMessage;
+import io.xdag.p2p.message.GetStatusMessage;
 import io.xdag.p2p.message.Message;
 import io.xdag.p2p.message.NewBlockHashMessage;
 import io.xdag.p2p.message.NewTransactionMessage;
+import io.xdag.p2p.message.StatusReplyMessage;
 import io.xdag.p2p.message.XdagMessageCode;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -80,6 +82,10 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
     this.messageTypes.add(XdagMessageCode.BLOCKS_REPLY.toByte());
     this.messageTypes.add(XdagMessageCode.GET_EPOCH_HASHES.toByte());
     this.messageTypes.add(XdagMessageCode.EPOCH_HASHES_REPLY.toByte());
+
+    // Register status exchange messages (BUG-SYNC-001 fix)
+    this.messageTypes.add(XdagMessageCode.GET_STATUS.toByte());
+    this.messageTypes.add(XdagMessageCode.STATUS_REPLY.toByte());
   }
 
   @Override
@@ -124,6 +130,15 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
   public void onConnect(Channel channel) {
     log.info("Peer connected: {} (Node ID: {})",
         channel.getRemoteAddress(), channel.getNodeId());
+
+    // BUG-SYNC-001 fix: Request peer's chain status on connection
+    // This allows us to know the remote tip epoch for sync completion detection
+    try {
+      channel.send(new GetStatusMessage());
+      log.debug("Sent GET_STATUS to {}", channel.getRemoteAddress());
+    } catch (Exception e) {
+      log.warn("Failed to send GET_STATUS to {}: {}", channel.getRemoteAddress(), e.getMessage());
+    }
   }
 
   @Override
@@ -181,6 +196,13 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
         case EPOCH_HASHES_REPLY:
           handleEpochHashesReply(channel, body);
           break;
+        // Status exchange handlers (BUG-SYNC-001 fix)
+        case GET_STATUS:
+          handleGetStatus(channel);
+          break;
+        case STATUS_REPLY:
+          handleStatusReply(channel, body);
+          break;
         default:
           log.warn("Unknown message type {} from {}",
               messageType, channel.getRemoteAddress());
@@ -196,23 +218,37 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
 
   /**
    * Handle NEW_BLOCK_HASH (Inv) - Received notification of a new block
+   *
+   * <p>BUG-SYNC-004 fix: During initial sync (when node is not synchronized),
+   * ignore NEW_BLOCK_HASH messages to prevent height inconsistency. These blocks
+   * will be fetched through ordered epoch sync instead.
    */
   private void handleNewBlockHash(Channel channel, Bytes body) {
     try {
       NewBlockHashMessage msg = new NewBlockHashMessage(body.toArray());
       Bytes32 hash = msg.getHash();
 
+      // BUG-SYNC-004: Check if node is synchronized before processing real-time broadcasts
+      // During initial sync, blocks should come through ordered epoch sync to ensure
+      // correct height assignment. Ignore NEW_BLOCK_HASH to prevent height inconsistency.
+      SyncManager syncManager = dagKernel.getSyncManager();
+      if (syncManager != null && !syncManager.isSynchronized()) {
+        log.debug("🔄 BUG-SYNC-004: Ignoring NEW_BLOCK_HASH {} during initial sync (will fetch via epoch sync)",
+            hash.toHexString().substring(0, 16));
+        return;
+      }
+
       // 1. Check if we already have this block
       if (dagChain.getBlockByHash(hash, false) != null) { // Use getBlockByHash(..., false) instead of hasBlock
-        log.trace("Ignoring NEW_BLOCK_HASH {} from {}: already have", 
+        log.trace("Ignoring NEW_BLOCK_HASH {} from {}: already have",
             hash.toHexString().substring(0, 16), channel.getRemoteAddress());
         return;
       }
 
       // 2. Request the block data
-      log.debug("Received NEW_BLOCK_HASH {} from {}, requesting data...", 
+      log.debug("Received NEW_BLOCK_HASH {} from {}, requesting data...",
           hash.toHexString().substring(0, 16), channel.getRemoteAddress());
-      
+
       GetBlocksMessage request = new GetBlocksMessage(hash);
       channel.send(request);
 
@@ -240,10 +276,17 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
       List<Block> foundBlocks = new ArrayList<>();
 
       for (Bytes32 hash : request.getHashes()) {
+        // BUG-SYNC-002 debug: Log each hash being looked up
+        log.info("  → Looking up hash: {}", hash.toHexString().substring(0, 18) + "...");
+
         // Use isRaw=true to get full block data
         Block block = dagChain.getBlockByHash(hash, true);
         if (block != null) {
           foundBlocks.add(block);
+          log.info("  ✓ Found block: hash={}, epoch={}",
+              hash.toHexString().substring(0, 18) + "...", block.getEpoch());
+        } else {
+          log.warn("  ✗ Block NOT FOUND: hash={}", hash.toHexString().substring(0, 18) + "...");
         }
       }
 
@@ -270,6 +313,9 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
    * allowing them to compete with locally mined blocks for best solution selection.
    *
    * <p>Historical or delayed blocks are imported directly without epoch competition.
+   *
+   * <p>BUG-SYNC-004: Reverse dependency filling is disabled to prevent memory explosion
+   * on long-running nodes. Missing dependencies are resolved through ordered forward sync.
    */
   private void handleBlocksReply(Channel channel, Bytes body) {
     try {
@@ -309,7 +355,10 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
             // Historical or delayed block: direct import
             log.info("📥 Block epoch {} != current epoch {}, importing directly",
                      blockEpoch, currentEpoch);
-            dagChain.tryToConnect(block);
+            io.xdag.core.DagImportResult importResult = dagChain.tryToConnect(block);
+            log.info("📥 Import result for {}: {}",
+                     block.getHash().toHexString().substring(0, 18),
+                     importResult.toDetailedString());
           }
         } else {
           // No epoch consensus manager: direct import (legacy behavior)
@@ -373,6 +422,23 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
       log.info("📦 Received EPOCH_HASHES_REPLY from {}: {} epochs",
           channel.getRemoteAddress(), data.size());
 
+      // BUG-SYNC-004: Check if SyncManager is in binary search mode
+      SyncManager syncManager = dagKernel.getSyncManager();
+      if (syncManager != null && syncManager.isInBinarySearch()) {
+        // Binary search mode: report results to SyncManager
+        boolean hasBlocks = !data.isEmpty();
+        long minEpoch = -1;
+        if (hasBlocks) {
+          // Find minimum epoch in response
+          minEpoch = data.keySet().stream().min(Long::compareTo).orElse(-1L);
+        }
+        log.info("🔍 BUG-SYNC-004: Binary search response - hasBlocks={}, minEpoch={}",
+            hasBlocks, minEpoch);
+        syncManager.onBinarySearchResponse(hasBlocks, minEpoch);
+        return; // Don't fetch blocks during binary search, just probe
+      }
+
+      // Normal sync mode: fetch missing blocks
       List<Bytes32> missingHashes = new ArrayList<>();
 
       for (List<Bytes32> hashes : data.values()) {
@@ -386,6 +452,12 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
       if (!missingHashes.isEmpty()) {
         log.info("📤 Found {} missing blocks from epoch sync, sending GET_BLOCKS request(s)...",
             missingHashes.size());
+
+        // BUG-SYNC-002 debug: Log first few missing hashes
+        int logLimit = Math.min(5, missingHashes.size());
+        for (int i = 0; i < logLimit; i++) {
+          log.info("  → Missing hash {}: {}", i, missingHashes.get(i).toHexString().substring(0, 18) + "...");
+        }
 
         // Batch requests (max 500 per message)
         int batchSize = 500;
@@ -402,6 +474,67 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
 
     } catch (Exception e) {
       log.error("Error handling EPOCH_HASHES_REPLY from {}: {}", channel.getRemoteAddress(), e.getMessage());
+    }
+  }
+
+  // ==================== Status Exchange Handlers (BUG-SYNC-001 fix) ====================
+
+  /**
+   * Handle GET_STATUS - peer requesting our chain status.
+   * Reply with local tip epoch, height, and cumulative difficulty.
+   */
+  private void handleGetStatus(Channel channel) {
+    try {
+      SyncManager syncManager = dagKernel.getSyncManager();
+      long tipEpoch = syncManager != null ? syncManager.getLocalTipEpoch() : 0;
+      long height = dagChain.getMainChainLength();
+
+      // Get cumulative difficulty from tip block (optional, primarily tipEpoch is needed)
+      java.math.BigInteger difficulty = java.math.BigInteger.ZERO;
+      if (height > 0) {
+        Block tipBlock = dagChain.getMainBlockByHeight(height);
+        if (tipBlock != null) {
+          org.apache.tuweni.units.bigints.UInt256 cumDiff = dagChain.calculateCumulativeDifficulty(tipBlock);
+          difficulty = cumDiff.toBigInteger();
+        }
+      }
+
+      StatusReplyMessage reply = new StatusReplyMessage(tipEpoch, height, difficulty);
+      channel.send(reply);
+
+      log.debug("Sent STATUS_REPLY to {}: tipEpoch={}, height={}, difficulty={}",
+          channel.getRemoteAddress(), tipEpoch, height, difficulty);
+
+    } catch (Exception e) {
+      log.error("Error handling GET_STATUS from {}: {}", channel.getRemoteAddress(), e.getMessage());
+    }
+  }
+
+  /**
+   * Handle STATUS_REPLY - received peer's chain status.
+   * Update SyncManager with the remote tip epoch AND height for sync completion detection.
+   * BUG-SYNC-001 fix (enhanced): Track both epoch and height to prevent mining
+   * before all historical blocks are synced.
+   */
+  private void handleStatusReply(Channel channel, Bytes body) {
+    try {
+      StatusReplyMessage reply = new StatusReplyMessage(body.toArray());
+
+      log.info("Received STATUS_REPLY from {}: tipEpoch={}, height={}, difficulty={}",
+          channel.getRemoteAddress(),
+          reply.getTipEpoch(),
+          reply.getMainChainHeight(),
+          reply.getDifficulty());
+
+      // Update SyncManager with peer's tip epoch AND height
+      SyncManager syncManager = dagKernel.getSyncManager();
+      if (syncManager != null) {
+        syncManager.updateRemoteTipEpoch(reply.getTipEpoch());
+        syncManager.updateRemoteTipHeight(reply.getMainChainHeight());
+      }
+
+    } catch (Exception e) {
+      log.error("Error handling STATUS_REPLY from {}: {}", channel.getRemoteAddress(), e.getMessage());
     }
   }
 
