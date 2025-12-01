@@ -23,6 +23,8 @@
  */
 package io.xdag.core;
 
+import lombok.Getter;
+
 /**
  * OrphanReason - classifies different orphan categories.
  *
@@ -46,6 +48,7 @@ package io.xdag.core;
  * @since XDAGJ 5.2.0
  * @see OrphanManager
  */
+@Getter
 public enum OrphanReason {
   /**
    * Parent block is missing so we must retry later.
@@ -69,15 +72,14 @@ public enum OrphanReason {
    */
   LOST_COMPETITION((byte) 1);
 
+  /**
+   * -- GETTER --
+   * Byte code used when persisting the reason.
+   */
   private final byte code;
 
   OrphanReason(byte code) {
     this.code = code;
-  }
-
-  /** Byte code used when persisting the reason. */
-  public byte getCode() {
-    return code;
   }
 
   /**
@@ -88,18 +90,11 @@ public enum OrphanReason {
    * @throws IllegalArgumentException when the code is invalid
    */
   public static OrphanReason fromCode(byte code) {
-    switch (code) {
-      case 0:
-        return MISSING_DEPENDENCY;
-      case 1:
-        return LOST_COMPETITION;
-      default:
-        throw new IllegalArgumentException("Unknown OrphanReason code: " + code);
-    }
+    return switch (code) {
+      case 0 -> MISSING_DEPENDENCY;
+      case 1 -> LOST_COMPETITION;
+      default -> throw new IllegalArgumentException("Unknown OrphanReason code: " + code);
+    };
   }
 
-  /** @return {@code true} if the orphan should be retried. */
-  public boolean shouldRetry() {
-    return this == MISSING_DEPENDENCY;
-  }
 }
