@@ -69,16 +69,6 @@ public class PendingTransaction {
     return System.currentTimeMillis() - entryTime;
   }
 
-  /**
-   * Check if this transaction has expired.
-   *
-   * @param maxAgeMillis maximum allowed age
-   * @return true if expired
-   */
-  public boolean isExpired(long maxAgeMillis) {
-    return getAge() > maxAgeMillis;
-  }
-
   @Override
   public String toString() {
     return String.format("PendingTransaction{hash=%s, from=%s, nonce=%d, age=%dms}",
