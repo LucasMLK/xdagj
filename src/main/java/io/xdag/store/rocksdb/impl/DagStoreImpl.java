@@ -234,6 +234,15 @@ public class DagStoreImpl implements DagStore {
       // 1. Save block data
       byte[] blockKey = buildBlockKey(hash);
       byte[] blockData = serializeBlock(block);
+
+      // BUG-SYNC-002 debug: Log serialization result
+      log.debug("saveBlock: hash={}, blockDataSize={} bytes",
+          hash.toHexString().substring(0, 18), blockData.length);
+
+      if (blockData.length == 0) {
+        log.error("saveBlock: BLOCK DATA IS EMPTY for hash={}", hash.toHexString().substring(0, 18));
+      }
+
       batch.put(blockKey, blockData);
 
       // 2. Save BlockInfo
@@ -287,9 +296,18 @@ public class DagStoreImpl implements DagStore {
         // Load full block data
         byte[] blockKey = buildBlockKey(hash);
         byte[] blockData = db.get(readOptions, blockKey);
+
+        // BUG-SYNC-002 debug: Log raw lookup
+        log.debug("getBlockByHash(isRaw=true): hash={}, blockData={}",
+            hash.toHexString().substring(0, 18),
+            blockData != null ? blockData.length + " bytes" : "NULL");
+
         if (blockData == null) {
           byte[] pendingKey = buildMissingBlockKey(hash);
           blockData = db.get(readOptions, pendingKey);
+          if (blockData != null) {
+            log.debug("getBlockByHash: found in pending store");
+          }
         }
         if (blockData == null) {
           return null;
