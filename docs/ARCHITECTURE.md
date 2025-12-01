@@ -15,7 +15,7 @@ This document condenses everything you need to understand the XDAGJ 1.0 release 
 |  +----------------+    +-----------------+    +----------+ |
 |          |                       |                 |       |
 |          v                       v                 v       |
-|  DagStore (blocks        HybridSyncManager    Stratum/Pool |
+|  DagStore (blocks        SyncManager          Stratum/Pool |
 |   + pending mgmt)        P2P Adapter          HTTP v1      |
 |  TransactionStore        RandomX POW                       |
 |  AccountStore                                              |
@@ -24,7 +24,7 @@ This document condenses everything you need to understand the XDAGJ 1.0 release 
 
 * **DagKernel** wires configuration, RocksDB stores, caches and starts/stops every subsystem.
 * **DagChainImpl** implements the XDAG 1.0b consensus rules, block validation and chain statistics.
-* **HybridSyncManager** drives network synchronization (linear + DAG solidification) through the Netty-based P2P layer.
+* **SyncManager** drives network synchronization (FastDAG v3.1 with binary search for large gaps) through the Netty-based P2P layer.
 * **HTTP API Server** exposes REST endpoints (`/api/v1/**`) plus JSON-RPC compatibility, powered by Netty + Jackson.
 * **MiningApiService** exposes pool-facing RandomX candidate generation and submission helpers.
 
@@ -33,7 +33,7 @@ This document condenses everything you need to understand the XDAGJ 1.0 release 
 | Area | Key Classes | External Libs |
 |------|-------------|---------------|
 | Networking / HTTP | `io.netty` pipeline, `HttpApiServer`, `HttpApiHandlerV1` | Netty 4, Jackson (JSON/YAML) |
-| P2P & Sync | `HybridSyncManager`, `HybridSyncP2pAdapter`, message classes | Netty, Tuweni Bytes, CompletableFuture |
+| P2P & Sync | `SyncManager`, `XdagP2pEventHandler`, message classes | Netty, Tuweni Bytes, CompletableFuture |
 | Consensus & DAG | `DagChainImpl`, `DagBlockProcessor`, `RandomXPow` | Apache Tuweni UInt256, BouncyCastle, RandomX JNI |
 | Storage | `DagStoreImpl`, `TransactionStoreImpl`, `AccountStoreImpl` | RocksDB JNI, Snappy, Typesafe Config |
 | Crypto | `io.xdag.crypto.*` | BouncyCastle, Tuweni |
@@ -266,7 +266,7 @@ All codecs rely on Apache Tuweni Bytes32 for determinism and share the same seri
 
 ## 4. Synchronization Workflow
 
-`HybridSyncManager` executes a deterministic pipeline:
+`SyncManager` executes a deterministic pipeline:
 
 1. **Height negotiation** – Query remote height/finality to decide if we are behind.
 2. **Finalized main chain sync** – Batch download 1,000-block ranges via `requestMainBlocks`, import sequentially.
@@ -274,7 +274,7 @@ All codecs rely on Apache Tuweni Bytes32 for determinism and share the same seri
 4. **Solidification** – Scan pending blocks (height=0) via `DagStore.getPendingBlocks()`, resolve missing references, request parents/transactions, and retry imports.
 5. **Transaction solidification** – (future) fetch missing transactions referenced by blocks once block dependencies are satisfied.
 
-Progress is exposed through `HybridSyncManager#getProgress()` and the HTTP `/api/v1/network/syncing` endpoint.
+Progress is exposed through `SyncManager#isSynchronized()` and the HTTP `/api/v1/network/syncing` endpoint.
 
 ## 5. Storage Layout
 

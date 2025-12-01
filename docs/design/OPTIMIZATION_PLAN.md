@@ -19,7 +19,7 @@ Since XDAGJ 1.0 is a clean-slate design, solutions prioritize **optimal architec
 | OPT-003 | P2 | Efficient Transaction Broadcasting (Gossip/Inv) | Pending |
 | OPT-004 | P3 | Block Broadcasting Optimization (Observation) | Pending |
 | OPT-005 | P3 | Randomized Peer Broadcasting Order | Pending |
-| OPT-006 | P0 | Implement Missing Transaction Sync in HybridSyncManager | Pending |
+| OPT-006 | P0 | Implement Missing Transaction Sync in SyncManager | Pending |
 | OPT-007 | P1 | Protocol-Level Snapshot Verification (Archive Root) | Pending |
 | OPT-008 | P1 | Orphan Transaction Pruning (Storage Leak Fix) | Pending |
 | OPT-009 | P0 | EVM Integration & The Three Roots Architecture | Pending |
@@ -81,7 +81,7 @@ Fixed broadcast order leaks privacy.
 
 ---
 
-### OPT-006: Implement Missing Transaction Sync in HybridSyncManager
+### OPT-006: Implement Missing Transaction Sync in SyncManager
 
 **Description:**
 Sync logic for missing transactions is unimplemented (empty TODO).
