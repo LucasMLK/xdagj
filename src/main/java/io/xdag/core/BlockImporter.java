@@ -322,18 +322,19 @@ public class BlockImporter {
 
         } else {
           // No other main blocks, assign new height
-          log.debug("Block {} is first winner in epoch {}, assigning new height",
+          // BUG-HEIGHT-001 fix: Assign height based on epoch order
+          log.debug("Block {} is first winner in epoch {}, assigning height by epoch order",
               formatHash(block.getHash()), blockEpoch);
-          height = isGenesisBlock(block) ? 1 : chainStats.getMainBlockCount() + 1;
+          height = isGenesisBlock(block) ? 1 : calculateHeightByEpochOrder(blockEpoch, chainStats);
           isBestChain = true;
         }
 
       } else {
         // Case 3: First block in this epoch
+        // BUG-HEIGHT-001 fix: Assign height based on epoch order, not arrival order
+        height = isGenesisBlock(block) ? 1 : calculateHeightByEpochOrder(blockEpoch, chainStats);
         log.info("🆕 Block {} is FIRST block in epoch {}, becoming main block at height {}",
-            formatHash(block.getHash()), blockEpoch,
-            (isGenesisBlock(block) ? 1 : chainStats.getMainBlockCount() + 1));
-        height = isGenesisBlock(block) ? 1 : chainStats.getMainBlockCount() + 1;
+            formatHash(block.getHash()), blockEpoch, height);
         isBestChain = true;
       }
 
@@ -708,6 +709,106 @@ public class BlockImporter {
       log.error("Error during atomic block import for {}: {}",
           formatHash(block.getHash()), e.getMessage(), e);
     }
+  }
+
+  /**
+   * Calculate the correct height for a block based on epoch order.
+   *
+   * <p><strong>BUG-HEIGHT-001 Fix:</strong>
+   * Heights must be assigned based on epoch order, not arrival order.
+   * This ensures consistent height assignment across all nodes regardless
+   * of the order blocks arrive during sync.
+   *
+   * <p>Algorithm:
+   * <ol>
+   *   <li>Get all main blocks (height > 0)</li>
+   *   <li>Find the correct position based on epoch order</li>
+   *   <li>If inserting in the middle, shift all subsequent blocks' heights</li>
+   * </ol>
+   *
+   * @param blockEpoch epoch of the block being inserted
+   * @param chainStats current chain statistics
+   * @return the correct height for this block
+   */
+  private long calculateHeightByEpochOrder(long blockEpoch, ChainStats chainStats) {
+    long mainBlockCount = chainStats.getMainBlockCount();
+
+    if (mainBlockCount == 0) {
+      // First main block (after genesis)
+      return 1;
+    }
+
+    // Get all main blocks and find insertion position
+    List<Block> mainBlocks = dagStore.getMainBlocksByHeightRange(1, mainBlockCount, false);
+
+    // Find the correct position based on epoch order
+    // Height should be assigned such that epochs are in increasing order
+    int insertPosition = 0;
+    for (int i = 0; i < mainBlocks.size(); i++) {
+      Block existingBlock = mainBlocks.get(i);
+      if (existingBlock == null || existingBlock.getInfo() == null) {
+        continue;
+      }
+
+      long existingEpoch = existingBlock.getEpoch();
+      if (blockEpoch > existingEpoch) {
+        insertPosition = i + 1;
+      } else {
+        break;
+      }
+    }
+
+    // The new height is insertPosition + 1 (heights are 1-based)
+    long newHeight = insertPosition + 1;
+
+    // Check if we need to shift subsequent blocks
+    if (insertPosition < mainBlocks.size()) {
+      // Inserting in the middle - need to shift all subsequent blocks
+      log.info("📊 BUG-HEIGHT-001 fix: Block epoch {} needs height {}, shifting {} blocks",
+          blockEpoch, newHeight, mainBlocks.size() - insertPosition);
+
+      // Shift all blocks from insertPosition to the end
+      // Process in reverse order to avoid conflicts
+      for (int i = mainBlocks.size() - 1; i >= insertPosition; i--) {
+        Block blockToShift = mainBlocks.get(i);
+        if (blockToShift == null || blockToShift.getInfo() == null) {
+          continue;
+        }
+
+        long oldHeight = blockToShift.getInfo().getHeight();
+        long shiftedHeight = oldHeight + 1;
+
+        log.debug("  → Shifting block {} (epoch {}) from height {} to {}",
+            formatHash(blockToShift.getHash()),
+            blockToShift.getEpoch(),
+            oldHeight,
+            shiftedHeight);
+
+        // Update BlockInfo with new height
+        BlockInfo shiftedInfo = blockToShift.getInfo().toBuilder()
+            .height(shiftedHeight)
+            .build();
+
+        Block shiftedBlock = blockToShift.toBuilder()
+            .info(shiftedInfo)
+            .build();
+
+        // Delete old height mapping first
+        dagStore.deleteHeightMapping(oldHeight);
+
+        // Save with new height
+        dagStore.saveBlockInfo(shiftedInfo);
+        dagStore.saveBlock(shiftedBlock);
+      }
+
+      log.info("📊 BUG-HEIGHT-001 fix: Shifted {} blocks, new block will be at height {}",
+          mainBlocks.size() - insertPosition, newHeight);
+    } else {
+      // Appending at the end - normal case
+      log.debug("Appending block at height {} (epoch order correct)", newHeight);
+    }
+
+    return newHeight;
   }
 
   /**
