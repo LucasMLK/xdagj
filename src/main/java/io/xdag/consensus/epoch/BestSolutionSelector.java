@@ -122,50 +122,7 @@ public class BestSolutionSelector {
         }
     }
 
-    /**
-     * Log detailed selection statistics.
-     *
-     * @param epoch     Epoch number
-     * @param solutions All candidate solutions
-     * @param selected  The selected solution
-     */
-    public void logDetailedStats(long epoch, List<BlockSolution> solutions, BlockSolution selected) {
-        if (solutions.isEmpty()) {
-            log.info("Epoch {} stats: No solutions submitted", epoch);
-            return;
-        }
-
-        // Calculate statistics
-        int totalSolutions = solutions.size();
-        long uniquePools = solutions.stream()
-                .map(BlockSolution::getPoolId)
-                .distinct()
-                .count();
-
-        // Find difficulty range
-        BlockSolution highestDiff = solutions.stream()
-                .max(Comparator.comparing(BlockSolution::getDifficulty))
-                .orElse(null);
-        BlockSolution lowestDiff = solutions.stream()
-                .min(Comparator.comparing(BlockSolution::getDifficulty))
-                .orElse(null);
-
-        log.info("────────────────────────────────────────────────");
-        log.info("Epoch {} Statistics:", epoch);
-        log.info("  Total solutions: {}", totalSolutions);
-        log.info("  Unique pools: {}", uniquePools);
-        if (highestDiff != null && lowestDiff != null) {
-            log.info("  Difficulty range: {} (best) to {} (worst)",
-                    highestDiff.getDifficulty().toHexString().substring(0, 18),
-                    lowestDiff.getDifficulty().toHexString().substring(0, 18));
-        }
-        if (selected != null) {
-            log.info("  Winner: Pool '{}'", selected.getPoolId());
-        }
-        log.info("────────────────────────────────────────────────");
-    }
-
-    /**
+  /**
      * Format timestamp for display.
      *
      * @param timestampMs Timestamp in milliseconds

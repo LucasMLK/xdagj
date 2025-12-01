@@ -24,6 +24,7 @@
 package io.xdag.consensus.epoch;
 
 import io.xdag.utils.TimeUtils;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.Executors;
@@ -69,7 +70,13 @@ public class EpochTimer {
 
     /**
      * Flag indicating if the timer is running.
+     * -- GETTER --
+     *  Check if the timer is running.
+     *
+     * @return true if running, false otherwise
+
      */
+    @Getter
     private volatile boolean running;
 
     public EpochTimer() {
@@ -256,16 +263,7 @@ public class EpochTimer {
         return TimeUtils.epochNumberToTimeMillis(currentEpochNum);
     }
 
-    /**
-     * Check if the timer is running.
-     *
-     * @return true if running, false otherwise
-     */
-    public boolean isRunning() {
-        return running;
-    }
-
-    /**
+  /**
      * Get the epoch duration in milliseconds.
      *
      * <p>Calculates the actual duration dynamically from XDAG time system.

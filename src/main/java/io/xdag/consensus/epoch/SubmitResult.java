@@ -41,6 +41,11 @@ public class SubmitResult {
 
     /**
      * Whether the solution was accepted.
+     * -- GETTER --
+     *  Check if the solution was accepted.
+     *
+     * @return true if accepted, false if rejected
+
      */
     private final boolean accepted;
 
@@ -74,16 +79,7 @@ public class SubmitResult {
         return new SubmitResult(false, message);
     }
 
-    /**
-     * Check if the solution was accepted.
-     *
-     * @return true if accepted, false if rejected
-     */
-    public boolean isAccepted() {
-        return accepted;
-    }
-
-    /**
+  /**
      * Get the error message (for rejected submissions).
      *
      * @return Error message, or success message if accepted

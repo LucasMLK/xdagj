@@ -24,12 +24,12 @@
 package io.xdag.consensus.epoch;
 
 import io.xdag.core.Block;
+import lombok.Getter;
 import org.apache.tuweni.units.bigints.UInt256;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -59,7 +59,13 @@ public class SolutionCollector {
 
     /**
      * Minimum difficulty requirement for solutions.
+     * -- GETTER --
+     *  Get the minimum difficulty requirement.
+     *
+     * @return Minimum difficulty
+
      */
+    @Getter
     private final UInt256 minimumDifficulty;
 
     /**
@@ -181,12 +187,4 @@ public class SolutionCollector {
         return UInt256.MAX_VALUE.subtract(hashValue);
     }
 
-    /**
-     * Get the minimum difficulty requirement.
-     *
-     * @return Minimum difficulty
-     */
-    public UInt256 getMinimumDifficulty() {
-        return minimumDifficulty;
-    }
 }

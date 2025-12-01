@@ -26,8 +26,6 @@ package io.xdag.consensus.epoch;
 import io.xdag.core.Block;
 import lombok.Getter;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -123,7 +121,7 @@ public class EpochContext {
      * @return Unmodifiable list of solutions
      */
     public List<BlockSolution> getSolutions() {
-        return Collections.unmodifiableList(new ArrayList<>(solutions));
+        return List.copyOf(solutions);
     }
 
     /**
@@ -181,16 +179,7 @@ public class EpochContext {
         return Math.max(0, remaining);
     }
 
-    /**
-     * Check if the epoch has ended.
-     *
-     * @return true if current time >= epoch end time
-     */
-    public boolean hasEnded() {
-        return System.currentTimeMillis() >= epochEndTime;
-    }
-
-    @Override
+  @Override
     public String toString() {
         return String.format("EpochContext{epoch=%d, start=%d, end=%d, solutions=%d, blockProduced=%b, backupStarted=%b}",
                 epochNumber, epochStartTime, epochEndTime, solutions.size(),
