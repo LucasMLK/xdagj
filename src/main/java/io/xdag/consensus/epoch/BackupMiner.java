@@ -24,6 +24,7 @@
 package io.xdag.consensus.epoch;
 
 import io.xdag.core.Block;
+import lombok.Getter;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
 import lombok.extern.slf4j.Slf4j;
@@ -65,7 +66,13 @@ public class BackupMiner {
 
     /**
      * Number of mining threads.
+     * -- GETTER --
+     *  Get the number of mining threads.
+     *
+     * @return Thread count
+
      */
+    @Getter
     private final int miningThreads;
 
     /**
@@ -76,7 +83,13 @@ public class BackupMiner {
     /**
      * Backup difficulty target (lower than normal difficulty).
      * This ensures that backup mining can succeed within 5 seconds.
+     * -- GETTER --
+     *  Get the backup difficulty target.
+     *
+     * @return Backup target difficulty
+
      */
+    @Getter
     private final UInt256 backupTarget;
 
     /**
@@ -282,21 +295,4 @@ public class BackupMiner {
         log.info("✓ BackupMiner stopped");
     }
 
-    /**
-     * Get the backup difficulty target.
-     *
-     * @return Backup target difficulty
-     */
-    public UInt256 getBackupTarget() {
-        return backupTarget;
-    }
-
-    /**
-     * Get the number of mining threads.
-     *
-     * @return Thread count
-     */
-    public int getMiningThreads() {
-        return miningThreads;
-    }
 }
