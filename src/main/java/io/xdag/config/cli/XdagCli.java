@@ -39,19 +39,12 @@ import io.xdag.crypto.encoding.Base58;
 import io.xdag.crypto.keys.AddressUtils;
 import io.xdag.crypto.keys.ECKeyPair;
 import io.xdag.utils.BytesUtils;
-import org.apache.commons.io.FileUtils;
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.Console;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Objects;
 import java.util.Scanner;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.cli.CommandLine;
@@ -567,33 +560,4 @@ public class XdagCli extends Launcher {
     return new String(console.readPassword(prompt));
   }
 
-  // TODO: Snapshot functionality temporarily disabled, will be re-implemented later
-  // SnapshotStore was removed in refactoring
-  public void makeSnapshot() {
-    System.out.println("Snapshot functionality temporarily disabled");
-    System.out.println("Will be re-implemented in future version");
-    System.out.println("Please use --enable-snapshot option to load existing snapshots");
-  }
-
-  /**
-   * Copy directory recursively
-   */
-  public static void copyDir(String sourcePath, String newPath) {
-    try {
-      FileUtils.copyDirectory(new File(sourcePath), new File(newPath));
-    } catch (IOException e) {
-      log.error("Failed to copy directory from {} to {}", sourcePath, newPath, e);
-    }
-  }
-
-  /**
-   * Copy single file
-   */
-  public static void copyFile(String sourcePath, String newPath) {
-    try {
-      FileUtils.copyFile(new File(sourcePath), new File(newPath));
-    } catch (IOException e) {
-      log.error("Failed to copy file from {} to {}", sourcePath, newPath, e);
-    }
-  }
 }

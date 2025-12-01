@@ -24,13 +24,16 @@
 package io.xdag.config;
 
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
+import lombok.Getter;
 
 /**
  * A sorted set of node capabilities
  */
+@Getter
 public class CapabilityTreeSet {
 
   private final Set<Capability> capabilities;
@@ -59,7 +62,7 @@ public class CapabilityTreeSet {
           }
           return null;
         })
-        .filter(cap -> cap != null)
+        .filter(Objects::nonNull)
         .collect(Collectors.toSet());
     return new CapabilityTreeSet(caps);
   }
@@ -71,13 +74,6 @@ public class CapabilityTreeSet {
     return capabilities.stream()
         .map(Capability::getName)
         .toArray(String[]::new);
-  }
-
-  /**
-   * Get the underlying set of capabilities
-   */
-  public Set<Capability> getCapabilities() {
-    return capabilities;
   }
 
   @Override

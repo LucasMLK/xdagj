@@ -23,9 +23,12 @@
  */
 package io.xdag.config;
 
+import lombok.Getter;
+
 /**
  * Enum representing node capabilities in the XDAG network
  */
+@Getter
 public enum Capability {
   /**
    * Full node capability - stores complete blockchain data
@@ -41,10 +44,6 @@ public enum Capability {
 
   Capability(String name) {
     this.name = name;
-  }
-
-  public String getName() {
-    return name;
   }
 
   @Override

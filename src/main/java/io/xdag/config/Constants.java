@@ -26,7 +26,6 @@ package io.xdag.config;
 
 import io.xdag.core.XAmount;
 import io.xdag.core.XUnit;
-import org.apache.tuweni.units.bigints.UInt64;
 
 public class Constants {
 

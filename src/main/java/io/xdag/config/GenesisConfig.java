@@ -29,7 +29,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.xdag.crypto.exception.AddressFormatException;
 import io.xdag.crypto.keys.AddressUtils;
-import io.xdag.utils.TimeUtils;
 import java.io.File;
 import java.io.IOException;
 import java.math.BigInteger;
@@ -183,60 +182,6 @@ public class GenesisConfig {
   public static GenesisConfig fromJson(String json) throws IOException {
     ObjectMapper mapper = new ObjectMapper();
     return mapper.readValue(json, GenesisConfig.class);
-  }
-
-  /**
-   * Create default genesis configuration for a network
-   *
-   * @param networkId "mainnet", "testnet", or "devnet"
-   * @return GenesisConfig instance
-   */
-  public static GenesisConfig createDefault(String networkId) {
-    GenesisConfig config = new GenesisConfig();
-    config.setNetworkId(networkId);
-
-    switch (networkId.toLowerCase()) {
-      case "mainnet":
-        config.setChainId(1);
-        // XDAG_ERA: 2018-01-20 00:00:00 UTC (Unix: 1516406400)
-        long mainnetMs = 1516406400L * 1000;
-        long mainnetTimestamp = TimeUtils.timeMillisToEpoch(mainnetMs);
-        long mainnetEpoch = TimeUtils.getEpoch(mainnetTimestamp);
-        config.setEpoch(mainnetEpoch);
-        config.setDifficulty("0x1");
-        break;
-
-      case "testnet":
-        config.setChainId(2);
-        // Current time to epoch using TimeUtils
-        long testnetTimestamp = TimeUtils.getCurrentEpoch();
-        long testnetEpoch = TimeUtils.getEpoch(testnetTimestamp);
-        config.setEpoch(testnetEpoch);
-        config.setDifficulty("0x1");
-        break;
-
-      case "devnet":
-        config.setChainId(3);
-        long devnetTimestamp = TimeUtils.getCurrentEpoch();
-        long devnetEpoch = TimeUtils.getEpoch(devnetTimestamp);
-        config.setEpoch(devnetEpoch);
-        config.setDifficulty("0x1");
-        // Add some test allocations for devnet (using base58check addresses)
-        config.getAlloc().put(
-            "4dutRdvFZJdKaPZXhdfgLMoujc9N3CFouZVs8JJi",
-            "1000000000000000000000"  // 1000 XDAG
-        );
-        config.getAlloc().put(
-            "1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2",
-            "500000000000000000000"   // 500 XDAG
-        );
-        break;
-
-      default:
-        throw new IllegalArgumentException("Unknown network: " + networkId);
-    }
-
-    return config;
   }
 
   /**
@@ -414,14 +359,4 @@ public class GenesisConfig {
     mapper.writerWithDefaultPrettyPrinter().writeValue(file, this);
   }
 
-  /**
-   * Convert to JSON string
-   *
-   * @return JSON representation
-   * @throws IOException if serialization fails
-   */
-  public String toJson() throws IOException {
-    ObjectMapper mapper = new ObjectMapper();
-    return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(this);
-  }
 }

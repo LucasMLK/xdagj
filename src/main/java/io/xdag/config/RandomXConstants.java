@@ -46,11 +46,6 @@ public class RandomXConstants {
   public static final long RANDOMX_FORK_HEIGHT = 0;
 
   /**
-   * Identifier for RandomX algorithm
-   */
-  public static final int XDAG_RANDOMX = 2;
-
-  /**
    * Number of blocks in one epoch for testnet/devnet Set to 2 for fast devnet testing (seed updates
    * every 2 blocks)
    */
