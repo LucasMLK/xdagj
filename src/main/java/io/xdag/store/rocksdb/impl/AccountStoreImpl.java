@@ -220,10 +220,10 @@ public class AccountStoreImpl implements AccountStore {
       initializeMetadata();
 
       running = true;
-      log.info("✓ AccountStore started successfully");
-      log.info("  - Database: {}", dbPath);
-      log.info("  - Accounts: {}", getAccountCount().toLong());
-      log.info("  - Total Balance: {}", getTotalBalance().toDecimalString());
+      log.info("AccountStore started");
+      log.debug("  - Database: {}", dbPath);
+      log.debug("  - Accounts: {}", getAccountCount().toLong());
+      log.debug("  - Total Balance: {}", getTotalBalance().toDecimalString());
 
     } catch (Exception e) {
       log.error("Failed to start AccountStore", e);
@@ -269,7 +269,7 @@ public class AccountStoreImpl implements AccountStore {
       }
 
       running = false;
-      log.info("✓ AccountStore stopped successfully");
+      log.info("AccountStore stopped");
 
     } catch (Exception e) {
       log.error("Error stopping AccountStore", e);
@@ -593,7 +593,7 @@ public class AccountStoreImpl implements AccountStore {
       throw new IllegalStateException("AccountStore is not running");
     }
 
-    log.warn("⚠ Resetting AccountStore - ALL ACCOUNT DATA WILL BE LOST!");
+    log.warn("Resetting AccountStore - ALL ACCOUNT DATA WILL BE LOST");
 
     try {
       // Close database
@@ -609,7 +609,7 @@ public class AccountStoreImpl implements AccountStore {
       // Restart database
       start();
 
-      log.info("✓ AccountStore reset completed");
+      log.info("AccountStore reset completed");
 
     } catch (Exception e) {
       log.error("Failed to reset AccountStore", e);

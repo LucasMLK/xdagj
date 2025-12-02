@@ -134,7 +134,7 @@ public class SolutionCollector {
         BlockSolution solution = new BlockSolution(block, poolId, System.currentTimeMillis(), blockDifficulty);
         context.addSolution(solution);
 
-        log.info("✓ Solution collected: epoch={}, pool='{}', difficulty={}, solutions_count={}",
+        log.debug("Solution collected: epoch={}, pool='{}', difficulty={}, count={}",
                 blockEpoch, poolId, blockDifficulty.toHexString().substring(0, 18),
                 context.getSolutionsCount());
 

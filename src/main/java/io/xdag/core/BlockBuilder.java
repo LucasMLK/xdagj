@@ -348,7 +348,7 @@ public class BlockBuilder {
         List.of()
     );
 
-    log.info("✓ Genesis block created: hash={}, epoch={}",
+    log.info("Genesis block created: hash={}, epoch={}",
         genesisBlock.getHash().toHexString(),
         genesisBlock.getEpoch());
 

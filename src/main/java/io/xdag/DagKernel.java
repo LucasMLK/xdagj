@@ -194,7 +194,7 @@ public class DagKernel {
 
     // Database factory for RocksDB management
     this.dbFactory = new RocksdbFactory(config);
-    log.info("   ✓ DatabaseFactory initialized");
+    log.info("   - DatabaseFactory initialized");
 
     // Initialize transaction manager (NEW - for atomic block processing)
     KVSource<byte[], byte[]> indexDb = dbFactory.getDB(DatabaseName.INDEX);
@@ -208,7 +208,7 @@ public class DagKernel {
 
     RocksDB mainDb = ((io.xdag.store.rocksdb.base.RocksdbKVSource) indexDb).getDb();
     this.transactionManager = new RocksDBTransactionManager(mainDb);
-    log.info("   ✓ RocksDBTransactionManager initialized (atomic operations ready)");
+    log.info("   - RocksDBTransactionManager initialized");
 
     // ========== Cache Layer (Initialize BEFORE Storage for shared cache) ==========
 
@@ -216,13 +216,13 @@ public class DagKernel {
 
     // L1 Caffeine cache (created first so stores can share it)
     this.dagCache = new DagCache();
-    log.info("   ✓ DagCache initialized (13.8 MB capacity, shared with stores)");
+    log.info("   - DagCache initialized");
 
     // ========== Continue Storage Layer with Shared Cache ==========
 
     // DagStore for Block persistence (with atomic operation support + shared cache)
     this.dagStore = new DagStoreImpl(config, transactionManager, this.dagCache);
-    log.info("   ✓ DagStore initialized (atomic operations + shared cache enabled)");
+    log.info("   - DagStore initialized");
 
     // TransactionStore for Transaction persistence (with atomic operation support)
     this.transactionStore = new TransactionStoreImpl(
@@ -230,15 +230,15 @@ public class DagKernel {
         dbFactory.getDB(DatabaseName.INDEX),
         transactionManager
     );
-    log.info("   ✓ TransactionStore initialized (atomic operations enabled)");
+    log.info("   - TransactionStore initialized");
 
     // AccountStore for account state (EVM compatible, with atomic operation support)
     this.accountStore = new AccountStoreImpl(config, transactionManager);
-    log.info("   ✓ AccountStore initialized (atomic operations enabled)");
+    log.info("   - AccountStore initialized");
 
     // Unified facade for Block/Transaction resolution
     this.entityResolver = new DagEntityResolver(dagStore, transactionStore);
-    log.info("   ✓ DagEntityResolver initialized");
+    log.info("   - DagEntityResolver initialized");
 
     // Note: DagChain and SyncManager will be initialized in start() method
     // because DagChainImpl needs a fully constructed DagKernel instance
@@ -249,13 +249,13 @@ public class DagKernel {
         log.info("Shutdown hook triggered: syncing WAL before exit...");
         if (dagStore != null && dagStore.isRunning()) {
           dagStore.syncWal();
-          log.info("✓ WAL synced successfully in shutdown hook");
+          log.info("WAL synced in shutdown hook");
         }
       } catch (Exception e) {
         log.error("Failed to sync WAL in shutdown hook: {}", e.getMessage(), e);
       }
     }, "DagKernel-ShutdownHook"));
-    log.info("   ✓ Shutdown hook registered for graceful termination");
+    log.debug("Shutdown hook registered");
 
     log.info("========================================");
     log.info("DagKernel initialization complete");
@@ -273,14 +273,14 @@ public class DagKernel {
 
     // 1. Create DagAccountManager
     this.dagAccountManager = new DagAccountManager(accountStore, config);
-    log.info("   ✓ DagAccountManager initialized");
+    log.info("   - DagAccountManager initialized");
 
     // 2. Create DagTransactionProcessor
     this.dagTransactionProcessor = new DagTransactionProcessor(
         dagAccountManager,
         transactionStore
     );
-    log.info("   ✓ DagTransactionProcessor initialized");
+    log.info("   - DagTransactionProcessor initialized");
 
     // 3. Create DagBlockProcessor
     this.dagBlockProcessor = new DagBlockProcessor(
@@ -289,7 +289,7 @@ public class DagKernel {
         dagTransactionProcessor,
         dagAccountManager
     );
-    log.info("   ✓ DagBlockProcessor initialized");
+    log.info("   - DagBlockProcessor initialized");
 
     // 4. Create TransactionPool
     this.transactionPool = new TransactionPoolImpl(
@@ -297,24 +297,24 @@ public class DagKernel {
         dagAccountManager,
         transactionStore
     );
-    log.info("   ✓ TransactionPool initialized");
+    log.info("   - TransactionPool initialized");
 
     // 5. Create TransactionBroadcastManager (Phase 3)
     this.transactionBroadcastManager = new TransactionBroadcastManager();
-    log.info("   ✓ TransactionBroadcastManager initialized (anti-loop protection ready)");
+    log.info("   - TransactionBroadcastManager initialized");
 
     // 6. Create DagChainImpl (requires fully constructed DagKernel)
     this.dagChain = new DagChainImpl(this);
-    log.info("   ✓ DagChain initialized");
+    log.info("   - DagChain initialized");
 
     // 9. Create PoW Algorithm: RandomX only
     this.powAlgorithm = new RandomXPow(config, dagChain);
-    log.info("   ✓ RandomXPow initialized");
+    log.info("   - RandomXPow initialized");
 
     // Create Mining API Service (for pool server integration)
     if (wallet != null) {
       this.miningApiService = new MiningApiService(dagChain, wallet, powAlgorithm);
-      log.info("   ✓ MiningApiService initialized (pool server interface ready)");
+      log.info("   - MiningApiService initialized");
 
       // Initialize Epoch Consensus Manager (for BUG-CONSENSUS fix)
       // Configuration: 2 backup mining threads, minimum difficulty from config
@@ -333,12 +333,12 @@ public class DagKernel {
 
       // Connect consensus manager to mining API service
       this.miningApiService.setEpochConsensusManager(this.epochConsensusManager);
-      log.info("   ✓ EpochConsensusManager initialized (epoch-based consensus enabled)");
+      log.info("   - EpochConsensusManager initialized");
     } else {
-      log.warn("   ⚠ MiningApiService not initialized (wallet required)");
+      log.warn("   MiningApiService not initialized (wallet required)");
     }
 
-    log.info("   ✓ Consensus layer initialization complete");
+    log.info("   Consensus layer initialization complete");
   }
 
   /**
@@ -372,15 +372,15 @@ public class DagKernel {
     try {
       // Start DagStore (Block persistence layer)
       dagStore.start();
-      log.info("✓ DagStore started");
+      log.info("DagStore started");
 
       // Start TransactionStore (Transaction persistence layer)
       transactionStore.start();
-      log.info("✓ TransactionStore started");
+      log.info("TransactionStore started");
 
       // Start AccountStore (Account state layer)
       accountStore.start();
-      log.info("✓ AccountStore started: {} accounts, total balance {}",
+      log.info("AccountStore started: {} accounts, total balance {}",
           accountStore.getAccountCount().toLong(),
           accountStore.getTotalBalance().toDecimalString());
 
@@ -401,7 +401,7 @@ public class DagKernel {
       // Start PoW Algorithm (RandomX)
       if (powAlgorithm != null) {
         powAlgorithm.start();
-        log.info("✓ PoW Algorithm started: {}", powAlgorithm.getName());
+        log.info("PoW Algorithm started: {}", powAlgorithm.getName());
 
         // Initialize RandomX seed from genesis config if available
         if (powAlgorithm instanceof RandomXPow randomXPow) {
@@ -409,8 +409,8 @@ public class DagKernel {
             try {
               byte[] genesisSeed = genesisConfig.getRandomXSeedBytes();
               randomXPow.getSeedManager().initializeFromPreseed(genesisSeed, 1);
-              log.info("✓ RandomX seed initialized from genesis config");
-              log.info("  - Seed: {}...",
+              log.info("RandomX seed initialized from genesis config");
+              log.debug("  - Seed: {}...",
                   org.apache.tuweni.bytes.Bytes.wrap(genesisSeed).toHexString().substring(0, 18));
             } catch (Exception e) {
               log.error("Failed to initialize RandomX seed from genesis", e);
@@ -418,7 +418,7 @@ public class DagKernel {
             }
           } else {
             log.warn(
-                "⚠ No randomXSeed in genesis config - mining will not work until epoch boundary");
+                "No randomXSeed in genesis config - mining will not work until epoch boundary");
           }
         }
       }
@@ -426,18 +426,13 @@ public class DagKernel {
       // Start Epoch Consensus Manager (for BUG-CONSENSUS fix)
       if (epochConsensusManager != null) {
         epochConsensusManager.start();
-        log.info("✓ EpochConsensusManager started (epoch-based consensus active)");
+        log.info("EpochConsensusManager started");
       }
 
       running = true;
       log.info("========================================");
-      log.info("✓ DagKernel started successfully");
-      log.info("  - Storage: DagStore + TransactionStore + AccountStore");
-      log.info("  - Cache: DagCache (13.8 MB L1) + DagEntityResolver");
-      log.info("  - Consensus: DagChain (FastDAG v3.0)");
+      log.info("DagKernel started successfully");
       log.info("  - Main Chain Height: {}", dagChain.getMainChainLength());
-      log.info("  - Cumulative Difficulty: {}",
-          dagChain.getChainStats().getDifficulty().toDecimalString());
       log.info("========================================");
 
     } catch (Exception e) {
@@ -467,13 +462,13 @@ public class DagKernel {
       // Stop PoW Algorithm (RandomX)
       if (powAlgorithm != null) {
         powAlgorithm.stop();
-        log.info("✓ PoW Algorithm stopped: {}", powAlgorithm.getName());
+        log.info("PoW Algorithm stopped: {}", powAlgorithm.getName());
       }
 
       // Stop Epoch Consensus Manager (for BUG-CONSENSUS fix)
       if (epochConsensusManager != null) {
         epochConsensusManager.stop();
-        log.info("✓ EpochConsensusManager stopped");
+        log.info("EpochConsensusManager stopped");
       }
 
       // Stop P2P service (5)
@@ -482,18 +477,18 @@ public class DagKernel {
       // Stop DagChain (if present)
       if (dagChain != null) {
         dagChain.stop();
-        log.info("✓ DagChain stopped");
+        log.info("DagChain stopped");
       }
 
       // Stop TransactionStore
       transactionStore.stop();
-      log.info("✓ TransactionStore stopped");
+      log.info("TransactionStore stopped");
 
       // Sync WAL before stopping DagStore (BUG-STORAGE-002 fix)
       try {
         if (dagStore != null && dagStore.isRunning()) {
           dagStore.syncWal();
-          log.info("✓ WAL synced before DagStore shutdown");
+          log.info("WAL synced before DagStore shutdown");
         }
       } catch (Exception e) {
         log.error("Failed to sync WAL before DagStore shutdown: {}", e.getMessage());
@@ -501,16 +496,16 @@ public class DagKernel {
 
       // Stop DagStore
       dagStore.stop();
-      log.info("✓ DagStore stopped");
+      log.info("DagStore stopped");
 
       // Stop AccountStore
       accountStore.stop();
-      log.info("✓ AccountStore stopped");
+      log.info("AccountStore stopped");
 
       // Shutdown transaction manager (rollback any uncommitted transactions)
       if (transactionManager != null) {
         transactionManager.shutdown();
-        log.info("✓ RocksDBTransactionManager stopped");
+        log.info("RocksDBTransactionManager stopped");
       }
 
       // Close all RocksDB databases
@@ -521,11 +516,11 @@ public class DagKernel {
           log.warn("Error closing database {}: {}", name, e.getMessage());
         }
       }
-      log.info("✓ All databases closed");
+      log.info("All databases closed");
 
       running = false;
       log.info("========================================");
-      log.info("✓ DagKernel stopped successfully");
+      log.info("DagKernel stopped successfully");
       log.info("========================================");
 
     } catch (Exception e) {
@@ -564,25 +559,25 @@ public class DagKernel {
    * Invalidates all L1 cache entries
    */
   public void reset() {
-    log.warn("⚠ Resetting DagKernel - ALL DATA WILL BE LOST!");
+    log.warn("Resetting DagKernel - ALL DATA WILL BE LOST");
 
     // Reset DagStore
     dagStore.reset();
-    log.info("✓ DagStore reset completed");
+    log.info("DagStore reset completed");
 
     // Reset TransactionStore
     transactionStore.reset();
-    log.info("✓ TransactionStore reset completed");
+    log.info("TransactionStore reset completed");
 
     // Reset AccountStore
     accountStore.reset();
-    log.info("✓ AccountStore reset completed");
+    log.info("AccountStore reset completed");
 
     // Invalidate all cache entries
     dagCache.invalidateAll();
-    log.info("✓ DagCache cleared");
+    log.info("DagCache cleared");
 
-    log.info("✓ DagKernel reset completed - all data erased");
+    log.info("DagKernel reset completed");
   }
 
   // ========== P2P Service Management (5) ==========
@@ -601,7 +596,7 @@ public class DagKernel {
 
     // P2P service requires a wallet/coinbase key
     if (wallet == null || wallet.getDefKey() == null) {
-      log.warn("⚠ P2P service not started (wallet required)");
+      log.warn("P2P service not started (wallet required)");
       return;
     }
 
@@ -625,7 +620,7 @@ public class DagKernel {
       // Connect P2P service to TransactionBroadcastManager (Phase 3)
       if (transactionBroadcastManager != null) {
         transactionBroadcastManager.setP2pService(this.p2pService);
-        log.info("✓ P2P service connected to TransactionBroadcastManager");
+        log.debug("P2P connected to TransactionBroadcastManager");
       }
 
       // Start FastDAG sync loop
@@ -633,20 +628,20 @@ public class DagKernel {
         this.syncManager = new SyncManager(this);
       }
       this.syncManager.start();
-      log.info("✓ FastDAG SyncManager started");
+      log.info("SyncManager started");
 
       // BUG-SYNC-001 fix: Connect SyncManager to MiningApiService for sync gate
       if (this.miningApiService != null) {
         this.miningApiService.setSyncManager(this.syncManager);
-        log.info("✓ SyncManager connected to MiningApiService (mining blocked until synchronized)");
+        log.debug("SyncManager connected to MiningApiService");
       }
 
-      log.info("✓ P2P service started (broadcasting enabled)");
+      log.info("P2P service started");
 
     } catch (Throwable e) {
       // Catch both Exception and Error (including NoSuchFieldError from P2P refactoring)
       log.error("Failed to start P2P service: {}", e.getMessage(), e);
-      log.warn("⚠ Continuing without P2P (block broadcasting disabled)");
+      log.warn("Continuing without P2P (block broadcasting disabled)");
       this.p2pService = null;
     }
   }
@@ -658,7 +653,7 @@ public class DagKernel {
     if (syncManager != null) {
       try {
         syncManager.stop();
-        log.info("✓ FastDAG SyncManager stopped");
+        log.info("SyncManager stopped");
       } catch (Exception e) {
         log.warn("Error stopping SyncManager: {}", e.getMessage());
       }
@@ -669,7 +664,7 @@ public class DagKernel {
       log.info("Stopping P2P service...");
       try {
         p2pService.stop();
-        log.info("✓ P2P service stopped");
+        log.info("P2P service stopped");
       } catch (Exception e) {
         log.error("Error stopping P2P service: {}", e.getMessage());
       }
@@ -832,12 +827,10 @@ public class DagKernel {
         }
 
         log.info("========================================");
-        log.info("✓ Genesis bootstrap complete");
+        log.info("Genesis bootstrap complete");
         log.info("  - Network: {}", genesisConfig.getNetworkId());
         log.info("  - Chain ID: {}", genesisConfig.getChainId());
         log.info("  - Main chain height: {}", dagChain.getMainChainLength());
-        log.info("  - Cumulative difficulty: {}",
-            dagChain.getChainStats().getDifficulty().toDecimalString());
         log.info("========================================");
 
       } catch (Exception e) {
@@ -924,7 +917,7 @@ public class DagKernel {
       throw new RuntimeException("Genesis block verification failed: difficulty mismatch");
     }
 
-    log.info("✓ Genesis block verification passed");
+    log.info("Genesis block verification passed");
     log.info("  - Epoch: {} (matches config)", actualEpoch);
     log.info("  - Difficulty: {} (matches config)", actualDifficulty.toHexString());
     log.info("  - Network: {}", genesisConfig.getNetworkId());
@@ -953,7 +946,7 @@ public class DagKernel {
           (result.getErrorMessage() != null ? " - " + result.getErrorMessage() : ""));
     }
 
-    log.info("✓ Genesis block imported successfully");
+    log.info("Genesis block imported successfully");
   }
 
   /**
@@ -988,7 +981,7 @@ public class DagKernel {
       }
     }
 
-    log.info("✓ Applied {} initial allocations", successCount);
+    log.info("Applied {} initial allocations", successCount);
   }
 
 }

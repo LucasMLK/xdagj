@@ -168,7 +168,7 @@ public class MiningApiService {
   public void setEpochConsensusManager(EpochConsensusManager consensusManager) {
     this.epochConsensusManager = consensusManager;
     if (consensusManager != null) {
-      log.info("✓ Epoch consensus manager enabled - solutions will be collected for epoch-end processing");
+      log.debug("Epoch consensus manager enabled");
     } else {
       log.info("Epoch consensus manager disabled - using legacy immediate import");
     }
@@ -185,7 +185,7 @@ public class MiningApiService {
   public void setSyncManager(SyncManager syncManager) {
     this.syncManager = syncManager;
     if (syncManager != null) {
-      log.info("✓ SyncManager enabled - mining will be blocked until synchronized");
+      log.debug("SyncManager enabled - mining blocked until synchronized");
     }
   }
 
@@ -206,7 +206,7 @@ public class MiningApiService {
 
       // BUG-SYNC-001 fix: Block mining until synchronized
       if (syncManager != null && !syncManager.isSynchronized()) {
-        log.warn("⏸ Pool '{}' cannot get candidate: node not synchronized " +
+        log.debug("Pool '{}' cannot get candidate: node not synchronized " +
             "(localEpoch={}, remoteEpoch={}; localHeight={}, remoteHeight={})",
             poolId, syncManager.getLocalTipEpoch(), syncManager.getRemoteTipEpoch(),
             dagChain.getMainChainLength(), syncManager.getRemoteTipHeight());
@@ -257,7 +257,7 @@ public class MiningApiService {
 
       // BUG-SYNC-001 fix: Reject mining submissions until synchronized
       if (syncManager != null && !syncManager.isSynchronized()) {
-        log.warn("⏸ Pool '{}' submission rejected: node not synchronized " +
+        log.debug("Pool '{}' submission rejected: node not synchronized " +
             "(localEpoch={}, remoteEpoch={}; localHeight={}, remoteHeight={})",
             poolId, syncManager.getLocalTipEpoch(), syncManager.getRemoteTipEpoch(),
             dagChain.getMainChainLength(), syncManager.getRemoteTipHeight());
@@ -277,10 +277,10 @@ public class MiningApiService {
         io.xdag.consensus.epoch.SubmitResult result = epochConsensusManager.submitSolution(block, poolId);
 
         if (result.isAccepted()) {
-          log.info("✓ Solution from pool '{}' collected for epoch processing", poolId);
+          log.debug("Solution from pool '{}' collected for epoch processing", poolId);
           return BlockSubmitResult.accepted(block.getHash());
         } else {
-          log.warn("✗ Solution from pool '{}' rejected: {}", poolId, result.getErrorMessage());
+          log.debug("Solution from pool '{}' rejected: {}", poolId, result.getErrorMessage());
           return BlockSubmitResult.rejected(result.getErrorMessage(), "REJECTED");
         }
 
@@ -291,7 +291,7 @@ public class MiningApiService {
 
         // Step 3: Process result
         if (importResult.isSuccess()) {
-          log.info("✓ Block from pool '{}' accepted and imported: hash={}",
+          log.info("Block from pool '{}' accepted: hash={}",
               poolId, block.getHash().toHexString().substring(0, 18) + "...");
 
           // Remove from cache (block is now on-chain)
@@ -300,7 +300,7 @@ public class MiningApiService {
           return BlockSubmitResult.accepted(block.getHash());
 
         } else {
-          log.warn("✗ Block from pool '{}' rejected: {}",
+          log.debug("Block from pool '{}' rejected: {}",
               poolId, importResult.getErrorMessage());
 
           return BlockSubmitResult.rejected(

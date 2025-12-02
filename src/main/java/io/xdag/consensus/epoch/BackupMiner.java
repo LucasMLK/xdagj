@@ -139,12 +139,12 @@ public class BackupMiner {
         }
 
         long remainingTime = context.getTimeRemaining();
-        log.warn("⚠ Starting backup mining for epoch {}: remaining {}ms",
+        log.warn("Starting backup mining for epoch {}: remaining {}ms",
                 context.getEpochNumber(), remainingTime);
 
         Block candidateBlock = context.getCandidateBlock();
         if (candidateBlock == null) {
-            log.error("✗ Cannot start backup mining: no candidate block for epoch {}",
+            log.error("Cannot start backup mining: no candidate block for epoch {}",
                     context.getEpochNumber());
             return;
         }
@@ -159,7 +159,7 @@ public class BackupMiner {
         miningFuture.thenAccept(minedBlock -> {
             if (minedBlock != null && !context.isBlockProduced()) {
                 UInt256 difficulty = calculateDifficulty(minedBlock.getHash());
-                log.info("✓ Backup miner found solution for epoch {}: difficulty={}",
+                log.debug("Backup miner found solution for epoch {}: difficulty={}",
                         context.getEpochNumber(),
                         difficulty.toHexString().substring(0, 18) + "...");
 
@@ -230,7 +230,7 @@ public class BackupMiner {
 
                     // If target reached, return immediately
                     if (difficulty.compareTo(backupTarget) >= 0) {
-                        log.info("✓ Backup miner reached target: attempts={}, time={}ms",
+                        log.debug("Backup miner reached target: attempts={}, time={}ms",
                                 attempts, System.currentTimeMillis() - startTime);
                         break;
                     }
@@ -292,7 +292,7 @@ public class BackupMiner {
     public void stop() {
         log.info("Stopping BackupMiner...");
         miningExecutor.shutdown();
-        log.info("✓ BackupMiner stopped");
+        log.info("BackupMiner stopped");
     }
 
 }

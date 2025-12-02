@@ -155,7 +155,7 @@ public class EpochTimer {
                         long expectedEpoch = lastProcessedEpoch[0] + 1;
                         if (endedEpochNum > expectedEpoch) {
                             long skippedCount = endedEpochNum - expectedEpoch;
-                            log.error("⚠️ EPOCH TIMER DRIFT DETECTED! Expected epoch {}, but actual is {}. Skipped {} epochs!",
+                            log.error("EPOCH TIMER DRIFT: Expected epoch {}, actual is {}, skipped {} epochs",
                                     expectedEpoch, endedEpochNum, skippedCount);
                             log.error("This can happen due to: JVM GC pause, thread starvation, or system hibernation");
 
@@ -166,12 +166,12 @@ public class EpochTimer {
                             }
                         } else if (endedEpochNum < expectedEpoch) {
                             // Timer fired early (rare, but possible with system clock adjustments)
-                            log.warn("⚠️ Timer fired early! Expected epoch {}, but actual is {}",
+                            log.warn("Timer fired early: expected epoch {}, actual is {}",
                                     expectedEpoch, endedEpochNum);
                             return; // Skip this trigger
                         }
 
-                        log.info("═══════════ Epoch {} ended ═══════════", endedEpochNum);
+                        log.debug("Epoch {} ended", endedEpochNum);
                         onEpochEnd.accept(endedEpochNum);
                         lastProcessedEpoch[0] = endedEpochNum;
 
@@ -185,7 +185,7 @@ public class EpochTimer {
         );
 
         running = true;
-        log.info("✓ EpochTimer started (epoch_duration={}ms, initial_delay={}ms)",
+        log.info("EpochTimer started (duration={}ms, delay={}ms)",
                 epochDurationMs, initialDelay);
     }
 
@@ -210,7 +210,7 @@ public class EpochTimer {
             }
         }
         running = false;
-        log.info("✓ EpochTimer stopped");
+        log.info("EpochTimer stopped");
     }
 
     /**

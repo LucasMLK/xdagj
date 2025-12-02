@@ -23,6 +23,8 @@
  */
 package io.xdag.p2p;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import io.xdag.DagKernel;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
@@ -33,6 +35,7 @@ import io.xdag.p2p.message.XdagMessageCode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadLocalRandom;
@@ -49,9 +52,9 @@ import lombok.extern.slf4j.Slf4j;
  * <p>Periodically schedules {@link GetEpochHashesMessage} requests so the node can learn about
  * new epochs and fetch missing blocks via {@link XdagMessageCode#GET_BLOCKS}.
  *
- * <p>BUG-SYNC-004: Uses binary search to locate the minimum valid epoch when local chain
- * is far behind remote chain. This avoids memory explosion from recursive dependency fetching
- * on long-running nodes (2+ years of history).
+ * <p>Uses binary search to locate the minimum valid epoch when local chain is far behind
+ * remote chain. This avoids memory explosion from recursive dependency fetching on long-running
+ * nodes (2+ years of history).
  */
 @Slf4j
 public class SyncManager implements AutoCloseable {
@@ -67,18 +70,18 @@ public class SyncManager implements AutoCloseable {
   private static final long SYNC_TOLERANCE = 2;
 
   /**
-   * BUG-SYNC-004: Threshold to trigger binary search.
+   * Threshold to trigger binary search.
    * If gap between local and remote is larger than this, use binary search.
    */
   private static final long BINARY_SEARCH_THRESHOLD = 1024;
 
   /**
-   * BUG-SYNC-004: Maximum iterations for binary search to prevent infinite loops.
+   * Maximum iterations for binary search to prevent infinite loops.
    */
   private static final int MAX_BINARY_SEARCH_ITERATIONS = 20;
 
   /**
-   * BUG-SYNC-004: Sync state enum.
+   * Sync state enum.
    */
   private enum SyncState {
     /** Normal forward sync mode */
@@ -103,19 +106,18 @@ public class SyncManager implements AutoCloseable {
 
   /**
    * Maximum tip epoch known from peer STATUS_REPLY messages.
-   * Used to determine when sync is complete (BUG-SYNC-001 fix).
+   * Used to determine when sync is complete.
    */
   private final AtomicLong remoteTipEpoch = new AtomicLong(0);
 
   /**
    * Maximum main chain height known from peer STATUS_REPLY messages.
    * Used together with remoteTipEpoch for accurate sync completion detection.
-   * BUG-SYNC-001 fix (enhanced): Check BOTH epoch AND height to prevent
-   * mining before all historical blocks are synced.
+   * Check BOTH epoch AND height to prevent mining before all historical blocks are synced.
    */
   private final AtomicLong remoteTipHeight = new AtomicLong(0);
 
-  // ==================== BUG-SYNC-004: Binary search state ====================
+  // ==================== Binary search state ====================
 
   /** Current sync state */
   private final AtomicReference<SyncState> syncState = new AtomicReference<>(SyncState.FORWARD_SYNC);
@@ -141,6 +143,50 @@ public class SyncManager implements AutoCloseable {
    * Set to -1 when not active.
    */
   private final AtomicLong forwardSyncStartEpoch = new AtomicLong(-1);
+
+  // ==================== Empty epoch tracking ====================
+
+  /**
+   * Request sequence counter for matching responses to requests.
+   * Ensures that late-arriving responses from old requests are ignored.
+   */
+  private final AtomicLong requestSequence = new AtomicLong(0);
+
+  /**
+   * Context for tracking epoch requests.
+   * Contains sequence ID to prevent response mismatch when requests overlap.
+   */
+  private static final class EpochRequestContext {
+    final long sequenceId;
+    final long startEpoch;
+    final long endEpoch;
+
+    EpochRequestContext(long sequenceId, long startEpoch, long endEpoch) {
+      this.sequenceId = sequenceId;
+      this.startEpoch = startEpoch;
+      this.endEpoch = endEpoch;
+    }
+  }
+
+  /** Current pending request context. Only responses matching this context are processed. */
+  private final AtomicReference<EpochRequestContext> lastRequestContext =
+      new AtomicReference<>(null);
+
+  /**
+   * Cache of confirmed empty epochs (no blocks exist on the network).
+   * When an epoch is requested and the response shows later epochs exist but not this one,
+   * we mark it as confirmed empty and skip it in future gap detection.
+   *
+   * <p>Bounded to prevent memory leaks:
+   * <ul>
+   *   <li>Maximum 1024 entries</li>
+   *   <li>Entries expire after 1 hour (allows re-verification from new peers)</li>
+   * </ul>
+   */
+  private final Cache<Long, Boolean> confirmedEmptyEpochs = Caffeine.newBuilder()
+      .maximumSize(1024)
+      .expireAfterWrite(1, TimeUnit.HOURS)
+      .build();
 
   public SyncManager(DagKernel dagKernel) {
     this(dagKernel, true);
@@ -194,7 +240,7 @@ public class SyncManager implements AutoCloseable {
       return;
     }
 
-    // BUG-SYNC-004: Handle different sync states
+    // Handle different sync states
     SyncState currentState = syncState.get();
     switch (currentState) {
       case BINARY_SEARCH:
@@ -210,7 +256,7 @@ public class SyncManager implements AutoCloseable {
   }
 
   /**
-   * BUG-SYNC-004: Perform binary search to locate minimum valid epoch.
+   * Perform binary search to locate minimum valid epoch.
    */
   private void performBinarySearch(List<Channel> channels) {
     long low = binarySearchLow.get();
@@ -228,8 +274,7 @@ public class SyncManager implements AutoCloseable {
       }
       // IMPORTANT: Update minValidEpochFound so transitionToForwardSync() uses correct value
       minValidEpochFound.set(minEpoch);
-      log.info("BUG-SYNC-004: Binary search complete after {} iterations, min valid epoch = {}",
-          iterations, minEpoch);
+      log.info("Sync: Binary search complete, starting from epoch {}", minEpoch);
       syncState.set(SyncState.BINARY_SEARCH_COMPLETE);
       return;
     }
@@ -239,7 +284,7 @@ public class SyncManager implements AutoCloseable {
     binarySearchProbe.set(mid);
     binarySearchIterations.incrementAndGet();
 
-    log.info("BUG-SYNC-004: Binary search iteration {}: probing epoch {} (range [{}, {}])",
+    log.debug("Binary search iteration {}: probing epoch {} (range [{}, {}])",
         iterations + 1, mid, low, high);
 
     // Send probe request
@@ -248,12 +293,12 @@ public class SyncManager implements AutoCloseable {
       long endEpoch = Math.min(mid + MAX_EPOCHS_PER_REQUEST - 1, high);
       channel.send(new GetEpochHashesMessage(mid, endEpoch));
     } catch (Exception e) {
-      log.warn("BUG-SYNC-004: Failed to send binary search probe: {}", e.getMessage());
+      log.warn("Failed to send binary search probe: {}", e.getMessage());
     }
   }
 
   /**
-   * BUG-SYNC-004: Handle binary search response.
+   * Handle binary search response.
    * Called from XdagP2pEventHandler when receiving EPOCH_HASHES_REPLY during binary search.
    *
    * @param hasBlocks true if the response contained any block hashes
@@ -275,19 +320,19 @@ public class SyncManager implements AutoCloseable {
       }
       // Search lower half
       binarySearchHigh.set(probe - 1);
-      log.info("BUG-SYNC-004: Found blocks at epoch {}, searching earlier (new range [{}, {}])",
+      log.debug("Binary search: found blocks at epoch {}, narrowing to [{}, {}]",
           minEpochInResponse > 0 ? minEpochInResponse : probe, low, probe - 1);
     } else {
       // No blocks at probe point, search later epochs
       // Search upper half
       binarySearchLow.set(probe + MAX_EPOCHS_PER_REQUEST);
-      log.info("BUG-SYNC-004: No blocks at epoch {}, searching later (new range [{}, {}])",
+      log.debug("Binary search: no blocks at epoch {}, narrowing to [{}, {}]",
           probe, probe + MAX_EPOCHS_PER_REQUEST, high);
     }
   }
 
   /**
-   * BUG-SYNC-004: Transition from binary search to forward sync.
+   * Transition from binary search to forward sync.
    */
   private void transitionToForwardSync() {
     long startEpoch = minValidEpochFound.get();
@@ -297,7 +342,7 @@ public class SyncManager implements AutoCloseable {
       startEpoch = Math.max(getLocalTipEpoch() + 1, remoteTipEpoch.get() - MAX_EPOCHS_PER_REQUEST);
     }
 
-    log.info("BUG-SYNC-004: Transitioning to forward sync from epoch {}", startEpoch);
+    log.debug("Transitioning to forward sync from epoch {}", startEpoch);
     lastRequestedEpoch.set(startEpoch - 1);
 
     // Set forwardSyncStartEpoch to prevent re-triggering binary search
@@ -319,7 +364,7 @@ public class SyncManager implements AutoCloseable {
     long localTipEpoch = getLocalTipEpoch();
     long knownRemoteTipEpoch = remoteTipEpoch.get();
 
-    // BUG-SYNC-004: Check if we need to start binary search
+    // Check if we need to start binary search
     // BUT don't re-initiate if we just completed binary search and haven't synced yet
     long syncStartEpoch = forwardSyncStartEpoch.get();
     boolean inCatchUpMode = syncStartEpoch > 0;
@@ -329,7 +374,7 @@ public class SyncManager implements AutoCloseable {
         // Local tip has advanced past the binary search start point, clear the flag
         forwardSyncStartEpoch.set(-1);
         inCatchUpMode = false;
-        log.info("BUG-SYNC-004: Local tip {} reached sync start epoch {}, clearing forward sync lock",
+        log.debug("Local tip {} reached sync start epoch {}, resuming normal sync",
             localTipEpoch, syncStartEpoch);
       }
       // Skip binary search check while forwardSyncStartEpoch is active
@@ -339,21 +384,20 @@ public class SyncManager implements AutoCloseable {
       return;
     }
 
-    // BUG-SYNC-002 fix: Check for epoch gaps in the main chain
+    // Check for epoch gaps in the main chain
     // If there are missing epochs between genesis and tip, prioritize filling them
     long firstMissingEpoch = findFirstMissingEpoch();
 
     long startEpoch;
     if (firstMissingEpoch > 0 && firstMissingEpoch < localTipEpoch) {
       // There's a gap in the chain, sync from the missing epoch
-      // BUG-SYNC-002 fix (enhanced): Reset lastRequestedEpoch to force re-request of gap
+      // Reset lastRequestedEpoch to force re-request of gap
       startEpoch = firstMissingEpoch;
-      log.info("BUG-SYNC-002: Detected epoch gap, forcing sync from epoch {} (resetting lastRequestedEpoch from {})",
-          startEpoch, lastRequestedEpoch.get());
+      log.debug("Epoch gap detected, syncing from epoch {}", startEpoch);
       lastRequestedEpoch.set(firstMissingEpoch - 1);
     } else {
       // No gap, sync from tip as usual
-      // BUG-SYNC-004: When in catch-up mode after binary search, use lastRequestedEpoch directly
+      // When in catch-up mode after binary search, use lastRequestedEpoch directly
       if (!inCatchUpMode) {
         lastRequestedEpoch.updateAndGet(prev -> Math.max(prev, localTipEpoch));
       }
@@ -362,7 +406,7 @@ public class SyncManager implements AutoCloseable {
         return;
       }
 
-      // BUG-SYNC-004: Skip pipeline gap check during catch-up mode
+      // Skip pipeline gap check during catch-up mode
       // After binary search, we need to sync from the found epoch regardless of gap
       if (!inCatchUpMode) {
         long outstanding = lastRequestedEpoch.get() - localTipEpoch;
@@ -385,10 +429,10 @@ public class SyncManager implements AutoCloseable {
   }
 
   /**
-   * BUG-SYNC-004: Initiate binary search to find minimum valid epoch.
+   * Initiate binary search to find minimum valid epoch.
    */
   private void initiateBinarySearch(long localTipEpoch, long knownRemoteTipEpoch) {
-    log.info("BUG-SYNC-004: Initiating binary search (local={}, remote={}, gap={})",
+    log.info("Sync: initiating binary search (local={}, remote={}, gap={})",
         localTipEpoch, knownRemoteTipEpoch, knownRemoteTipEpoch - localTipEpoch);
 
     // Set search range: from local tip + 1 to remote tip
@@ -409,11 +453,111 @@ public class SyncManager implements AutoCloseable {
     return syncState.get() == SyncState.BINARY_SEARCH;
   }
 
+  // ==================== Empty epoch response handling ====================
+
+  /**
+   * Process EPOCH_HASHES_REPLY to detect confirmed empty epochs.
+   *
+   * <p>When we request a range of epochs and the response contains some epochs but not others,
+   * we can determine which epochs are legitimately empty (no blocks on the network) vs
+   * which epochs the peer simply doesn't have yet.
+   *
+   * <p>Logic:
+   * <ul>
+   *   <li>If epoch X is not in response, but epoch Y > X is in response, then X is empty</li>
+   *   <li>If epoch X is not in response and no epoch > X is in response, X is unknown (peer might be behind)</li>
+   * </ul>
+   *
+   * <p>Request-Response Matching:
+   * Uses sequence IDs to ensure responses are matched to the correct request.
+   * If a newer request was sent before the response arrived, the stale response is ignored.
+   *
+   * @param receivedEpochs the set of epochs that had blocks in the response
+   */
+  public void onEpochHashesResponse(Set<Long> receivedEpochs) {
+    // Don't mark empty epochs during binary search (different handling)
+    if (isInBinarySearch()) {
+      return;
+    }
+
+    // Atomically get and clear the request context
+    EpochRequestContext ctx = lastRequestContext.getAndSet(null);
+    if (ctx == null) {
+      log.debug("Ignoring orphan epoch response (no pending request context)");
+      return;
+    }
+
+    // Verify this response matches the most recent request (sequence ID check)
+    // If a newer request was sent, ctx.sequenceId < requestSequence.get()
+    long currentSeq = requestSequence.get();
+    if (ctx.sequenceId != currentSeq) {
+      log.debug("Ignoring stale epoch response (response seq={}, current seq={})",
+          ctx.sequenceId, currentSeq);
+      return;
+    }
+
+    long requestStart = ctx.startEpoch;
+    long requestEnd = ctx.endEpoch;
+
+    // Find the maximum epoch in the response
+    long maxReceivedEpoch = receivedEpochs.stream()
+        .max(Long::compareTo)
+        .orElse(-1L);
+
+    if (maxReceivedEpoch < 0) {
+      // Empty response - peer might be behind, don't mark any epochs as empty
+      log.debug("Empty epoch response for range [{}, {}]", requestStart, requestEnd);
+      return;
+    }
+
+    // Mark empty epochs: those in request range, not in response, but before maxReceivedEpoch
+    int emptyCount = 0;
+    for (long epoch = requestStart; epoch <= Math.min(requestEnd, maxReceivedEpoch); epoch++) {
+      if (!receivedEpochs.contains(epoch)) {
+        // This epoch was requested, not in response, but later epochs exist
+        // Therefore this epoch is confirmed empty on the network
+        if (confirmedEmptyEpochs.getIfPresent(epoch) == null) {
+          confirmedEmptyEpochs.put(epoch, Boolean.TRUE);
+          emptyCount++;
+          log.trace("Epoch {} confirmed empty", epoch);
+        }
+      }
+    }
+
+    if (emptyCount > 0) {
+      log.debug("Confirmed {} empty epochs in range [{}, {}]",
+          emptyCount, requestStart, Math.min(requestEnd, maxReceivedEpoch));
+    }
+    // Note: context already cleared by getAndSet(null) above
+  }
+
+  /**
+   * Check if an epoch has been confirmed as empty.
+   *
+   * @param epoch the epoch to check
+   * @return true if the epoch is confirmed empty, false otherwise
+   */
+  public boolean isEpochConfirmedEmpty(long epoch) {
+    return confirmedEmptyEpochs.getIfPresent(epoch) != null;
+  }
+
+  /**
+   * Get the count of confirmed empty epochs (for monitoring/testing).
+   *
+   * @return the number of epochs currently marked as confirmed empty
+   */
+  public long getConfirmedEmptyEpochCount() {
+    return confirmedEmptyEpochs.estimatedSize();
+  }
+
   private void sendEpochRequest(Channel channel, long startEpoch, long endEpoch) {
     try {
       log.debug("Requesting epoch hashes from {}: [{}-{}]",
           channel.getRemoteAddress(), startEpoch, endEpoch);
       channel.send(new GetEpochHashesMessage(startEpoch, endEpoch));
+      // Track request with unique sequence ID for response matching
+      long seqId = requestSequence.incrementAndGet();
+      lastRequestContext.set(new EpochRequestContext(seqId, startEpoch, endEpoch));
       lastRequestedEpoch.set(endEpoch);
     } catch (Exception e) {
       log.warn("Failed to send GET_EPOCH_HASHES to {}: {}",
@@ -429,7 +573,7 @@ public class SyncManager implements AutoCloseable {
     return channels.get(index);
   }
 
-  // ==================== BUG-SYNC-001 fix: Sync status tracking ====================
+  // ==================== Sync status tracking ====================
 
   /**
    * Update the known remote tip epoch from peer STATUS_REPLY.
@@ -440,20 +584,20 @@ public class SyncManager implements AutoCloseable {
   public void updateRemoteTipEpoch(long epoch) {
     long prev = remoteTipEpoch.getAndUpdate(old -> Math.max(old, epoch));
     if (epoch > prev) {
-      log.info("Remote tip epoch updated: {} -> {}", prev, epoch);
+      log.debug("Remote tip epoch updated: {} -> {}", prev, epoch);
     }
   }
 
   /**
    * Update the known remote main chain height from peer STATUS_REPLY.
-   * BUG-SYNC-001 fix (enhanced): Track height to ensure all blocks are synced.
+   * Track height to ensure all blocks are synced.
    *
    * @param height the main chain height reported by a peer
    */
   public void updateRemoteTipHeight(long height) {
     long prev = remoteTipHeight.getAndUpdate(old -> Math.max(old, height));
     if (height > prev) {
-      log.info("Remote tip height updated: {} -> {}", prev, height);
+      log.debug("Remote tip height updated: {} -> {}", prev, height);
     }
   }
 
@@ -478,7 +622,7 @@ public class SyncManager implements AutoCloseable {
   /**
    * Check if local chain is synchronized with remote peers.
    *
-   * <p>BUG-SYNC-001 fix (enhanced): Synchronized means BOTH conditions must be met:
+   * <p>Synchronized means BOTH conditions must be met:
    * <ul>
    *   <li>Local tip epoch is within SYNC_TOLERANCE of remote tip epoch</li>
    *   <li>Local main chain height is within SYNC_TOLERANCE of remote height</li>
@@ -505,7 +649,7 @@ public class SyncManager implements AutoCloseable {
     // Check epoch proximity
     boolean epochSynced = (remoteEpoch == 0) || (localEpoch >= remoteEpoch - SYNC_TOLERANCE);
 
-    // Check height proximity (BUG-SYNC-001 fix enhanced)
+    // Check height proximity
     boolean heightSynced = (remoteHeight == 0) || (localHeight >= remoteHeight - SYNC_TOLERANCE);
 
     boolean synced = epochSynced && heightSynced;
@@ -544,7 +688,7 @@ public class SyncManager implements AutoCloseable {
   /**
    * Find the first missing epoch in the main chain.
    *
-   * <p>BUG-SYNC-002 fix: Detects gaps in the main chain where epochs are missing.
+   * <p>Detects gaps in the main chain where epochs are missing.
    * This can happen when a node receives a broadcast block before syncing all
    * historical blocks.
    *
@@ -586,10 +730,17 @@ public class SyncManager implements AutoCloseable {
         // Gap of 2-MAX_EXPECTED_EPOCH_GAP might indicate missing blocks
         // Gap > MAX_EXPECTED_EPOCH_GAP is likely normal (node was offline)
         if (gap > 1 && gap <= MAX_EXPECTED_EPOCH_GAP) {
-          long missingEpoch = prevEpoch + 1;
-          log.info("BUG-SYNC-002: Found epoch gap at height {}: {} -> {} (gap={}, missing epochs starting at {})",
-              h, prevEpoch, currEpoch, gap, missingEpoch);
-          return missingEpoch;
+          // Check each epoch in the gap, skip confirmed empty ones
+          for (long epoch = prevEpoch + 1; epoch < currEpoch; epoch++) {
+            if (confirmedEmptyEpochs.getIfPresent(epoch) == null) {
+              // This epoch is not confirmed empty, might need to sync
+              log.debug("Found epoch gap at height {}: {} -> {} (gap={})",
+                  h, prevEpoch, currEpoch, gap);
+              return epoch;
+            }
+          }
+          // All epochs in this gap are confirmed empty, continue scanning
+          log.trace("Epoch gap [{}, {}] confirmed empty, skipping", prevEpoch + 1, currEpoch - 1);
         }
 
         prevBlock = currBlock;

@@ -179,7 +179,7 @@ public class BlockImporter {
         List<Block> demotedBlocks = competition.getDemotedBlocks();
         long blockEpochForLog = block.getEpoch();
 
-        log.warn("⬇️  DEMOTION: {} block(s) being demoted from epoch {} (lost competition to {})",
+        log.warn("DEMOTION: {} block(s) being demoted from epoch {} (lost competition to {})",
             demotedBlocks.size(), blockEpochForLog, formatHash(block.getHash()));
 
         for (Block demotedBlock : demotedBlocks) {
@@ -191,7 +191,7 @@ public class BlockImporter {
           demoteBlockToOrphan(demotedBlock);
         }
 
-        log.warn("✅ DEMOTION COMPLETE: {} block(s) now orphan, winner {} takes height {}",
+        log.warn("DEMOTION COMPLETE: {} block(s) now orphan, winner {} takes height {}",
             demotedBlocks.size(),
             formatHash(block.getHash()),
             finalHeight);
@@ -289,10 +289,10 @@ public class BlockImporter {
         // Case 1: New block beats current winner
         long replacementHeight = currentWinner.getInfo().getHeight();
 
-        log.warn("🏆 EPOCH COMPETITION: Block {} WINS epoch {} competition!",
-            formatHash(block.getHash()), blockEpoch);
-        log.warn("   Winner hash: {} (smaller)", formatHash(block.getHash()));
-        log.warn("   Loser hash:  {} (larger) - will be demoted from height {}",
+        log.debug("Epoch {} competition: block {} wins (smaller hash)",
+            blockEpoch, formatHash(block.getHash()));
+        log.debug("  Winner: {}, Loser: {} (demoted from height {})",
+            formatHash(block.getHash()),
             formatHash(currentWinner.getHash()), replacementHeight);
 
         // Mark old winner for demotion
@@ -332,17 +332,17 @@ public class BlockImporter {
         // Case 3: First block in this epoch
         // BUG-HEIGHT-001 fix: Assign height based on epoch order, not arrival order
         height = isGenesisBlock(block) ? 1 : calculateHeightByEpochOrder(blockEpoch, chainStats);
-        log.info("🆕 Block {} is FIRST block in epoch {}, becoming main block at height {}",
+        log.debug("Block {} is first in epoch {}, assigned height {}",
             formatHash(block.getHash()), blockEpoch, height);
         isBestChain = true;
       }
 
     } else {
       // Lost epoch competition - orphan (BUG-LOGGING-001 fix: use DEBUG instead of WARN)
-      log.debug("❌ EPOCH COMPETITION: Block {} LOSES epoch {} competition",
-          formatHash(block.getHash()), blockEpoch);
-      log.debug("   Loser hash:  {} (larger) - will be orphan", formatHash(block.getHash()));
-      log.debug("   Winner hash: {} (smaller) - remains at height {}",
+      log.debug("Epoch {} competition: block {} loses (larger hash)",
+          blockEpoch, formatHash(block.getHash()));
+      log.debug("  Loser: {}, Winner: {} (height {})",
+          formatHash(block.getHash()),
           formatHash(currentWinner.getHash()),
           currentWinner.getInfo() != null ? currentWinner.getInfo().getHeight() : 0);
       height = 0;
@@ -454,10 +454,10 @@ public class BlockImporter {
     }
 
     if (mainBlocks.size() > 1) {
-      log.error("⚠️  EPOCH INTEGRITY VIOLATION: Epoch {} has {} main blocks (expected 1):",
+      log.error("EPOCH INTEGRITY VIOLATION: Epoch {} has {} main blocks (expected 1):",
           epoch, mainBlocks.size());
       for (Block mainBlock : mainBlocks) {
-        log.error("   - Block {} at height {}",
+        log.error("  - Block {} at height {}",
             formatHash(mainBlock.getHash()),
             mainBlock.getInfo().getHeight());
       }
@@ -465,28 +465,28 @@ public class BlockImporter {
       // Auto-fix: Demote all except the winner
       for (Block mainBlock : mainBlocks) {
         if (!mainBlock.getHash().equals(expectedWinner.getHash())) {
-          log.warn("   → Auto-demoting block {} to fix integrity",
+          log.warn("  Auto-demoting block {} to fix integrity",
               formatHash(mainBlock.getHash()));
           demoteBlockToOrphan(mainBlock);
         }
       }
 
-      log.warn("✓ Epoch {} integrity restored: only winner {} remains as main block",
+      log.info("Epoch {} integrity restored: winner {} remains as main block",
           epoch, formatHash(expectedWinner.getHash()));
 
     } else if (mainBlocks.size() == 1) {
       if (!mainBlocks.getFirst().getHash().equals(expectedWinner.getHash())) {
-        log.error("⚠️  EPOCH INTEGRITY VIOLATION: Epoch {} main block mismatch:",
+        log.error("EPOCH INTEGRITY VIOLATION: Epoch {} main block mismatch:",
             epoch);
-        log.error("   Expected: {}", formatHash(expectedWinner.getHash()));
-        log.error("   Actual: {}", formatHash(mainBlocks.getFirst().getHash()));
+        log.error("  Expected: {}", formatHash(expectedWinner.getHash()));
+        log.error("  Actual: {}", formatHash(mainBlocks.getFirst().getHash()));
       } else {
-        log.debug("✓ Epoch {} integrity verified: single winner {}",
+        log.trace("Epoch {} integrity verified: winner {}",
             epoch, formatHash(expectedWinner.getHash()));
       }
     } else if (mainBlocks.isEmpty()) {
       // This shouldn't happen since expectedWinner should be in mainBlocks
-      log.error("⚠️  EPOCH INTEGRITY WARNING: Epoch {} has no main blocks after import of {}",
+      log.error("EPOCH INTEGRITY WARNING: Epoch {} has no main blocks after import of {}",
           epoch, formatHash(expectedWinner.getHash()));
     }
   }
@@ -544,19 +544,19 @@ public class BlockImporter {
   public void verifyEpochIntegrity(long epoch) {
     // Force MemTable flush to ensure visibility of all recent writes
     // This is the critical fix for BUG-CONSENSUS-008 (RocksDB snapshot isolation)
-    log.info("🔍 Epoch {} integrity check: flushing MemTable...", epoch);
+    log.debug("Epoch {} integrity check: flushing MemTable", epoch);
     dagStore.flushMemTable();
 
     Block expectedWinner = getWinnerBlockInEpoch(epoch);
     if (expectedWinner == null) {
-      log.warn("⚠️  Epoch {} integrity check: no winner found, skipping verification", epoch);
+      log.warn("Epoch {} integrity check: no winner found, skipping", epoch);
       return;
     }
 
-    log.info("🔍 Epoch {} integrity check: verifying winner {} (BUG-CONSENSUS-008 fix)",
+    log.debug("Epoch {} integrity check: verifying winner {}",
         epoch, formatHash(expectedWinner.getHash()));
     verifyEpochSingleWinner(epoch, expectedWinner);
-    log.info("✅ Epoch {} integrity verification complete", epoch);
+    log.debug("Epoch {} integrity verification complete", epoch);
   }
 
   /**
@@ -656,7 +656,7 @@ public class BlockImporter {
         }
 
         transactionManager.commitTransaction(txId);
-        log.info("✓ Atomic commit successful for block {} (transaction {})",
+        log.debug("Atomic commit successful for block {} (transaction {})",
             formatHash(block.getHash()), txId);
 
       } else {
@@ -744,7 +744,7 @@ public class BlockImporter {
     // Check if we need to shift subsequent blocks
     if (insertPosition < mainBlocks.size()) {
       // Inserting in the middle - need to shift all subsequent blocks
-      log.info("📊 BUG-HEIGHT-001 fix: Block epoch {} needs height {}, shifting {} blocks",
+      log.debug("Height insertion: block epoch {} needs height {}, shifting {} blocks",
           blockEpoch, newHeight, mainBlocks.size() - insertPosition);
 
       // Shift all blocks from insertPosition to the end
@@ -781,7 +781,7 @@ public class BlockImporter {
         dagStore.saveBlock(shiftedBlock);
       }
 
-      log.info("📊 BUG-HEIGHT-001 fix: Shifted {} blocks, new block will be at height {}",
+      log.debug("Height insertion complete: shifted {} blocks, new block at height {}",
           mainBlocks.size() - insertPosition, newHeight);
     } else {
       // Appending at the end - normal case

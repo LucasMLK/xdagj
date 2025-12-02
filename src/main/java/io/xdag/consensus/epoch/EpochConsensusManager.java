@@ -220,11 +220,11 @@ public class EpochConsensusManager {
         // BUG FIX (BUG-CONSENSUS-005): Create context for both current and next epoch
         // This ensures the next epoch has a context ready when current epoch ends
         createEpochContext(epoch);
-        log.info("✓ Created epoch context for current epoch {}", epoch);
+        log.debug("Created epoch context for current epoch {}", epoch);
 
         // Also create context for next epoch to ensure miners can work
         createEpochContext(epoch + 1);
-        log.info("✓ Created epoch context for next epoch {}", epoch + 1);
+        log.debug("Created epoch context for next epoch {}", epoch + 1);
 
         // Start epoch timer (triggers onEpochEnd at 64-second boundaries)
         epochTimer.start(this::onEpochEnd);
@@ -235,7 +235,7 @@ public class EpochConsensusManager {
         scheduleBackupMinerTrigger(epoch + 1);
 
         running = true;
-        log.info("✓ EpochConsensusManager started (epoch={}, duration={}ms, backup_threads={})",
+        log.info("EpochConsensusManager started (epoch={}, duration={}ms, backup_threads={})",
                 epoch, EPOCH_DURATION_MS, backupMiner.getMiningThreads());
     }
 
@@ -265,7 +265,7 @@ public class EpochConsensusManager {
         }
 
         running = false;
-        log.info("✓ EpochConsensusManager stopped");
+        log.info("EpochConsensusManager stopped");
     }
 
     /**
@@ -363,7 +363,7 @@ public class EpochConsensusManager {
         // BUG-SYNC-001 fix: Check sync status before backup mining
         SyncManager syncManager = dagKernel != null ? dagKernel.getSyncManager() : null;
         if (syncManager != null && !syncManager.isSynchronized()) {
-            log.info("⏸ Skipping backup miner for epoch {}: node not synchronized " +
+            log.debug("Skipping backup miner for epoch {}: node not synchronized " +
                     "(localEpoch={}, remoteEpoch={}; localHeight={}, remoteHeight={})",
                     epoch, syncManager.getLocalTipEpoch(), syncManager.getRemoteTipEpoch(),
                     dagChain.getMainChainLength(), syncManager.getRemoteTipHeight());
@@ -371,7 +371,7 @@ public class EpochConsensusManager {
         }
 
         if (context.getSolutionsCount() == 0 && !context.isBlockProduced()) {
-            log.warn("⚠ No solutions for epoch {}, triggering backup miner", epoch);
+            log.warn("No solutions for epoch {}, triggering backup miner", epoch);
             backupMiner.startBackupMining(context);
         } else {
             log.debug("Backup miner not needed for epoch {}: {} solutions already collected",
@@ -387,12 +387,12 @@ public class EpochConsensusManager {
      * @param epoch The epoch that just ended
      */
     private void onEpochEnd(long epoch) {
-        log.info("═══════════ Processing Epoch {} End ═══════════", epoch);
+        log.info("Processing epoch {} end", epoch);
 
         // 1. Get epoch context
         EpochContext context = epochContexts.remove(epoch);
         if (context == null) {
-            log.error("✗ Epoch context not found for epoch {}", epoch);
+            log.error("Epoch context not found for epoch {}", epoch);
             // Create context for next epoch
             createEpochContext(epoch + 1);
             scheduleBackupMinerTrigger(epoch + 1);
@@ -401,7 +401,7 @@ public class EpochConsensusManager {
 
         // 2. Check if block already produced
         if (context.isBlockProduced()) {
-            log.info("✓ Block already produced for epoch {}, skipping", epoch);
+            log.debug("Block already produced for epoch {}, skipping", epoch);
             // Create context for next epoch
             createEpochContext(epoch + 1);
             scheduleBackupMinerTrigger(epoch + 1);
@@ -416,7 +416,7 @@ public class EpochConsensusManager {
             // BUG-SYNC-001 fix: Check sync status before waiting for backup miner
             SyncManager syncManager = dagKernel != null ? dagKernel.getSyncManager() : null;
             if (syncManager != null && !syncManager.isSynchronized()) {
-                log.info("⏸ Skipping backup miner wait for epoch {}: node not synchronized " +
+                log.debug("Skipping backup miner wait for epoch {}: node not synchronized " +
                         "(localEpoch={}, remoteEpoch={}; localHeight={}, remoteHeight={})",
                         epoch, syncManager.getLocalTipEpoch(), syncManager.getRemoteTipEpoch(),
                         dagChain.getMainChainLength(), syncManager.getRemoteTipHeight());
@@ -426,12 +426,12 @@ public class EpochConsensusManager {
                 return;
             }
 
-            log.warn("⚠ No solutions collected for epoch {}, waiting for backup miner", epoch);
+            log.warn("No solutions collected for epoch {}, waiting for backup miner", epoch);
             waitForBackupMiner(context);
             solutions = context.getSolutions();
 
             if (solutions.isEmpty()) {
-                log.error("✗ No backup solution for epoch {}, skipping block generation", epoch);
+                log.error("No backup solution for epoch {}, skipping block generation", epoch);
                 // Create context for next epoch
                 createEpochContext(epoch + 1);
                 scheduleBackupMinerTrigger(epoch + 1);
@@ -442,7 +442,7 @@ public class EpochConsensusManager {
         // 5. Select best solution
         BlockSolution bestSolution = bestSolutionSelector.selectBest(solutions);
         if (bestSolution == null) {
-            log.error("✗ Failed to select best solution for epoch {}", epoch);
+            log.error("Failed to select best solution for epoch {}", epoch);
             // Create context for next epoch
             createEpochContext(epoch + 1);
             scheduleBackupMinerTrigger(epoch + 1);
@@ -464,10 +464,10 @@ public class EpochConsensusManager {
         if (importResult != null) {
             if (importResult.isSuccess()) {
                 context.markBlockProduced();
-                log.info("✓ Epoch {} block imported successfully", epoch);
+                log.info("Epoch {} block imported successfully", epoch);
             } else {
                 String errorMsg = importResult.getErrorMessage();
-                log.error("✗ Failed to import epoch {} block: {}", epoch, errorMsg);
+                log.error("Failed to import epoch {} block: {}", epoch, errorMsg);
             }
         } else {
             log.error("Block import returned null result for epoch {}", epoch);
