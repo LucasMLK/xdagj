@@ -185,16 +185,17 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
             return handleGetBlockNumber();
         }
 
-        if (path.matches("/api/v1/blocks/[^/]+") && method == HttpMethod.GET) {
-            String blockNumber = extractPathParam(path, 4);
-            boolean fullTx = Boolean.parseBoolean(params.getOrDefault("fullTransactions", "false"));
-            return handleGetBlockByNumber(blockNumber, fullTx);
-        }
-
+        // More specific routes must come before generic /api/v1/blocks/{number}
         if (path.matches("/api/v1/blocks/hash/[^/]+") && method == HttpMethod.GET) {
             String blockHash = extractPathParam(path, 5);
             boolean fullTx = Boolean.parseBoolean(params.getOrDefault("fullTransactions", "false"));
             return handleGetBlockByHash(blockHash, fullTx);
+        }
+
+        if (path.equals("/api/v1/blocks/epoch/range") && method == HttpMethod.GET) {
+            String fromEpochStr = params.get("fromEpoch");
+            String toEpochStr = params.get("toEpoch");
+            return handleGetBlocksByEpochRange(fromEpochStr, toEpochStr);
         }
 
         if (path.matches("/api/v1/blocks/epoch/[^/]+") && method == HttpMethod.GET) {
@@ -203,10 +204,11 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
             return handleGetBlocksByEpoch(epochStr, pageRequest);
         }
 
-        if (path.equals("/api/v1/blocks/epoch/range") && method == HttpMethod.GET) {
-            String fromEpochStr = params.get("fromEpoch");
-            String toEpochStr = params.get("toEpoch");
-            return handleGetBlocksByEpochRange(fromEpochStr, toEpochStr);
+        // Generic block by number - must be after all /api/v1/blocks/* specific routes
+        if (path.matches("/api/v1/blocks/[^/]+") && method == HttpMethod.GET) {
+            String blockNumber = extractPathParam(path, 4);
+            boolean fullTx = Boolean.parseBoolean(params.getOrDefault("fullTransactions", "false"));
+            return handleGetBlockByNumber(blockNumber, fullTx);
         }
 
         if (path.equals("/api/v1/transactions") && method == HttpMethod.GET) {

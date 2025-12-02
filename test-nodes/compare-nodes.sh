@@ -23,7 +23,6 @@ hex_to_dec() {
 }
 
 # Extract JSON field using grep (simple approach, no jq required)
-# Only returns the first match to avoid confusion with nested fields
 extract_json_field() {
     local json="$1"
     local field="$2"
@@ -32,25 +31,58 @@ extract_json_field() {
 
 # Print table separator
 print_separator() {
-    echo "+--------+----------+---------------------------+---------------------------+--------+--------+"
+    echo "+--------+----------+---------------------------+---------------------------+--------+----------------------+--------+"
 }
 
 # Print table header
 print_header() {
     print_separator
-    printf "| %-6s | %-8s | %-25s | %-25s | %-6s | %-6s |\n" \
-        "Height" "Epoch" "Node1 Hash" "Node2 Hash" "Diff" "Match"
+    printf "| %-6s | %-8s | %-25s | %-25s | %-6s | %-20s | %-6s |\n" \
+        "Height" "Epoch" "Node1 Hash" "Node2 Hash" "Diff" "Coinbase" "Match"
     print_separator
 }
 
+# Print epoch blocks for a node
+print_epoch_blocks() {
+    local api="$1"
+    local epoch="$2"
+    local node_name="$3"
+
+    local resp=$(curl -s "$api/blocks/epoch/$epoch" 2>/dev/null)
+    local count=$(echo "$resp" | grep -o '"blockCount":[0-9]*' | cut -d':' -f2)
+
+    if [ "${count:-0}" -gt 0 ] 2>/dev/null; then
+        echo "$resp" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    blocks = data.get('blocks', [])
+    parts = []
+    for b in blocks:
+        h = b.get('hash', '')[:16] + '...'
+        state = b.get('state', '')
+        cb = b.get('coinbase', '')
+        cb_short = cb[:6] + '..' + cb[-3:] if len(cb) > 9 else cb
+        color = '\033[0;32m' if state == 'Main' else '\033[1;33m'
+        nc = '\033[0m'
+        parts.append(f'{color}{state}{nc}:{h}({cb_short})')
+    print('  '.join(parts))
+except:
+    print('(error)')
+" 2>/dev/null
+    else
+        echo "(no blocks)"
+    fi
+}
+
 echo ""
-echo "╔══════════════════════════════════════════════════════════════════════════════╗"
-echo "║                  XDAG Node Block Comparison Tool                             ║"
-echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+echo "+====================================================================================================+"
+echo "|                              XDAG Node Block Comparison Tool                                       |"
+echo "+====================================================================================================+"
 echo ""
 
 # Get current block number from both nodes
-echo "🔍 Querying nodes..."
+echo "Querying nodes..."
 node1_block_hex=$(curl -s "$NODE1_API/blocks/number" 2>/dev/null | grep -o '"blockNumber":"[^"]*"' | cut -d'"' -f4)
 node2_block_hex=$(curl -s "$NODE2_API/blocks/number" 2>/dev/null | grep -o '"blockNumber":"[^"]*"' | cut -d'"' -f4)
 
@@ -63,16 +95,16 @@ node1_height=$(hex_to_dec "$node1_block_hex")
 node2_height=$(hex_to_dec "$node2_block_hex")
 
 echo ""
-echo "📊 Node Status:"
-echo "┌────────────────────────────────────────┐"
-printf "│ %-20s: %8s blocks │\n" "$NODE1_NAME (Port 10001)" "$node1_height"
-printf "│ %-20s: %8s blocks │\n" "$NODE2_NAME (Port 10002)" "$node2_height"
-echo "└────────────────────────────────────────┘"
+echo "Node Status:"
+echo "+------------------------------------------+"
+printf "| %-20s: %8s blocks   |\n" "$NODE1_NAME (Port 10001)" "$node1_height"
+printf "| %-20s: %8s blocks   |\n" "$NODE2_NAME (Port 10002)" "$node2_height"
+echo "+------------------------------------------+"
 echo ""
 
 # Check if heights match
 if [ "$node1_height" -ne "$node2_height" ]; then
-    echo -e "${YELLOW}⚠ WARNING: Block heights differ!${NC}"
+    echo -e "${YELLOW}WARNING: Block heights differ!${NC}"
 fi
 
 # Determine comparison range
@@ -83,8 +115,10 @@ total_compared=0
 identical_blocks=0
 different_blocks=0
 missing_blocks=0
+epoch_match_count=0
+epoch_mismatch_count=0
 
-echo "🔄 Comparing blocks (1 to $max_height)..."
+echo "Comparing blocks (1 to $max_height)..."
 echo ""
 
 # Print table header
@@ -101,117 +135,106 @@ for height in $(seq 1 $max_height); do
     node1_epoch=$(extract_json_field "$node1_block" "epoch")
     node1_difficulty=$(extract_json_field "$node1_block" "difficulty")
     node1_state=$(extract_json_field "$node1_block" "state")
+    node1_coinbase=$(extract_json_field "$node1_block" "coinbase")
 
     # Extract key fields from Node2
     node2_hash=$(extract_json_field "$node2_block" "hash")
     node2_epoch=$(extract_json_field "$node2_block" "epoch")
     node2_difficulty=$(extract_json_field "$node2_block" "difficulty")
     node2_state=$(extract_json_field "$node2_block" "state")
+    node2_coinbase=$(extract_json_field "$node2_block" "coinbase")
 
     total_compared=$((total_compared + 1))
 
     # Check if blocks exist
     if [ -z "$node1_hash" ] || [ -z "$node2_hash" ]; then
         missing_blocks=$((missing_blocks + 1))
-        node1_display="${RED}MISSING${NC}"
-        node2_display="${RED}MISSING${NC}"
-        [ -n "$node1_hash" ] && node1_display="${node1_hash:0:20}"
-        [ -n "$node2_hash" ] && node2_display="${node2_hash:0:20}"
-
-        printf "| %-6s | %-8s | %-25s | %-25s | %-6s | ${RED}%-6s${NC} |\n" \
-            "$height" "N/A" "$node1_display" "$node2_display" "N/A" "✗"
+        printf "| %-6s | %-8s | %-25s | %-25s | %-6s | %-20s | ${RED}%-6s${NC} |\n" \
+            "$height" "N/A" "MISSING" "MISSING" "N/A" "N/A" "X"
         continue
     fi
 
     # Prepare display values
     display_epoch=$(hex_to_dec "$node1_epoch")
-    # Show first 14 chars (0x + 12 hex) ... last 8 chars for better visibility
     node1_hash_short="${node1_hash:0:14}...${node1_hash: -8}"
     node2_hash_short="${node2_hash:0:14}...${node2_hash: -8}"
     display_diff=$(hex_to_dec "$node1_difficulty")
+    coinbase_short="${node1_coinbase:0:8}...${node1_coinbase: -4}"
 
     # Compare block data
     if [ "$node1_hash" = "$node2_hash" ] && \
        [ "$node1_epoch" = "$node2_epoch" ] && \
        [ "$node1_difficulty" = "$node2_difficulty" ] && \
        [ "$node1_state" = "$node2_state" ]; then
-        # Identical blocks
-        printf "| %-6s | %-8s | %-25s | %-25s | %-6s | ${GREEN}%-6s${NC} |\n" \
-            "$height" "$display_epoch" "$node1_hash_short" "$node2_hash_short" "$display_diff" "✓"
+        printf "| %-6s | %-8s | %-25s | %-25s | %-6s | %-20s | ${GREEN}%-6s${NC} |\n" \
+            "$height" "$display_epoch" "$node1_hash_short" "$node2_hash_short" "$display_diff" "$coinbase_short" "OK"
         identical_blocks=$((identical_blocks + 1))
     else
-        # Different blocks - show with red color
         different_blocks=$((different_blocks + 1))
+        printf "| %-6s | %-8s | %-25s | %-25s | %-6s | %-20s | ${RED}%-6s${NC} |\n" \
+            "$height" "$display_epoch" "$node1_hash_short" "$node2_hash_short" "$display_diff" "$coinbase_short" "X"
+    fi
 
-        # Highlight differences
-        if [ "$node1_hash" != "$node2_hash" ]; then
-            node1_hash_short="${RED}${node1_hash:0:20}${NC}"
-            node2_hash_short="${RED}${node2_hash:0:20}${NC}"
+    # Get epoch block counts for comparison
+    node1_epoch_resp=$(curl -s "$NODE1_API/blocks/epoch/$display_epoch" 2>/dev/null)
+    node2_epoch_resp=$(curl -s "$NODE2_API/blocks/epoch/$display_epoch" 2>/dev/null)
+    n1_count=$(echo "$node1_epoch_resp" | grep -o '"blockCount":[0-9]*' | cut -d':' -f2)
+    n2_count=$(echo "$node2_epoch_resp" | grep -o '"blockCount":[0-9]*' | cut -d':' -f2)
+
+    # Show epoch blocks inline
+    if [ "${n1_count:-0}" -gt 1 ] || [ "${n2_count:-0}" -gt 1 ] || [ "$n1_count" != "$n2_count" ]; then
+        # Multiple blocks or mismatch - show details
+        if [ "$n1_count" = "$n2_count" ]; then
+            epoch_match_count=$((epoch_match_count + 1))
+            epoch_status="${GREEN}=${NC}"
+        else
+            epoch_mismatch_count=$((epoch_mismatch_count + 1))
+            epoch_status="${RED}!${NC}"
         fi
 
-        # Show epoch mismatch
-        if [ "$node1_epoch" != "$node2_epoch" ]; then
-            node2_epoch_dec=$(hex_to_dec "$node2_epoch")
-            display_epoch="${display_epoch}/${RED}${node2_epoch_dec}${NC}"
-        fi
-
-        # Show diff mismatch
-        if [ "$node1_difficulty" != "$node2_difficulty" ]; then
-            node2_diff=$(hex_to_dec "$node2_difficulty")
-            display_diff="${display_diff}/${RED}${node2_diff}${NC}"
-        fi
-
-        printf "| %-6s | %-8s | %-25s | %-25s | %-6s | ${RED}%-6s${NC} |\n" \
-            "$height" "$display_epoch" "$node1_hash_short" "$node2_hash_short" "$display_diff" "✗"
-
-        # Show detailed diff below table row
-        print_separator
-        echo "  ${RED}▼ MISMATCH DETAILS for Height $height:${NC}"
-        if [ "$node1_hash" != "$node2_hash" ]; then
-            echo "    ${YELLOW}Hash:${NC}"
-            echo "      Node1: $node1_hash"
-            echo "      Node2: $node2_hash"
-        fi
-        if [ "$node1_epoch" != "$node2_epoch" ]; then
-            echo "    ${YELLOW}Epoch:${NC} Node1=$(hex_to_dec $node1_epoch) vs Node2=$(hex_to_dec $node2_epoch)"
-        fi
-        if [ "$node1_difficulty" != "$node2_difficulty" ]; then
-            echo "    ${YELLOW}Difficulty:${NC} Node1=$(hex_to_dec $node1_difficulty) vs Node2=$(hex_to_dec $node2_difficulty)"
-        fi
-        if [ "$node1_state" != "$node2_state" ]; then
-            echo "    ${YELLOW}State:${NC} Node1=$node1_state vs Node2=$node2_state"
-        fi
+        printf "|        |          | ${CYAN}Node1 epoch blocks (${n1_count:-0}):${NC} "
+        print_epoch_blocks "$NODE1_API" "$display_epoch" "Node1"
+        printf "|        |          | ${CYAN}Node2 epoch blocks (${n2_count:-0}):${NC} "
+        print_epoch_blocks "$NODE2_API" "$display_epoch" "Node2"
+    else
+        epoch_match_count=$((epoch_match_count + 1))
     fi
 done
 
 # Close table
 print_separator
 
-# Final summary
+# Summary
 echo ""
-echo "╔══════════════════════════════════════════════════════════════════════════════╗"
-echo "║                         Comparison Summary                                   ║"
-echo "╠══════════════════════════════════════════════════════════════════════════════╣"
-printf "║ Total blocks compared:    %-51s║\n" "$total_compared"
-printf "║ ${GREEN}Identical blocks:         %-51s${NC}║\n" "$identical_blocks"
-printf "║ ${RED}Different blocks:         %-51s${NC}║\n" "$different_blocks"
-printf "║ ${YELLOW}Missing blocks:           %-51s${NC}║\n" "$missing_blocks"
-echo "╚══════════════════════════════════════════════════════════════════════════════╝"
+echo "+==============================================================================+"
+echo "|                           Comparison Summary                                 |"
+echo "+==============================================================================+"
+printf "| Total blocks compared:    %-51s|\n" "$total_compared"
+printf "| ${GREEN}Identical blocks:         %-51s${NC}|\n" "$identical_blocks"
+printf "| ${RED}Different blocks:         %-51s${NC}|\n" "$different_blocks"
+printf "| ${YELLOW}Missing blocks:           %-51s${NC}|\n" "$missing_blocks"
+echo "+------------------------------------------------------------------------------+"
+printf "| ${GREEN}Matching epoch views:     %-51s${NC}|\n" "$epoch_match_count"
+printf "| ${RED}Mismatched epoch views:   %-51s${NC}|\n" "$epoch_mismatch_count"
+echo "+==============================================================================+"
 echo ""
 
 # Conclusion
-if [ "$different_blocks" -eq 0 ] && [ "$missing_blocks" -eq 0 ]; then
-    echo -e "${GREEN}✓ SUCCESS: All blocks are identical!${NC}"
+if [ "$different_blocks" -eq 0 ] && [ "$missing_blocks" -eq 0 ] && [ "$epoch_mismatch_count" -eq 0 ]; then
+    echo -e "${GREEN}SUCCESS: All blocks and epoch views are identical!${NC}"
     echo "  The two nodes are perfectly synchronized."
     echo ""
     exit 0
 else
-    echo -e "${RED}✗ FAILURE: Nodes are not synchronized!${NC}"
+    echo -e "${RED}FAILURE: Nodes are not fully synchronized!${NC}"
     if [ "$different_blocks" -gt 0 ]; then
-        echo "  - $different_blocks block(s) have different data"
+        echo "  - $different_blocks main chain block(s) differ"
     fi
     if [ "$missing_blocks" -gt 0 ]; then
-        echo "  - $missing_blocks block(s) are missing on one or both nodes"
+        echo "  - $missing_blocks block(s) missing"
+    fi
+    if [ "$epoch_mismatch_count" -gt 0 ]; then
+        echo "  - $epoch_mismatch_count epoch(s) have different block counts"
     fi
     echo ""
     exit 1
