@@ -167,6 +167,15 @@ public class TransactionPoolImpl implements TransactionPool {
   public boolean addTransaction(Transaction tx) {
     Bytes32 txHash = tx.getHash();
 
+    log.debug("addTransaction called: hash={}, from={}, to={}, amount={}, nonce={}, fee={}, v={}",
+        txHash.toHexString().substring(0, 16),
+        tx.getFrom().toHexString(),
+        tx.getTo().toHexString(),
+        tx.getAmount().toDecimal(9, XUnit.XDAG),
+        tx.getNonce(),
+        tx.getFee().toDecimal(9, XUnit.XDAG),
+        tx.getV());
+
     poolLock.writeLock().lock();
     try {
       // 1. Check if already in pool
@@ -190,7 +199,7 @@ public class TransactionPoolImpl implements TransactionPool {
 
       // 4. Validate nonce continuity
       if (!canAcceptNonce(tx.getFrom(), tx.getNonce())) {
-        log.debug("Transaction {} rejected: nonce gap (from={}, nonce={}, expected={})",
+        log.info("Transaction {} rejected: nonce gap (from={}, nonce={}, expected={})",
             txHash.toHexString().substring(0, 16),
             tx.getFrom().toHexString().substring(0, 8),
             tx.getNonce(),
@@ -201,8 +210,10 @@ public class TransactionPoolImpl implements TransactionPool {
 
       // 5. Validate balance
       if (!hasSufficientBalance(tx)) {
-        log.debug("Transaction {} rejected: insufficient balance",
-            txHash.toHexString().substring(0, 16));
+        log.info("Transaction {} rejected: insufficient balance (from={}, required={})",
+            txHash.toHexString().substring(0, 16),
+            tx.getFrom().toHexString(),
+            tx.getAmount().add(tx.getFee()).toDecimal(9, XUnit.XDAG));
         totalRejected.incrementAndGet();
         return false;
       }
@@ -404,14 +415,14 @@ public class TransactionPoolImpl implements TransactionPool {
     // Check signature validity
     // Note: Full signature validation is expensive, we do basic checks here
     if (tx.getV() < 0) {
-      log.debug("Transaction {} rejected: invalid signature v value",
-          tx.getHash().toHexString().substring(0, 16));
+      log.info("Transaction {} rejected: invalid signature v value (v={})",
+          tx.getHash().toHexString().substring(0, 16), tx.getV());
       return false;
     }
 
     // Check minimum fee
     if (tx.getFee().compareTo(config.getMinFee()) < 0) {
-      log.debug("Transaction {} rejected: fee too low (have: {}, min: {})",
+      log.info("Transaction {} rejected: fee too low (have: {}, min: {})",
           tx.getHash().toHexString().substring(0, 16),
           tx.getFee().toDecimal(9, XUnit.XDAG),
           config.getMinFee().toDecimal(9, XUnit.XDAG));
@@ -420,11 +431,16 @@ public class TransactionPoolImpl implements TransactionPool {
 
     // Check amounts are positive
     if (tx.getAmount().isNegative() || tx.getFee().isNegative()) {
-      log.debug("Transaction {} rejected: negative amount or fee",
+      log.info("Transaction {} rejected: negative amount or fee",
           tx.getHash().toHexString().substring(0, 16));
       return false;
     }
 
+    log.debug("Transaction {} passed basic validation (v={}, fee={}, amount={})",
+        tx.getHash().toHexString().substring(0, 16),
+        tx.getV(),
+        tx.getFee().toDecimal(9, XUnit.XDAG),
+        tx.getAmount().toDecimal(9, XUnit.XDAG));
     return true;
   }
 
@@ -461,6 +477,11 @@ public class TransactionPoolImpl implements TransactionPool {
 
     // Convert XAmount to UInt256 (nano units)
     UInt256 requiredUInt256 = UInt256.valueOf(required.toDecimal(0, NANO_XDAG).longValue());
+
+    log.debug("Balance check: from={}, balance={}, required={}",
+        tx.getFrom().toHexString(),
+        balance.toDecimalString(),
+        requiredUInt256.toDecimalString());
 
     return balance.compareTo(requiredUInt256) >= 0;
   }
