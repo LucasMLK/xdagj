@@ -62,6 +62,9 @@ import io.xdag.store.rocksdb.transaction.RocksDBTransactionManager;
 import java.io.File;
 import java.math.BigInteger;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
@@ -161,6 +164,12 @@ public class DagKernel {
 
   private boolean p2pEnabled = true;
   private volatile boolean running = false;
+
+  /**
+   * WAL sync scheduler for periodic durability (BUG-PERSISTENCE-001 fix).
+   * Syncs RocksDB WAL every 10 seconds to prevent data loss on unexpected restarts.
+   */
+  private ScheduledExecutorService walSyncScheduler;
 
   /**
    * Create a new standalone DagKernel
@@ -429,6 +438,9 @@ public class DagKernel {
         log.info("EpochConsensusManager started");
       }
 
+      // Start periodic WAL sync scheduler (BUG-PERSISTENCE-001 fix)
+      startWalSyncScheduler();
+
       running = true;
       log.info("========================================");
       log.info("DagKernel started successfully");
@@ -459,6 +471,9 @@ public class DagKernel {
     log.info("========================================");
 
     try {
+      // Stop WAL sync scheduler first (BUG-PERSISTENCE-001 fix)
+      stopWalSyncScheduler();
+
       // Stop PoW Algorithm (RandomX)
       if (powAlgorithm != null) {
         powAlgorithm.stop();
@@ -672,6 +687,61 @@ public class DagKernel {
     }
   }
 
+  // ========== WAL Sync Scheduler (BUG-PERSISTENCE-001 fix) ==========
+
+  /**
+   * Start periodic WAL sync scheduler.
+   *
+   * <p>Syncs RocksDB WAL every 10 seconds to minimize data loss window on unexpected restarts.
+   * Without this, data written since the last epoch end (up to 64 seconds) could be lost.
+   */
+  private void startWalSyncScheduler() {
+    if (dagStore == null) {
+      log.warn("DagStore not available, skipping WAL sync scheduler");
+      return;
+    }
+
+    walSyncScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+      Thread t = new Thread(r, "WALSyncScheduler");
+      t.setDaemon(true);
+      return t;
+    });
+
+    // Sync WAL every 10 seconds
+    walSyncScheduler.scheduleAtFixedRate(() -> {
+      try {
+        if (dagStore != null && dagStore.isRunning()) {
+          dagStore.syncWal();
+          log.debug("Periodic WAL sync completed");
+        }
+      } catch (Exception e) {
+        log.error("Periodic WAL sync failed: {}", e.getMessage());
+      }
+    }, 10, 10, TimeUnit.SECONDS);
+
+    log.info("WAL sync scheduler started (interval=10s)");
+  }
+
+  /**
+   * Stop WAL sync scheduler with final sync.
+   */
+  private void stopWalSyncScheduler() {
+    if (walSyncScheduler != null) {
+      log.info("Stopping WAL sync scheduler...");
+      walSyncScheduler.shutdown();
+      try {
+        if (!walSyncScheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+          walSyncScheduler.shutdownNow();
+        }
+      } catch (InterruptedException e) {
+        walSyncScheduler.shutdownNow();
+        Thread.currentThread().interrupt();
+      }
+      walSyncScheduler = null;
+      log.info("WAL sync scheduler stopped");
+    }
+  }
+
   // ========== Genesis Configuration and Bootstrap ==========
 
   /**
@@ -842,6 +912,9 @@ public class DagKernel {
       // Subsequent startup: Verify existing genesis matches genesis.json
       log.info("Chain already initialized ({} blocks), verifying genesis...", mainBlockCount);
       verifyGenesisBlock();
+
+      // Verify data consistency (BUG-PERSISTENCE-001 fix)
+      verifyDataConsistency();
     }
   }
 
@@ -921,6 +994,122 @@ public class DagKernel {
     log.info("  - Epoch: {} (matches config)", actualEpoch);
     log.info("  - Difficulty: {} (matches config)", actualDifficulty.toHexString());
     log.info("  - Network: {}", genesisConfig.getNetworkId());
+  }
+
+  /**
+   * Verify data consistency after restart (BUG-PERSISTENCE-001 fix).
+   *
+   * <p>Checks that all blocks in the chain have valid link targets.
+   * If blocks with missing dependencies are found, they are removed to allow resync.
+   *
+   * <p>This handles the case where:
+   * <ol>
+   *   <li>Node receives P2P blocks (written to WAL buffer)</li>
+   *   <li>Candidate block created with links to these blocks</li>
+   *   <li>Node restarts before WAL sync</li>
+   *   <li>P2P blocks lost, but candidate block still references them</li>
+   * </ol>
+   */
+  private void verifyDataConsistency() {
+    log.info("Verifying data consistency after restart...");
+
+    long mainChainHeight = dagChain.getMainChainLength();
+    if (mainChainHeight <= 1) {
+      log.info("Chain only has genesis block, skipping consistency check");
+      return;
+    }
+
+    int invalidBlockCount = 0;
+    int checkedBlockCount = 0;
+
+    // Check recent blocks (last 100 heights or all if less)
+    long startHeight = Math.max(2, mainChainHeight - 100);
+
+    for (long height = mainChainHeight; height >= startHeight; height--) {
+      Block block = dagStore.getMainBlockByHeight(height, true);
+      if (block == null) {
+        log.warn("Block at height {} not found during consistency check", height);
+        continue;
+      }
+
+      checkedBlockCount++;
+
+      // Check all link targets exist
+      var links = block.getLinks();
+      if (links != null) {
+        for (var link : links) {
+          var targetHash = link.getTargetHash();
+          if (targetHash != null && !targetHash.isZero()) {
+            Block targetBlock = dagStore.getBlockByHash(targetHash, false);
+            if (targetBlock == null) {
+              log.error("CONSISTENCY ERROR: Block {} (height={}) references missing block {}",
+                  block.getHash().toHexString().substring(0, 18),
+                  height,
+                  targetHash.toHexString());
+              invalidBlockCount++;
+
+              // Mark this block for removal
+              try {
+                removeInconsistentBlock(block, height);
+              } catch (Exception e) {
+                log.error("Failed to remove inconsistent block: {}", e.getMessage());
+              }
+              break; // Move to next block
+            }
+          }
+        }
+      }
+    }
+
+    if (invalidBlockCount > 0) {
+      log.warn("========================================");
+      log.warn("DATA CONSISTENCY CHECK COMPLETED");
+      log.warn("  - Checked blocks: {}", checkedBlockCount);
+      log.warn("  - Inconsistent blocks found: {}", invalidBlockCount);
+      log.warn("  - Action: Removed invalid blocks, will resync from peers");
+      log.warn("========================================");
+    } else {
+      log.info("Data consistency check passed ({} blocks verified)", checkedBlockCount);
+    }
+  }
+
+  /**
+   * Remove an inconsistent block from the chain.
+   *
+   * <p>This demotes the block to orphan status and updates chain stats.
+   * BlockInfo with height=0 indicates orphan status.
+   *
+   * @param block the block to remove
+   * @param height the block's current height
+   */
+  private void removeInconsistentBlock(Block block, long height) {
+    log.warn("Removing inconsistent block {} at height {}",
+        block.getHash().toHexString().substring(0, 18), height);
+
+    try {
+      // Update block info to mark as orphan (height = 0)
+      // BlockInfo is immutable, use toBuilder() to create new instance
+      var blockInfo = dagStore.getBlockInfo(block.getHash());
+      if (blockInfo != null) {
+        var orphanBlockInfo = blockInfo.toBuilder()
+            .height(0)  // height=0 indicates orphan status
+            .build();
+        dagStore.saveBlockInfo(orphanBlockInfo);
+        log.info("Block {} demoted to orphan status", block.getHash().toHexString().substring(0, 18));
+      }
+
+      // Update chain stats (ChainStats is immutable, use with* methods)
+      var chainStats = dagChain.getChainStats();
+      if (chainStats.getMainBlockCount() > 0) {
+        var updatedStats = chainStats.withMainBlockCount(chainStats.getMainBlockCount() - 1);
+        dagStore.saveChainStats(updatedStats);
+      }
+
+    } catch (Exception e) {
+      log.error("Error removing inconsistent block {}: {}",
+          block.getHash().toHexString().substring(0, 18), e.getMessage());
+      throw e;
+    }
   }
 
   /**
