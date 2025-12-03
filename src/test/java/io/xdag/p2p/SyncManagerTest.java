@@ -74,6 +74,9 @@ public class SyncManagerTest {
     when(dagChain.getMainBlockByHeight(10L)).thenReturn(tipBlock);
 
     syncManager = new SyncManager(dagKernel, false);
+    // Mark initial historical scan as done to skip fork detection for most tests
+    // Fork detection tests will create their own SyncManager instance
+    syncManager.markInitialHistoricalScanDone();
     syncManager.start();
   }
 
@@ -586,7 +589,8 @@ public class SyncManagerTest {
     when(dagChain.getCurrentEpoch()).thenReturn(400L);
     syncManager.performSync();
 
-    syncManager.onEpochHashesResponse(java.util.Set.of(135L));
+    // Use multi-epoch response to trigger empty detection (single-epoch skipped as edge case)
+    syncManager.onEpochHashesResponse(java.util.Set.of(135L, 140L));
 
     assertTrue(syncManager.isEpochConfirmedEmpty(129));
     assertTrue(syncManager.isEpochConfirmedEmpty(130));
@@ -649,8 +653,8 @@ public class SyncManagerTest {
   public void confirmedEmptyEpochs_ShouldTrackCorrectly() {
     when(dagChain.getCurrentEpoch()).thenReturn(400L);
     syncManager.performSync();
-    // Response has epoch 140, so 129-139 are marked empty
-    syncManager.onEpochHashesResponse(java.util.Set.of(140L));
+    // Use multi-epoch response: epoch 140 and 145, so 129-139 are marked empty
+    syncManager.onEpochHashesResponse(java.util.Set.of(140L, 145L));
 
     assertTrue(syncManager.isEpochConfirmedEmpty(129));
     assertTrue(syncManager.isEpochConfirmedEmpty(139));
@@ -681,13 +685,18 @@ public class SyncManagerTest {
     when(dagChain.getCurrentEpoch()).thenReturn(500L);
 
     syncManager.performSync();
+    // First response: epochs 130-135, marks 129 and 131-134 as empty (request starts at 129)
     syncManager.onEpochHashesResponse(java.util.Set.of(130L, 135L));
     long countAfterFirst = syncManager.getConfirmedEmptyEpochCount();
+    assertTrue("First response should mark some epochs as empty", countAfterFirst > 0);
 
     syncManager.performSync();
-    syncManager.onEpochHashesResponse(java.util.Set.of(200L, 210L));
+    // Second response: epochs in the second request range (around 385+)
+    // Second request starts at max(129, 385) = 385, so response needs epochs >= 385
+    syncManager.onEpochHashesResponse(java.util.Set.of(390L, 400L));
 
-    assertTrue(syncManager.getConfirmedEmptyEpochCount() > countAfterFirst);
+    assertTrue("Second response should add more empty epochs",
+        syncManager.getConfirmedEmptyEpochCount() > countAfterFirst);
   }
 
   /**
@@ -735,8 +744,8 @@ public class SyncManagerTest {
     when(dagChain.getCurrentEpoch()).thenReturn(200L);
 
     syncManager.performSync();
-    // Response contains 103, so 101, 102 should be marked empty
-    syncManager.onEpochHashesResponse(java.util.Set.of(103L));
+    // Use multi-epoch response: contains 103 and 105, so 101, 102 should be marked empty
+    syncManager.onEpochHashesResponse(java.util.Set.of(103L, 105L));
 
     // Verify epochs 101, 102 are confirmed empty
     assertTrue(syncManager.isEpochConfirmedEmpty(101));
@@ -752,11 +761,8 @@ public class SyncManagerTest {
   public void CONFIRM_EMPTY_boundary_test() {
     when(dagChain.getCurrentEpoch()).thenReturn(10_000L);
     syncManager.performSync();
-    syncManager.onEpochHashesResponse(java.util.Set.of(10_000L));
-    syncManager.performSync();
-    syncManager.onEpochHashesResponse(java.util.Set.of(10_001L));
-    syncManager.performSync();
-    syncManager.onEpochHashesResponse(java.util.Set.of(10_002L));
+    // Use multi-epoch response to trigger empty epoch detection
+    syncManager.onEpochHashesResponse(java.util.Set.of(10_000L, 10_001L, 10_002L));
     assertTrue(syncManager.getConfirmedEmptyEpochCount() > 0);
   }
 
@@ -796,7 +802,8 @@ public class SyncManagerTest {
     syncManager.performSync();
     verify(channel).send((io.xdag.p2p.message.Message) argThat(msg -> msg instanceof GetEpochHashesMessage));
 
-    syncManager.onEpochHashesResponse(java.util.Set.of(103L));
+    // Use multi-epoch response to trigger empty epoch detection
+    syncManager.onEpochHashesResponse(java.util.Set.of(103L, 105L));
     assertTrue(syncManager.isEpochConfirmedEmpty(101));
     assertTrue(syncManager.isEpochConfirmedEmpty(102));
     // Note: findFirstMissingEpoch() is now private, removing the assertion
@@ -868,5 +875,390 @@ public class SyncManagerTest {
     // Nothing should be marked as empty
     assertEquals("Orphan response should not mark epochs",
         0L, syncManager.getConfirmedEmptyEpochCount());
+  }
+
+  // ==================== BUG-SYNC-003: Fork Detection Tests ====================
+
+  /**
+   * Helper method to create a fresh SyncManager for fork detection tests.
+   * Does NOT call markInitialHistoricalScanDone() so fork detection will trigger.
+   */
+  private SyncManager createForkDetectionSyncManager() {
+    SyncManager mgr = new SyncManager(dagKernel, false);
+    // Do NOT mark initial historical scan as done
+    mgr.start();
+    return mgr;
+  }
+
+  /**
+   * Test: Fork detection should be initiated on first peer connection
+   * when node has blocks beyond genesis.
+   */
+  @Test
+  public void forkDetection_ShouldInitiateOnFirstPeerConnection() {
+    SyncManager forkSyncManager = createForkDetectionSyncManager();
+    try {
+      // Setup: chain has more than just genesis
+      when(dagChain.getMainChainLength()).thenReturn(5L);
+      when(dagChain.getCurrentEpoch()).thenReturn(200L);
+
+      // Mock genesis block for getGenesisEpoch()
+      Block genesisBlock = org.mockito.Mockito.mock(Block.class);
+      when(genesisBlock.getEpoch()).thenReturn(100L);
+      when(dagChain.getMainBlockByHeight(1L)).thenReturn(genesisBlock);
+
+      // Mock tip block for getLocalTipEpoch()
+      Block tipMock = org.mockito.Mockito.mock(Block.class);
+      when(tipMock.getEpoch()).thenReturn(150L);
+      when(dagChain.getMainBlockByHeight(5L)).thenReturn(tipMock);
+
+      // First sync should initiate fork detection
+      forkSyncManager.performSync();
+
+      assertTrue("Should be in fork detection mode", forkSyncManager.isInForkDetection());
+    } finally {
+      forkSyncManager.stop();
+    }
+  }
+
+  /**
+   * Test: Fork detection should NOT be triggered when chain only has genesis.
+   */
+  @Test
+  public void forkDetection_ShouldNotTriggerWithOnlyGenesis() {
+    SyncManager forkSyncManager = createForkDetectionSyncManager();
+    try {
+      // Setup: chain only has genesis
+      when(dagChain.getMainChainLength()).thenReturn(1L);
+      when(dagChain.getCurrentEpoch()).thenReturn(200L);
+
+      forkSyncManager.performSync();
+
+      assertFalse("Should NOT be in fork detection with only genesis",
+          forkSyncManager.isInForkDetection());
+    } finally {
+      forkSyncManager.stop();
+    }
+  }
+
+  /**
+   * Test: Fork detection should only run once per session.
+   */
+  @Test
+  public void forkDetection_ShouldOnlyRunOnce() {
+    SyncManager forkSyncManager = createForkDetectionSyncManager();
+    try {
+      // Setup: chain has blocks
+      when(dagChain.getMainChainLength()).thenReturn(5L);
+      when(dagChain.getCurrentEpoch()).thenReturn(200L);
+
+      Block genesisBlock = org.mockito.Mockito.mock(Block.class);
+      when(genesisBlock.getEpoch()).thenReturn(100L);
+      when(dagChain.getMainBlockByHeight(1L)).thenReturn(genesisBlock);
+
+      Block tipMock = org.mockito.Mockito.mock(Block.class);
+      when(tipMock.getEpoch()).thenReturn(105L);
+      when(dagChain.getMainBlockByHeight(5L)).thenReturn(tipMock);
+
+      // First sync initiates fork detection
+      forkSyncManager.performSync();
+      assertTrue("First sync should start fork detection", forkSyncManager.isInForkDetection());
+
+      // Simulate fork detection completing - chains are consistent
+      java.util.Map<Long, java.util.List<org.apache.tuweni.bytes.Bytes32>> consistentResponse =
+          new java.util.HashMap<>();
+      // Add epoch 100 with matching hash
+      Block winnerBlock = org.mockito.Mockito.mock(Block.class);
+      org.apache.tuweni.bytes.Bytes32 winnerHash = org.apache.tuweni.bytes.Bytes32.random();
+      when(winnerBlock.getHash()).thenReturn(winnerHash);
+      when(dagChain.getWinnerBlockInEpoch(100L)).thenReturn(winnerBlock);
+      consistentResponse.put(100L, java.util.List.of(winnerHash));
+
+      // Process response - should complete fork detection (scan complete since 100-105 is small)
+      forkSyncManager.onForkDetectionResponse(consistentResponse);
+
+      // Next sync should NOT re-trigger fork detection
+      forkSyncManager.performSync();
+      assertFalse("Should not re-trigger fork detection",
+          forkSyncManager.isInForkDetection());
+    } finally {
+      forkSyncManager.stop();
+    }
+  }
+
+  /**
+   * Test: onForkDetectionResponse should detect divergence when peer has better hash.
+   */
+  @Test
+  public void onForkDetectionResponse_ShouldDetectDivergence() {
+    SyncManager forkSyncManager = createForkDetectionSyncManager();
+    try {
+      // Setup: chain with blocks
+      when(dagChain.getMainChainLength()).thenReturn(5L);
+      when(dagChain.getCurrentEpoch()).thenReturn(200L);
+
+      Block genesisBlock = org.mockito.Mockito.mock(Block.class);
+      when(genesisBlock.getEpoch()).thenReturn(100L);
+      when(dagChain.getMainBlockByHeight(1L)).thenReturn(genesisBlock);
+
+      Block tipMock = org.mockito.Mockito.mock(Block.class);
+      when(tipMock.getEpoch()).thenReturn(105L);
+      when(dagChain.getMainBlockByHeight(5L)).thenReturn(tipMock);
+
+      // Initiate fork detection
+      forkSyncManager.performSync();
+      assertTrue(forkSyncManager.isInForkDetection());
+
+      // Create divergent response
+      // Local winner has larger hash, peer has smaller (better) hash
+      Block localWinner = org.mockito.Mockito.mock(Block.class);
+      org.apache.tuweni.bytes.Bytes32 localHash = org.apache.tuweni.bytes.Bytes32.fromHexString(
+          "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+      when(localWinner.getHash()).thenReturn(localHash);
+      when(dagChain.getWinnerBlockInEpoch(100L)).thenReturn(localWinner);
+
+      // Peer has better (smaller) hash
+      org.apache.tuweni.bytes.Bytes32 peerHash = org.apache.tuweni.bytes.Bytes32.fromHexString(
+          "0x0000000000000000000000000000000000000000000000000000000000000001");
+
+      java.util.Map<Long, java.util.List<org.apache.tuweni.bytes.Bytes32>> divergentResponse =
+          new java.util.HashMap<>();
+      divergentResponse.put(100L, java.util.List.of(peerHash));
+
+      // Process response - should detect divergence and transition to reorg
+      forkSyncManager.onForkDetectionResponse(divergentResponse);
+
+      assertTrue("Should transition to chain reorganization",
+          forkSyncManager.isInChainReorganization());
+    } finally {
+      forkSyncManager.stop();
+    }
+  }
+
+  /**
+   * Test: Fork detection should continue scanning when no divergence found in batch.
+   */
+  @Test
+  public void onForkDetectionResponse_ShouldContinueScanningIfNoDivergence() {
+    SyncManager forkSyncManager = createForkDetectionSyncManager();
+    try {
+      when(dagChain.getMainChainLength()).thenReturn(10L);
+      when(dagChain.getCurrentEpoch()).thenReturn(500L);
+
+      Block genesisBlock = org.mockito.Mockito.mock(Block.class);
+      when(genesisBlock.getEpoch()).thenReturn(100L);
+      when(dagChain.getMainBlockByHeight(1L)).thenReturn(genesisBlock);
+
+      // Mock tip block for getLocalTipEpoch()
+      Block tipMock = org.mockito.Mockito.mock(Block.class);
+      when(tipMock.getEpoch()).thenReturn(400L);
+      when(dagChain.getMainBlockByHeight(10L)).thenReturn(tipMock);
+
+      // Initiate fork detection
+      forkSyncManager.performSync();
+      assertTrue(forkSyncManager.isInForkDetection());
+
+      // Response with matching hashes (no divergence)
+      Block localWinner = org.mockito.Mockito.mock(Block.class);
+      org.apache.tuweni.bytes.Bytes32 matchingHash = org.apache.tuweni.bytes.Bytes32.random();
+      when(localWinner.getHash()).thenReturn(matchingHash);
+      when(dagChain.getWinnerBlockInEpoch(100L)).thenReturn(localWinner);
+
+      java.util.Map<Long, java.util.List<org.apache.tuweni.bytes.Bytes32>> matchingResponse =
+          new java.util.HashMap<>();
+      matchingResponse.put(100L, java.util.List.of(matchingHash));
+
+      // Process response - should still be in fork detection (more epochs to scan)
+      forkSyncManager.onForkDetectionResponse(matchingResponse);
+
+      // Should still be in fork detection since there are more epochs to scan
+      // (tip is at 400, we only scanned from 100)
+      assertTrue("Should still be in fork detection mode",
+          forkSyncManager.isInForkDetection());
+    } finally {
+      forkSyncManager.stop();
+    }
+  }
+
+  /**
+   * Test: Chain reorganization should request blocks from fork point.
+   */
+  @Test
+  public void chainReorganization_ShouldRequestFromForkPoint() {
+    SyncManager forkSyncManager = createForkDetectionSyncManager();
+    try {
+      when(dagChain.getMainChainLength()).thenReturn(5L);
+      when(dagChain.getCurrentEpoch()).thenReturn(300L);
+
+      Block genesisBlock = org.mockito.Mockito.mock(Block.class);
+      when(genesisBlock.getEpoch()).thenReturn(100L);
+      when(dagChain.getMainBlockByHeight(1L)).thenReturn(genesisBlock);
+
+      Block tipMock = org.mockito.Mockito.mock(Block.class);
+      when(tipMock.getEpoch()).thenReturn(150L);
+      when(dagChain.getMainBlockByHeight(5L)).thenReturn(tipMock);
+
+      // Initiate fork detection
+      forkSyncManager.performSync();
+      assertTrue(forkSyncManager.isInForkDetection());
+
+      // Simulate finding divergence at epoch 110
+      Block localWinner = org.mockito.Mockito.mock(Block.class);
+      org.apache.tuweni.bytes.Bytes32 localHash = org.apache.tuweni.bytes.Bytes32.fromHexString(
+          "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+      when(localWinner.getHash()).thenReturn(localHash);
+      when(dagChain.getWinnerBlockInEpoch(100L)).thenReturn(localWinner);
+      when(dagChain.getWinnerBlockInEpoch(110L)).thenReturn(localWinner);
+
+      // Peer has better hash at epoch 110
+      org.apache.tuweni.bytes.Bytes32 peerHash = org.apache.tuweni.bytes.Bytes32.fromHexString(
+          "0x0000000000000000000000000000000000000000000000000000000000000001");
+
+      java.util.Map<Long, java.util.List<org.apache.tuweni.bytes.Bytes32>> response =
+          new java.util.HashMap<>();
+      response.put(110L, java.util.List.of(peerHash));
+
+      forkSyncManager.onForkDetectionResponse(response);
+
+      // Should be in chain reorganization mode
+      assertTrue("Should be in chain reorganization", forkSyncManager.isInChainReorganization());
+
+      // Perform sync should request blocks from fork point
+      forkSyncManager.performSync();
+
+      // Verify GET_EPOCH_HASHES message was sent
+      verify(channel, org.mockito.Mockito.atLeastOnce()).send(
+          argThat((Message msg) -> msg instanceof GetEpochHashesMessage));
+    } finally {
+      forkSyncManager.stop();
+    }
+  }
+
+  /**
+   * Test: Chain reorganization should complete when all epochs synced.
+   */
+  @Test
+  public void chainReorganization_ShouldCompleteWhenDone() {
+    SyncManager forkSyncManager = createForkDetectionSyncManager();
+    try {
+      when(dagChain.getMainChainLength()).thenReturn(3L);
+      when(dagChain.getCurrentEpoch()).thenReturn(120L);
+
+      Block genesisBlock = org.mockito.Mockito.mock(Block.class);
+      when(genesisBlock.getEpoch()).thenReturn(100L);
+      when(dagChain.getMainBlockByHeight(1L)).thenReturn(genesisBlock);
+
+      Block tipMock = org.mockito.Mockito.mock(Block.class);
+      when(tipMock.getEpoch()).thenReturn(105L);
+      when(dagChain.getMainBlockByHeight(3L)).thenReturn(tipMock);
+
+      // Initiate fork detection
+      forkSyncManager.performSync();
+
+      // Trigger divergence detection - simulate response that causes reorg
+      Block localWinner = org.mockito.Mockito.mock(Block.class);
+      org.apache.tuweni.bytes.Bytes32 localHash = org.apache.tuweni.bytes.Bytes32.fromHexString(
+          "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+      when(localWinner.getHash()).thenReturn(localHash);
+      when(dagChain.getWinnerBlockInEpoch(100L)).thenReturn(localWinner);
+
+      org.apache.tuweni.bytes.Bytes32 peerHash = org.apache.tuweni.bytes.Bytes32.fromHexString(
+          "0x0000000000000000000000000000000000000000000000000000000000000001");
+
+      java.util.Map<Long, java.util.List<org.apache.tuweni.bytes.Bytes32>> response =
+          new java.util.HashMap<>();
+      response.put(100L, java.util.List.of(peerHash));
+
+      forkSyncManager.onForkDetectionResponse(response);
+      assertTrue("Should be in reorg mode", forkSyncManager.isInChainReorganization());
+
+      // Simulate syncing past the target epoch
+      // Multiple performSync calls until reorg complete
+      for (int i = 0; i < 10; i++) {
+        forkSyncManager.performSync();
+        if (!forkSyncManager.isInChainReorganization()) {
+          break;
+        }
+      }
+
+      // Should have completed reorganization
+      assertFalse("Should complete chain reorganization",
+          forkSyncManager.isInChainReorganization());
+    } finally {
+      forkSyncManager.stop();
+    }
+  }
+
+  /**
+   * Test: isInForkDetection should return correct state.
+   */
+  @Test
+  public void isInForkDetection_ShouldReturnCorrectState() {
+    SyncManager forkSyncManager = createForkDetectionSyncManager();
+    try {
+      assertFalse("Initially not in fork detection", forkSyncManager.isInForkDetection());
+
+      when(dagChain.getMainChainLength()).thenReturn(5L);
+      when(dagChain.getCurrentEpoch()).thenReturn(200L);
+
+      Block genesisBlock = org.mockito.Mockito.mock(Block.class);
+      when(genesisBlock.getEpoch()).thenReturn(100L);
+      when(dagChain.getMainBlockByHeight(1L)).thenReturn(genesisBlock);
+
+      Block tipMock = org.mockito.Mockito.mock(Block.class);
+      when(tipMock.getEpoch()).thenReturn(150L);
+      when(dagChain.getMainBlockByHeight(5L)).thenReturn(tipMock);
+
+      forkSyncManager.performSync();
+
+      assertTrue("Should be in fork detection after initiation",
+          forkSyncManager.isInForkDetection());
+    } finally {
+      forkSyncManager.stop();
+    }
+  }
+
+  /**
+   * Test: isInChainReorganization should return correct state.
+   */
+  @Test
+  public void isInChainReorganization_ShouldReturnCorrectState() {
+    assertFalse("Initially not in chain reorganization",
+        syncManager.isInChainReorganization());
+  }
+
+  /**
+   * Test: Fork detection with empty peer response should continue scanning.
+   */
+  @Test
+  public void onForkDetectionResponse_EmptyResponse_ShouldContinue() {
+    SyncManager forkSyncManager = createForkDetectionSyncManager();
+    try {
+      when(dagChain.getMainChainLength()).thenReturn(5L);
+      when(dagChain.getCurrentEpoch()).thenReturn(500L);
+
+      Block genesisBlock = org.mockito.Mockito.mock(Block.class);
+      when(genesisBlock.getEpoch()).thenReturn(100L);
+      when(dagChain.getMainBlockByHeight(1L)).thenReturn(genesisBlock);
+
+      Block tipMock = org.mockito.Mockito.mock(Block.class);
+      when(tipMock.getEpoch()).thenReturn(400L);
+      when(dagChain.getMainBlockByHeight(5L)).thenReturn(tipMock);
+
+      forkSyncManager.performSync();
+      assertTrue(forkSyncManager.isInForkDetection());
+
+      // Empty response from peer
+      java.util.Map<Long, java.util.List<org.apache.tuweni.bytes.Bytes32>> emptyResponse =
+          new java.util.HashMap<>();
+
+      forkSyncManager.onForkDetectionResponse(emptyResponse);
+
+      // Should still be in fork detection - continue scanning
+      assertTrue("Should continue fork detection on empty response",
+          forkSyncManager.isInForkDetection());
+    } finally {
+      forkSyncManager.stop();
+    }
   }
 }

@@ -374,15 +374,22 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
 
   /**
    * Handle EPOCH_HASHES_REPLY - Received hashes, need to fetch missing blocks
+   *
+   * <p>BUG-SYNC-003 fix: Also fetch blocks that have smaller hash than local
+   * block for the same epoch (peer has better block).
    */
   private void handleEpochHashesReply(Channel channel, Bytes body) {
     try {
       EpochHashesReplyMessage reply = new EpochHashesReplyMessage(body.toArray());
       Map<Long, List<Bytes32>> data = reply.getEpochHashes();
 
-      // BUG-SYNC-004: Check if SyncManager is in binary search mode
       SyncManager syncManager = dagKernel.getSyncManager();
-      if (syncManager != null && syncManager.isInBinarySearch()) {
+      if (syncManager == null) {
+        return;
+      }
+
+      // BUG-SYNC-004: Check if SyncManager is in binary search mode
+      if (syncManager.isInBinarySearch()) {
         // Binary search mode: report results to SyncManager
         boolean hasBlocks = !data.isEmpty();
         long minEpoch = hasBlocks
@@ -393,30 +400,68 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
         return; // Don't fetch blocks during binary search, just probe
       }
 
-      // BUG-SYNC-005: Notify SyncManager about received epochs for empty epoch detection
-      if (syncManager != null) {
-        syncManager.onEpochHashesResponse(data.keySet());
+      // BUG-SYNC-003: Check if SyncManager is in fork detection mode
+      if (syncManager.isInForkDetection()) {
+        log.debug("Fork detection response: {} epochs", data.size());
+        syncManager.onForkDetectionResponse(data);
+        return; // Fork detection will handle reorganization
       }
 
-      // Normal sync mode: fetch missing blocks
-      List<Bytes32> missingHashes = new ArrayList<>();
+      // BUG-SYNC-005: Notify SyncManager about received epochs for empty epoch detection
+      syncManager.onEpochHashesResponse(data.keySet());
 
-      for (List<Bytes32> hashes : data.values()) {
-        for (Bytes32 hash : hashes) {
-          if (dagChain.getBlockByHash(hash, false) == null) {
-            missingHashes.add(hash);
+      // Normal sync mode: fetch missing blocks AND better blocks (BUG-SYNC-003 fix)
+      List<Bytes32> hashesToFetch = new ArrayList<>();
+
+      for (Map.Entry<Long, List<Bytes32>> entry : data.entrySet()) {
+        long epoch = entry.getKey();
+        List<Bytes32> peerHashes = entry.getValue();
+
+        // Get local winner for this epoch
+        Block localWinner = dagChain.getWinnerBlockInEpoch(epoch);
+        Bytes32 localWinnerHash = (localWinner != null) ? localWinner.getHash() : null;
+
+        for (Bytes32 peerHash : peerHashes) {
+          // Check if we don't have this block
+          if (dagChain.getBlockByHash(peerHash, false) == null) {
+            hashesToFetch.add(peerHash);
+            continue;
+          }
+
+          // BUG-SYNC-003 fix: Even if we have this block, check if peer has better block
+          // for the same epoch (smaller hash)
+          if (localWinnerHash != null && peerHash.compareTo(localWinnerHash) < 0) {
+            // Peer has a block with smaller hash for this epoch!
+            // We should already have this block if we received it via normal sync,
+            // but the epoch competition might not have been triggered.
+            // Re-import it to trigger epoch competition.
+            log.info("BUG-SYNC-003: Epoch {} peer has better hash {} (local: {})",
+                epoch,
+                peerHash.toHexString().substring(0, 18),
+                localWinnerHash.toHexString().substring(0, 18));
+
+            // Try to re-import the block to trigger epoch competition
+            Block betterBlock = dagChain.getBlockByHash(peerHash, true);
+            if (betterBlock != null) {
+              // Block exists locally but may not be main block
+              // Re-import to trigger epoch competition
+              dagChain.tryToConnect(betterBlock);
+            } else {
+              // Don't have the block yet, request it
+              hashesToFetch.add(peerHash);
+            }
           }
         }
       }
 
-      if (!missingHashes.isEmpty()) {
-        log.debug("Requesting {} missing blocks from sync", missingHashes.size());
+      if (!hashesToFetch.isEmpty()) {
+        log.debug("Requesting {} blocks from sync (missing or better)", hashesToFetch.size());
 
         // Batch requests (max 500 per message)
         int batchSize = 500;
-        for (int i = 0; i < missingHashes.size(); i += batchSize) {
-            int end = Math.min(i + batchSize, missingHashes.size());
-            List<Bytes32> batch = missingHashes.subList(i, end);
+        for (int i = 0; i < hashesToFetch.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, hashesToFetch.size());
+            List<Bytes32> batch = hashesToFetch.subList(i, end);
             channel.send(new GetBlocksMessage(batch));
         }
       }

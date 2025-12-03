@@ -34,6 +34,7 @@ import io.xdag.p2p.message.GetEpochHashesMessage;
 import io.xdag.p2p.message.XdagMessageCode;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Executors;
@@ -45,6 +46,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.tuweni.bytes.Bytes32;
 
 /**
  * FastDAG Sync Manager (v3.1).
@@ -62,6 +64,24 @@ public class SyncManager implements AutoCloseable {
   private static final long SYNC_INTERVAL_MS = 5_000;
   private static final long MAX_EPOCHS_PER_REQUEST = 256;
   private static final long MAX_PIPELINE_GAP = 4_096;
+
+  /**
+   * Interval for historical epoch verification (BUG-SYNC-003 fix).
+   * Check for better blocks in historical epochs every 30 seconds.
+   */
+  private static final long HISTORICAL_VERIFY_INTERVAL_MS = 30_000;
+
+  /**
+   * Number of recent epochs to verify for better blocks (BUG-SYNC-003 fix).
+   * After initial full historical scan, verify only recent epochs periodically.
+   */
+  private static final long HISTORICAL_VERIFY_DEPTH = 10;
+
+  /**
+   * Batch size for fork detection scan.
+   * Process epochs in batches to avoid requesting too many at once.
+   */
+  private static final long FORK_DETECTION_BATCH_SIZE = 256;
 
   /**
    * Sync tolerance: allow local tip to be this many epochs behind remote tip
@@ -89,7 +109,11 @@ public class SyncManager implements AutoCloseable {
     /** Binary search to locate minimum valid epoch */
     BINARY_SEARCH,
     /** Binary search completed, transitioning to forward sync */
-    BINARY_SEARCH_COMPLETE
+    BINARY_SEARCH_COMPLETE,
+    /** Fork detection: scanning history to find fork point */
+    FORK_DETECTION,
+    /** Reorganization: syncing from fork point */
+    CHAIN_REORGANIZATION
   }
 
   private final DagKernel dagKernel;
@@ -143,6 +167,47 @@ public class SyncManager implements AutoCloseable {
    * Set to -1 when not active.
    */
   private final AtomicLong forwardSyncStartEpoch = new AtomicLong(-1);
+
+  // ==================== Historical epoch verification (BUG-SYNC-003 fix) ====================
+
+  /**
+   * Last time historical epoch verification was performed.
+   * Used to rate-limit historical verification.
+   */
+  private final AtomicLong lastHistoricalVerifyTime = new AtomicLong(0);
+
+  /**
+   * Flag indicating historical verification is in progress.
+   * Prevents concurrent verifications.
+   */
+  private final AtomicBoolean historicalVerifyInProgress = new AtomicBoolean(false);
+
+  // ==================== Fork Detection (BUG-SYNC-003 fix) ====================
+
+  /**
+   * Flag indicating if initial full historical scan has been completed.
+   * On first peer connection, we scan all epochs from genesis to tip.
+   */
+  private final AtomicBoolean initialHistoricalScanDone = new AtomicBoolean(false);
+
+  /**
+   * Current epoch being scanned during fork detection.
+   * Starts from genesis and advances forward until tip.
+   */
+  private final AtomicLong forkDetectionCurrentEpoch = new AtomicLong(-1);
+
+  /**
+   * Fork point epoch: the last epoch where local and peer chains agree.
+   * Set to -1 when not in fork detection mode.
+   * All epochs after this point need to be re-synced.
+   */
+  private final AtomicLong forkPointEpoch = new AtomicLong(-1);
+
+  /**
+   * Target epoch for chain reorganization.
+   * Sync from forkPointEpoch to this epoch.
+   */
+  private final AtomicLong reorgTargetEpoch = new AtomicLong(-1);
 
   // ==================== Empty epoch tracking ====================
 
@@ -240,9 +305,21 @@ public class SyncManager implements AutoCloseable {
       return;
     }
 
+    // BUG-SYNC-003 fix: On first peer connection, initiate full historical scan
+    maybeInitiateForkDetection(channels);
+
+    // BUG-SYNC-003 fix: Periodically verify historical epochs for better blocks
+    maybePerformHistoricalVerification(channels);
+
     // Handle different sync states
     SyncState currentState = syncState.get();
     switch (currentState) {
+      case FORK_DETECTION:
+        performForkDetection(channels);
+        return;
+      case CHAIN_REORGANIZATION:
+        performChainReorganization(channels);
+        return;
       case BINARY_SEARCH:
         performBinarySearch(channels);
         return;
@@ -428,6 +505,359 @@ public class SyncManager implements AutoCloseable {
     sendEpochRequest(channel, startEpoch, endEpoch);
   }
 
+  // ==================== Historical Epoch Verification (BUG-SYNC-003 fix) ====================
+
+  /**
+   * Maybe perform historical epoch verification.
+   *
+   * <p>BUG-SYNC-003 fix: Periodically request historical epoch hashes from peers
+   * to detect if peers have better (smaller hash) blocks for epochs we already have.
+   *
+   * <p>This is needed because normal forward sync only syncs from localTipEpoch + 1,
+   * never checking if historical epochs have better blocks on other nodes.
+   *
+   * @param channels active P2P channels
+   */
+  private void maybePerformHistoricalVerification(List<Channel> channels) {
+    // Rate limit: only verify every HISTORICAL_VERIFY_INTERVAL_MS
+    long now = System.currentTimeMillis();
+    long lastVerify = lastHistoricalVerifyTime.get();
+    if (now - lastVerify < HISTORICAL_VERIFY_INTERVAL_MS) {
+      return;
+    }
+
+    // Only verify when in forward sync mode (not during binary search)
+    if (syncState.get() != SyncState.FORWARD_SYNC) {
+      return;
+    }
+
+    // Only one verification at a time
+    if (!historicalVerifyInProgress.compareAndSet(false, true)) {
+      return;
+    }
+
+    try {
+      long localTipEpoch = getLocalTipEpoch();
+      if (localTipEpoch <= 1) {
+        return; // Only genesis, nothing to verify
+      }
+
+      // Calculate verification range: last HISTORICAL_VERIFY_DEPTH epochs
+      long genesisEpoch = getGenesisEpoch();
+      long startEpoch = Math.max(genesisEpoch + 1, localTipEpoch - HISTORICAL_VERIFY_DEPTH);
+      long endEpoch = localTipEpoch;
+
+      if (startEpoch >= endEpoch) {
+        return; // Nothing to verify
+      }
+
+      log.debug("Historical verification: requesting epochs [{}-{}]", startEpoch, endEpoch);
+
+      // Request historical epoch hashes
+      // The response handler will compare with local and request missing/better blocks
+      Channel channel = selectChannel(channels);
+      channel.send(new GetEpochHashesMessage(startEpoch, endEpoch));
+
+      lastHistoricalVerifyTime.set(now);
+
+    } catch (Exception e) {
+      log.warn("Historical verification failed: {}", e.getMessage());
+    } finally {
+      historicalVerifyInProgress.set(false);
+    }
+  }
+
+  // ==================== Fork Detection (BUG-SYNC-003 fix) ====================
+
+  /**
+   * Initiate fork detection on first peer connection.
+   *
+   * <p>BUG-SYNC-003 fix: When nodes start simultaneously, they mine independently
+   * before P2P sync kicks in. This creates divergent chains for early epochs.
+   *
+   * <p>On first peer connection, we scan from genesis to find the fork point
+   * (last common epoch), then reorganize from there.
+   *
+   * @param channels active P2P channels
+   */
+  private void maybeInitiateForkDetection(List<Channel> channels) {
+    // Only run once per session
+    if (initialHistoricalScanDone.get()) {
+      return;
+    }
+
+    // Skip if in other sync states
+    SyncState currentState = syncState.get();
+    if (currentState != SyncState.FORWARD_SYNC) {
+      return;
+    }
+
+    // Need at least genesis + 1 block
+    long mainChainLength = dagChain.getMainChainLength();
+    if (mainChainLength <= 1) {
+      return;
+    }
+
+    // Mark as done immediately to prevent re-triggering
+    if (!initialHistoricalScanDone.compareAndSet(false, true)) {
+      return;
+    }
+
+    long genesisEpoch = getGenesisEpoch();
+    long localTipEpoch = getLocalTipEpoch();
+
+    log.info("BUG-SYNC-003: Initiating fork detection scan from epoch {} to {}",
+        genesisEpoch, localTipEpoch);
+
+    // Start fork detection from genesis
+    forkDetectionCurrentEpoch.set(genesisEpoch);
+    forkPointEpoch.set(genesisEpoch); // Assume genesis is common ancestor
+    reorgTargetEpoch.set(localTipEpoch);
+    syncState.set(SyncState.FORK_DETECTION);
+  }
+
+  /**
+   * Perform fork detection by scanning epochs from genesis forward.
+   *
+   * <p>Request epochs in batches and compare local winner hashes with peer hashes.
+   * The fork point is the last epoch where both chains have the same winner.
+   *
+   * @param channels active P2P channels
+   */
+  private void performForkDetection(List<Channel> channels) {
+    long currentEpoch = forkDetectionCurrentEpoch.get();
+    long targetEpoch = reorgTargetEpoch.get();
+
+    if (currentEpoch < 0 || currentEpoch > targetEpoch) {
+      // Fork detection complete - no divergence found
+      log.info("BUG-SYNC-003: Fork detection complete, no divergence found");
+      transitionFromForkDetection();
+      return;
+    }
+
+    // Request next batch of epochs
+    long endEpoch = Math.min(currentEpoch + FORK_DETECTION_BATCH_SIZE - 1, targetEpoch);
+
+    log.debug("Fork detection: scanning epochs [{}-{}]", currentEpoch, endEpoch);
+
+    Channel channel = selectChannel(channels);
+    try {
+      channel.send(new GetEpochHashesMessage(currentEpoch, endEpoch));
+    } catch (Exception e) {
+      log.warn("Failed to send fork detection request: {}", e.getMessage());
+    }
+  }
+
+  /**
+   * Handle fork detection response.
+   *
+   * <p>Called from XdagP2pEventHandler when receiving EPOCH_HASHES_REPLY during fork detection.
+   * Compares each epoch's winner hash with peer's hash to find divergence point.
+   *
+   * @param peerEpochHashes map of epoch -> list of block hashes from peer
+   */
+  public void onForkDetectionResponse(Map<Long, List<Bytes32>> peerEpochHashes) {
+    if (syncState.get() != SyncState.FORK_DETECTION) {
+      return;
+    }
+
+    long scanStart = forkDetectionCurrentEpoch.get();
+    long targetEpoch = reorgTargetEpoch.get();
+    long endOfBatch = Math.min(scanStart + FORK_DETECTION_BATCH_SIZE - 1, targetEpoch);
+
+    // Check each epoch in the batch
+    for (long epoch = scanStart; epoch <= endOfBatch; epoch++) {
+      Block localWinner = dagChain.getWinnerBlockInEpoch(epoch);
+      List<Bytes32> peerHashes = peerEpochHashes.get(epoch);
+
+      if (localWinner == null) {
+        // No local winner for this epoch - this is fine, continue
+        continue;
+      }
+
+      Bytes32 localWinnerHash = localWinner.getHash();
+
+      if (peerHashes == null || peerHashes.isEmpty()) {
+        // Peer doesn't have blocks for this epoch - possible divergence
+        // Keep scanning to find where peer's chain actually starts
+        continue;
+      }
+
+      // Check if peer has the same winner
+      boolean peerHasLocalWinner = peerHashes.contains(localWinnerHash);
+
+      if (!peerHasLocalWinner) {
+        // Found divergence! Peer has different blocks for this epoch
+        // Check if peer has a BETTER (smaller hash) block
+        Bytes32 peerBestHash = peerHashes.stream()
+            .min(Bytes32::compareTo)
+            .orElse(null);
+
+        if (peerBestHash != null && peerBestHash.compareTo(localWinnerHash) < 0) {
+          // Peer has better block - this is the fork point
+          log.info("BUG-SYNC-003: Found fork at epoch {}. Peer has better hash {} (local: {})",
+              epoch,
+              peerBestHash.toHexString().substring(0, 18),
+              localWinnerHash.toHexString().substring(0, 18));
+
+          // The fork point is the previous epoch (last common ancestor)
+          long lastCommonEpoch = findLastCommonEpoch(epoch - 1, scanStart);
+          forkPointEpoch.set(lastCommonEpoch);
+
+          // Transition to chain reorganization
+          transitionToChainReorganization();
+          return;
+        }
+      } else {
+        // Peer has our winner - update fork point to this epoch
+        forkPointEpoch.set(epoch);
+      }
+    }
+
+    // Advance to next batch
+    long nextStart = endOfBatch + 1;
+    if (nextStart > targetEpoch) {
+      // Scan complete - no divergence requiring reorganization
+      log.info("BUG-SYNC-003: Fork detection complete, chains are consistent");
+      transitionFromForkDetection();
+    } else {
+      forkDetectionCurrentEpoch.set(nextStart);
+    }
+  }
+
+  /**
+   * Find the last common epoch before the divergence point.
+   *
+   * @param startEpoch epoch to start searching backwards from
+   * @param minEpoch minimum epoch to search (genesis)
+   * @return last common epoch
+   */
+  private long findLastCommonEpoch(long startEpoch, long minEpoch) {
+    // For now, return the epoch just before divergence
+    // In a more sophisticated implementation, we could walk backwards
+    // comparing hashes until we find a match
+    return Math.max(startEpoch, minEpoch);
+  }
+
+  /**
+   * Transition from fork detection to chain reorganization.
+   */
+  private void transitionToChainReorganization() {
+    long forkPoint = forkPointEpoch.get();
+    long target = reorgTargetEpoch.get();
+
+    log.info("BUG-SYNC-003: Starting chain reorganization from epoch {} to {}",
+        forkPoint + 1, target);
+
+    // Reset forward sync to start from fork point
+    lastRequestedEpoch.set(forkPoint);
+
+    syncState.set(SyncState.CHAIN_REORGANIZATION);
+  }
+
+  /**
+   * Transition from fork detection back to normal forward sync.
+   */
+  private void transitionFromForkDetection() {
+    log.debug("Transitioning from fork detection to forward sync");
+
+    // Reset fork detection state
+    forkDetectionCurrentEpoch.set(-1);
+    forkPointEpoch.set(-1);
+    reorgTargetEpoch.set(-1);
+
+    syncState.set(SyncState.FORWARD_SYNC);
+  }
+
+  /**
+   * Perform chain reorganization by syncing from fork point.
+   *
+   * <p>Requests blocks for all epochs from fork point + 1 to target epoch.
+   * When complete, transitions back to forward sync.
+   *
+   * @param channels active P2P channels
+   */
+  private void performChainReorganization(List<Channel> channels) {
+    long forkPoint = forkPointEpoch.get();
+    long target = reorgTargetEpoch.get();
+    long lastRequested = lastRequestedEpoch.get();
+
+    // Calculate next request range
+    long startEpoch = Math.max(forkPoint + 1, lastRequested + 1);
+    long endEpoch = Math.min(startEpoch + MAX_EPOCHS_PER_REQUEST - 1, target);
+
+    if (startEpoch > target) {
+      // Reorganization complete
+      log.info("BUG-SYNC-003: Chain reorganization complete");
+      transitionFromChainReorganization();
+      return;
+    }
+
+    log.debug("Chain reorganization: requesting epochs [{}-{}]", startEpoch, endEpoch);
+
+    Channel channel = selectChannel(channels);
+    sendEpochRequest(channel, startEpoch, endEpoch);
+  }
+
+  /**
+   * Transition from chain reorganization back to forward sync.
+   */
+  private void transitionFromChainReorganization() {
+    log.debug("Transitioning from chain reorganization to forward sync");
+
+    // Reset state
+    forkPointEpoch.set(-1);
+    reorgTargetEpoch.set(-1);
+
+    syncState.set(SyncState.FORWARD_SYNC);
+  }
+
+  /**
+   * Check if currently in fork detection mode.
+   *
+   * @return true if in fork detection mode
+   */
+  public boolean isInForkDetection() {
+    return syncState.get() == SyncState.FORK_DETECTION;
+  }
+
+  /**
+   * Check if currently in chain reorganization mode.
+   *
+   * @return true if in chain reorganization mode
+   */
+  public boolean isInChainReorganization() {
+    return syncState.get() == SyncState.CHAIN_REORGANIZATION;
+  }
+
+  /**
+   * Mark initial historical scan as done.
+   * Also resets historical verification timer to prevent immediate verification.
+   * Package-private for testing only.
+   */
+  void markInitialHistoricalScanDone() {
+    initialHistoricalScanDone.set(true);
+    // Also set last verify time to prevent historical verification from running immediately
+    lastHistoricalVerifyTime.set(System.currentTimeMillis());
+  }
+
+  /**
+   * Get the genesis epoch from the chain.
+   *
+   * @return genesis epoch, or 0 if not available
+   */
+  private long getGenesisEpoch() {
+    try {
+      Block genesis = dagChain.getMainBlockByHeight(1);
+      if (genesis != null) {
+        return genesis.getEpoch();
+      }
+    } catch (Exception e) {
+      log.debug("Failed to get genesis epoch: {}", e.getMessage());
+    }
+    return 0;
+  }
+
   /**
    * Initiate binary search to find minimum valid epoch.
    */
@@ -507,6 +937,13 @@ public class SyncManager implements AutoCloseable {
     if (maxReceivedEpoch < 0) {
       // Empty response - peer might be behind, don't mark any epochs as empty
       log.debug("Empty epoch response for range [{}, {}]", requestStart, requestEnd);
+      return;
+    }
+
+    // Single-epoch response - can't reliably determine if earlier epochs are empty
+    // The peer might be syncing or only have partial data
+    if (receivedEpochs.size() == 1) {
+      log.debug("Single epoch response ({}), skipping empty epoch detection", maxReceivedEpoch);
       return;
     }
 
