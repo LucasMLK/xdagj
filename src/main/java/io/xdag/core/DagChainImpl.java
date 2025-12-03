@@ -558,51 +558,72 @@ public class DagChainImpl implements DagChain {
 
   @Override
   public UInt256 calculateCumulativeDifficulty(Block block) {
-    // IMPORTANT: This implements XDAG's epoch-based difficulty calculation
-    // matching C code logic in block.c:724-735
+    // XDAG GHOST Protocol Implementation
+    // BUG-CONSENSUS-009: Accumulate orphan block work to prevent wasted hashpower
     //
-    // Rule: Blocks in the SAME epoch do NOT accumulate difficulty
-    // Only cross-epoch references accumulate difficulty
-    // This ensures fair competition within each epoch
+    // Rules:
+    // 1. Blocks in SAME epoch do NOT accumulate difficulty
+    // 2. Cross-epoch main block references: take max cumulative difficulty
+    // 3. Cross-epoch orphan block references: sum their work (GHOST protocol)
+    //
+    // Formula: cumulative = maxPreviousEpochDifficulty + orphanWorkSum + thisBlockWork
 
     long blockEpoch = block.getEpoch();
-    UInt256 maxParentDifficulty = UInt256.ZERO;
+    UInt256 maxPreviousEpochDifficulty = UInt256.ZERO;
+    UInt256 orphanWorkSum = UInt256.ZERO;
 
     for (Link link : block.getLinks()) {
-      if (link.isBlock()) {
-        Block parent = dagStore.getBlockByHash(link.getTargetHash(), false);
-        if (parent != null && parent.getInfo() != null) {
-          long parentEpoch = parent.getEpoch();
+      if (!link.isBlock()) {
+        continue;
+      }
 
-          if (parentEpoch < blockEpoch) {
-            // Case 1: Parent is in PREVIOUS epoch
-            // → Accumulate difficulty (C code: diff = xdag_diff_add(diff0, blockRef->difficulty))
-            UInt256 parentDifficulty = parent.getInfo().getDifficulty();
-            if (parentDifficulty.compareTo(maxParentDifficulty) > 0) {
-              maxParentDifficulty = parentDifficulty;
-            }
-          } else {
-            // Case 2: Parent is in SAME epoch
-            // → Do NOT accumulate (C code: diff = blockRef->difficulty, skip same-epoch blocks)
-            // Skip this parent and continue searching for cross-epoch references
-            log.debug("Skipping same-epoch parent {} (epoch {})",
-                parent.getHash().toHexString().substring(0, 16), parentEpoch);
+      Block parent = dagStore.getBlockByHash(link.getTargetHash(), false);
+      if (parent == null || parent.getInfo() == null) {
+        continue;
+      }
+
+      long parentEpoch = parent.getEpoch();
+
+      if (parentEpoch < blockEpoch) {
+        // Parent from PREVIOUS epoch - process according to GHOST protocol
+        long parentHeight = parent.getInfo().getHeight();
+
+        if (parentHeight > 0) {
+          // Main block (has height): take max cumulative difficulty as base
+          UInt256 parentDifficulty = parent.getInfo().getDifficulty();
+          if (parentDifficulty.compareTo(maxPreviousEpochDifficulty) > 0) {
+            maxPreviousEpochDifficulty = parentDifficulty;
           }
+        } else {
+          // Orphan block (height=0): accumulate its work (GHOST protocol)
+          // This prevents orphan hashpower from being wasted
+          UInt256 orphanWork = calculateBlockWork(parent.getHash());
+          orphanWorkSum = orphanWorkSum.add(orphanWork);
+          log.debug("GHOST: Accumulating orphan work from {} (work={})",
+              parent.getHash().toHexString().substring(0, 16), orphanWork.toDecimalString());
         }
+      } else {
+        // Same epoch parent - skip (XDAG rule: same-epoch refs don't accumulate)
+        log.debug("Skipping same-epoch parent {} (epoch {})",
+            parent.getHash().toHexString().substring(0, 16), parentEpoch);
       }
     }
 
     // Calculate this block's work
     UInt256 blockWork = calculateBlockWork(block.getHash());
 
-    // Cumulative difficulty = parent max difficulty (from previous epochs) + block work
-    UInt256 cumulativeDifficulty = maxParentDifficulty.add(blockWork);
+    // GHOST: Cumulative = max previous epoch difficulty + orphan work sum + this block's work
+    UInt256 cumulativeDifficulty = maxPreviousEpochDifficulty
+        .add(orphanWorkSum)
+        .add(blockWork);
 
     log.debug(
-        "Calculated cumulative difficulty for block {} (epoch {}): parent={}, work={}, cumulative={}",
+        "Calculated cumulative difficulty for block {} (epoch {}): " +
+            "previousMax={}, orphanWork={}, blockWork={}, cumulative={}",
         block.getHash().toHexString().substring(0, 16),
         blockEpoch,
-        maxParentDifficulty.toDecimalString(),
+        maxPreviousEpochDifficulty.toDecimalString(),
+        orphanWorkSum.toDecimalString(),
         blockWork.toDecimalString(),
         cumulativeDifficulty.toDecimalString());
 

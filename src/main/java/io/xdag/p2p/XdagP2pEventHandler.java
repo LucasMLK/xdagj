@@ -28,6 +28,7 @@ import io.xdag.consensus.epoch.EpochConsensusManager;
 import io.xdag.consensus.epoch.SubmitResult;
 import io.xdag.core.Block;
 import io.xdag.core.DagChain;
+import io.xdag.core.DagImportResult;
 import io.xdag.core.Transaction;
 import io.xdag.core.TransactionBroadcastManager;
 import io.xdag.core.TransactionPool;
@@ -49,6 +50,8 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
@@ -62,6 +65,17 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
 
   private final DagKernel dagKernel;
   private final DagChain dagChain;
+
+  /**
+   * BUG-SYNC-006: Track recently requested missing dependencies to avoid duplicate requests.
+   * Key: block hash, Value: request timestamp (for expiration)
+   */
+  private final Map<Bytes32, Long> recentlyRequestedBlocks = new ConcurrentHashMap<>();
+
+  /**
+   * Maximum age for tracking requested blocks (5 minutes)
+   */
+  private static final long REQUEST_TRACKING_EXPIRY_MS = 5 * 60 * 1000;
 
   public XdagP2pEventHandler(DagKernel dagKernel) {
     this.dagKernel = dagKernel;
@@ -291,8 +305,8 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
    *
    * <p>Historical or delayed blocks are imported directly without epoch competition.
    *
-   * <p>BUG-SYNC-004: Reverse dependency filling is disabled to prevent memory explosion
-   * on long-running nodes. Missing dependencies are resolved through ordered forward sync.
+   * <p>BUG-SYNC-006: When import fails due to missing dependency, actively request
+   * the missing block from the peer instead of just waiting passively.
    */
   private void handleBlocksReply(Channel channel, Bytes body) {
     try {
@@ -303,6 +317,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
 
       for (Block block : blocks) {
         long blockEpoch = block.getEpoch();
+        DagImportResult importResult;
 
         // Check if we have epoch consensus manager
         EpochConsensusManager epochConsensusManager = dagKernel.getEpochConsensusManager();
@@ -317,24 +332,83 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
 
             if (result.isAccepted()) {
               log.debug("P2P block submitted to epoch {} solution pool", blockEpoch);
+              continue; // No import result to check
             } else {
               // Submission failed (e.g., epoch ended), fallback to direct import
-              dagChain.tryToConnect(block);
+              importResult = dagChain.tryToConnect(block);
             }
           } else {
             // Historical or delayed block: direct import
-            io.xdag.core.DagImportResult importResult = dagChain.tryToConnect(block);
-            log.debug("Imported block {}: {}",
-                block.getHash().toHexString().substring(0, 16), importResult.getStatus());
+            importResult = dagChain.tryToConnect(block);
           }
         } else {
           // No epoch consensus manager: direct import (legacy behavior)
-          dagChain.tryToConnect(block);
+          importResult = dagChain.tryToConnect(block);
+        }
+
+        log.debug("Imported block {}: {}",
+            block.getHash().toHexString().substring(0, 16), importResult.getStatus());
+
+        // BUG-SYNC-006: Handle missing dependency by actively requesting it
+        if (importResult.getStatus() == DagImportResult.ImportStatus.MISSING_DEPENDENCY) {
+          handleMissingDependency(channel, block, importResult);
         }
       }
 
     } catch (Exception e) {
       log.error("Error handling BLOCKS_REPLY from {}: {}", channel.getRemoteAddress(), e.getMessage(), e);
+    }
+  }
+
+  /**
+   * BUG-SYNC-006: Actively request missing dependency block from peer.
+   *
+   * <p>When a block import fails due to missing dependency (e.g., orphan block reference),
+   * this method sends a GET_BLOCKS request to fetch the missing block.
+   *
+   * <p>Includes rate limiting to prevent request flooding.
+   *
+   * @param channel the peer channel to request from
+   * @param block the block that failed to import
+   * @param importResult the import result containing missing dependency info
+   */
+  private void handleMissingDependency(Channel channel, Block block, DagImportResult importResult) {
+    if (importResult.getErrorDetails() == null) {
+      return;
+    }
+
+    Bytes32 missingHash = importResult.getErrorDetails().getMissingDependency();
+    if (missingHash == null) {
+      return;
+    }
+
+    // Clean up expired entries
+    long now = System.currentTimeMillis();
+    recentlyRequestedBlocks.entrySet().removeIf(
+        entry -> now - entry.getValue() > REQUEST_TRACKING_EXPIRY_MS);
+
+    // Check if we've already requested this block recently
+    if (recentlyRequestedBlocks.containsKey(missingHash)) {
+      log.debug("Already requested missing block {} recently, skipping",
+          missingHash.toHexString().substring(0, 16));
+      return;
+    }
+
+    // Mark as requested
+    recentlyRequestedBlocks.put(missingHash, now);
+
+    // Send request for missing block
+    log.info("BUG-SYNC-006: Requesting missing dependency {} for block {}",
+        missingHash.toHexString().substring(0, 16),
+        block.getHash().toHexString().substring(0, 16));
+
+    try {
+      channel.send(new GetBlocksMessage(missingHash));
+    } catch (Exception e) {
+      log.warn("Failed to request missing block {}: {}",
+          missingHash.toHexString().substring(0, 16), e.getMessage());
+      // Remove from tracking so it can be retried
+      recentlyRequestedBlocks.remove(missingHash);
     }
   }
 

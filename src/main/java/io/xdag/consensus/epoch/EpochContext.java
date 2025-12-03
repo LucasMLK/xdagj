@@ -107,6 +107,15 @@ public class EpochContext {
     }
 
     /**
+     * Get the candidate block for this epoch.
+     *
+     * @return Candidate block, or null if not set
+     */
+    public Block getCandidateBlock() {
+        return candidateBlock;
+    }
+
+    /**
      * Add a solution to this epoch's collection.
      *
      * @param solution The solution to add
