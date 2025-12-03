@@ -125,5 +125,10 @@ public class BlockDetail {
      * Linked block epoch (null if not available)
      */
     private Long epoch;
+
+    /**
+     * Link type: "parent" (main block) or "orphan" (orphan block reference)
+     */
+    private String type;
   }
 }

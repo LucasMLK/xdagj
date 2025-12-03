@@ -408,14 +408,18 @@ public class BlockApiService {
       if (link.isBlock()) {
         Block linkedBlock = dagKernel.getDagChain().getBlockByHash(link.getTargetHash(), false);
         if (linkedBlock != null && linkedBlock.getInfo() != null) {
+          long linkedHeight = linkedBlock.getInfo().getHeight();
+          String linkType = linkedHeight == 0 ? "orphan" : "parent";
           blockLinks.add(BlockDetail.LinkInfo.builder()
               .hash(Hex.toHexString(link.getTargetHash().toArray()))
-              .height(linkedBlock.getInfo().getHeight())
+              .height(linkedHeight)
               .epoch(linkedBlock.getInfo().getEpoch())
+              .type(linkType)
               .build());
         } else {
           blockLinks.add(BlockDetail.LinkInfo.builder()
               .hash(Hex.toHexString(link.getTargetHash().toArray()))
+              .type("unknown")
               .build());
         }
       } else if (link.isTransaction()) {

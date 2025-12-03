@@ -915,7 +915,7 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
                 links.add(BlockDetailResponse.LinkInfo.builder()
                         .hash(linkInfo.getHash() != null ? linkInfo.getHash() : "0x0")
                         .height(linkInfo.getHeight() != null ? String.format("0x%x", linkInfo.getHeight()) : "0x0")
-                        .type("parent")
+                        .type(linkInfo.getType() != null ? linkInfo.getType() : "unknown")
                         .build());
             }
         }

@@ -271,6 +271,26 @@ public class MiningApiService {
         return BlockSubmitResult.rejected("Unknown candidate block", "UNKNOWN_CANDIDATE");
       }
 
+      // Step 1.5: BUG-CONSENSUS-010 fix - Validate parent links haven't been demoted
+      // When candidate block was created, it linked to the current main block as parent.
+      // If that main block was later demoted to orphan (due to epoch competition),
+      // the candidate is now stale and should be rejected.
+      for (io.xdag.core.Link link : block.getLinks()) {
+        if (link.isBlock()) {
+          Block linkedBlock = dagChain.getBlockByHash(link.getTargetHash(), false);
+          if (linkedBlock != null && linkedBlock.getInfo() != null) {
+            long linkedHeight = linkedBlock.getInfo().getHeight();
+            if (linkedHeight == 0) {
+              // Parent link has been demoted to orphan - candidate is stale
+              log.warn("Pool '{}' submitted stale candidate: parent link {} is now orphan",
+                  poolId, link.getTargetHash().toHexString().substring(0, 18) + "...");
+              return BlockSubmitResult.rejected(
+                  "Stale candidate: parent block demoted to orphan", "STALE_CANDIDATE");
+            }
+          }
+        }
+      }
+
       // Step 2: Check if epoch consensus is enabled
       if (epochConsensusManager != null && epochConsensusManager.isRunning()) {
         // NEW: Submit to EpochConsensusManager for collection (BUG-CONSENSUS-002 fix)
