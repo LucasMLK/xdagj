@@ -474,9 +474,28 @@ public class DagChainImpl implements DagChain {
         log.info("Fallback scan found {} main block(s) in epoch {} (time-range query failed)",
             candidates.size(), epoch);
       } else {
-        log.warn("Fallback scan found NO blocks in epoch {} (scanned main blocks heights {} to {})",
-            epoch, scanStart, chainStats.getMainBlockCount());
-        log.warn("If epoch {} should have blocks, the epoch index may be corrupted", epoch);
+        // Distinguish between normal empty epochs and potentially corrupted index
+        // Get epoch range of known blocks
+        Block genesisBlock = dagStore.getMainBlockByHeight(1, false);
+        Block latestBlock = dagStore.getMainBlockByHeight(chainStats.getMainBlockCount(), false);
+
+        if (genesisBlock != null && latestBlock != null) {
+          long genesisEpoch = genesisBlock.getEpoch();
+          long latestEpoch = latestBlock.getEpoch();
+
+          if (epoch < genesisEpoch || epoch > latestEpoch) {
+            // Epoch is outside known block range - empty is normal
+            log.debug("No blocks in epoch {} (outside known range [{}, {}])",
+                epoch, genesisEpoch, latestEpoch);
+          } else {
+            // Epoch is within known range but no blocks found - may indicate issue
+            // But could also be normal for devnet with discontinuous epochs
+            log.debug("No blocks in epoch {} (within known range [{}, {}], may be discontinuous epoch)",
+                epoch, genesisEpoch, latestEpoch);
+          }
+        } else {
+          log.debug("No blocks found in epoch {} (chain not fully initialized)", epoch);
+        }
       }
     }
 
