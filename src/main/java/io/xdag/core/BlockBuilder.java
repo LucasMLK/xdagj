@@ -222,26 +222,62 @@ public class BlockBuilder {
       }
     }
 
-    // Step 3: Get all candidates in prev block's epoch
-    log.debug("Collecting links from height {} (epoch {}), reference depth: {} epochs",
-        currentMainHeight, prevEpoch, referenceDepth);
+    // Step 3: Collect candidates using reliable epoch strategy
+    // - N-1 epoch: Only reference main block and orphans that are already present
+    // - N-2 epoch: Reference orphans (guaranteed to have arrived after 64+ seconds)
+    // This avoids network timing issues where N-1 orphans haven't arrived yet
+    log.debug("Collecting links from height {} (epoch N-1={}, N-2={}), reference depth: {} epochs",
+        currentMainHeight, prevEpoch, prevEpoch - 1, referenceDepth);
 
-    List<Block> candidates = getCandidateBlocksInEpoch(prevEpoch);
+    List<Block> candidates = new ArrayList<>();
+
+    // Get all candidates from N-1 epoch (main block + any orphans already present)
+    List<Block> prevEpochCandidates = getCandidateBlocksInEpoch(prevEpoch);
+    candidates.addAll(prevEpochCandidates);
+
+    // Get orphans from N-2 epoch (guaranteed to have arrived)
+    // Only include orphans that haven't been referenced by N-1 blocks
+    if (prevEpoch > 0) {
+      long olderEpoch = prevEpoch - 1;
+      List<Block> olderCandidates = getCandidateBlocksInEpoch(olderEpoch);
+      for (Block block : olderCandidates) {
+        // Only include orphans (height == 0), skip main blocks (already in chain)
+        if (block.getInfo() != null && block.getInfo().getHeight() == 0) {
+          // Check if this orphan is already referenced by any block in N-1 epoch
+          boolean alreadyReferenced = isBlockReferencedByEpoch(block.getHash(), prevEpoch);
+          if (!alreadyReferenced) {
+            candidates.add(block);
+            log.info("Including N-2 orphan from epoch {}: {} (guaranteed arrival)",
+                olderEpoch, block.getHash().toHexString().substring(0, 16));
+          }
+        }
+      }
+    }
 
     if (candidates.isEmpty()) {
       // Fallback: if no candidates found (shouldn't happen), at least reference prev main block
-      log.warn("No candidates found in epoch {}, only referencing prev main block", prevEpoch);
+      log.warn("No candidates found in epochs {} and {}, only referencing prev main block",
+          prevEpoch, prevEpoch - 1);
       links.add(Link.toBlock(prevMainBlock.getHash()));
       return links;
     }
 
-    // Step 3: Sort by work (descending), take top 16 (MAX_BLOCK_LINKS)
+    // Step 4: Sort by work (descending), take top 16 (MAX_BLOCK_LINKS)
     // Work = MAX_UINT256 / hash → smaller hash = more work
+    // BUG-SYNC-007: Use deterministic multi-level sorting to ensure consistent link order
+    // across all nodes, as link order affects block hash calculation
     List<Block> top16 = candidates.stream()
         .sorted((b1, b2) -> {
+          // Level 1: Sort by work descending (largest work = smallest hash first)
           UInt256 work1 = calculateBlockWork(b1.getHash());
           UInt256 work2 = calculateBlockWork(b2.getHash());
-          return work2.compareTo(work1);  // Descending: largest work first
+          int workCompare = work2.compareTo(work1);
+          if (workCompare != 0) {
+            return workCompare;
+          }
+          // Level 2: Sort by hash ascending (lexicographic, for determinism)
+          // This ensures consistent ordering when work values are equal
+          return b1.getHash().compareTo(b2.getHash());
         })
         .limit(Block.MAX_BLOCK_LINKS)
         .toList();
@@ -392,5 +428,24 @@ public class BlockBuilder {
       log.error("Error calculating block work for hash {}: {}", hash.toHexString(), e.getMessage());
       return UInt256.ZERO;
     }
+  }
+
+  /**
+   * Check if a block is referenced by any block in a given epoch
+   *
+   * @param blockHash the block hash to check
+   * @param epoch     the epoch to search in
+   * @return true if the block is referenced by any block in the epoch
+   */
+  private boolean isBlockReferencedByEpoch(Bytes32 blockHash, long epoch) {
+    List<Block> epochBlocks = getCandidateBlocksInEpoch(epoch);
+    for (Block block : epochBlocks) {
+      for (Link link : block.getLinks()) {
+        if (link.isBlock() && link.getTargetHash().equals(blockHash)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 }

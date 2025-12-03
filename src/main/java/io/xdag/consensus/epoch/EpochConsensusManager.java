@@ -372,7 +372,23 @@ public class EpochConsensusManager {
 
         if (context.getSolutionsCount() == 0 && !context.isBlockProduced()) {
             log.warn("No solutions for epoch {}, triggering backup miner", epoch);
-            backupMiner.startBackupMining(context);
+
+            // BUG FIX: Refresh candidate block before backup mining
+            // When candidate was created at epoch start, the previous epoch's main block
+            // hadn't been imported yet. Now at T-5s, it should be available.
+            Block refreshedCandidate = blockGenerator.generateCandidate();
+            int oldLinkCount = context.getCandidateBlock() != null ?
+                    context.getCandidateBlock().getLinks().size() : 0;
+            int newLinkCount = refreshedCandidate.getLinks().size();
+
+            if (newLinkCount != oldLinkCount) {
+                log.info("Refreshed candidate block for epoch {}: links {} -> {} (parent block now available)",
+                        epoch, oldLinkCount, newLinkCount);
+            }
+
+            // Update context with refreshed candidate
+            // Note: EpochContext.candidateBlock is final, so we need to pass it directly
+            backupMiner.startBackupMining(context, refreshedCandidate);
         } else {
             log.debug("Backup miner not needed for epoch {}: {} solutions already collected",
                     epoch, context.getSolutionsCount());

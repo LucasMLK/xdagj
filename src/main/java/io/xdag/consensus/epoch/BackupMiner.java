@@ -128,6 +128,20 @@ public class BackupMiner {
      * @param context The epoch context
      */
     public void startBackupMining(EpochContext context) {
+        startBackupMining(context, context.getCandidateBlock());
+    }
+
+    /**
+     * Start backup mining for an epoch with a refreshed candidate block.
+     *
+     * <p>This overload allows passing a freshly generated candidate block
+     * that includes the latest links (e.g., parent block that wasn't available
+     * when the original candidate was created at epoch start).
+     *
+     * @param context The epoch context
+     * @param refreshedCandidate The refreshed candidate block with updated links
+     */
+    public void startBackupMining(EpochContext context, Block refreshedCandidate) {
         if (context.isBackupMinerStarted()) {
             log.debug("Backup miner already started for epoch {}", context.getEpochNumber());
             return;
@@ -142,7 +156,7 @@ public class BackupMiner {
         log.warn("Starting backup mining for epoch {}: remaining {}ms",
                 context.getEpochNumber(), remainingTime);
 
-        Block candidateBlock = context.getCandidateBlock();
+        Block candidateBlock = refreshedCandidate;
         if (candidateBlock == null) {
             log.error("Cannot start backup mining: no candidate block for epoch {}",
                     context.getEpochNumber());
