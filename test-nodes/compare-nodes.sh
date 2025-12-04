@@ -119,8 +119,14 @@ def load_json(path):
 
 COL_WIDTH = 82
 
+def truncate(s, length):
+    """Truncate string to length with ellipsis"""
+    if len(s) <= length:
+        return s
+    return s[:length-2] + '..'
+
 def format_block_line(block, detail, is_main=True):
-    """Format a single block line with header (hash + coinbase) and body (links)"""
+    """Format block with clean multi-line structure"""
     if not block:
         return [f"{GR}(missing){NC}"]
 
@@ -129,14 +135,18 @@ def format_block_line(block, detail, is_main=True):
     state = block.get('state', '?')
     coinbase = block.get('coinbase', '-')
 
-    # Header line: [State] hash | coinbase: xxx
+    # Truncate for display (hash: 20 chars, coinbase: 16 chars)
+    hash_short = truncate(hash_str, 20)
+    cb_short = truncate(coinbase, 16)
+
+    # Header line: [State] hash
     if is_main:
         if state == 'Main':
-            lines.append(f"{G}[Main]{NC}   {hash_str} | coinbase: {coinbase}")
+            lines.append(f"{G}[Main]{NC}   {hash_short}  cb:{cb_short}")
         else:
-            lines.append(f"{Y}[{state}]{NC} {hash_str} | coinbase: {coinbase}")
+            lines.append(f"{Y}[{state}]{NC} {hash_short}  cb:{cb_short}")
     else:
-        lines.append(f"{GR}[Orphan]{NC} {hash_str} | coinbase: {coinbase}")
+        lines.append(f"{GR}[Orphan]{NC} {hash_short}  cb:{cb_short}")
 
     # Body: Links (only for main blocks with detail)
     if is_main and detail:
@@ -167,7 +177,8 @@ def format_block_line(block, detail, is_main=True):
             is_last = (i == len(all_items) - 1)
             prefix = "└─" if is_last else "├─"
             tc = type_colors.get(item_type, NC)
-            lines.append(f"          {prefix} {tc}[{item_type}]{NC} {item_hash}")
+            hash_trunc = truncate(item_hash, 24)
+            lines.append(f"         {prefix} {tc}[{item_type}]{NC} {hash_trunc}")
 
     return lines
 
