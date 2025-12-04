@@ -127,14 +127,18 @@ def format_block_line(block, detail, is_main=True):
     lines = []
     hash_str = block.get('hash', '-')
     state = block.get('state', '?')
+    coinbase = block.get('coinbase', '-')
 
     if is_main:
         if state == 'Main':
-            lines.append(f"{G}◆{NC} {hash_str} {G}[Main]{NC}")
+            lines.append(f"{G}[Main]{NC}   {hash_str}")
         else:
-            lines.append(f"{Y}◇{NC} {hash_str} {Y}[{state}]{NC}")
+            lines.append(f"{Y}[{state}]{NC} {hash_str}")
+        # Add coinbase info
+        lines.append(f"          coinbase: {coinbase}")
     else:
-        lines.append(f"  {GR}◇{NC} {GR}{hash_str}{NC}")
+        lines.append(f"{GR}[Orphan]{NC} {hash_str}")
+        lines.append(f"          coinbase: {coinbase}")
 
     # Add ALL links for main blocks, grouped by type
     if is_main and detail:
@@ -148,14 +152,14 @@ def format_block_line(block, detail, is_main=True):
                 h = int(height, 16) if isinstance(height, str) else int(height)
             except:
                 h = 0
-            # Use height to determine type: 0 = orphan, >0 = parent
-            lt = 'orphan' if h == 0 else 'parent'
+            # Use height to determine type: 0 = witness (reference to orphan), >0 = parent
+            lt = 'witness' if h == 0 else 'parent'
             if lt not in by_type:
                 by_type[lt] = []
             by_type[lt].append(link.get('hash', '-'))
 
         # Display by type with colors
-        type_colors = {'parent': C, 'coinbase': Y, 'transaction': G, 'orphan': GR}
+        type_colors = {'parent': C, 'coinbase': Y, 'transaction': G, 'witness': GR}
         all_types = list(by_type.keys())
         for ti, lt in enumerate(all_types):
             hashes = by_type[lt]
@@ -167,7 +171,7 @@ def format_block_line(block, detail, is_main=True):
                     prefix = "└─"
                 else:
                     prefix = "├─"
-                lines.append(f"    {prefix} {tc}[{lt}]{NC} {lh}")
+                lines.append(f"          {prefix} {tc}[{lt}]{NC} {lh}")
 
     return lines
 
@@ -315,11 +319,18 @@ print(f"{BD}╚{'═'*COL_WIDTH}╩{'═'*COL_WIDTH}╝{NC}")
 # Stats
 print("")
 print(f"{BD}Block Production:{NC}")
+total_all_main = sum(s['main'] for s in stats.values())
 for cb, s in sorted(stats.items(), key=lambda x: x[1]['main'], reverse=True):
     main, orphan = s['main'], s['orphan']
-    total_p = main + orphan
-    rate = (main / total_p * 100) if total_p > 0 else 0
-    rate_c = G if rate >= 50 else Y if rate >= 30 else R
-    print(f"  {cb}: {main} main, {orphan} orphan ({rate_c}{rate:.0f}%{NC})")
+    # Win Rate: percentage of all main blocks won by this coinbase
+    win_rate = (main / total_all_main * 100) if total_all_main > 0 else 0
+    # Efficiency: percentage of this coinbase's blocks that became main
+    total_produced = main + orphan
+    efficiency = (main / total_produced * 100) if total_produced > 0 else 0
+    win_c = G if win_rate >= 40 else Y if win_rate >= 20 else GR
+    eff_c = G if efficiency >= 50 else Y if efficiency >= 30 else R
+    print(f"  {cb}:")
+    print(f"      {win_c}Win Rate: {win_rate:5.1f}%{NC} ({main}/{total_all_main} main blocks)")
+    print(f"      {eff_c}Efficiency: {efficiency:5.1f}%{NC} ({main} main / {total_produced} produced, {orphan} orphan)")
 print("")
 PYTHON_SCRIPT
