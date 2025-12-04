@@ -120,7 +120,7 @@ def load_json(path):
 COL_WIDTH = 82
 
 def format_block_line(block, detail, is_main=True):
-    """Format a single block line"""
+    """Format a single block line with header (hash + coinbase) and body (links)"""
     if not block:
         return [f"{GR}(missing){NC}"]
 
@@ -129,49 +129,45 @@ def format_block_line(block, detail, is_main=True):
     state = block.get('state', '?')
     coinbase = block.get('coinbase', '-')
 
+    # Header line: [State] hash | coinbase: xxx
     if is_main:
         if state == 'Main':
-            lines.append(f"{G}[Main]{NC}   {hash_str}")
+            lines.append(f"{G}[Main]{NC}   {hash_str} | coinbase: {coinbase}")
         else:
-            lines.append(f"{Y}[{state}]{NC} {hash_str}")
-        # Add coinbase info
-        lines.append(f"          coinbase: {coinbase}")
+            lines.append(f"{Y}[{state}]{NC} {hash_str} | coinbase: {coinbase}")
     else:
-        lines.append(f"{GR}[Orphan]{NC} {hash_str}")
-        lines.append(f"          coinbase: {coinbase}")
+        lines.append(f"{GR}[Orphan]{NC} {hash_str} | coinbase: {coinbase}")
 
-    # Add ALL links for main blocks, grouped by type
+    # Body: Links (only for main blocks with detail)
     if is_main and detail:
         links = detail.get('links', [])
-        # Group links by type (determine type from height: 0 = orphan, >0 = parent)
-        by_type = {}
-        for link in links:
-            height = link.get('height', '0x0')
-            # Parse height and determine actual type
-            try:
-                h = int(height, 16) if isinstance(height, str) else int(height)
-            except:
-                h = 0
-            # Use height to determine type: 0 = witness (reference to orphan), >0 = parent
-            lt = 'witness' if h == 0 else 'parent'
-            if lt not in by_type:
-                by_type[lt] = []
-            by_type[lt].append(link.get('hash', '-'))
+        transactions = detail.get('transactions', [])
 
-        # Display by type with colors
-        type_colors = {'parent': C, 'coinbase': Y, 'transaction': G, 'witness': GR}
-        all_types = list(by_type.keys())
-        for ti, lt in enumerate(all_types):
-            hashes = by_type[lt]
-            tc = type_colors.get(lt, NC)
-            for hi, lh in enumerate(hashes):
-                is_last_type = (ti == len(all_types) - 1)
-                is_last_hash = (hi == len(hashes) - 1)
-                if is_last_type and is_last_hash:
-                    prefix = "└─"
-                else:
-                    prefix = "├─"
-                lines.append(f"          {prefix} {tc}[{lt}]{NC} {lh}")
+        # Separate block links and collect them
+        block_links = []
+        for link in links:
+            link_type = link.get('type', 'unknown')
+            link_hash = link.get('hash', '-')
+            block_links.append({'type': link_type, 'hash': link_hash})
+
+        # Sort block links by hash (smallest first)
+        block_links.sort(key=lambda x: x['hash'])
+
+        # Combine all items for display
+        all_items = []
+        for bl in block_links:
+            all_items.append(('block', bl['type'], bl['hash']))
+        for tx in transactions:
+            tx_hash = tx.get('hash', '-') if isinstance(tx, dict) else str(tx)
+            all_items.append(('tx', 'transaction', tx_hash))
+
+        # Display with tree structure
+        type_colors = {'parent': C, 'orphan': GR, 'transaction': G, 'unknown': NC}
+        for i, (category, item_type, item_hash) in enumerate(all_items):
+            is_last = (i == len(all_items) - 1)
+            prefix = "└─" if is_last else "├─"
+            tc = type_colors.get(item_type, NC)
+            lines.append(f"          {prefix} {tc}[{item_type}]{NC} {item_hash}")
 
     return lines
 
