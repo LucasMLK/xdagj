@@ -535,40 +535,6 @@ public class DagChainImpl implements DagChain {
     }
   }
 
-  @Override
-  public EpochStats getEpochStats(long epoch) {
-    List<Block> candidates = getCandidateBlocksInEpoch(epoch);
-    Block winner = getWinnerBlockInEpoch(epoch);
-
-    // Calculate average block time
-    double avgBlockTime = 0.0;
-    if (!candidates.isEmpty()) {
-      long[] timeRange = getEpochTimeRange(epoch);
-      long epochDuration = timeRange[1] - timeRange[0];
-      avgBlockTime = (double) epochDuration / candidates.size();
-    }
-
-    // Calculate total difficulty added in this epoch
-    UInt256 totalDifficulty = UInt256.ZERO;
-    for (Block candidate : candidates) {
-      if (candidate.getInfo() != null) {
-        UInt256 blockWork = calculateBlockWork(candidate.getHash());
-        totalDifficulty = totalDifficulty.add(blockWork);
-      }
-    }
-
-    return EpochStats.builder()
-        .epoch(epoch)
-        .startTime(epoch * 64)
-        .endTime((epoch + 1) * 64)
-        .totalBlocks(candidates.size())
-        .winningBlockHash(winner != null ? winner.getHash() : null)
-        .averageBlockTime(avgBlockTime)
-        .totalDifficulty(totalDifficulty)
-        .hasMainBlock(winner != null)
-        .build();
-  }
-
   // ==================== General Block Queries ====================
 
   @Override

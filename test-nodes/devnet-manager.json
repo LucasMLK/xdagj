@@ -58,7 +58,7 @@
     "components": {
       "node": {
         "workdir": "test-nodes/{suite}/node",
-        "artifact": "xdagj.jar",
+        "artifact": "xdagj-1.0.0-executable.jar",
         "artifactRef": "node",
         "pidFile": "xdag.pid",
         "logFile": "node.log",
@@ -68,7 +68,7 @@
           "-Dlog4j.configurationFile=log4j2.xml",
           "-Dconfig.file=xdag-devnet.conf",
           "-cp",
-          ".:xdagj.jar",
+          ".:xdagj-1.0.0-executable.jar",
           "io.xdag.Bootstrap",
           "-d"
         ],

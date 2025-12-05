@@ -303,8 +303,10 @@ public class EpochConsensusManager {
      * @param epoch Epoch number
      */
     private void createEpochContext(long epoch) {
-        long epochStartTime = epoch * EPOCH_DURATION_MS;
-        long epochEndTime = epochStartTime + EPOCH_DURATION_MS;
+        // BUG FIX: Use TimeUtils to calculate proper epoch times
+        // Previous code used epoch * EPOCH_DURATION_MS which overflows for large epoch numbers
+        long epochEndTime = io.xdag.utils.TimeUtils.epochNumberToTimeMillis(epoch);
+        long epochStartTime = io.xdag.utils.TimeUtils.epochNumberToTimeMillis(epoch - 1);
 
         // Generate candidate block for this epoch
         Block candidateBlock = blockGenerator.generateCandidate();
@@ -331,7 +333,9 @@ public class EpochConsensusManager {
      * @param epoch Epoch number
      */
     private void scheduleBackupMinerTrigger(long epoch) {
-        long epochEndTime = (epoch + 1) * EPOCH_DURATION_MS;
+        // BUG FIX: Use TimeUtils to calculate proper epoch end time
+        // Previous code used (epoch + 1) * EPOCH_DURATION_MS which overflows for large epoch numbers
+        long epochEndTime = io.xdag.utils.TimeUtils.epochNumberToTimeMillis(epoch);
         long triggerTime = epochEndTime - FORCED_MINING_THRESHOLD_MS;
         long delay = triggerTime - System.currentTimeMillis();
 

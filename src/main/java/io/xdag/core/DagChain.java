@@ -349,16 +349,15 @@ public interface DagChain {
   /**
    * Get time range for a specific epoch
    *
-   * <p>Returns [startTime, endTime) time interval for the epoch.
+   * <p>Returns [startTime, endTime) time interval for the epoch in milliseconds.
    * <ul>
-   *   <li>startTime = epoch * 64 (inclusive)</li>
-   *   <li>endTime = (epoch + 1) * 64 (exclusive)</li>
+   *   <li>startTime = TimeUtils.epochNumberToTimeMillis(epoch - 1) (inclusive)</li>
+   *   <li>endTime = TimeUtils.epochNumberToTimeMillis(epoch) (exclusive)</li>
    * </ul>
    *
    * <p><strong>Example</strong>:
    * <pre>
-   * getEpochTimeRange(1000) → [64000, 64064)
-   * getEpochTimeRange(1001) → [64064, 64128)
+   * getEpochTimeRange(27577013) → [epoch start ms, epoch end ms)
    * </pre>
    *
    * @param epoch epoch number
@@ -393,7 +392,6 @@ public interface DagChain {
    * @param epoch epoch number (timestamp / 64)
    * @return list of all candidate blocks in this epoch (may be empty if epoch has no blocks)
    * @see #getWinnerBlockInEpoch(long)
-   * @see #getEpochStats(long)
    */
   List<Block> getCandidateBlocksInEpoch(long epoch);
 
@@ -455,26 +453,6 @@ public interface DagChain {
    * @param epoch epoch number that needs verification
    */
   void verifyEpochIntegrity(long epoch);
-
-  /**
-   * Get statistics for a specific epoch
-   *
-   * <p>Returns detailed statistics for the given epoch:
-   * <ul>
-   *   <li>Total candidate blocks</li>
-   *   <li>Winning block hash</li>
-   *   <li>Average block time within epoch</li>
-   *   <li>Total difficulty added in this epoch</li>
-   *   <li>Whether epoch has a main block</li>
-   * </ul>
-   *
-   * @param epoch epoch number
-   * @return epoch statistics
-   * @see EpochStats
-   * @see #getCandidateBlocksInEpoch(long)
-   * @see #getWinnerBlockInEpoch(long)
-   */
-  EpochStats getEpochStats(long epoch);
 
   // ==================== General Block Queries ====================
 
