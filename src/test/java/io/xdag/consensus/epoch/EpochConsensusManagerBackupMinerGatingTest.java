@@ -132,7 +132,7 @@ public class EpochConsensusManagerBackupMinerGatingTest {
 
     getTriggerMethod().invoke(manager, epoch);
 
-    verify(backupMiner, times(1)).startBackupMining(any(EpochContext.class));
+    verify(backupMiner, times(1)).startBackupMining(any(EpochContext.class), any(Block.class));
   }
 
   /**
@@ -148,7 +148,7 @@ public class EpochConsensusManagerBackupMinerGatingTest {
 
     getTriggerMethod().invoke(manager, epoch);
 
-    verify(backupMiner, times(1)).startBackupMining(any(EpochContext.class));
+    verify(backupMiner, times(1)).startBackupMining(any(EpochContext.class), any(Block.class));
   }
 
   /**
@@ -167,7 +167,7 @@ public class EpochConsensusManagerBackupMinerGatingTest {
 
     getTriggerMethod().invoke(manager, epoch);
 
-    verify(backupMiner, never()).startBackupMining(any(EpochContext.class));
+    verify(backupMiner, never()).startBackupMining(any(EpochContext.class), any(Block.class));
   }
 
   /**
@@ -181,7 +181,7 @@ public class EpochConsensusManagerBackupMinerGatingTest {
     // Don't add context for epoch 100
     getTriggerMethod().invoke(manager, 100L);
 
-    verify(backupMiner, never()).startBackupMining(any(EpochContext.class));
+    verify(backupMiner, never()).startBackupMining(any(EpochContext.class), any(Block.class));
   }
 
   /**
@@ -210,7 +210,7 @@ public class EpochConsensusManagerBackupMinerGatingTest {
 
     getTriggerMethod().invoke(manager, epoch);
 
-    verify(backupMiner, never()).startBackupMining(any(EpochContext.class));
+    verify(backupMiner, never()).startBackupMining(any(EpochContext.class), any(Block.class));
   }
 
   /**
@@ -229,7 +229,7 @@ public class EpochConsensusManagerBackupMinerGatingTest {
 
     getTriggerMethod().invoke(manager, epoch);
 
-    verify(backupMiner, never()).startBackupMining(any(EpochContext.class));
+    verify(backupMiner, never()).startBackupMining(any(EpochContext.class), any(Block.class));
   }
 
   // ==================== Edge Cases ====================
@@ -250,12 +250,12 @@ public class EpochConsensusManagerBackupMinerGatingTest {
     when(syncManager.getLocalTipEpoch()).thenReturn(50L);
     when(syncManager.getRemoteTipEpoch()).thenReturn(100L);
     getTriggerMethod().invoke(manager, epoch);
-    verify(backupMiner, never()).startBackupMining(any(EpochContext.class));
+    verify(backupMiner, never()).startBackupMining(any(EpochContext.class), any(Block.class));
 
     // Second call: now synchronized
     when(syncManager.isSynchronized()).thenReturn(true);
     getTriggerMethod().invoke(manager, epoch);
-    verify(backupMiner, times(1)).startBackupMining(any(EpochContext.class));
+    verify(backupMiner, times(1)).startBackupMining(any(EpochContext.class), any(Block.class));
   }
 
   /**
@@ -293,6 +293,6 @@ public class EpochConsensusManagerBackupMinerGatingTest {
     method.invoke(nullKernelManager, epoch);
 
     // Should trigger (fail-open) when kernel is null
-    verify(backupMiner, times(1)).startBackupMining(any(EpochContext.class));
+    verify(backupMiner, times(1)).startBackupMining(any(EpochContext.class), any(Block.class));
   }
 }
