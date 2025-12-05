@@ -119,27 +119,27 @@ public class BlockBuilder {
   }
 
   /**
-   * Collect links for candidate block creation (REFACTORED)
+   * Collect links for candidate block creation (STRICT N-2 RULE)
    *
-   * <p>NEW STRATEGY: Reference "top 16 candidates from previous height's epoch" + up to 1024
-   * transactions from pool
+   * <p>STRICT N-2 STRATEGY: Reference main block from N-1 + orphans from N-2 epoch
    *
    * <p>Algorithm:
    * <ol>
    *   <li>Get previous main block (height N-1)</li>
    *   <li>Check if node is up-to-date (strict mining reference depth limit)</li>
-   *   <li>Get all candidates in that block's epoch</li>
+   *   <li>Add ONLY the main block from N-1 epoch (parent reference)</li>
+   *   <li>Add ALL orphans from N-2 epoch (guaranteed network propagation)</li>
    *   <li>Sort by work (descending), take top 16 (MAX_BLOCK_LINKS)</li>
-   *   <li>Add references to these 16 blocks</li>
    *   <li>Add up to 1024 transaction references from transaction pool</li>
    * </ol>
    *
-   * <p>RATIONALE:
+   * <p>RATIONALE (Strict N-2 Rule):
    * <ul>
-   *   <li>Height N-1 is already confirmed (epoch competition finished)</li>
-   *   <li>All candidates are valid and can be referenced</li>
-   *   <li>Top 16 includes the winner (highest work) and top candidates</li>
-   *   <li>Gives epoch losers a chance to be referenced</li>
+   *   <li>When epoch N ends, all nodes broadcast blocks simultaneously</li>
+   *   <li>N-1's main block is known (epoch winner), but N-1's orphans may not have propagated</li>
+   *   <li>N-2's orphans have had 64+ seconds to propagate - guaranteed arrival</li>
+   *   <li>By NOT referencing N-1 orphans, we avoid hashpower waste from missing references</li>
+   *   <li>All nodes will have consistent candidate blocks with identical references</li>
    *   <li>Strict reference limit prevents outdated nodes from mining</li>
    *   <li>MAX_LINKS_PER_BLOCK (1,485,000) allows massive transaction throughput</li>
    *   <li>Initial limit of 1024 txs is conservative for stability</li>
@@ -148,8 +148,7 @@ public class BlockBuilder {
    * <p>See: docs/DESIGN-BLOCK-LINK-ORPHAN-STORE-REFACTOR.md
    *
    * @param chainStats current chain statistics
-   * @return list of links (16 block links + up to 1024 tx links), empty list if node is too far
-   *     behind
+   * @return list of links (block links + up to 1024 tx links), empty list if node is too far behind
    */
   private List<Link> collectCandidateLinks(ChainStats chainStats) {
     List<Link> links = new ArrayList<>();
@@ -222,35 +221,52 @@ public class BlockBuilder {
       }
     }
 
-    // Step 3: Collect candidates using reliable epoch strategy
-    // - N-1 epoch: Only reference main block and orphans that are already present
-    // - N-2 epoch: Reference orphans (guaranteed to have arrived after 64+ seconds)
-    // This avoids network timing issues where N-1 orphans haven't arrived yet
-    log.debug("Collecting links from height {} (epoch N-1={}, N-2={}), reference depth: {} epochs",
-        currentMainHeight, prevEpoch, prevEpoch - 1, referenceDepth);
+    // Step 3: Collect candidates using STRICT N-2 epoch strategy
+    // - N-1 epoch: ONLY reference the main block (parent link)
+    // - N-2 epoch: Reference ALL orphans (guaranteed to have arrived after 64+ seconds)
+    //
+    // RATIONALE (Strict N-2 Rule):
+    // When epoch N ends, all nodes broadcast their blocks simultaneously.
+    // Due to network latency, when mining starts for epoch N+1:
+    // - N-1's main block is known (it won the epoch)
+    // - N-1's orphans may NOT have arrived yet (network propagation delay)
+    // If we try to reference N-1 orphans that haven't arrived, the mined block
+    // will have fewer references, wasting hashpower.
+    //
+    // By strictly referencing N-2 orphans (which have had 64+ seconds to propagate),
+    // we guarantee all referenced blocks are available on all nodes.
+    log.debug("Collecting links using STRICT N-2 rule: height {} (N-1 epoch={}, N-2 epoch={})",
+        currentMainHeight, prevEpoch, prevEpoch - 1);
 
     List<Block> candidates = new ArrayList<>();
 
-    // Get all candidates from N-1 epoch (main block + any orphans already present)
-    List<Block> prevEpochCandidates = getCandidateBlocksInEpoch(prevEpoch);
-    candidates.addAll(prevEpochCandidates);
+    // Step 3a: Get ONLY the main block from N-1 epoch (the epoch winner)
+    // Do NOT include N-1 orphans - they may not have propagated yet
+    Block mainBlock = dagStore.getMainBlockByHeight(lastBlockHeight);
+    if (mainBlock != null) {
+      candidates.add(mainBlock);
+      log.debug("Added N-1 main block: epoch={}, hash={}",
+          mainBlock.getEpoch(), mainBlock.getHash().toHexString().substring(0, 16));
+    }
 
-    // Get orphans from N-2 epoch (guaranteed to have arrived)
-    // Only include orphans that haven't been referenced by N-1 blocks
+    // Step 3b: Get ALL orphans from N-2 epoch (guaranteed to have arrived)
+    // These blocks have had at least 64 seconds to propagate across the network
     if (prevEpoch > 0) {
       long olderEpoch = prevEpoch - 1;
       List<Block> olderCandidates = getCandidateBlocksInEpoch(olderEpoch);
+      int orphanCount = 0;
       for (Block block : olderCandidates) {
-        // Only include orphans (height == 0), skip main blocks (already in chain)
+        // Only include orphans (height == 0), skip main blocks (already in chain via parent)
         if (block.getInfo() != null && block.getInfo().getHeight() == 0) {
-          // Check if this orphan is already referenced by any block in N-1 epoch
-          boolean alreadyReferenced = isBlockReferencedByEpoch(block.getHash(), prevEpoch);
-          if (!alreadyReferenced) {
-            candidates.add(block);
-            log.info("Including N-2 orphan from epoch {}: {} (guaranteed arrival)",
-                olderEpoch, block.getHash().toHexString().substring(0, 16));
-          }
+          candidates.add(block);
+          orphanCount++;
+          log.debug("Added N-2 orphan: epoch={}, hash={}",
+              olderEpoch, block.getHash().toHexString().substring(0, 16));
         }
+      }
+      if (orphanCount > 0) {
+        log.info("Strict N-2 rule: Added {} orphan(s) from epoch {} (guaranteed propagation)",
+            orphanCount, olderEpoch);
       }
     }
 
@@ -428,24 +444,5 @@ public class BlockBuilder {
       log.error("Error calculating block work for hash {}: {}", hash.toHexString(), e.getMessage());
       return UInt256.ZERO;
     }
-  }
-
-  /**
-   * Check if a block is referenced by any block in a given epoch
-   *
-   * @param blockHash the block hash to check
-   * @param epoch     the epoch to search in
-   * @return true if the block is referenced by any block in the epoch
-   */
-  private boolean isBlockReferencedByEpoch(Bytes32 blockHash, long epoch) {
-    List<Block> epochBlocks = getCandidateBlocksInEpoch(epoch);
-    for (Block block : epochBlocks) {
-      for (Link link : block.getLinks()) {
-        if (link.isBlock() && link.getTargetHash().equals(blockHash)) {
-          return true;
-        }
-      }
-    }
-    return false;
   }
 }
