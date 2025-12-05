@@ -350,7 +350,7 @@ public class MiningApiServiceSyncGateTest {
         when(demotedParent.getInfo()).thenReturn(demotedInfo);
 
         // Mock DagChain.getBlockByHash to return the demoted parent
-        when(dagChain.getBlockByHash(eq(parentHash), eq(false))).thenReturn(demotedParent);
+        when(dagChain.getBlockByHash(eq(parentHash))).thenReturn(demotedParent);
 
         // Create a candidate block with a link to the parent
         List<Link> links = new ArrayList<>();
@@ -425,7 +425,7 @@ public class MiningApiServiceSyncGateTest {
         when(validParent.getInfo()).thenReturn(validInfo);
 
         // Mock DagChain.getBlockByHash to return the valid parent
-        when(dagChain.getBlockByHash(eq(parentHash), eq(false))).thenReturn(validParent);
+        when(dagChain.getBlockByHash(eq(parentHash))).thenReturn(validParent);
 
         // Create a candidate block with a link to the valid parent
         List<Link> links = new ArrayList<>();

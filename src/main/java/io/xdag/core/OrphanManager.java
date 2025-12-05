@@ -167,7 +167,7 @@ public class OrphanManager {
 
   private void retryBlock(Bytes32 hash) {
     try {
-      Block pendingBlock = dagStore.getBlockByHash(hash, true);
+      Block pendingBlock = dagStore.getBlockByHash(hash);
       if (pendingBlock == null) {
         log.debug("Missing dependency block {} no longer exists", formatHash(hash));
         return;

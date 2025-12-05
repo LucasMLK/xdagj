@@ -144,11 +144,10 @@ public interface DagStore extends XdagLifecycle {
   /**
    * Get block by hash
    *
-   * @param hash  Block hash
-   * @param isRaw true to load full raw data, false for BlockInfo only
+   * @param hash Block hash
    * @return Block or null if not found
    */
-  Block getBlockByHash(Bytes32 hash, boolean isRaw);
+  Block getBlockByHash(Bytes32 hash);
 
   /**
    * Check if block exists
@@ -187,10 +186,9 @@ public interface DagStore extends XdagLifecycle {
    * <p><strong>NOT 1:1 with Epoch</strong>: Height 100 might be from Epoch 1003
    *
    * @param height Main chain height (1-based, 1 = first main block)
-   * @param isRaw  true to load full raw data, false for BlockInfo only
    * @return Block at height, or null if height is invalid
    */
-  Block getMainBlockByHeight(long height, boolean isRaw);
+  Block getMainBlockByHeight(long height);
 
   /**
    * Get main chain length (number of main blocks)
@@ -222,10 +220,9 @@ public interface DagStore extends XdagLifecycle {
    *
    * @param fromHeight Start height (inclusive)
    * @param toHeight   End height (inclusive)
-   * @param isRaw      true to load full raw data, false for BlockInfo only
    * @return List of blocks in ascending height order (may contain nulls for missing blocks)
    */
-  List<Block> getMainBlocksByHeightRange(long fromHeight, long toHeight, boolean isRaw);
+  List<Block> getMainBlocksByHeightRange(long fromHeight, long toHeight);
 
   /**
    * Check if main chain is continuous range

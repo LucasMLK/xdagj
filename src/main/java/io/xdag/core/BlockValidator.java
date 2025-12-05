@@ -192,7 +192,7 @@ public class BlockValidator {
 
     // Check if block already exists
     if (dagStore.hasBlock(block.getHash())) {
-      Block existingBlock = dagStore.getBlockByHash(block.getHash(), false);
+      Block existingBlock = dagStore.getBlockByHash(block.getHash());
       if (existingBlock != null && existingBlock.getInfo() != null
           && existingBlock.getInfo().getHeight() == 0) {
         // Orphan block exists - allow re-processing
@@ -485,7 +485,7 @@ public class BlockValidator {
       long currentEpoch = TimeUtils.getCurrentEpochNumber();
       for (Link link : block.getLinks()) {
         if (link.isBlock()) {
-          Block refBlock = dagStore.getBlockByHash(link.getTargetHash(), false);
+          Block refBlock = dagStore.getBlockByHash(link.getTargetHash());
           if (refBlock != null) {
             long refEpoch = refBlock.getEpoch();
             if (currentEpoch - refEpoch > ORPHAN_RETENTION_WINDOW) {
@@ -551,7 +551,7 @@ public class BlockValidator {
     visited.add(currentHash);
     recursionStack.add(currentHash);
 
-    Block current = dagStore.getBlockByHash(currentHash, false);
+    Block current = dagStore.getBlockByHash(currentHash);
     if (current != null) {
       for (Link link : current.getLinks()) {
         if (link.isBlock()) {
@@ -581,7 +581,7 @@ public class BlockValidator {
 
     for (Link link : block.getLinks()) {
       if (link.isBlock()) {
-        Block parent = dagStore.getBlockByHash(link.getTargetHash(), false);
+        Block parent = dagStore.getBlockByHash(link.getTargetHash());
         if (parent != null) {
           int parentDepth = calculateDepthFromGenesis(parent);
           maxDepth = Math.max(maxDepth, parentDepth + 1);

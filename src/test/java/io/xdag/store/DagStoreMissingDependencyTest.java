@@ -109,7 +109,7 @@ public class DagStoreMissingDependencyTest {
     List<Bytes32> waiting = dagStore.getBlocksWaitingForParent(missingParent);
     assertTrue(waiting.contains(pendingBlock.getHash()));
 
-    Block loaded = dagStore.getBlockByHash(pendingBlock.getHash(), true);
+    Block loaded = dagStore.getBlockByHash(pendingBlock.getHash());
     assertNotNull(loaded);
     assertEquals(pendingBlock.getHash(), loaded.getHash());
 

@@ -246,7 +246,7 @@ public class TransactionExecutionTimingTest {
         System.out.println("  Is main block: " + result.isMainBlock());
 
         // Verify block is NOT on main chain (height = 0 means orphan)
-        Block importedBlock = dagChain.getBlockByHash(orphanBlock.getHash(), false);
+        Block importedBlock = dagChain.getBlockByHash(orphanBlock.getHash());
         assertNotNull("Block should be imported", importedBlock);
         assertNotNull("Block should have info", importedBlock.getInfo());
         assertEquals("Block should be orphan (height = 0)", 0, importedBlock.getInfo().getHeight());
@@ -359,7 +359,7 @@ public class TransactionExecutionTimingTest {
         System.out.println("  Is main block: " + result.isMainBlock());
 
         // Verify block is on main chain (height > 0)
-        Block importedBlock = dagChain.getBlockByHash(mainBlock.getHash(), false);
+        Block importedBlock = dagChain.getBlockByHash(mainBlock.getHash());
         assertNotNull("Block should be imported", importedBlock);
         assertNotNull("Block should have info", importedBlock.getInfo());
         assertTrue("Block should be main block (height > 0)",

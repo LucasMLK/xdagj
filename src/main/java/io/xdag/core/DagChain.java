@@ -481,13 +481,12 @@ public interface DagChain {
   /**
    * Get block by its hash
    *
-   * @param hash  block hash (32 bytes)
-   * @param isRaw whether to include raw block data (true) or just BlockInfo metadata (false)
+   * @param hash block hash (32 bytes)
    * @return block instance, or null if not found
    * @see #getMainBlockByHeight(long)
    * @see #getWinnerBlockInEpoch(long)
    */
-  Block getBlockByHash(Bytes32 hash, boolean isRaw);
+  Block getBlockByHash(Bytes32 hash);
 
   // ==================== Cumulative Difficulty ====================
 

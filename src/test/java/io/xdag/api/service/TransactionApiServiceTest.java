@@ -142,7 +142,7 @@ public class TransactionApiServiceTest {
         when(dagChain.getMainChainLength()).thenReturn(2L);
         when(dagChain.getMainBlockByHeight(anyLong()))
                 .thenAnswer(invocation -> blockByHeight.get(invocation.getArgument(0)));
-        when(dagChain.getBlockByHash(any(Bytes32.class), anyBoolean()))
+        when(dagChain.getBlockByHash(any(Bytes32.class)))
                 .thenAnswer(invocation -> blockByHash.get(invocation.getArgument(0)));
 
         when(transactionStore.getTransactionCount()).thenReturn(3L);

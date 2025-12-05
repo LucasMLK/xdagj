@@ -168,7 +168,7 @@ public class BlockBuilder {
     log.debug("Collecting candidate links: currentMainHeight={}, lastBlockHeight={}",
         currentMainHeight, lastBlockHeight);
 
-    Block prevMainBlock = dagStore.getMainBlockByHeight(lastBlockHeight, false);
+    Block prevMainBlock = dagStore.getMainBlockByHeight(lastBlockHeight);
 
     if (prevMainBlock == null) {
       // No blocks exist yet (not even Genesis) - this should only happen during initialization

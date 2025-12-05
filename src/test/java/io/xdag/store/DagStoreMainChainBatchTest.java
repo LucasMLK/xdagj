@@ -51,7 +51,7 @@ import static org.junit.Assert.*;
  *
  * <p>Tests the new batch query methods:
  * <ul>
- *   <li>{@link DagStore#getMainBlocksByHeightRange(long, long, boolean)}</li>
+ *   <li>{@link DagStore#getMainBlocksByHeightRange(long, long)}</li>
  *   <li>{@link DagStore#verifyMainChainContinuity(long, long)}</li>
  * </ul>
  */
@@ -146,7 +146,7 @@ public class DagStoreMainChainBatchTest {
     @Test
     public void testGetMainBlocksByHeightRange_Small() {
         // Fetch blocks 1-10
-        List<Block> blocks = dagStore.getMainBlocksByHeightRange(1, 10, false);
+        List<Block> blocks = dagStore.getMainBlocksByHeightRange(1, 10);
 
         assertEquals(10, blocks.size());
         for (int i = 0; i < 10; i++) {
@@ -158,7 +158,7 @@ public class DagStoreMainChainBatchTest {
     @Test
     public void testGetMainBlocksByHeightRange_Large() {
         // Fetch blocks 1-100
-        List<Block> blocks = dagStore.getMainBlocksByHeightRange(1, 100, false);
+        List<Block> blocks = dagStore.getMainBlocksByHeightRange(1, 100);
 
         assertEquals(100, blocks.size());
         for (int i = 0; i < 100; i++) {
@@ -168,21 +168,21 @@ public class DagStoreMainChainBatchTest {
     }
 
     @Test
-    public void testGetMainBlocksByHeightRange_WithRawData() {
-        // Fetch with raw data
-        List<Block> blocks = dagStore.getMainBlocksByHeightRange(1, 10, true);
+    public void testGetMainBlocksByHeightRange_WithFullData() {
+        // Fetch with full data (always loads full blocks now)
+        List<Block> blocks = dagStore.getMainBlocksByHeightRange(1, 10);
 
         assertEquals(10, blocks.size());
         for (Block block : blocks) {
             assertNotNull(block);
-            assertNotNull("Header should be loaded for raw blocks", block.getHeader());
+            assertNotNull("Header should be loaded for full blocks", block.getHeader());
         }
     }
 
     @Test
     public void testGetMainBlocksByHeightRange_PartialRange() {
         // Fetch middle range
-        List<Block> blocks = dagStore.getMainBlocksByHeightRange(40, 60, false);
+        List<Block> blocks = dagStore.getMainBlocksByHeightRange(40, 60);
 
         assertEquals(21, blocks.size());
         assertEquals(40, blocks.get(0).getInfo().getHeight());
@@ -192,11 +192,11 @@ public class DagStoreMainChainBatchTest {
     @Test
     public void testGetMainBlocksByHeightRange_InvalidRange() {
         // Invalid: fromHeight > toHeight
-        List<Block> blocks = dagStore.getMainBlocksByHeightRange(50, 10, false);
+        List<Block> blocks = dagStore.getMainBlocksByHeightRange(50, 10);
         assertTrue("Invalid range should return empty list", blocks.isEmpty());
 
         // Invalid: fromHeight < 1
-        blocks = dagStore.getMainBlocksByHeightRange(0, 10, false);
+        blocks = dagStore.getMainBlocksByHeightRange(0, 10);
         assertTrue("Invalid fromHeight should return empty list", blocks.isEmpty());
     }
 
@@ -207,7 +207,7 @@ public class DagStoreMainChainBatchTest {
         dagStore.deleteBlock(block50.getHash());
 
         // Fetch range with gap
-        List<Block> blocks = dagStore.getMainBlocksByHeightRange(45, 55, false);
+        List<Block> blocks = dagStore.getMainBlocksByHeightRange(45, 55);
 
         assertEquals(11, blocks.size());
         assertNull("Block 50 should be null (deleted)", blocks.get(5));  // Block 50 index
@@ -258,7 +258,7 @@ public class DagStoreMainChainBatchTest {
         long startTime = System.nanoTime();
 
         // Query 100 blocks (would be 1000 in production, but 100 is enough for test)
-        List<Block> blocks = dagStore.getMainBlocksByHeightRange(1, 100, false);
+        List<Block> blocks = dagStore.getMainBlocksByHeightRange(1, 100);
 
         long duration = (System.nanoTime() - startTime) / 1_000_000;  // Convert to ms
 
@@ -272,7 +272,7 @@ public class DagStoreMainChainBatchTest {
     public void testBatchSizeLimit() {
         // Test that batch size is limited to 10000
         // This should be limited automatically
-        List<Block> blocks = dagStore.getMainBlocksByHeightRange(1, 50000, false);
+        List<Block> blocks = dagStore.getMainBlocksByHeightRange(1, 50000);
 
         // Should return 10000 entries (batch size limit), including nulls for missing blocks
         assertEquals("Should respect batch size limit of 10000", 10000, blocks.size());
@@ -285,12 +285,12 @@ public class DagStoreMainChainBatchTest {
     @Test
     public void testCacheEfficiency() {
         // First query - populate cache
-        List<Block> blocks1 = dagStore.getMainBlocksByHeightRange(1, 50, false);
+        List<Block> blocks1 = dagStore.getMainBlocksByHeightRange(1, 50);
         assertEquals(50, blocks1.size());
 
         // Measure second query (should be faster due to cache)
         long startTime = System.nanoTime();
-        List<Block> blocks2 = dagStore.getMainBlocksByHeightRange(1, 50, false);
+        List<Block> blocks2 = dagStore.getMainBlocksByHeightRange(1, 50);
         long duration = (System.nanoTime() - startTime) / 1_000_000;
 
         assertEquals(50, blocks2.size());

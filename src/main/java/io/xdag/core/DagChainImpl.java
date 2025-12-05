@@ -231,7 +231,8 @@ public class DagChainImpl implements DagChain {
         notifyDagchainListeners(blockWithInfo);
 
         // Update chain stats for main blocks
-        updateChainStatsForNewMainBlock(blockInfo);
+        // BUG-HEIGHT-002 fix: use chainLength from importResult instead of blockInfo.getHeight()
+        updateChainStatsForNewMainBlock(importResult.getChainLength(), blockInfo.getDifficulty());
 
         // Delegate to DifficultyAdjuster (P1 refactoring)
         this.chainStats = difficultyAdjuster.checkAndAdjustDifficulty(
@@ -288,18 +289,20 @@ public class DagChainImpl implements DagChain {
   /**
    * Update chain statistics for new main block
    *
-   * <p>IMPORTANT: When a block replaces another via epoch competition, its height may be
-   * less than the current mainBlockCount. In this case, we should NOT decrease mainBlockCount. Only
-   * increase it when the new block truly extends the chain.
+   * <p><strong>BUG-HEIGHT-002 Fix:</strong>
+   * Use chainLength from ImportResult instead of block height. When height shifting occurs,
+   * chainLength = mainBlockCount + 1, which may be different from the new block's height.
+   *
+   * @param chainLength actual chain length after the import operation
+   * @param difficulty cumulative difficulty of the new block
    */
-  private synchronized void updateChainStatsForNewMainBlock(BlockInfo blockInfo) {
-    // Only update mainBlockCount if this block extends the chain
-    // (for epoch competition replacements, height < mainBlockCount, so we keep the higher value)
-    long newMainBlockCount = Math.max(chainStats.getMainBlockCount(), blockInfo.getHeight());
+  private synchronized void updateChainStatsForNewMainBlock(long chainLength, UInt256 difficulty) {
+    // BUG-HEIGHT-002 fix: use chainLength directly instead of block height
+    long newMainBlockCount = Math.max(chainStats.getMainBlockCount(), chainLength);
 
     chainStats = chainStats
         .withMainBlockCount(newMainBlockCount)
-        .withDifficulty(blockInfo.getDifficulty());
+        .withDifficulty(difficulty);
 
     // Save updated stats
     dagStore.saveChainStats(chainStats);
@@ -381,7 +384,7 @@ public class DagChainImpl implements DagChain {
 
   @Override
   public Block getMainBlockByHeight(long height) {
-    return dagStore.getMainBlockByHeight(height, false);
+    return dagStore.getMainBlockByHeight(height);
   }
 
   @Override
@@ -454,7 +457,7 @@ public class DagChainImpl implements DagChain {
           scanStart, chainStats.getMainBlockCount());
 
       for (long height = chainStats.getMainBlockCount(); height >= scanStart; height--) {
-        Block block = dagStore.getMainBlockByHeight(height, false);
+        Block block = dagStore.getMainBlockByHeight(height);
         if (block != null) {
           long blockEpoch = block.getEpoch();
           log.debug("    Height {}: block={}, epoch={}, match={}",
@@ -476,8 +479,8 @@ public class DagChainImpl implements DagChain {
       } else {
         // Distinguish between normal empty epochs and potentially corrupted index
         // Get epoch range of known blocks
-        Block genesisBlock = dagStore.getMainBlockByHeight(1, false);
-        Block latestBlock = dagStore.getMainBlockByHeight(chainStats.getMainBlockCount(), false);
+        Block genesisBlock = dagStore.getMainBlockByHeight(1);
+        Block latestBlock = dagStore.getMainBlockByHeight(chainStats.getMainBlockCount());
 
         if (genesisBlock != null && latestBlock != null) {
           long genesisEpoch = genesisBlock.getEpoch();
@@ -569,8 +572,8 @@ public class DagChainImpl implements DagChain {
   // ==================== General Block Queries ====================
 
   @Override
-  public Block getBlockByHash(Bytes32 hash, boolean isRaw) {
-    return dagStore.getBlockByHash(hash, isRaw);
+  public Block getBlockByHash(Bytes32 hash) {
+    return dagStore.getBlockByHash(hash);
   }
 
   // ==================== Cumulative Difficulty ====================
@@ -596,7 +599,7 @@ public class DagChainImpl implements DagChain {
         continue;
       }
 
-      Block parent = dagStore.getBlockByHash(link.getTargetHash(), false);
+      Block parent = dagStore.getBlockByHash(link.getTargetHash());
       if (parent == null || parent.getInfo() == null) {
         continue;
       }
@@ -681,7 +684,7 @@ public class DagChainImpl implements DagChain {
 
   @Override
   public boolean isBlockInMainChain(Bytes32 hash) {
-    Block block = dagStore.getBlockByHash(hash, false);
+    Block block = dagStore.getBlockByHash(hash);
 
     if (block == null || block.getInfo() == null) {
       return false;
@@ -708,7 +711,7 @@ public class DagChainImpl implements DagChain {
     // DagStore returns List<Bytes32> (hashes), need to convert to List<Block>
     List<Bytes32> hashes = dagStore.getBlockReferences(hash);
     return hashes.stream()
-        .map(h -> dagStore.getBlockByHash(h, false))
+        .map(h -> dagStore.getBlockByHash(h))
         .filter(Objects::nonNull)
         .collect(Collectors.toList());
   }
@@ -811,7 +814,7 @@ public class DagChainImpl implements DagChain {
       return true;
     }
 
-    Block latestMainBlock = dagStore.getMainBlockByHeight(localMainHeight, false);
+    Block latestMainBlock = dagStore.getMainBlockByHeight(localMainHeight);
     if (latestMainBlock == null) {
       log.warn("Cannot find latest main block at height {}, assuming node is behind",
           localMainHeight);

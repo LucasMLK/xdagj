@@ -180,7 +180,7 @@ public class OrphanManagerTest {
     orphanManager.registerMissingDependency(orphanBlock, List.of(missingParentHash));
 
     // Verify block is persisted in MISSING_DEP_BLOCK
-    Block loaded = dagStore.getBlockByHash(orphanBlock.getHash(), true);
+    Block loaded = dagStore.getBlockByHash(orphanBlock.getHash());
     assertNotNull("Block should be retrievable from MISSING_DEP_BLOCK", loaded);
     assertEquals(orphanBlock.getHash(), loaded.getHash());
 
@@ -222,7 +222,7 @@ public class OrphanManagerTest {
     }
 
     // Critical: Block data should still be accessible (NOT deleted prematurely)
-    Block stillExists = dagStore.getBlockByHash(orphanBlock.getHash(), true);
+    Block stillExists = dagStore.getBlockByHash(orphanBlock.getHash());
     assertNotNull("Block data must NOT be deleted by onBlockImported", stillExists);
 
     // Verify retry was called with the block
@@ -238,7 +238,7 @@ public class OrphanManagerTest {
 
     // Verify it exists
     assertEquals(1, dagStore.getMissingDependencyBlockCount());
-    assertNotNull(dagStore.getBlockByHash(orphanBlock.getHash(), true));
+    assertNotNull(dagStore.getBlockByHash(orphanBlock.getHash()));
 
     // Clear the dependency
     orphanManager.clearMissingDependency(orphanBlock.getHash());

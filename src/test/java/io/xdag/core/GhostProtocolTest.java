@@ -101,9 +101,9 @@ public class GhostProtocolTest {
     Bytes32 orphan2Hash = Bytes32.fromHexString("0x0000000000000000000000000000000000000000000000000000000000000003");
 
     // Setup mock store to return these blocks
-    when(mockDagStore.getBlockByHash(mainHash, false)).thenReturn(mainBlock);
-    when(mockDagStore.getBlockByHash(orphan1Hash, false)).thenReturn(orphan1);
-    when(mockDagStore.getBlockByHash(orphan2Hash, false)).thenReturn(orphan2);
+    when(mockDagStore.getBlockByHash(mainHash)).thenReturn(mainBlock);
+    when(mockDagStore.getBlockByHash(orphan1Hash)).thenReturn(orphan1);
+    when(mockDagStore.getBlockByHash(orphan2Hash)).thenReturn(orphan2);
 
     // Create new block that references all three
     List<Link> links = List.of(

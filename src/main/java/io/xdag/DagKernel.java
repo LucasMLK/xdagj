@@ -109,7 +109,7 @@ import org.rocksdb.RocksDB;
  * dagKernel.start();
  *
  * // Use storage layer
- * Block block = dagKernel.getDagStore().getBlockByHash(hash, true);
+ * Block block = dagKernel.getDagStore().getBlockByHash(hash);
  * Transaction tx = dagKernel.getTransactionStore().getTransaction(txHash);
  *
  * // Use consensus layer
@@ -928,7 +928,7 @@ public class DagKernel {
    */
   private void verifyGenesisBlock() {
     // Get genesis block (genesis has height 1, orphan blocks have height 0)
-    Block genesisBlock = dagStore.getMainBlockByHeight(1, true);
+    Block genesisBlock = dagStore.getMainBlockByHeight(1);
     if (genesisBlock == null) {
       String error = String.format(
           """
@@ -1026,7 +1026,7 @@ public class DagKernel {
     long startHeight = Math.max(2, mainChainHeight - 100);
 
     for (long height = mainChainHeight; height >= startHeight; height--) {
-      Block block = dagStore.getMainBlockByHeight(height, true);
+      Block block = dagStore.getMainBlockByHeight(height);
       if (block == null) {
         log.warn("Block at height {} not found during consistency check", height);
         continue;
@@ -1040,7 +1040,7 @@ public class DagKernel {
         for (var link : links) {
           var targetHash = link.getTargetHash();
           if (targetHash != null && !targetHash.isZero()) {
-            Block targetBlock = dagStore.getBlockByHash(targetHash, false);
+            Block targetBlock = dagStore.getBlockByHash(targetHash);
             if (targetBlock == null) {
               log.error("CONSISTENCY ERROR: Block {} (height={}) references missing block {}",
                   block.getHash().toHexString().substring(0, 18),

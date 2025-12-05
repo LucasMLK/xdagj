@@ -182,7 +182,7 @@ public class DagKernelPersistenceTest {
 
         // Create and import a test block
         long currentEpoch = dagChain.getChainStats().getMainBlockCount() > 0 ?
-            dagStore.getMainBlockByHeight(1, true).getEpoch() + 1000 : 23695000;
+            dagStore.getMainBlockByHeight(1).getEpoch() + 1000 : 23695000;
 
         Block testBlock = dagChain.createGenesisBlock(currentEpoch);
         DagImportResult result = dagChain.tryToConnect(testBlock);
@@ -204,7 +204,7 @@ public class DagKernelPersistenceTest {
 
         // Verify data persisted
         DagStore newDagStore = dagKernel.getDagStore();
-        Block retrievedBlock = newDagStore.getBlockByHash(testBlockHash, true);
+        Block retrievedBlock = newDagStore.getBlockByHash(testBlockHash);
 
         // The block should exist (either imported or detected as duplicate)
         // The important thing is that the chain state is consistent
@@ -267,7 +267,7 @@ public class DagKernelPersistenceTest {
         DagChainImpl dagChain = (DagChainImpl) dagKernel.getDagChain();
 
         // Get genesis block
-        Block genesisBlock = dagStore.getMainBlockByHeight(1, true);
+        Block genesisBlock = dagStore.getMainBlockByHeight(1);
         assertNotNull("Genesis block should exist", genesisBlock);
 
         // Verify genesis has no missing links
@@ -276,7 +276,7 @@ public class DagKernelPersistenceTest {
             for (var link : links) {
                 var targetHash = link.getTargetHash();
                 if (targetHash != null && !targetHash.isZero()) {
-                    Block target = dagStore.getBlockByHash(targetHash, false);
+                    Block target = dagStore.getBlockByHash(targetHash);
                     // Genesis may have self-reference or no links
                     // This just verifies the check mechanism works
                 }
@@ -304,7 +304,7 @@ public class DagKernelPersistenceTest {
         DagStore dagStore = dagKernel.getDagStore();
 
         // Get genesis block info
-        Block genesisBlock = dagStore.getMainBlockByHeight(1, true);
+        Block genesisBlock = dagStore.getMainBlockByHeight(1);
         assertNotNull("Genesis block should exist", genesisBlock);
 
         BlockInfo originalInfo = dagStore.getBlockInfo(genesisBlock.getHash());

@@ -70,7 +70,7 @@ public class BlockApiService {
    */
   public BlockDetail getBlockDetail(Bytes32 blockHash) {
     try {
-      Block block = dagKernel.getDagChain().getBlockByHash(blockHash, true);
+      Block block = dagKernel.getDagChain().getBlockByHash(blockHash);
       if (block == null) {
         return null;
       }
@@ -406,7 +406,7 @@ public class BlockApiService {
     List<Link> links = block.getLinks();
     for (Link link : links) {
       if (link.isBlock()) {
-        Block linkedBlock = dagKernel.getDagChain().getBlockByHash(link.getTargetHash(), false);
+        Block linkedBlock = dagKernel.getDagChain().getBlockByHash(link.getTargetHash());
         if (linkedBlock != null && linkedBlock.getInfo() != null) {
           long linkedHeight = linkedBlock.getInfo().getHeight();
           String linkType = linkedHeight == 0 ? "orphan" : "parent";

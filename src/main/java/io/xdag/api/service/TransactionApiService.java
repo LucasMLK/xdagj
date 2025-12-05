@@ -245,7 +245,7 @@ public class TransactionApiService {
     if (blockHash != null) {
       builder.blockHash(blockHash.toHexString());
 
-      Block block = dagKernel.getDagChain().getBlockByHash(blockHash, false);
+      Block block = dagKernel.getDagChain().getBlockByHash(blockHash);
       if (block != null) {
         long timestamp = TimeUtils.epochNumberToTimeMillis(block.getEpoch());
         builder.timestamp(timestamp);

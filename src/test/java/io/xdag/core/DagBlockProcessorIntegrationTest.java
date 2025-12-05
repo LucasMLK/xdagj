@@ -100,7 +100,7 @@ public class DagBlockProcessorIntegrationTest extends BaseIntegrationTest {
     @Test
     public void testGetNonExistentBlock() {
         Bytes32 randomHash = Bytes32.random();
-        Block block = blockProcessor.getBlock(randomHash, false);
+        Block block = blockProcessor.getBlock(randomHash);
         assertNull("Non-existent block should return null", block);
     }
 
@@ -254,7 +254,7 @@ public class DagBlockProcessorIntegrationTest extends BaseIntegrationTest {
         assertTrue("Block should exist after processing", blockProcessor.hasBlock(block.getHash()));
 
         // Verify block can be retrieved
-        Block retrievedBlock = blockProcessor.getBlock(block.getHash(), false);
+        Block retrievedBlock = blockProcessor.getBlock(block.getHash());
         assertNotNull("Retrieved block should not be null", retrievedBlock);
         assertEquals("Retrieved block hash should match", block.getHash(), retrievedBlock.getHash());
     }
@@ -333,15 +333,10 @@ public class DagBlockProcessorIntegrationTest extends BaseIntegrationTest {
 
         Bytes32 blockHash = block.getHash();
 
-        // Retrieve without links
-        Block retrievedWithoutLinks = blockProcessor.getBlock(blockHash, false);
-        assertNotNull("Block should be retrievable without links", retrievedWithoutLinks);
-        assertEquals("Hash should match", blockHash, retrievedWithoutLinks.getHash());
-
-        // Retrieve with links
-        Block retrievedWithLinks = blockProcessor.getBlock(blockHash, true);
-        assertNotNull("Block should be retrievable with links", retrievedWithLinks);
-        assertEquals("Hash should match", blockHash, retrievedWithLinks.getHash());
+        // Retrieve block (always loads full block now)
+        Block retrievedBlock = blockProcessor.getBlock(blockHash);
+        assertNotNull("Block should be retrievable", retrievedBlock);
+        assertEquals("Hash should match", blockHash, retrievedBlock.getHash());
     }
 
     /**

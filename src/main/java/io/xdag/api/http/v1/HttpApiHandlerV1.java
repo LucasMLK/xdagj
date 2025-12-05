@@ -385,7 +385,7 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
     }
 
     private BlockDetailResponse handleGetBlockByHash(String blockHash, boolean fullTransactions) {
-        Bytes32 hash = BasicUtils.address2Hash(blockHash);
+        Bytes32 hash = Bytes32.fromHexString(blockHash);
         BlockDetail blockDetail = blockApiService.getBlockDetail(hash);
 
         if (blockDetail == null) {

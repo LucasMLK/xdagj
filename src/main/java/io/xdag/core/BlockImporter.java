@@ -110,16 +110,18 @@ public class BlockImporter {
 
       // Step 0: Check if block already exists (BUG-P2P-001 fix)
       // Prevent redundant imports that waste CPU and cause log pollution
-      Block existingBlock = dagStore.getBlockByHash(blockHash, false);
+      Block existingBlock = dagStore.getBlockByHash(blockHash);
       if (existingBlock != null && existingBlock.getInfo() != null) {
         BlockInfo info = existingBlock.getInfo();
         log.debug("Block {} already exists (height={}), skipping import",
             formatHash(blockHash), info.getHeight());
 
         // Return success with existing block's info
+        // For existing blocks, chainLength = height (no new block added to chain)
         return ImportResult.success(
             info.getEpoch(),
             info.getHeight(),
+            info.getHeight(),  // chainLength same as height for existing block
             info.getDifficulty(),
             info.getHeight() > 0,  // isBestChain
             false);  // not newly imported
@@ -230,13 +232,14 @@ public class BlockImporter {
         verifyEpochSingleWinner(blockEpoch, finalBlock);
       }
 
-      log.info("Successfully imported block {}: height={}, difficulty={}, isBestChain={}",
-          formatHash(block.getHash()), finalHeight,
+      log.info("Successfully imported block {}: height={}, chainLength={}, difficulty={}, isBestChain={}",
+          formatHash(block.getHash()), finalHeight, competition.getChainLength(),
           cumulativeDifficulty.toDecimalString(), isBestChain);
 
       return ImportResult.success(
           blockEpoch,
           finalHeight,
+          competition.getChainLength(),  // BUG-HEIGHT-002 fix: use actual chain length
           cumulativeDifficulty,
           isBestChain,
           competition.isEpochWinner());
@@ -281,6 +284,7 @@ public class BlockImporter {
         (block.getHash().compareTo(currentWinner.getHash()) < 0);
 
     long height;
+    long chainLength = chainStats.getMainBlockCount();  // BUG-HEIGHT-002: track actual chain length
     boolean isBestChain;
     Block demotedBlock = null;  // Track which block needs demotion
 
@@ -298,6 +302,7 @@ public class BlockImporter {
         // Mark old winner for demotion
         demotedBlock = currentWinner;
         height = replacementHeight;
+        // BUG-HEIGHT-002: chainLength stays the same (replacing, not adding)
         isBestChain = true;
 
       } else if (currentWinner != null && currentWinner.getHash().equals(block.getHash())) {
@@ -316,24 +321,39 @@ public class BlockImporter {
           height = firstDemoted.getInfo().getHeight();
 
           // Return ALL demoted blocks (BUG-CONSENSUS-007 fix)
+          // BUG-HEIGHT-002: chainLength stays the same (replacing, not adding)
           isBestChain = true;
-          return new EpochCompetitionResult(height, isBestChain, isEpochWinner, otherMainBlocks);
+          return new EpochCompetitionResult(height, chainLength, isBestChain, isEpochWinner, otherMainBlocks);
 
         } else {
           // No other main blocks, assign new height
           // BUG-HEIGHT-001 fix: Assign height based on epoch order
           log.debug("Block {} is first winner in epoch {}, assigning height by epoch order",
               formatHash(block.getHash()), blockEpoch);
-          height = isGenesisBlock(block) ? 1 : calculateHeightByEpochOrder(blockEpoch, chainStats);
+          if (isGenesisBlock(block)) {
+            height = 1;
+            chainLength = 1;
+          } else {
+            HeightCalculationResult heightResult = calculateHeightByEpochOrder(blockEpoch, chainStats);
+            height = heightResult.getBlockHeight();
+            chainLength = heightResult.getChainLength();
+          }
           isBestChain = true;
         }
 
       } else {
         // Case 3: First block in this epoch
         // BUG-HEIGHT-001 fix: Assign height based on epoch order, not arrival order
-        height = isGenesisBlock(block) ? 1 : calculateHeightByEpochOrder(blockEpoch, chainStats);
-        log.debug("Block {} is first in epoch {}, assigned height {}",
-            formatHash(block.getHash()), blockEpoch, height);
+        if (isGenesisBlock(block)) {
+          height = 1;
+          chainLength = 1;
+        } else {
+          HeightCalculationResult heightResult = calculateHeightByEpochOrder(blockEpoch, chainStats);
+          height = heightResult.getBlockHeight();
+          chainLength = heightResult.getChainLength();
+        }
+        log.debug("Block {} is first in epoch {}, assigned height {}, chainLength {}",
+            formatHash(block.getHash()), blockEpoch, height, chainLength);
         isBestChain = true;
       }
 
@@ -346,6 +366,7 @@ public class BlockImporter {
           formatHash(currentWinner.getHash()),
           currentWinner.getInfo() != null ? currentWinner.getInfo().getHeight() : 0);
       height = 0;
+      // BUG-HEIGHT-002: chainLength stays the same for orphan blocks
       isBestChain = false;
 
       // BUG-ORPHAN-001 fix: Record orphan reason for selective retry
@@ -353,7 +374,7 @@ public class BlockImporter {
       dagStore.saveOrphanReason(block.getHash(), OrphanReason.LOST_COMPETITION);
     }
 
-    return new EpochCompetitionResult(height, isBestChain, isEpochWinner, demotedBlock);
+    return new EpochCompetitionResult(height, chainLength, isBestChain, isEpochWinner, demotedBlock);
   }
 
   /**
@@ -403,19 +424,27 @@ public class BlockImporter {
       return;
     }
 
+    // Reload full block data to ensure we have the complete block
+    Bytes32 blockHash = block.getInfo().getHash();
+    Block fullBlock = dagStore.getBlockByHash(blockHash);
+    if (fullBlock == null) {
+      log.error("Failed to reload full block {} for demotion", formatHash(blockHash));
+      return;
+    }
+
     log.debug("Demoting block {} from height {} to orphan",
-        formatHash(block.getHash()), previousHeight);
+        formatHash(blockHash), previousHeight);
 
     // Update BlockInfo with height=0
-    BlockInfo orphanInfo = block.getInfo().toBuilder()
+    BlockInfo orphanInfo = fullBlock.getInfo().toBuilder()
         .height(0)
         .build();
 
-    Block orphanBlock = block.toBuilder()
+    Block orphanBlock = fullBlock.toBuilder()
         .info(orphanInfo)
         .build();
 
-    // Save updated block to storage
+    // Save updated block to storage (preserving original header/links)
     dagStore.saveBlockInfo(orphanInfo);
     dagStore.saveBlock(orphanBlock);
 
@@ -584,7 +613,7 @@ public class BlockImporter {
         continue;
       }
 
-      Block parent = dagStore.getBlockByHash(link.getTargetHash(), false);
+      Block parent = dagStore.getBlockByHash(link.getTargetHash());
       if (parent == null || parent.getInfo() == null) {
         continue;
       }
@@ -719,12 +748,35 @@ public class BlockImporter {
   }
 
   /**
+   * Result of height calculation including both block height and chain length.
+   *
+   * <p><strong>BUG-HEIGHT-002 Fix:</strong>
+   * When height shifting occurs, the chain length increases by 1 even though
+   * the new block might get a lower height. This class tracks both values.
+   */
+  @Getter
+  private static class HeightCalculationResult {
+    private final long blockHeight;     // Height for the new block
+    private final long chainLength;     // Actual chain length after operation
+
+    HeightCalculationResult(long blockHeight, long chainLength) {
+      this.blockHeight = blockHeight;
+      this.chainLength = chainLength;
+    }
+  }
+
+  /**
    * Calculate the correct height for a block based on epoch order.
    *
    * <p><strong>BUG-HEIGHT-001 Fix:</strong>
    * Heights must be assigned based on epoch order, not arrival order.
    * This ensures consistent height assignment across all nodes regardless
    * of the order blocks arrive during sync.
+   *
+   * <p><strong>BUG-HEIGHT-002 Fix:</strong>
+   * Returns both block height AND actual chain length. When height shifting
+   * occurs, chain length = mainBlockCount + 1, which may be different from
+   * the new block's height.
    *
    * <p>Algorithm:
    * <ol>
@@ -735,25 +787,33 @@ public class BlockImporter {
    *
    * @param blockEpoch epoch of the block being inserted
    * @param chainStats current chain statistics
-   * @return the correct height for this block
+   * @return HeightCalculationResult with block height and chain length
    */
-  private long calculateHeightByEpochOrder(long blockEpoch, ChainStats chainStats) {
+  private HeightCalculationResult calculateHeightByEpochOrder(long blockEpoch, ChainStats chainStats) {
     long mainBlockCount = chainStats.getMainBlockCount();
+
+    log.debug("calculateHeightByEpochOrder called for epoch {}, mainBlockCount={}",
+        blockEpoch, mainBlockCount);
 
     if (mainBlockCount == 0) {
       // First main block (after genesis)
-      return 1;
+      return new HeightCalculationResult(1, 1);
     }
 
     // Get all main blocks and find insertion position
-    List<Block> mainBlocks = dagStore.getMainBlocksByHeightRange(1, mainBlockCount, false);
+    List<Block> mainBlocks = dagStore.getMainBlocksByHeightRange(1, mainBlockCount);
+
+    log.debug("Fetched {} blocks from range [1, {}]",
+        mainBlocks.size(), mainBlockCount);
 
     // Find the correct position based on epoch order
     // Height should be assigned such that epochs are in increasing order
     int insertPosition = 0;
+    int nullBlockCount = 0;
     for (int i = 0; i < mainBlocks.size(); i++) {
       Block existingBlock = mainBlocks.get(i);
       if (existingBlock == null || existingBlock.getInfo() == null) {
+        nullBlockCount++;
         continue;
       }
 
@@ -761,9 +821,14 @@ public class BlockImporter {
       if (blockEpoch > existingEpoch) {
         insertPosition = i + 1;
       } else {
+        log.debug("Found insert point at index {}, existing epoch {} >= new epoch {}",
+            i, existingEpoch, blockEpoch);
         break;
       }
     }
+
+    log.debug("Height calculation: insertPosition={}, mainBlocks.size()={}, nullBlockCount={}",
+        insertPosition, mainBlocks.size(), nullBlockCount);
 
     // The new height is insertPosition + 1 (heights are 1-based)
     long newHeight = insertPosition + 1;
@@ -771,7 +836,7 @@ public class BlockImporter {
     // Check if we need to shift subsequent blocks
     if (insertPosition < mainBlocks.size()) {
       // Inserting in the middle - need to shift all subsequent blocks
-      log.debug("Height insertion: block epoch {} needs height {}, shifting {} blocks",
+      log.info("Height shifting required: epoch {} needs height {}, shifting {} blocks",
           blockEpoch, newHeight, mainBlocks.size() - insertPosition);
 
       // Shift all blocks from insertPosition to the end
@@ -779,43 +844,58 @@ public class BlockImporter {
       for (int i = mainBlocks.size() - 1; i >= insertPosition; i--) {
         Block blockToShift = mainBlocks.get(i);
         if (blockToShift == null || blockToShift.getInfo() == null) {
+          log.debug("Block at index {} is null, skipping", i);
           continue;
         }
 
-        long oldHeight = blockToShift.getInfo().getHeight();
+        // Reload full block data for height shifting
+        Bytes32 blockHash = blockToShift.getInfo().getHash();
+        Block fullBlockToShift = dagStore.getBlockByHash(blockHash);
+        if (fullBlockToShift == null) {
+          log.error("Failed to reload full block {} for height shifting", formatHash(blockHash));
+          continue;
+        }
+
+        long oldHeight = fullBlockToShift.getInfo().getHeight();
         long shiftedHeight = oldHeight + 1;
 
-        log.debug("  → Shifting block {} (epoch {}) from height {} to {}",
-            formatHash(blockToShift.getHash()),
-            blockToShift.getEpoch(),
+        log.debug("Shifting block {} (epoch {}) from height {} to {}",
+            formatHash(fullBlockToShift.getHash()),
+            fullBlockToShift.getEpoch(),
             oldHeight,
             shiftedHeight);
 
         // Update BlockInfo with new height
-        BlockInfo shiftedInfo = blockToShift.getInfo().toBuilder()
+        BlockInfo shiftedInfo = fullBlockToShift.getInfo().toBuilder()
             .height(shiftedHeight)
             .build();
 
-        Block shiftedBlock = blockToShift.toBuilder()
+        Block shiftedBlock = fullBlockToShift.toBuilder()
             .info(shiftedInfo)
             .build();
 
         // Delete old height mapping first
         dagStore.deleteHeightMapping(oldHeight);
 
-        // Save with new height
+        // Save with new height (preserving original header/links)
         dagStore.saveBlockInfo(shiftedInfo);
         dagStore.saveBlock(shiftedBlock);
       }
 
-      log.debug("Height insertion complete: shifted {} blocks, new block at height {}",
-          mainBlocks.size() - insertPosition, newHeight);
+      log.info("Height shifting complete: shifted {} blocks, new block at height {}, new chain length {}",
+          mainBlocks.size() - insertPosition, newHeight, mainBlockCount + 1);
+
+      // BUG-HEIGHT-002 fix: Return both block height AND actual chain length
+      // When shifting occurs, chain length = mainBlockCount + 1
+      return new HeightCalculationResult(newHeight, mainBlockCount + 1);
     } else {
       // Appending at the end - normal case
-      log.debug("Appending block at height {} (epoch order correct)", newHeight);
-    }
+      log.debug("No shifting needed, appending at height {}",
+          newHeight);
 
-    return newHeight;
+      // No shifting: new chain length = newHeight (since we're appending)
+      return new HeightCalculationResult(newHeight, newHeight);
+    }
   }
 
   /**
@@ -844,6 +924,7 @@ public class BlockImporter {
     private final boolean success;
     private final long epoch;
     private final long height;
+    private final long chainLength;  // BUG-HEIGHT-002 fix: actual chain length for mainBlockCount update
     private final UInt256 cumulativeDifficulty;
     private final boolean isBestChain;
     private final boolean isEpochWinner;
@@ -855,6 +936,7 @@ public class BlockImporter {
         boolean success,
         long epoch,
         long height,
+        long chainLength,
         UInt256 cumulativeDifficulty,
         boolean isBestChain,
         boolean isEpochWinner,
@@ -864,6 +946,7 @@ public class BlockImporter {
       this.success = success;
       this.epoch = epoch;
       this.height = height;
+      this.chainLength = chainLength;
       this.cumulativeDifficulty = cumulativeDifficulty;
       this.isBestChain = isBestChain;
       this.isEpochWinner = isEpochWinner;
@@ -875,21 +958,22 @@ public class BlockImporter {
     public static ImportResult success(
         long epoch,
         long height,
+        long chainLength,
         UInt256 cumulativeDifficulty,
         boolean isBestChain,
         boolean isEpochWinner) {
-      return new ImportResult(true, epoch, height, cumulativeDifficulty,
+      return new ImportResult(true, epoch, height, chainLength, cumulativeDifficulty,
           isBestChain, isEpochWinner, null, null, null);
     }
 
     public static ImportResult error(String errorMessage) {
       DagImportResult failure = DagImportResult.error(new Exception(errorMessage), errorMessage);
-      return new ImportResult(false, 0, 0, UInt256.ZERO, false, false, errorMessage, failure, null);
+      return new ImportResult(false, 0, 0, 0, UInt256.ZERO, false, false, errorMessage, failure, null);
     }
 
     public static ImportResult fromDagImportResult(DagImportResult dagResult, List<Bytes32> missingParents) {
       String message = dagResult != null ? dagResult.getErrorMessage() : "Import failed";
-      return new ImportResult(false, 0, 0, UInt256.ZERO, false, false, message, dagResult, missingParents);
+      return new ImportResult(false, 0, 0, 0, UInt256.ZERO, false, false, message, dagResult, missingParents);
     }
   }
 
@@ -899,6 +983,7 @@ public class BlockImporter {
   @Getter
   private static class EpochCompetitionResult {
     private final long height;
+    private final long chainLength;  // BUG-HEIGHT-002 fix: actual chain length after operation
     private final boolean winner;
     private final boolean epochWinner;
     private final Block demotedBlock;         // Single block (for backward compatibility)
@@ -911,16 +996,16 @@ public class BlockImporter {
     /**
      * Constructor for single block demotion (backward compatible)
      */
-    public EpochCompetitionResult(long height, boolean winner, boolean epochWinner, Block demotedBlock) {
-      this(height, winner, epochWinner, demotedBlock,
+    public EpochCompetitionResult(long height, long chainLength, boolean winner, boolean epochWinner, Block demotedBlock) {
+      this(height, chainLength, winner, epochWinner, demotedBlock,
            demotedBlock != null ? Collections.singletonList(demotedBlock) : Collections.emptyList());
     }
 
     /**
      * Constructor for multiple blocks demotion (BUG-CONSENSUS-007 fix)
      */
-    public EpochCompetitionResult(long height, boolean winner, boolean epochWinner, List<Block> demotedBlocks) {
-      this(height, winner, epochWinner,
+    public EpochCompetitionResult(long height, long chainLength, boolean winner, boolean epochWinner, List<Block> demotedBlocks) {
+      this(height, chainLength, winner, epochWinner,
            demotedBlocks != null && !demotedBlocks.isEmpty() ? demotedBlocks.getFirst() : null,
            demotedBlocks != null ? demotedBlocks : Collections.emptyList());
     }
@@ -928,9 +1013,10 @@ public class BlockImporter {
     /**
      * Private constructor with all fields
      */
-    private EpochCompetitionResult(long height, boolean winner, boolean epochWinner,
+    private EpochCompetitionResult(long height, long chainLength, boolean winner, boolean epochWinner,
                                     Block demotedBlock, List<Block> demotedBlocks) {
       this.height = height;
+      this.chainLength = chainLength;
       this.winner = winner;
       this.epochWinner = epochWinner;
       this.demotedBlock = demotedBlock;

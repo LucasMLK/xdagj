@@ -244,7 +244,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
       }
 
       // 1. Check if we already have this block
-      if (dagChain.getBlockByHash(hash, false) != null) { // Use getBlockByHash(..., false) instead of hasBlock
+      if (dagChain.getBlockByHash(hash) != null) {
         log.trace("Ignoring NEW_BLOCK_HASH {} from {}: already have",
             hash.toHexString().substring(0, 16), channel.getRemoteAddress());
         return;
@@ -278,7 +278,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
       List<Block> foundBlocks = new ArrayList<>();
 
       for (Bytes32 hash : request.getHashes()) {
-        Block block = dagChain.getBlockByHash(hash, true);
+        Block block = dagChain.getBlockByHash(hash);
         if (block != null) {
           foundBlocks.add(block);
         } else {
@@ -497,7 +497,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
 
         for (Bytes32 peerHash : peerHashes) {
           // Check if we don't have this block
-          if (dagChain.getBlockByHash(peerHash, false) == null) {
+          if (dagChain.getBlockByHash(peerHash) == null) {
             hashesToFetch.add(peerHash);
             continue;
           }
@@ -515,7 +515,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
                 localWinnerHash.toHexString().substring(0, 18));
 
             // Try to re-import the block to trigger epoch competition
-            Block betterBlock = dagChain.getBlockByHash(peerHash, true);
+            Block betterBlock = dagChain.getBlockByHash(peerHash);
             if (betterBlock != null) {
               // Block exists locally but may not be main block
               // Re-import to trigger epoch competition

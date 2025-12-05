@@ -337,12 +337,11 @@ public class DagBlockProcessor {
   /**
    * Get block by hash
    *
-   * @param hash      block hash
-   * @param withLinks whether to include links
+   * @param hash block hash
    * @return block or null if not found
    */
-  public Block getBlock(Bytes32 hash, boolean withLinks) {
-    return dagStore.getBlockByHash(hash, withLinks);
+  public Block getBlock(Bytes32 hash) {
+    return dagStore.getBlockByHash(hash);
   }
 
   /**

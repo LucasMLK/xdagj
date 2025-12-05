@@ -279,7 +279,7 @@ public class DagStoreImpl implements DagStore {
   }
 
   @Override
-  public Block getBlockByHash(Bytes32 hash, boolean isRaw) {
+  public Block getBlockByHash(Bytes32 hash) {
     if (hash == null) {
       return null;
     }
@@ -290,64 +290,34 @@ public class DagStoreImpl implements DagStore {
       return cached;
     }
 
-    // L2 + Disk read
+    // L2 + Disk read - always load full block
     try {
-      if (isRaw) {
-        // Load full block data
-        byte[] blockKey = buildBlockKey(hash);
-        byte[] blockData = db.get(readOptions, blockKey);
+      byte[] blockKey = buildBlockKey(hash);
+      byte[] blockData = db.get(readOptions, blockKey);
 
-        // BUG-SYNC-002 debug: Log raw lookup
-        log.debug("getBlockByHash(isRaw=true): hash={}, blockData={}",
-            hash.toHexString().substring(0, 18),
-            blockData != null ? blockData.length + " bytes" : "NULL");
-
-        if (blockData == null) {
-          byte[] pendingKey = buildMissingBlockKey(hash);
-          blockData = db.get(readOptions, pendingKey);
-          if (blockData != null) {
-            log.debug("getBlockByHash: found in pending store");
-          }
-        }
-        if (blockData == null) {
-          return null;
-        }
-
-        Block block = deserializeBlock(blockData);
-
-        // Also load BlockInfo
-        BlockInfo info = getBlockInfo(hash);
-        if (info != null) {
-          block = block.toBuilder().info(info).build();
-        }
-
-        // Update cache
-        cache.putBlock(hash, block);
-        return block;
-
-      } else {
-        // Load BlockInfo only
-        BlockInfo info = getBlockInfo(hash);
-        if (info == null) {
-          return null;
-        }
-
-        // Create lightweight Block with info only
-        // Note: Block doesn't have hash in builder, only in built instance
-        // BUGFIX: Use 20-byte zero address for coinbase (not 32-byte Bytes32.ZERO)
-        Block block = Block.builder()
-            .header(BlockHeader.builder()
-                .epoch(info.getEpoch())
-                .difficulty(info.getDifficulty())
-                .nonce(Bytes32.ZERO)
-                .coinbase(Bytes.wrap(new byte[20]))  // 20-byte zero address
-                .build())
-            .links(new ArrayList<>())
-            .info(info)
-            .build();
-
-        return block;
+      if (blockData == null) {
+        // Check pending store
+        byte[] pendingKey = buildMissingBlockKey(hash);
+        blockData = db.get(readOptions, pendingKey);
       }
+      if (blockData == null) {
+        return null;
+      }
+
+      Block block = deserializeBlock(blockData);
+      if (block == null) {
+        return null;
+      }
+
+      // Also load BlockInfo
+      BlockInfo info = getBlockInfo(hash);
+      if (info != null) {
+        block = block.toBuilder().info(info).build();
+      }
+
+      // Update cache
+      cache.putBlock(hash, block);
+      return block;
 
     } catch (RocksDBException e) {
       log.error("Failed to get block: {}", hash.toHexString(), e);
@@ -435,7 +405,7 @@ public class DagStoreImpl implements DagStore {
   // ==================== Main Chain Queries ====================
 
   @Override
-  public Block getMainBlockByHeight(long height, boolean isRaw) {
+  public Block getMainBlockByHeight(long height) {
     if (height <= 0) {
       return null;
     }
@@ -443,7 +413,7 @@ public class DagStoreImpl implements DagStore {
     // L1 Cache check for height-to-hash mapping
     Bytes32 hash = cache.getHashByHeight(height);
     if (hash != null) {
-      return getBlockByHash(hash, isRaw);
+      return getBlockByHash(hash);
     }
 
     // L2 + Disk read
@@ -459,7 +429,7 @@ public class DagStoreImpl implements DagStore {
       // Update cache
       cache.putHashByHeight(height, hash);
 
-      return getBlockByHash(hash, isRaw);
+      return getBlockByHash(hash);
 
     } catch (RocksDBException e) {
       log.error("Failed to get main block at height {}", height, e);
@@ -480,7 +450,7 @@ public class DagStoreImpl implements DagStore {
     long start = Math.max(1, length - count + 1);
 
     for (long pos = length; pos >= start; pos--) {
-      Block block = getMainBlockByHeight(pos, false);
+      Block block = getMainBlockByHeight(pos);
       if (block != null) {
         blocks.add(block);
       }
@@ -490,7 +460,7 @@ public class DagStoreImpl implements DagStore {
   }
 
   @Override
-  public List<Block> getMainBlocksByHeightRange(long fromHeight, long toHeight, boolean isRaw) {
+  public List<Block> getMainBlocksByHeightRange(long fromHeight, long toHeight) {
     List<Block> blocks = new ArrayList<>();
 
     // Validation
@@ -506,7 +476,7 @@ public class DagStoreImpl implements DagStore {
       toHeight = fromHeight + 9999;
     }
 
-    log.debug("Fetching main blocks: height [{}, {}], raw={}", fromHeight, toHeight, isRaw);
+    log.debug("Fetching main blocks: height [{}, {}]", fromHeight, toHeight);
 
     try {
       //  Batch load height-to-hash mappings
@@ -548,30 +518,17 @@ public class DagStoreImpl implements DagStore {
         }
       }
 
-      //  Batch load blocks
-      if (isRaw) {
-        // Load full block data
-        for (Bytes32 hash : hashes) {
-          if (hash != null) {
-            Block block = getBlockByHash(hash, true);
-            blocks.add(block);
-          } else {
-            blocks.add(null);  // Missing block
-          }
-        }
-      } else {
-        // Load BlockInfo only (faster)
-        for (Bytes32 hash : hashes) {
-          if (hash != null) {
-            Block block = getBlockByHash(hash, false);
-            blocks.add(block);
-          } else {
-            blocks.add(null);  // Missing block
-          }
+      // Load full blocks
+      for (Bytes32 hash : hashes) {
+        if (hash != null) {
+          Block block = getBlockByHash(hash);
+          blocks.add(block);
+        } else {
+          blocks.add(null);  // Missing block
         }
       }
 
-      log.debug("Fetched {} main blocks (isRaw={})", blocks.size(), isRaw);
+      log.debug("Fetched {} main blocks", blocks.size());
       return blocks;
 
     } catch (Exception e) {
@@ -587,8 +544,8 @@ public class DagStoreImpl implements DagStore {
     }
 
     try {
-      // Load blocks with BlockInfo only (faster)
-      List<Block> blocks = getMainBlocksByHeightRange(fromHeight, toHeight, false);
+      // Load blocks
+      List<Block> blocks = getMainBlocksByHeightRange(fromHeight, toHeight);
 
       // Check all blocks exist
       for (Block block : blocks) {
@@ -677,7 +634,7 @@ public class DagStoreImpl implements DagStore {
           log.debug("getCandidateBlocksInEpoch: found hash in epoch index: {}",
               hash.toHexString().substring(0, 16));
 
-          Block block = getBlockByHash(hash, false);
+          Block block = getBlockByHash(hash);
           if (block != null) {
             candidates.add(block);
             log.debug("getCandidateBlocksInEpoch: added candidate {} (height={})",

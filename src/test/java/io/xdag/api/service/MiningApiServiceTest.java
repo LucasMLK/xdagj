@@ -407,7 +407,7 @@ public class MiningApiServiceTest {
         // For testing, we need to access the DagStore directly
         for (Link blockLink : blockLinks) {
             Bytes32 linkedHash = blockLink.getTargetHash();
-            Block linkedBlock = dagKernel.getDagChain().getBlockByHash(linkedHash, true);
+            Block linkedBlock = dagKernel.getDagChain().getBlockByHash(linkedHash);
 
             if (linkedBlock != null && linkedBlock.getInfo() != null) {
                 long originalHeight = linkedBlock.getInfo().getHeight();
@@ -476,7 +476,7 @@ public class MiningApiServiceTest {
         boolean hasValidParent = false;
         for (Link link : candidate.getLinks()) {
             if (link.isBlock()) {
-                Block linkedBlock = dagKernel.getDagChain().getBlockByHash(link.getTargetHash(), true);
+                Block linkedBlock = dagKernel.getDagChain().getBlockByHash(link.getTargetHash());
                 if (linkedBlock != null && linkedBlock.getInfo() != null) {
                     long height = linkedBlock.getInfo().getHeight();
                     if (height > 0) {

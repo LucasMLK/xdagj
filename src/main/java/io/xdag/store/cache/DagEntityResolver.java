@@ -136,7 +136,7 @@ public class DagEntityResolver {
 
     // Resolve block links
     for (Link link : blockLinks) {
-      Block refBlock = dagStore.getBlockByHash(link.getTargetHash(), false);
+      Block refBlock = dagStore.getBlockByHash(link.getTargetHash());
       if (refBlock != null) {
         resolvedBlocks.add(refBlock);
       } else {

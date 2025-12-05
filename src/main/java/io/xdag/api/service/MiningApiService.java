@@ -277,7 +277,7 @@ public class MiningApiService {
       // the candidate is now stale and should be rejected.
       for (io.xdag.core.Link link : block.getLinks()) {
         if (link.isBlock()) {
-          Block linkedBlock = dagChain.getBlockByHash(link.getTargetHash(), false);
+          Block linkedBlock = dagChain.getBlockByHash(link.getTargetHash());
           if (linkedBlock != null && linkedBlock.getInfo() != null) {
             long linkedHeight = linkedBlock.getInfo().getHeight();
             if (linkedHeight == 0) {

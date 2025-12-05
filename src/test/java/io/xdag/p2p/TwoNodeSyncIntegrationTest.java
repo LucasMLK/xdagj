@@ -312,7 +312,7 @@ public class TwoNodeSyncIntegrationTest {
                 List<Bytes32> epochHashes = sender.getBlockHashesByEpoch(epoch);
                 for (Bytes32 hash : epochHashes) {
                     // Check if receiver already has this block
-                    if (receiver.getBlockByHash(hash, false) == null) {
+                    if (receiver.getBlockByHash(hash) == null) {
                         hashesToFetch.add(hash);
                     }
                 }
@@ -325,7 +325,7 @@ public class TwoNodeSyncIntegrationTest {
             // Step B: Simulate GET_BLOCKS -> BLOCKS_REPLY
             List<Block> blocksToSync = new ArrayList<>();
             for (Bytes32 hash : hashesToFetch) {
-                Block block = sender.getBlockByHash(hash, true);
+                Block block = sender.getBlockByHash(hash);
                 if (block != null) {
                     blocksToSync.add(block);
                 }

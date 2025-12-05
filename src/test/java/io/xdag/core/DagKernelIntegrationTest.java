@@ -774,7 +774,7 @@ public class DagKernelIntegrationTest extends BaseIntegrationTest {
         dagKernel.start();
 
         // Verify genesis block is at height=1 (XDAG 1.0 protocol)
-        Block genesisAtHeight1 = dagKernel.getDagStore().getMainBlockByHeight(1, true);
+        Block genesisAtHeight1 = dagKernel.getDagStore().getMainBlockByHeight(1);
         assertNotNull("Genesis block should exist at height=1 (BUGFIX BUG-001)",
                 genesisAtHeight1);
 
@@ -783,7 +783,7 @@ public class DagKernelIntegrationTest extends BaseIntegrationTest {
                 1L, genesisAtHeight1.getInfo().getHeight());
 
         // Verify no main block at height=0 (orphan blocks use height=0 but aren't in main chain)
-        Block blockAtHeight0 = dagKernel.getDagStore().getMainBlockByHeight(0, true);
+        Block blockAtHeight0 = dagKernel.getDagStore().getMainBlockByHeight(0);
         assertNull("No main block should exist at height=0 (height=0 is for orphan blocks only)",
                 blockAtHeight0);
 
@@ -851,7 +851,7 @@ public class DagKernelIntegrationTest extends BaseIntegrationTest {
             assertNotNull("DagChain should be initialized after restart", restartedChain);
 
             // Verify genesis block is still at height=1
-            Block genesisBlock = restartedKernel.getDagStore().getMainBlockByHeight(1, true);
+            Block genesisBlock = restartedKernel.getDagStore().getMainBlockByHeight(1);
             assertNotNull("Genesis block should exist at height=1 after restart",
                     genesisBlock);
 
