@@ -51,7 +51,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 /**
- * Unit tests for OrphanManager asynchronous retry logic.
+ * Unit tests for PendingBlockManager asynchronous retry logic.
  *
  * <p>Tests cover:
  * <ul>
@@ -61,20 +61,20 @@ import org.junit.Test;
  *   <li>clearMissingDependency properly removes all artifacts</li>
  * </ul>
  */
-public class OrphanManagerTest {
+public class PendingBlockManagerTest {
 
   private DagKernel dagKernel;
   private DagStore dagStore;
-  private OrphanManager orphanManager;
+  private PendingBlockManager pendingBlockManager;
   private Path tempDir;
 
-  private Block orphanBlock;
+  private Block pendingBlock;
   private Block parentBlock;
   private Bytes32 missingParentHash;
 
   @Before
   public void setUp() throws IOException {
-    tempDir = Files.createTempDirectory("orphan-manager-test-");
+    tempDir = Files.createTempDirectory("pending-block-manager-test-");
 
     // Create genesis file
     createTestGenesisFile(tempDir);
@@ -100,7 +100,7 @@ public class OrphanManagerTest {
     dagKernel.start();
 
     dagStore = dagKernel.getDagStore();
-    orphanManager = new OrphanManager(dagKernel);
+    pendingBlockManager = new PendingBlockManager(dagKernel);
 
     // Create test blocks
     missingParentHash = Bytes32.random();
@@ -115,7 +115,7 @@ public class OrphanManagerTest {
         .links(List.of())
         .build();
 
-    orphanBlock = Block.builder()
+    pendingBlock = Block.builder()
         .header(BlockHeader.builder()
             .epoch(1_000_001L)
             .difficulty(UInt256.valueOf(1))
@@ -128,8 +128,8 @@ public class OrphanManagerTest {
 
   @After
   public void tearDown() {
-    if (orphanManager != null) {
-      orphanManager.stop();
+    if (pendingBlockManager != null) {
+      pendingBlockManager.stop();
     }
 
     if (dagKernel != null) {
@@ -176,20 +176,20 @@ public class OrphanManagerTest {
 
   @Test
   public void testRegisterMissingDependency() {
-    // Register orphan block with missing parent
-    orphanManager.registerMissingDependency(orphanBlock, List.of(missingParentHash));
+    // Register pending block with missing parent
+    pendingBlockManager.registerMissingDependency(pendingBlock, List.of(missingParentHash));
 
     // Verify block is persisted in MISSING_DEP_BLOCK
-    Block loaded = dagStore.getBlockByHash(orphanBlock.getHash());
+    Block loaded = dagStore.getBlockByHash(pendingBlock.getHash());
     assertNotNull("Block should be retrievable from MISSING_DEP_BLOCK", loaded);
-    assertEquals(orphanBlock.getHash(), loaded.getHash());
+    assertEquals(pendingBlock.getHash(), loaded.getHash());
 
     // Verify parent index is created
     List<Bytes32> waiting = dagStore.getBlocksWaitingForParent(missingParentHash);
-    assertTrue("Block should be waiting for parent", waiting.contains(orphanBlock.getHash()));
+    assertTrue("Block should be waiting for parent", waiting.contains(pendingBlock.getHash()));
 
     // Verify orphan reason is set
-    OrphanReason reason = dagStore.getOrphanReason(orphanBlock.getHash());
+    OrphanReason reason = dagStore.getOrphanReason(pendingBlock.getHash());
     assertEquals(OrphanReason.MISSING_DEPENDENCY, reason);
 
     // Verify count
@@ -198,21 +198,21 @@ public class OrphanManagerTest {
 
   @Test
   public void testOnBlockImportedDoesNotDeleteData() {
-    // Register orphan block
-    orphanManager.registerMissingDependency(orphanBlock, List.of(parentBlock.getHash()));
+    // Register pending block
+    pendingBlockManager.registerMissingDependency(pendingBlock, List.of(parentBlock.getHash()));
 
-    // Start orphan manager with a mock retry function that tracks calls
+    // Start pending block manager with a mock retry function that tracks calls
     AtomicInteger retryCount = new AtomicInteger(0);
     AtomicReference<Block> retriedBlock = new AtomicReference<>();
 
-    orphanManager.start(block -> {
+    pendingBlockManager.start(block -> {
       retryCount.incrementAndGet();
       retriedBlock.set(block);
       return DagImportResult.orphan(block.getEpoch(), UInt256.ZERO, false);
     });
 
     // Simulate parent block arrival
-    orphanManager.onBlockImported(parentBlock);
+    pendingBlockManager.onBlockImported(parentBlock);
 
     // Wait for async processing
     try {
@@ -222,38 +222,38 @@ public class OrphanManagerTest {
     }
 
     // Critical: Block data should still be accessible (NOT deleted prematurely)
-    Block stillExists = dagStore.getBlockByHash(orphanBlock.getHash());
+    Block stillExists = dagStore.getBlockByHash(pendingBlock.getHash());
     assertNotNull("Block data must NOT be deleted by onBlockImported", stillExists);
 
     // Verify retry was called with the block
     assertTrue("Retry should have been called", retryCount.get() > 0);
     assertNotNull("Retried block should not be null", retriedBlock.get());
-    assertEquals(orphanBlock.getHash(), retriedBlock.get().getHash());
+    assertEquals(pendingBlock.getHash(), retriedBlock.get().getHash());
   }
 
   @Test
   public void testClearMissingDependency() {
-    // Register orphan block
-    orphanManager.registerMissingDependency(orphanBlock, List.of(missingParentHash));
+    // Register pending block
+    pendingBlockManager.registerMissingDependency(pendingBlock, List.of(missingParentHash));
 
     // Verify it exists
     assertEquals(1, dagStore.getMissingDependencyBlockCount());
-    assertNotNull(dagStore.getBlockByHash(orphanBlock.getHash()));
+    assertNotNull(dagStore.getBlockByHash(pendingBlock.getHash()));
 
     // Clear the dependency
-    orphanManager.clearMissingDependency(orphanBlock.getHash());
+    pendingBlockManager.clearMissingDependency(pendingBlock.getHash());
 
     // Verify all artifacts are removed
     assertEquals(0, dagStore.getMissingDependencyBlockCount());
     assertTrue(dagStore.getBlocksWaitingForParent(missingParentHash).isEmpty());
-    assertTrue(dagStore.getMissingParents(orphanBlock.getHash()).isEmpty());
+    assertTrue(dagStore.getMissingParents(pendingBlock.getHash()).isEmpty());
   }
 
   @Test
   public void testMultipleDependentsForSameParent() {
-    // Create multiple orphan blocks waiting for the same parent
-    Block orphan1 = orphanBlock;
-    Block orphan2 = Block.builder()
+    // Create multiple pending blocks waiting for the same parent
+    Block pending1 = pendingBlock;
+    Block pending2 = Block.builder()
         .header(BlockHeader.builder()
             .epoch(1_000_002L)
             .difficulty(UInt256.valueOf(1))
@@ -262,7 +262,7 @@ public class OrphanManagerTest {
             .build())
         .links(List.of())
         .build();
-    Block orphan3 = Block.builder()
+    Block pending3 = Block.builder()
         .header(BlockHeader.builder()
             .epoch(1_000_003L)
             .difficulty(UInt256.valueOf(1))
@@ -274,24 +274,24 @@ public class OrphanManagerTest {
 
     Bytes32 sharedParent = Bytes32.random();
 
-    orphanManager.registerMissingDependency(orphan1, List.of(sharedParent));
-    orphanManager.registerMissingDependency(orphan2, List.of(sharedParent));
-    orphanManager.registerMissingDependency(orphan3, List.of(sharedParent));
+    pendingBlockManager.registerMissingDependency(pending1, List.of(sharedParent));
+    pendingBlockManager.registerMissingDependency(pending2, List.of(sharedParent));
+    pendingBlockManager.registerMissingDependency(pending3, List.of(sharedParent));
 
     assertEquals(3, dagStore.getMissingDependencyBlockCount());
 
     // All should be waiting for the same parent
     List<Bytes32> waiting = dagStore.getBlocksWaitingForParent(sharedParent);
     assertEquals(3, waiting.size());
-    assertTrue(waiting.contains(orphan1.getHash()));
-    assertTrue(waiting.contains(orphan2.getHash()));
-    assertTrue(waiting.contains(orphan3.getHash()));
+    assertTrue(waiting.contains(pending1.getHash()));
+    assertTrue(waiting.contains(pending2.getHash()));
+    assertTrue(waiting.contains(pending3.getHash()));
 
     // Track retries
     List<Bytes32> retriedHashes = new ArrayList<>();
     CountDownLatch latch = new CountDownLatch(3);
 
-    orphanManager.start(block -> {
+    pendingBlockManager.start(block -> {
       synchronized (retriedHashes) {
         retriedHashes.add(block.getHash());
       }
@@ -312,7 +312,7 @@ public class OrphanManagerTest {
 
     // Need to create a block with the exact hash
     // For this test, we'll use a different approach - trigger via the stored parent hash
-    orphanManager.onBlockImported(Block.builder()
+    pendingBlockManager.onBlockImported(Block.builder()
         .header(BlockHeader.builder()
             .epoch(999_999L)
             .difficulty(UInt256.valueOf(1))
@@ -341,11 +341,11 @@ public class OrphanManagerTest {
 
   @Test
   public void testStopClearsQueue() {
-    // Register some orphans
-    orphanManager.registerMissingDependency(orphanBlock, List.of(missingParentHash));
+    // Register some pending blocks
+    pendingBlockManager.registerMissingDependency(pendingBlock, List.of(missingParentHash));
 
     // Start with a slow retry function
-    orphanManager.start(block -> {
+    pendingBlockManager.start(block -> {
       try {
         Thread.sleep(1000);
       } catch (InterruptedException e) {
@@ -356,7 +356,7 @@ public class OrphanManagerTest {
 
     // Stop should complete without hanging
     long startTime = System.currentTimeMillis();
-    orphanManager.stop();
+    pendingBlockManager.stop();
     long elapsed = System.currentTimeMillis() - startTime;
 
     // Should stop within 6 seconds (5 second timeout + margin)
@@ -366,19 +366,19 @@ public class OrphanManagerTest {
   @Test
   public void testRetrySuccessTriggersCleanup() throws Exception {
     // This test verifies the full flow:
-    // 1. Register orphan
+    // 1. Register pending block
     // 2. Parent arrives -> enqueue retry
     // 3. Retry succeeds -> clearMissingDependency called
 
-    orphanManager.registerMissingDependency(orphanBlock, List.of(parentBlock.getHash()));
+    pendingBlockManager.registerMissingDependency(pendingBlock, List.of(parentBlock.getHash()));
     assertEquals(1, dagStore.getMissingDependencyBlockCount());
 
     CountDownLatch importLatch = new CountDownLatch(1);
 
     // Start with a retry function that simulates successful import
-    orphanManager.start(block -> {
+    pendingBlockManager.start(block -> {
       // Simulate successful import - caller (BlockImporter) would call clearMissingDependency
-      orphanManager.clearMissingDependency(block.getHash());
+      pendingBlockManager.clearMissingDependency(block.getHash());
       importLatch.countDown();
       return DagImportResult.mainBlock(block.getEpoch(), 1, UInt256.ONE, true);
     });
@@ -400,7 +400,7 @@ public class OrphanManagerTest {
             .build())
         .build();
 
-    orphanManager.onBlockImported(parent);
+    pendingBlockManager.onBlockImported(parent);
 
     // Wait for import
     assertTrue("Import should complete", importLatch.await(5, TimeUnit.SECONDS));

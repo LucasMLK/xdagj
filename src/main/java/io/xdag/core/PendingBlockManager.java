@@ -39,17 +39,39 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes32;
 
 /**
- * Asynchronous orphan tracker / retry executor.
+ * Manages blocks with missing dependencies (pending blocks).
  *
- * <p>Responsibilities:
+ * <p>This class handles blocks that cannot be immediately imported because
+ * their parent blocks have not yet been received. This is a network
+ * synchronization concern, NOT consensus-related.
+ *
+ * <p><strong>Note:</strong> "Pending block" refers to blocks waiting for
+ * missing parent dependencies. This is different from "orphan block" in
+ * XDAG consensus, which refers to blocks that lost the epoch competition
+ * (height=0).
+ *
+ * <h2>Responsibilities</h2>
  * <ul>
- *   <li>Persist missing-dependency blocks and their parent mappings</li>
- *   <li>Watch parent arrivals and enqueue dependents for retry</li>
- *   <li>Run a background worker to retry pending blocks without blocking import path</li>
+ *   <li>Persist blocks with missing dependencies and their parent mappings</li>
+ *   <li>Watch for parent arrivals and enqueue dependents for retry</li>
+ *   <li>Run a background worker to retry pending blocks without blocking import</li>
  * </ul>
+ *
+ * <h2>Workflow</h2>
+ * <pre>
+ * Block received → Check parents exist?
+ *     ↓ No
+ * registerMissingDependency() → Save to pending store → Enqueue for retry
+ *     ↓
+ * Parent arrives → onBlockImported() → Trigger dependent blocks retry
+ *     ↓
+ * Retry succeeds → clearMissingDependency()
+ * </pre>
+ *
+ * @since XDAGJ 5.1
  */
 @Slf4j
-public class OrphanManager {
+public class PendingBlockManager {
 
   private static final long RETRY_INTERVAL_MS = 2000L;
   private static final int MAX_BATCH_RETRY = 64;
@@ -63,10 +85,10 @@ public class OrphanManager {
   private volatile boolean running = false;
   private volatile Function<Block, DagImportResult> retryFunction;
 
-  public OrphanManager(DagKernel dagKernel) {
+  public PendingBlockManager(DagKernel dagKernel) {
     this.dagStore = dagKernel.getDagStore();
     this.retryExecutor = Executors.newSingleThreadScheduledExecutor(r -> {
-      Thread t = new Thread(r, "OrphanRetryExecutor");
+      Thread t = new Thread(r, "PendingBlockRetryExecutor");
       t.setDaemon(true);
       return t;
     });
@@ -74,6 +96,8 @@ public class OrphanManager {
 
   /**
    * Start asynchronous retry worker.
+   *
+   * @param retryFunction function to retry importing a pending block
    */
   public synchronized void start(Function<Block, DagImportResult> retryFunction) {
     if (running) {
@@ -88,6 +112,9 @@ public class OrphanManager {
     enqueueMissingDependencyBlocks(FALLBACK_BATCH);
   }
 
+  /**
+   * Stop the retry worker and clear queues.
+   */
   public synchronized void stop() {
     if (!running) {
       retryExecutor.shutdownNow();
@@ -111,7 +138,12 @@ public class OrphanManager {
   }
 
   /**
-   * Persist missing dependency information.
+   * Register a block that has missing parent dependencies.
+   *
+   * <p>The block will be persisted and enqueued for retry when parents arrive.
+   *
+   * @param block          the block with missing dependencies
+   * @param missingParents list of missing parent hashes
    */
   public void registerMissingDependency(Block block, List<Bytes32> missingParents) {
     List<Bytes32> parents = missingParents == null ? Collections.emptyList() : missingParents;
@@ -122,6 +154,8 @@ public class OrphanManager {
 
   /**
    * Clear pending state once block successfully imports.
+   *
+   * @param blockHash hash of the block that was successfully imported
    */
   public void clearMissingDependency(Bytes32 blockHash) {
     dagStore.deleteMissingDependencyBlock(blockHash);
@@ -129,7 +163,12 @@ public class OrphanManager {
   }
 
   /**
-   * Triggered when a parent block becomes part of the DAG.
+   * Triggered when a block is imported to the DAG.
+   *
+   * <p>Checks if any pending blocks were waiting for this block as a parent,
+   * and enqueues them for retry.
+   *
+   * @param block the newly imported block
    */
   public void onBlockImported(Block block) {
     if (!running) {
@@ -137,7 +176,7 @@ public class OrphanManager {
     }
     List<Bytes32> dependents = dagStore.getBlocksWaitingForParent(block.getHash());
     if (!dependents.isEmpty()) {
-      log.debug("Parent {} satisfied {} orphan(s)", formatHash(block.getHash()), dependents.size());
+      log.debug("Parent {} satisfied {} pending block(s)", formatHash(block.getHash()), dependents.size());
     }
     for (Bytes32 dependent : dependents) {
       enqueueRetry(dependent);
@@ -169,12 +208,12 @@ public class OrphanManager {
     try {
       Block pendingBlock = dagStore.getBlockByHash(hash);
       if (pendingBlock == null) {
-        log.debug("Missing dependency block {} no longer exists", formatHash(hash));
+        log.debug("Pending block {} no longer exists", formatHash(hash));
         return;
       }
       retryFunction.apply(pendingBlock);
     } catch (Exception e) {
-      log.error("Failed to retry orphan block {}: {}", formatHash(hash), e.getMessage());
+      log.error("Failed to retry pending block {}: {}", formatHash(hash), e.getMessage());
     }
   }
 

@@ -339,7 +339,7 @@ public interface DagStore extends XdagLifecycle {
    *   <li><strong>LOST_COMPETITION</strong>: Block lost epoch competition and will never become main</li>
    * </ul>
    *
-   * <p>This distinction allows OrphanManager to only retry MISSING_DEPENDENCY orphans,
+   * <p>This distinction allows PendingBlockManager to only retry MISSING_DEPENDENCY orphans,
    * avoiding wasteful retry of LOST_COMPETITION orphans.
    *
    * @param blockHash block hash

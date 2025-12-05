@@ -113,7 +113,7 @@ io.xdag
 ├── core
 │   ├── DagChainImpl      # Consensus engine (1.0b rules)
 │   ├── BlockImporter     # Block validation & import
-│   ├── OrphanManager     # Pending block retry logic
+│   ├── PendingBlockManager # Missing dependency retry logic
 │   └── DagAccountManager # Wallet state management
 ├── consensus
 │   ├── epoch             # Epoch-based consensus
@@ -137,10 +137,9 @@ io.xdag
 ### Storage Architecture
 
 All stores use RocksDB with column families:
-- **DagStore**: Blocks, block info, epoch indexes, height indexes
+- **DagStore**: Blocks, block info, epoch indexes, height indexes, pending blocks
 - **TransactionStore**: Transactions, block→tx indexes, address→tx indexes
 - **AccountStore**: Balances and nonces (separate RocksDB instance)
-- **OrphanBlockStore**: Tracks pending blocks with timestamps for retry scheduling
 
 **Caching**: Caffeine-based L1 cache in front of RocksDB for hot entries (`DagCache`)
 
@@ -231,16 +230,12 @@ if (isMainBlock && block.getTransactions() != null) {
 // Blocks without parents → pending (height=0)
 if (missingDependencies(block)) {
     dagStore.saveBlockWithHeight(block, 0);
-    orphanManager.addOrphan(block.getHash());
+    pendingBlockManager.registerMissingDependency(block, missingParents);
 }
 
 // Retry when parent arrives
-orphanManager.getPendingHashes().forEach(hash -> {
-    Block block = dagStore.getBlockByHash(hash);
-    if (canImportNow(block)) {
-        dagChain.tryToConnect(block);
-    }
-});
+pendingBlockManager.onBlockImported(parentBlock);
+// PendingBlockManager will automatically retry dependent blocks
 ```
 
 ### Epoch vs Height Usage
@@ -286,7 +281,7 @@ consensus.powMode = "test"
 **"Block import failed: missing dependencies"**
 - Expected behavior for out-of-order sync
 - Block saved as pending (height=0) and retried when parents arrive
-- Check `OrphanManager.getPendingBlockCount()`
+- Handled by `PendingBlockManager`
 
 **"Height gaps in main chain"**
 - Likely discontinuous epochs (node was offline)
@@ -295,7 +290,7 @@ consensus.powMode = "test"
 
 **"Transaction not executed"**
 - Only main blocks (epoch winners) execute transactions
-- Orphan blocks keep transactions but don't execute them
+- Blocks that lost epoch competition (height=0) keep transactions but don't execute them
 - Check block's `isMainBlock` flag
 
 **Test failures with "byte-buddy-agent.jar not found"**

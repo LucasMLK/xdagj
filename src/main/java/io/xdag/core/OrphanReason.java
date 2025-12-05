@@ -41,12 +41,12 @@ import lombok.Getter;
  * become the main block. The remaining 15 are orphans because they lost the competition, not because
  * they miss parents, so re-importing them is pointless.</p>
  *
- * <p><strong>BUG-ORPHAN-001</strong> fix: OrphanManager must only retry
+ * <p><strong>BUG-ORPHAN-001</strong> fix: PendingBlockManager must only retry
  * {@link OrphanReason#MISSING_DEPENDENCY} blocks and should never retry
  * {@link OrphanReason#LOST_COMPETITION} blocks.</p>
  *
  * @since XDAGJ 5.2.0
- * @see OrphanManager
+ * @see PendingBlockManager
  */
 @Getter
 public enum OrphanReason {

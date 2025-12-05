@@ -98,7 +98,7 @@ public class DagChainImpl implements DagChain {
   // Refactored components (P1 phase)
   private final BlockBuilder blockBuilder;
   private final DifficultyAdjuster difficultyAdjuster;
-  private final OrphanManager orphanManager;
+  private final PendingBlockManager pendingBlockManager;
 
   private volatile ChainStats chainStats;
   private final List<Listener> listeners = new ArrayList<>();
@@ -168,12 +168,12 @@ public class DagChainImpl implements DagChain {
         entityResolver,
         dagKernel.getConfig());
 
-    this.orphanManager = new OrphanManager(dagKernel);
+    this.pendingBlockManager = new PendingBlockManager(dagKernel);
 
     this.blockImporter = new BlockImporter(
         dagKernel,
         blockValidator,
-        orphanManager);
+        pendingBlockManager);
 
     // Initialize refactored components (P1 phase)
     this.blockBuilder = new BlockBuilder(dagKernel);
@@ -187,9 +187,9 @@ public class DagChainImpl implements DagChain {
     log.info("  - BlockImporter: initialized (P0 refactoring)");
     log.info("  - BlockBuilder: initialized (P1 refactoring)");
     log.info("  - DifficultyAdjuster: initialized (P1 refactoring)");
-    log.info("  - OrphanManager: initialized (P1 refactoring)");
+    log.info("  - PendingBlockManager: initialized (P1 refactoring)");
 
-    this.orphanManager.start(this::tryToConnect);
+    this.pendingBlockManager.start(this::tryToConnect);
   }
 
   // ==================== Block Import Operations ====================
@@ -241,14 +241,14 @@ public class DagChainImpl implements DagChain {
             block.getEpoch(),
             this::getCandidateBlocksInEpoch);
 
-        // Note: OrphanManager.cleanupOldOrphans() removed
+        // Note: PendingBlockManager.cleanupOldOrphans() removed
         // Reason: Each epoch limited to 16 blocks, storage is bounded (~134MB for 16384 epochs)
         // Deleting orphans risks breaking DAG references (see BUG-LINK-NOT-FOUND)
         // Trade-off: Prioritize correctness over storage efficiency
 
       }
 
-      orphanManager.onBlockImported(blockWithInfo);
+      pendingBlockManager.onBlockImported(blockWithInfo);
 
       log.info("Successfully imported block {}: height={}, difficulty={}",
           block.getHash().toHexString(),
@@ -283,7 +283,7 @@ public class DagChainImpl implements DagChain {
 
   @Override
   public void stop() {
-    orphanManager.stop();
+    pendingBlockManager.stop();
   }
 
   /**

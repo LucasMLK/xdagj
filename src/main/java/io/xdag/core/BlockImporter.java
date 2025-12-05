@@ -63,24 +63,24 @@ public class BlockImporter {
   private final DagStore dagStore;
   private final TransactionStore transactionStore;
   private final BlockValidator validator;
-  private final OrphanManager orphanManager;
+  private final PendingBlockManager pendingBlockManager;
 
   /**
    * Creates a BlockImporter with required dependencies
    *
-   * @param dagKernel       DAG kernel providing storage and services
-   * @param validator       block validation service
-   * @param orphanManager   orphan tracker/manager
+   * @param dagKernel           DAG kernel providing storage and services
+   * @param validator           block validation service
+   * @param pendingBlockManager manager for blocks with missing dependencies
    */
   public BlockImporter(
       DagKernel dagKernel,
       BlockValidator validator,
-      OrphanManager orphanManager) {
+      PendingBlockManager pendingBlockManager) {
     this.dagKernel = dagKernel;
     this.dagStore = dagKernel.getDagStore();
     this.transactionStore = dagKernel.getTransactionStore();
     this.validator = validator;
-    this.orphanManager = orphanManager;
+    this.pendingBlockManager = pendingBlockManager;
   }
 
   /**
@@ -132,10 +132,10 @@ public class BlockImporter {
       if (validationResult != null) {
         if (validationResult.getStatus() == DagImportResult.ImportStatus.MISSING_DEPENDENCY) {
           List<Bytes32> missingParents = extractMissingParents(validationResult);
-          orphanManager.registerMissingDependency(block, missingParents);
+          pendingBlockManager.registerMissingDependency(block, missingParents);
           return ImportResult.fromDagImportResult(validationResult, missingParents);
         }
-        orphanManager.clearMissingDependency(block.getHash());
+        pendingBlockManager.clearMissingDependency(block.getHash());
         return ImportResult.fromDagImportResult(validationResult, null);
       }
 
@@ -218,7 +218,7 @@ public class BlockImporter {
         }
       }
       // Block successfully stored in main DAG - remove any missing-dependency artifacts
-      orphanManager.clearMissingDependency(block.getHash());
+      pendingBlockManager.clearMissingDependency(block.getHash());
 
       // Step 6: Process transactions if main block
       if (isBestChain) {
@@ -245,7 +245,7 @@ public class BlockImporter {
           competition.isEpochWinner());
 
     } catch (Exception e) {
-      orphanManager.clearMissingDependency(block.getHash());
+      pendingBlockManager.clearMissingDependency(block.getHash());
       log.error("Error importing block {}: {}",
           formatHash(block.getHash()), e.getMessage(), e);
       return ImportResult.error("Exception during import: " + e.getMessage());
