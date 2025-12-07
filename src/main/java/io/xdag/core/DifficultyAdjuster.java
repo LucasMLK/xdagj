@@ -186,6 +186,17 @@ public class DifficultyAdjuster {
         .multiply(BigInteger.valueOf((long) (adjustmentFactor * 1000)))
         .divide(BigInteger.valueOf(1000));
 
+    // BUG-DIFFICULTY-001 fix: Cap target at UInt256.MAX_VALUE to prevent overflow
+    // This can happen when:
+    // 1. DEVNET mode starts with baseDifficultyTarget = MAX_VALUE
+    // 2. Too few blocks are produced, causing adjustmentFactor = 2.0
+    // 3. MAX_VALUE * 2 would overflow UInt256
+    BigInteger maxValue = UInt256.MAX_VALUE.toBigInteger();
+    if (newTargetBigInt.compareTo(maxValue) > 0) {
+      log.info("New target would exceed MAX_VALUE, capping at MAX_VALUE");
+      newTargetBigInt = maxValue;
+    }
+
     UInt256 newTarget = UInt256.valueOf(newTargetBigInt);
 
     log.info("Difficulty adjusted: old target={}, new target={}, factor={}",
