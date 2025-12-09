@@ -52,6 +52,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
@@ -67,6 +70,18 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
   private final DagChain dagChain;
 
   /**
+   * BUG-P2P-008 FIX: Dedicated thread pool for block import operations.
+   *
+   * <p>Block import (tryToConnect) is a synchronized method that can take significant time
+   * due to RocksDB writes and listener notifications. If executed on Netty EventLoop,
+   * it blocks all P2P message processing, causing ReadTimeout and connection drops.
+   *
+   * <p>Solution: Execute block imports asynchronously in a dedicated thread pool.
+   * This ensures Netty EventLoop remains responsive for PING/PONG and other messages.
+   */
+  private final ExecutorService blockImportExecutor;
+
+  /**
    * BUG-SYNC-006: Track recently requested missing dependencies to avoid duplicate requests.
    * Key: block hash, Value: request timestamp (for expiration)
    */
@@ -80,6 +95,15 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
   public XdagP2pEventHandler(DagKernel dagKernel) {
     this.dagKernel = dagKernel;
     this.dagChain = dagKernel.getDagChain();
+
+    // BUG-P2P-008 FIX: Create dedicated thread pool for block imports
+    // Using single thread to ensure sequential block processing and avoid race conditions
+    this.blockImportExecutor = Executors.newSingleThreadExecutor(r -> {
+      Thread t = new Thread(r, "BlockImporter");
+      t.setDaemon(true);
+      return t;
+    });
+    log.info("BUG-P2P-008: Created dedicated BlockImporter thread pool");
 
     // Register as NewBlockListener for real-time broadcasting
     this.dagChain.registerNewBlockListener(this);
@@ -102,14 +126,35 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
     this.messageTypes.add(XdagMessageCode.STATUS_REPLY.toByte());
   }
 
+  /**
+   * Shutdown the block import executor gracefully.
+   * Should be called when the P2P service is stopping.
+   */
+  public void shutdown() {
+    log.info("Shutting down BlockImporter executor...");
+    blockImportExecutor.shutdown();
+    try {
+      if (!blockImportExecutor.awaitTermination(10, TimeUnit.SECONDS)) {
+        blockImportExecutor.shutdownNow();
+        log.warn("BlockImporter executor did not terminate gracefully, forced shutdown");
+      }
+    } catch (InterruptedException e) {
+      blockImportExecutor.shutdownNow();
+      Thread.currentThread().interrupt();
+    }
+    log.info("BlockImporter executor shutdown complete");
+  }
+
   @Override
   public void onNewBlock(Block block) {
     // Real-time broadcasting of new blocks (Inv)
     // This is triggered when a block is mined or received and validated
-    
+
     try {
       P2pService p2pService = dagKernel.getP2pService();
       if (p2pService == null) {
+        log.warn("onNewBlock: P2pService is null, cannot broadcast block {}",
+            block.getHash().toHexString().substring(0, 16));
         return;
       }
 
@@ -121,6 +166,12 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
       // Broadcast to all connected peers
       // Use a custom broadcast method that doesn't exclude anyone (since this is a new event)
       List<Channel> channels = getActiveChannels(p2pService);
+      if (channels.isEmpty()) {
+        log.warn("onNewBlock: No connected peers, cannot broadcast block {}",
+            block.getHash().toHexString().substring(0, 16));
+        return;
+      }
+
       for (Channel channel : channels) {
         try {
           channel.send(msg);
@@ -129,9 +180,9 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
               block.getHash().toHexString().substring(0, 16), channel.getRemoteAddress(), e.getMessage());
         }
       }
-      log.debug("Broadcast NEW_BLOCK_HASH {} to {} peers",
-          block.getHash().toHexString().substring(0, 16), channels.size());
-          
+      log.info("Broadcast NEW_BLOCK_HASH {} (epoch {}) to {} peers",
+          block.getHash().toHexString().substring(0, 16), block.getEpoch(), channels.size());
+
     } catch (Exception e) {
       log.error("Error broadcasting new block hash: {}", e.getMessage(), e);
     }
@@ -233,25 +284,28 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
       NewBlockHashMessage msg = new NewBlockHashMessage(body.toArray());
       Bytes32 hash = msg.getHash();
 
+      log.info("Received NEW_BLOCK_HASH {} (epoch {}) from {}",
+          hash.toHexString().substring(0, 16), msg.getEpoch(), channel.getRemoteAddress());
+
       // BUG-SYNC-004: Check if node is synchronized before processing real-time broadcasts
       // During initial sync, blocks should come through ordered epoch sync to ensure
       // correct height assignment. Ignore NEW_BLOCK_HASH to prevent height inconsistency.
       SyncManager syncManager = dagKernel.getSyncManager();
       if (syncManager != null && !syncManager.isSynchronized()) {
-        log.debug("Ignoring NEW_BLOCK_HASH {} during sync (will fetch via epoch sync)",
+        log.info("Ignoring NEW_BLOCK_HASH {} during sync (will fetch via epoch sync)",
             hash.toHexString().substring(0, 16));
         return;
       }
 
       // 1. Check if we already have this block
       if (dagChain.getBlockByHash(hash) != null) {
-        log.trace("Ignoring NEW_BLOCK_HASH {} from {}: already have",
+        log.debug("Ignoring NEW_BLOCK_HASH {} from {}: already have",
             hash.toHexString().substring(0, 16), channel.getRemoteAddress());
         return;
       }
 
       // 2. Request the block data
-      log.debug("Received NEW_BLOCK_HASH {} from {}, requesting data...",
+      log.info("Requesting block {} from {}...",
           hash.toHexString().substring(0, 16), channel.getRemoteAddress());
 
       GetBlocksMessage request = new GetBlocksMessage(hash);
@@ -307,56 +361,79 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
    *
    * <p>BUG-SYNC-006: When import fails due to missing dependency, actively request
    * the missing block from the peer instead of just waiting passively.
+   *
+   * <p>BUG-P2P-008 FIX: Block imports are executed asynchronously in a dedicated thread pool
+   * to prevent blocking the Netty EventLoop. This ensures P2P communication remains responsive
+   * even when block import takes significant time (RocksDB writes, listener notifications).
    */
   private void handleBlocksReply(Channel channel, Bytes body) {
     try {
       BlocksReplyMessage reply = new BlocksReplyMessage(body.toArray());
       List<Block> blocks = reply.getBlocks();
 
-      log.debug("Received {} blocks from {}", blocks.size(), channel.getRemoteAddress());
+      log.debug("Received {} blocks from {}, queuing for async import", blocks.size(), channel.getRemoteAddress());
 
-      for (Block block : blocks) {
-        long blockEpoch = block.getEpoch();
-        DagImportResult importResult;
-
-        // Check if we have epoch consensus manager
-        EpochConsensusManager epochConsensusManager = dagKernel.getEpochConsensusManager();
-        if (epochConsensusManager != null && epochConsensusManager.isRunning()) {
-          long currentEpoch = epochConsensusManager.getCurrentEpoch();
-
-          // Only submit current epoch blocks to solution pool
-          if (blockEpoch == currentEpoch) {
-            // Real-time block: participate in current epoch competition
-            String peerId = "P2P_" + channel.getRemoteAddress();
-            SubmitResult result = epochConsensusManager.submitSolution(block, peerId);
-
-            if (result.isAccepted()) {
-              log.debug("P2P block submitted to epoch {} solution pool", blockEpoch);
-              continue; // No import result to check
-            } else {
-              // Submission failed (e.g., epoch ended), fallback to direct import
-              importResult = dagChain.tryToConnect(block);
-            }
-          } else {
-            // Historical or delayed block: direct import
-            importResult = dagChain.tryToConnect(block);
+      // BUG-P2P-008 FIX: Execute block imports asynchronously to avoid blocking Netty EventLoop
+      // This prevents ReadTimeout disconnections caused by long-running tryToConnect operations
+      blockImportExecutor.submit(() -> {
+        for (Block block : blocks) {
+          try {
+            importBlockAsync(channel, block);
+          } catch (Exception e) {
+            log.error("Error importing block {} from {}: {}",
+                block.getHash().toHexString().substring(0, 16),
+                channel.getRemoteAddress(),
+                e.getMessage(), e);
           }
-        } else {
-          // No epoch consensus manager: direct import (legacy behavior)
-          importResult = dagChain.tryToConnect(block);
         }
-
-        log.debug("Imported block {}: {}",
-            block.getHash().toHexString().substring(0, 16), importResult.getStatus());
-
-        // BUG-SYNC-006: Handle missing dependency by actively requesting it
-        if (importResult.getStatus() == DagImportResult.ImportStatus.MISSING_DEPENDENCY) {
-          handleMissingDependency(channel, block, importResult);
-        }
-      }
+      });
 
     } catch (Exception e) {
       log.error("Error handling BLOCKS_REPLY from {}: {}", channel.getRemoteAddress(), e.getMessage(), e);
+    }
+  }
+
+  /**
+   * Import a single block asynchronously.
+   * This method runs in the dedicated BlockImporter thread, not on Netty EventLoop.
+   */
+  private void importBlockAsync(Channel channel, Block block) {
+    long blockEpoch = block.getEpoch();
+    DagImportResult importResult;
+
+    // Check if we have epoch consensus manager
+    EpochConsensusManager epochConsensusManager = dagKernel.getEpochConsensusManager();
+    if (epochConsensusManager != null && epochConsensusManager.isRunning()) {
+      long currentEpoch = epochConsensusManager.getCurrentEpoch();
+
+      // Only submit current epoch blocks to solution pool
+      if (blockEpoch == currentEpoch) {
+        // Real-time block: participate in current epoch competition
+        String peerId = "P2P_" + channel.getRemoteAddress();
+        SubmitResult result = epochConsensusManager.submitSolution(block, peerId);
+
+        if (result.isAccepted()) {
+          log.debug("P2P block submitted to epoch {} solution pool", blockEpoch);
+          return; // No import result to check
+        } else {
+          // Submission failed (e.g., epoch ended), fallback to direct import
+          importResult = dagChain.tryToConnect(block);
+        }
+      } else {
+        // Historical or delayed block: direct import
+        importResult = dagChain.tryToConnect(block);
+      }
+    } else {
+      // No epoch consensus manager: direct import (legacy behavior)
+      importResult = dagChain.tryToConnect(block);
+    }
+
+    log.debug("Imported block {}: {}",
+        block.getHash().toHexString().substring(0, 16), importResult.getStatus());
+
+    // BUG-SYNC-006: Handle missing dependency by actively requesting it
+    if (importResult.getStatus() == DagImportResult.ImportStatus.MISSING_DEPENDENCY) {
+      handleMissingDependency(channel, block, importResult);
     }
   }
 
@@ -519,7 +596,17 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
             if (betterBlock != null) {
               // Block exists locally but may not be main block
               // Re-import to trigger epoch competition
-              dagChain.tryToConnect(betterBlock);
+              // BUG-P2P-008 FIX: Execute asynchronously to avoid blocking Netty EventLoop
+              Block blockToReimport = betterBlock;
+              blockImportExecutor.submit(() -> {
+                try {
+                  dagChain.tryToConnect(blockToReimport);
+                  log.debug("BUG-SYNC-003: Re-imported block {} for epoch competition",
+                      blockToReimport.getHash().toHexString().substring(0, 16));
+                } catch (Exception e) {
+                  log.error("Error re-importing block for epoch competition: {}", e.getMessage());
+                }
+              });
             } else {
               // Don't have the block yet, request it
               hashesToFetch.add(peerHash);

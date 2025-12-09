@@ -100,6 +100,38 @@ while read -r height; do
 done < "$TMPDIR/heights.txt"
 wait
 
+# Collect orphan hashes and fetch their details
+python3 << PYTHON_ORPHAN
+import json, os
+tmpdir = "$TMPDIR"
+orphan_hashes = set()
+
+# Scan all epoch files for orphan blocks
+for filename in os.listdir(tmpdir):
+    if filename.startswith('n1_epoch_') or filename.startswith('n2_epoch_'):
+        try:
+            with open(f"{tmpdir}/{filename}") as f:
+                data = json.load(f)
+                for blk in data.get('blocks', []):
+                    if blk.get('state') == 'Orphan' and blk.get('hash'):
+                        orphan_hashes.add(blk['hash'])
+        except: pass
+
+with open(f"{tmpdir}/orphan_hashes.txt", 'w') as f:
+    for h in orphan_hashes:
+        f.write(f"{h}\n")
+PYTHON_ORPHAN
+
+echo "Fetching orphan block details..."
+count=0
+while read -r hash; do
+    [ -z "$hash" ] && continue
+    curl -s "$NODE1_API/blocks/hash/$hash" > "$TMPDIR/n1_orphan_$hash.json" &
+    curl -s "$NODE2_API/blocks/hash/$hash" > "$TMPDIR/n2_orphan_$hash.json" &
+    count=$((count + 1)); [ $((count % batch)) -eq 0 ] && wait
+done < "$TMPDIR/orphan_hashes.txt"
+wait
+
 # Display dual-column comparison
 python3 << 'PYTHON_SCRIPT'
 import json, os
@@ -148,8 +180,8 @@ def format_block_line(block, detail, is_main=True):
     else:
         lines.append(f"{GR}[Orphan]{NC} {hash_short}  cb:{cb_short}")
 
-    # Body: Links (only for main blocks with detail)
-    if is_main and detail:
+    # Body: Links (for both main and orphan blocks with detail)
+    if detail:
         links = detail.get('links', [])
         transactions = detail.get('transactions', [])
 
@@ -298,13 +330,24 @@ for ed in epochs_data:
         o1, o2 = nodes['n1'], nodes['n2']
         o_match = (o1 is not None) == (o2 is not None)
 
-        left_orph = format_block_line(o1, None, False) if o1 else [f"  {GR}(missing){NC}"]
-        right_orph = format_block_line(o2, None, False) if o2 else [f"  {GR}(missing){NC}"]
+        # Load orphan block details
+        od1 = load_json(f"{tmpdir}/n1_orphan_{oh}.json") if o1 else None
+        od2 = load_json(f"{tmpdir}/n2_orphan_{oh}.json") if o2 else None
 
-        for ll, rl in zip(left_orph, right_orph):
+        left_orph = format_block_line(o1, od1, False) if o1 else [f"  {GR}(missing){NC}"]
+        right_orph = format_block_line(o2, od2, False) if o2 else [f"  {GR}(missing){NC}"]
+
+        # Pad to same length
+        max_orph_lines = max(len(left_orph), len(right_orph))
+        while len(left_orph) < max_orph_lines: left_orph.append("")
+        while len(right_orph) < max_orph_lines: right_orph.append("")
+
+        for i, (ll, rl) in enumerate(zip(left_orph, right_orph)):
             o_sym = f"{G}✓{NC}" if o_match else f"{R}✗{NC}"
+            # Only show match symbol on first line
+            suffix = f" {o_sym}" if i == 0 else ""
             left = pad_line(f" {ll}", COL_WIDTH)
-            right = pad_line(f" {rl} {o_sym}", COL_WIDTH)
+            right = pad_line(f" {rl}{suffix}", COL_WIDTH)
             print(f"{BD}║{NC}{left}{BD}║{NC}{right}{BD}║{NC}")
 
     print(f"{BD}╠{'─'*COL_WIDTH}╬{'─'*COL_WIDTH}╣{NC}")

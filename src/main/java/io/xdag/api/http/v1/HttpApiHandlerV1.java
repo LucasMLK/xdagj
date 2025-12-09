@@ -614,7 +614,20 @@ public class HttpApiHandlerV1 extends SimpleChannelInboundHandler<FullHttpReques
     }
 
     private PeerCountResponse handleGetPeerCount() {
-        return PeerCountResponse.builder().peerCount("0x0").build();
+        int peerCount = 0;
+        try {
+            if (dagKernel.getP2pService() != null
+                    && dagKernel.getP2pService().getChannelManager() != null) {
+                // Use unique connected channels to avoid counting duplicate connections
+                peerCount = dagKernel.getP2pService().getChannelManager()
+                        .getUniqueConnectedChannels().size();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get peer count: {}", e.getMessage());
+        }
+        return PeerCountResponse.builder()
+                .peerCount("0x" + Integer.toHexString(peerCount))
+                .build();
     }
 
     private ProtocolVersionResponse handleGetProtocolVersion() {

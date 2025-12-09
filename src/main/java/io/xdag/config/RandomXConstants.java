@@ -46,15 +46,20 @@ public class RandomXConstants {
   public static final long RANDOMX_FORK_HEIGHT = 0;
 
   /**
-   * Number of blocks in one epoch for testnet/devnet Set to 2 for fast devnet testing (seed updates
-   * every 2 blocks)
+   * Number of blocks in one epoch for testnet/devnet.
+   *
+   * <p>Set to 64 blocks (~1 hour at 64s/block) for reasonable devnet testing.
+   * Previous value of 2 caused severe performance issues due to frequent
+   * RandomX cache rebuilds (~700-800ms each).
    */
-  public static long SEEDHASH_EPOCH_TESTNET_BLOCKS = 2;
+  public static long SEEDHASH_EPOCH_TESTNET_BLOCKS = 64;
 
   /**
-   * Lag in blocks for seed hash calculation in testnet/devnet Set to 1 for devnet (minimal lag)
+   * Lag in blocks for seed hash calculation in testnet/devnet.
+   *
+   * <p>Set to 8 blocks for reasonable lag while still allowing fast testing.
    */
-  public static long SEEDHASH_EPOCH_TESTNET_LAG = 1;
+  public static long SEEDHASH_EPOCH_TESTNET_LAG = 8;
 
   /**
    * Block height at which RandomX activates on testnet/devnet Set to 0 because xdagj only supports

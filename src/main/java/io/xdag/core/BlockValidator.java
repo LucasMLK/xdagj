@@ -64,7 +64,6 @@ public class BlockValidator {
   private static final long ORPHAN_RETENTION_WINDOW = 16384; // 12 days in epochs
   private static final long SYNC_MAX_REFERENCE_DEPTH = 1000; // Max reference depth for sync mode
   private static final int MAX_BLOCKS_PER_EPOCH = 16; // Limit orphan growth
-  private static final int MAX_TRAVERSAL_DEPTH = 1000; // Max DAG traversal depth
 
   private final DagStore dagStore;
   private final DagEntityResolver entityResolver;
@@ -103,32 +102,59 @@ public class BlockValidator {
    * @return validation result (success or specific error)
    */
   public DagImportResult validate(Block block, ChainStats chainStats) {
+    String blockHashShort = formatHash(block.getHash());
+    com.google.common.base.Stopwatch stageWatch = com.google.common.base.Stopwatch.createStarted();
+
     // Stage 1: Basic rules
     DagImportResult basicResult = validateBasicRules(block, chainStats);
+    long stage1Ms = stageWatch.elapsed().toMillis();
+    if (stage1Ms > 100) {
+      log.warn("[PERF] validate stage1 (basicRules): {}ms for block {}", stage1Ms, blockHashShort);
+    }
     if (basicResult != null) {
       return basicResult;
     }
 
     // Stage 2: PoW validation
+    stageWatch.reset().start();
     DagImportResult powResult = validateMinimumPoW(block, chainStats);
+    long stage2Ms = stageWatch.elapsed().toMillis();
+    if (stage2Ms > 100) {
+      log.warn("[PERF] validate stage2 (PoW): {}ms for block {}", stage2Ms, blockHashShort);
+    }
     if (powResult != null) {
       return powResult;
     }
 
     // Stage 3: Epoch limit
+    stageWatch.reset().start();
     DagImportResult epochLimitResult = validateEpochLimit(block, chainStats);
+    long stage3Ms = stageWatch.elapsed().toMillis();
+    if (stage3Ms > 100) {
+      log.warn("[PERF] validate stage3 (epochLimit): {}ms for block {}", stage3Ms, blockHashShort);
+    }
     if (epochLimitResult != null) {
       return epochLimitResult;
     }
 
     // Stage 4: Link validation
+    stageWatch.reset().start();
     DagImportResult linkResult = validateLinks(block, chainStats);
+    long stage4Ms = stageWatch.elapsed().toMillis();
+    if (stage4Ms > 100) {
+      log.warn("[PERF] validate stage4 (links): {}ms for block {}", stage4Ms, blockHashShort);
+    }
     if (linkResult != null) {
       return linkResult;
     }
 
     // Stage 5: DAG rules
+    stageWatch.reset().start();
     DAGValidationResult dagResult = validateDAGRules(block, chainStats);
+    long stage5Ms = stageWatch.elapsed().toMillis();
+    if (stage5Ms > 100) {
+      log.warn("[PERF] validate stage5 (DAGRules): {}ms for block {}", stage5Ms, blockHashShort);
+    }
     if (!dagResult.isValid()) {
       log.debug("Block {} failed DAG validation: {}",
           formatHash(block.getHash()), dagResult.getErrorMessage());
@@ -471,15 +497,23 @@ public class BlockValidator {
       return DAGValidationResult.valid();
     }
 
+    String blockHashShort = formatHash(block.getHash());
+    com.google.common.base.Stopwatch ruleWatch = com.google.common.base.Stopwatch.createStarted();
+
     // Rule 1: Check for cycles
     if (hasCycle(block)) {
       return DAGValidationResult.invalid(
           DAGValidationResult.DAGErrorCode.CYCLE_DETECTED,
           "Block creates a cycle in DAG");
     }
+    long rule1Ms = ruleWatch.elapsed().toMillis();
+    if (rule1Ms > 100) {
+      log.warn("[PERF] DAGRules rule1 (hasCycle): {}ms for block {}", rule1Ms, blockHashShort);
+    }
 
     // Rule 2: Check time window (12 days / 16384 epochs)
     // DEVNET: Skip time window validation for testing with old genesis blocks
+    ruleWatch.reset().start();
     boolean isDevnet = config.getNodeSpec().getNetwork().toString().toLowerCase().contains("devnet");
     if (!isDevnet) {
       long currentEpoch = TimeUtils.getCurrentEpochNumber();
@@ -497,6 +531,10 @@ public class BlockValidator {
         }
       }
     }
+    long rule2Ms = ruleWatch.elapsed().toMillis();
+    if (rule2Ms > 100) {
+      log.warn("[PERF] DAGRules rule2 (timeWindow): {}ms for block {}", rule2Ms, blockHashShort);
+    }
 
     // Rule 3: Check link count (1-16 block links)
     long blockLinkCount = block.getLinks().stream()
@@ -510,13 +548,9 @@ public class BlockValidator {
           "Block must have 1-16 block links (found " + blockLinkCount + ")");
     }
 
-    // Rule 4: Check traversal depth
-    int depth = calculateDepthFromGenesis(block);
-    if (depth > MAX_TRAVERSAL_DEPTH) {
-      return DAGValidationResult.invalid(
-          DAGValidationResult.DAGErrorCode.TRAVERSAL_DEPTH_EXCEEDED,
-          "Block depth from genesis exceeds 1000 layers (depth=" + depth + ")");
-    }
+    // Rule 4: REMOVED - calculateDepthFromGenesis had O(2^n) complexity and would
+    // reject all blocks after mainchain height > 1000. The time window check (Rule 2)
+    // already prevents referencing blocks older than 16384 epochs (~12 days).
 
     return DAGValidationResult.valid();
   }
@@ -571,25 +605,6 @@ public class BlockValidator {
 
     recursionStack.remove(currentHash);
     return false;
-  }
-
-  /**
-   * Calculate depth from genesis
-   */
-  private int calculateDepthFromGenesis(Block block) {
-    int maxDepth = 0;
-
-    for (Link link : block.getLinks()) {
-      if (link.isBlock()) {
-        Block parent = dagStore.getBlockByHash(link.getTargetHash());
-        if (parent != null) {
-          int parentDepth = calculateDepthFromGenesis(parent);
-          maxDepth = Math.max(maxDepth, parentDepth + 1);
-        }
-      }
-    }
-
-    return maxDepth;
   }
 
   /**

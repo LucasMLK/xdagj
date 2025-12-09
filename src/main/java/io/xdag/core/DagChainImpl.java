@@ -38,6 +38,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.LongAdder;
+import java.util.concurrent.locks.ReentrantLock;
+import com.google.common.base.Stopwatch;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
@@ -104,6 +108,24 @@ public class DagChainImpl implements DagChain {
   private final List<Listener> listeners = new ArrayList<>();
   private final List<DagchainListener> dagchainListeners = new ArrayList<>();
   private final List<NewBlockListener> newBlockListeners = new ArrayList<>();
+
+  // ==================== Lock and Statistics for tryToConnect ====================
+
+  /**
+   * Lock for tryToConnect method. Using ReentrantLock instead of synchronized
+   * to enable lock wait time measurement.
+   */
+  private final ReentrantLock importLock = new ReentrantLock(true); // fair lock
+
+  /**
+   * Performance statistics tracker for tryToConnect operations.
+   * Uses LongAdder for better performance under high contention.
+   */
+  private final ImportStatsTracker statsTracker = new ImportStatsTracker();
+
+  // Warning thresholds (milliseconds)
+  private static final long LOCK_WAIT_WARN_MS = 100;
+  private static final long EXECUTION_WARN_MS = 500;
 
   /**
    * Creates DagChain with DagKernel dependencies
@@ -195,90 +217,216 @@ public class DagChainImpl implements DagChain {
   // ==================== Block Import Operations ====================
 
   @Override
-  public synchronized DagImportResult tryToConnect(Block block) {
+  public DagImportResult tryToConnect(Block block) {
+    String blockHashShort = block.getHash().toHexString().substring(0, 16);
+
+    // Measure lock acquisition time
+    Stopwatch lockWatch = Stopwatch.createStarted();
+    importLock.lock();
+    long lockWaitMs = lockWatch.elapsed().toMillis();
+
     try {
-      log.debug("Attempting to connect block: {}", block.getHash().toHexString());
+      // Warn if lock wait was too long
+      if (lockWaitMs >= LOCK_WAIT_WARN_MS) {
+        log.warn("[PERF] tryToConnect lock wait: {}ms (thread={}, block={}, queueLength={})",
+            lockWaitMs, Thread.currentThread().getName(), blockHashShort, importLock.getQueueLength());
+      }
 
-      // Delegate to BlockImporter (P0 refactoring)
-      BlockImporter.ImportResult importResult = blockImporter.importBlock(block, chainStats);
+      // Measure execution time
+      Stopwatch execWatch = Stopwatch.createStarted();
+      try {
+        log.debug("Attempting to connect block: {}", block.getHash().toHexString());
 
-      if (!importResult.isSuccess()) {
-        DagImportResult failure = importResult.getFailureResult();
-        if (failure != null) {
-          return failure;
+        // Delegate to BlockImporter (P0 refactoring)
+        BlockImporter.ImportResult importResult = blockImporter.importBlock(block, chainStats);
+
+        if (!importResult.isSuccess()) {
+          DagImportResult failure = importResult.getFailureResult();
+          if (failure != null) {
+            return failure;
+          }
+          return DagImportResult.error(
+              new Exception(importResult.getErrorMessage()),
+              importResult.getErrorMessage());
         }
-        return DagImportResult.error(
-            new Exception(importResult.getErrorMessage()),
-            importResult.getErrorMessage());
-      }
 
-      // Import successful - create block with BlockInfo for notifications
-      BlockInfo blockInfo = BlockInfo.builder()
-          .hash(block.getHash())
-          .epoch(importResult.getEpoch())
-          .height(importResult.getHeight())
-          .difficulty(importResult.getCumulativeDifficulty())
-          .build();
+        // Import successful - create block with BlockInfo for notifications
+        BlockInfo blockInfo = BlockInfo.builder()
+            .hash(block.getHash())
+            .epoch(importResult.getEpoch())
+            .height(importResult.getHeight())
+            .difficulty(importResult.getCumulativeDifficulty())
+            .build();
 
-      Block blockWithInfo = block.toBuilder().info(blockInfo).build();
+        Block blockWithInfo = block.toBuilder().info(blockInfo).build();
 
-      // Notify listeners
-      notifyListeners(blockWithInfo);
-      notifyNewBlockListeners(blockWithInfo);
+        // Timing for post-import operations
+        Stopwatch postWatch = Stopwatch.createStarted();
 
-      // Notify DAG chain listeners (only for main blocks)
-      if (importResult.isBestChain()) {
-        notifyDagchainListeners(blockWithInfo);
+        // Notify listeners
+        notifyListeners(blockWithInfo);
+        long notifyListenersMs = postWatch.elapsed().toMillis();
 
-        // Update chain stats for main blocks
-        // BUG-HEIGHT-002 fix: use chainLength from importResult instead of blockInfo.getHeight()
-        updateChainStatsForNewMainBlock(importResult.getChainLength(), blockInfo.getDifficulty());
+        notifyNewBlockListeners(blockWithInfo);
+        long notifyNewBlockMs = postWatch.elapsed().toMillis() - notifyListenersMs;
 
-        // Delegate to DifficultyAdjuster (P1 refactoring)
-        this.chainStats = difficultyAdjuster.checkAndAdjustDifficulty(
-            this.chainStats,
+        // Notify DAG chain listeners (only for main blocks)
+        long notifyDagchainMs = 0, updateStatsMs = 0, diffAdjustMs = 0;
+        if (importResult.isBestChain()) {
+          postWatch.reset().start();
+          notifyDagchainListeners(blockWithInfo);
+          notifyDagchainMs = postWatch.elapsed().toMillis();
+
+          // Update chain stats for main blocks
+          // BUG-HEIGHT-002 fix: use chainLength from importResult instead of blockInfo.getHeight()
+          postWatch.reset().start();
+          updateChainStatsForNewMainBlock(importResult.getChainLength(), blockInfo.getDifficulty());
+          updateStatsMs = postWatch.elapsed().toMillis();
+
+          // Delegate to DifficultyAdjuster (P1 refactoring)
+          postWatch.reset().start();
+          this.chainStats = difficultyAdjuster.checkAndAdjustDifficulty(
+              this.chainStats,
+              importResult.getHeight(),
+              block.getEpoch(),
+              this::getCandidateBlocksInEpoch);
+          diffAdjustMs = postWatch.elapsed().toMillis();
+
+          // Note: PendingBlockManager.cleanupOldOrphans() removed
+          // Reason: Each epoch limited to 16 blocks, storage is bounded (~134MB for 16384 epochs)
+          // Deleting orphans risks breaking DAG references (see BUG-LINK-NOT-FOUND)
+          // Trade-off: Prioritize correctness over storage efficiency
+
+        }
+
+        postWatch.reset().start();
+        pendingBlockManager.onBlockImported(blockWithInfo);
+        long pendingMgrMs = postWatch.elapsed().toMillis();
+
+        // Log if any post-import operation is slow
+        long totalPostMs = notifyListenersMs + notifyNewBlockMs + notifyDagchainMs + updateStatsMs + diffAdjustMs + pendingMgrMs;
+        if (totalPostMs > 100) {
+          log.warn("[PERF] tryToConnect post-import: {}ms (listeners={}ms, newBlock={}ms, dagchain={}ms, stats={}ms, diffAdj={}ms, pending={}ms) for block {}",
+              totalPostMs, notifyListenersMs, notifyNewBlockMs, notifyDagchainMs, updateStatsMs, diffAdjustMs, pendingMgrMs, blockHashShort);
+        }
+
+        log.info("Successfully imported block {}: height={}, difficulty={}",
+            block.getHash().toHexString(),
             importResult.getHeight(),
-            block.getEpoch(),
-            this::getCandidateBlocksInEpoch);
-
-        // Note: PendingBlockManager.cleanupOldOrphans() removed
-        // Reason: Each epoch limited to 16 blocks, storage is bounded (~134MB for 16384 epochs)
-        // Deleting orphans risks breaking DAG references (see BUG-LINK-NOT-FOUND)
-        // Trade-off: Prioritize correctness over storage efficiency
-
-      }
-
-      pendingBlockManager.onBlockImported(blockWithInfo);
-
-      log.info("Successfully imported block {}: height={}, difficulty={}",
-          block.getHash().toHexString(),
-          importResult.getHeight(),
-          importResult.getCumulativeDifficulty().toDecimalString());
-
-      // Return detailed result
-      if (importResult.isBestChain()) {
-        return DagImportResult.mainBlock(
-            importResult.getEpoch(),
-            importResult.getHeight(),
-            importResult.getCumulativeDifficulty(),
-            importResult.isEpochWinner());
-      } else {
-        // Orphan blocks (height=0) are automatically stored in DagStore
-        log.debug("Block {} is orphan (epoch {}, cumDiff {})",
-            block.getHash().toHexString().substring(0, 16),
-            importResult.getEpoch(),
             importResult.getCumulativeDifficulty().toDecimalString());
 
-        return DagImportResult.orphan(
-            importResult.getEpoch(),
-            importResult.getCumulativeDifficulty(),
-            importResult.isEpochWinner());
-      }
+        // Return detailed result
+        if (importResult.isBestChain()) {
+          return DagImportResult.mainBlock(
+              importResult.getEpoch(),
+              importResult.getHeight(),
+              importResult.getCumulativeDifficulty(),
+              importResult.isEpochWinner());
+        } else {
+          // Orphan blocks (height=0) are automatically stored in DagStore
+          log.debug("Block {} is orphan (epoch {}, cumDiff {})",
+              block.getHash().toHexString().substring(0, 16),
+              importResult.getEpoch(),
+              importResult.getCumulativeDifficulty().toDecimalString());
 
-    } catch (Exception e) {
-      log.error("Error importing block {}: {}", block.getHash().toHexString(), e.getMessage(), e);
-      return DagImportResult.error(e, "Exception during import: " + e.getMessage());
+          return DagImportResult.orphan(
+              importResult.getEpoch(),
+              importResult.getCumulativeDifficulty(),
+              importResult.isEpochWinner());
+        }
+
+      } catch (Exception e) {
+        log.error("Error importing block {}: {}", block.getHash().toHexString(), e.getMessage(), e);
+        return DagImportResult.error(e, "Exception during import: " + e.getMessage());
+      } finally {
+        // Record statistics
+        long execMs = execWatch.elapsed().toMillis();
+        statsTracker.record(lockWaitMs, execMs);
+
+        // Warn if execution was too slow
+        if (execMs >= EXECUTION_WARN_MS) {
+          log.warn("[PERF] tryToConnect execution: {}ms (thread={}, block={})",
+              execMs, Thread.currentThread().getName(), blockHashShort);
+        }
+
+        // Log stats periodically (every 100 calls)
+        if (statsTracker.getCallCount() % 100 == 0) {
+          log.info("[PERF] {}", statsTracker);
+        }
+      }
+    } finally {
+      importLock.unlock();
     }
+  }
+
+  /**
+   * Simple statistics tracker for performance monitoring.
+   * Uses LongAdder for better performance under high contention.
+   */
+  private static class ImportStatsTracker {
+    private final LongAdder callCount = new LongAdder();
+    private final LongAdder totalLockWaitMs = new LongAdder();
+    private final LongAdder totalExecMs = new LongAdder();
+    private final AtomicLong maxLockWaitMs = new AtomicLong(0);
+    private final AtomicLong maxExecMs = new AtomicLong(0);
+
+    void record(long lockWaitMs, long execMs) {
+      callCount.increment();
+      totalLockWaitMs.add(lockWaitMs);
+      totalExecMs.add(execMs);
+      updateMax(maxLockWaitMs, lockWaitMs);
+      updateMax(maxExecMs, execMs);
+    }
+
+    private void updateMax(AtomicLong max, long value) {
+      max.updateAndGet(current -> Math.max(current, value));
+    }
+
+    long getCallCount() {
+      return callCount.sum();
+    }
+
+    void reset() {
+      callCount.reset();
+      totalLockWaitMs.reset();
+      totalExecMs.reset();
+      maxLockWaitMs.set(0);
+      maxExecMs.set(0);
+    }
+
+    @Override
+    public String toString() {
+      long calls = callCount.sum();
+      if (calls == 0) {
+        return "tryToConnect stats: no calls yet";
+      }
+      return String.format(
+          "tryToConnect stats: calls=%d, avgLockWait=%dms, maxLockWait=%dms, avgExec=%dms, maxExec=%dms",
+          calls,
+          totalLockWaitMs.sum() / calls,
+          maxLockWaitMs.get(),
+          totalExecMs.sum() / calls,
+          maxExecMs.get()
+      );
+    }
+  }
+
+  /**
+   * Get import statistics as a formatted string.
+   * Useful for HTTP API or debugging.
+   *
+   * @return statistics string
+   */
+  public String getImportStats() {
+    return statsTracker.toString() + ", queueLength=" + importLock.getQueueLength();
+  }
+
+  /**
+   * Reset import statistics. Useful for periodic monitoring.
+   */
+  public void resetImportStats() {
+    statsTracker.reset();
+    log.info("Import statistics reset");
   }
 
   @Override

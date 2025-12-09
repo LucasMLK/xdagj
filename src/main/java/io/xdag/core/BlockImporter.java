@@ -106,15 +106,25 @@ public class BlockImporter {
   public ImportResult importBlock(Block block, ChainStats chainStats) {
     try {
       Bytes32 blockHash = block.getHash();
-      log.debug("Importing block: {}", formatHash(blockHash));
+      String blockHashShort = formatHash(blockHash);
+      log.debug("Importing block: {}", blockHashShort);
+
+      // Performance timing for bottleneck identification
+      com.google.common.base.Stopwatch totalWatch = com.google.common.base.Stopwatch.createStarted();
+      com.google.common.base.Stopwatch stepWatch = com.google.common.base.Stopwatch.createStarted();
 
       // Step 0: Check if block already exists (BUG-P2P-001 fix)
       // Prevent redundant imports that waste CPU and cause log pollution
       Block existingBlock = dagStore.getBlockByHash(blockHash);
+      long step0Ms = stepWatch.elapsed().toMillis();
+      if (step0Ms > 100) {
+        log.warn("[PERF] importBlock step0 (existsCheck): {}ms for block {}", step0Ms, blockHashShort);
+      }
+
       if (existingBlock != null && existingBlock.getInfo() != null) {
         BlockInfo info = existingBlock.getInfo();
         log.debug("Block {} already exists (height={}), skipping import",
-            formatHash(blockHash), info.getHeight());
+            blockHashShort, info.getHeight());
 
         // Return success with existing block's info
         // For existing blocks, chainLength = height (no new block added to chain)
@@ -128,7 +138,13 @@ public class BlockImporter {
       }
 
       // Step 1: Validate block (delegated to BlockValidator)
+      stepWatch.reset().start();
       DagImportResult validationResult = validator.validate(block, chainStats);
+      long step1Ms = stepWatch.elapsed().toMillis();
+      if (step1Ms > 100) {
+        log.warn("[PERF] importBlock step1 (validate): {}ms for block {}", step1Ms, blockHashShort);
+      }
+
       if (validationResult != null) {
         if (validationResult.getStatus() == DagImportResult.ImportStatus.MISSING_DEPENDENCY) {
           List<Bytes32> missingParents = extractMissingParents(validationResult);
@@ -140,9 +156,15 @@ public class BlockImporter {
       }
 
       // Step 2: Calculate cumulative difficulty
+      stepWatch.reset().start();
       UInt256 cumulativeDifficulty;
+      long step2Ms = 0;
       try {
         cumulativeDifficulty = calculateCumulativeDifficulty(block);
+        step2Ms = stepWatch.elapsed().toMillis();
+        if (step2Ms > 100) {
+          log.warn("[PERF] importBlock step2 (calcDifficulty): {}ms for block {}", step2Ms, blockHashShort);
+        }
         log.debug("Block {} cumulative difficulty: {}",
             formatHash(block.getHash()), cumulativeDifficulty.toDecimalString());
       } catch (Exception e) {
@@ -152,6 +174,7 @@ public class BlockImporter {
       }
 
       // Step 3: Save block with PENDING height (makes visible for epoch competition)
+      stepWatch.reset().start();
       long blockEpoch = block.getEpoch();
       long pendingHeight = isGenesisBlock(block) ? 1 : 0;
 
@@ -167,9 +190,18 @@ public class BlockImporter {
       // Save to storage (makes visible in epoch index)
       dagStore.saveBlockInfo(pendingInfo);
       dagStore.saveBlock(blockWithPendingInfo);
+      long step3Ms = stepWatch.elapsed().toMillis();
+      if (step3Ms > 100) {
+        log.warn("[PERF] importBlock step3 (saveBlock): {}ms for block {}", step3Ms, blockHashShort);
+      }
 
       // Step 4: Determine epoch competition result
+      stepWatch.reset().start();
       EpochCompetitionResult competition = determineEpochWinner(block, blockEpoch, chainStats);
+      long step4Ms = stepWatch.elapsed().toMillis();
+      if (step4Ms > 100) {
+        log.warn("[PERF] importBlock step4 (epochCompetition): {}ms for block {}", step4Ms, blockHashShort);
+      }
 
       // Step 5: Update height based on competition
       long finalHeight = competition.getHeight();
@@ -177,6 +209,7 @@ public class BlockImporter {
 
       // Step 4.5: Handle epoch competition demotion (if new block wins)
       // BUG-CONSENSUS-007 Fix: Handle multiple demoted blocks
+      stepWatch.reset().start();
       if (competition.isWinner() && !competition.getDemotedBlocks().isEmpty()) {
         List<Block> demotedBlocks = competition.getDemotedBlocks();
         long blockEpochForLog = block.getEpoch();
@@ -219,17 +252,38 @@ public class BlockImporter {
       }
       // Block successfully stored in main DAG - remove any missing-dependency artifacts
       pendingBlockManager.clearMissingDependency(block.getHash());
+      long step5Ms = stepWatch.elapsed().toMillis();
+      if (step5Ms > 100) {
+        log.warn("[PERF] importBlock step5 (updateHeight): {}ms for block {}", step5Ms, blockHashShort);
+      }
 
       // Step 6: Process transactions if main block
+      stepWatch.reset().start();
       if (isBestChain) {
         processBlockTransactions(finalBlock);
+      }
+      long step6Ms = stepWatch.elapsed().toMillis();
+      if (step6Ms > 100) {
+        log.warn("[PERF] importBlock step6 (processTransactions): {}ms for block {}", step6Ms, blockHashShort);
       }
 
       // Step 7: Verify epoch integrity (BUG-CONSENSUS-008 dual verification)
       // Quick verification without flush - catches most issues immediately
       // Epoch-end verification (in EpochTimer) provides guaranteed cleanup
+      stepWatch.reset().start();
       if (isBestChain) {
         verifyEpochSingleWinner(blockEpoch, finalBlock);
+      }
+      long step7Ms = stepWatch.elapsed().toMillis();
+      if (step7Ms > 100) {
+        log.warn("[PERF] importBlock step7 (verifyEpoch): {}ms for block {}", step7Ms, blockHashShort);
+      }
+
+      // Log total time if significant
+      long totalMs = totalWatch.elapsed().toMillis();
+      if (totalMs > 500) {
+        log.warn("[PERF] importBlock TOTAL: {}ms for block {} (steps: exist={}ms, validate={}ms, diff={}ms, save={}ms, compete={}ms, update={}ms, tx={}ms, verify={}ms)",
+            totalMs, blockHashShort, step0Ms, step1Ms, step2Ms, step3Ms, step4Ms, step5Ms, step6Ms, step7Ms);
       }
 
       log.info("Successfully imported block {}: height={}, chainLength={}, difficulty={}, isBestChain={}",

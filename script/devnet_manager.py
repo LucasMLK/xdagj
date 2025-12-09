@@ -714,6 +714,7 @@ def main() -> None:
             node_jar=args.xdagj_jar,
             pool_jar=args.pool_jar,
             miner_jar=args.miner_jar,
+            cleanup_override=None,
         )
     elif args.command == "start":
         manager.start(args.suites or (), args.components or ())
