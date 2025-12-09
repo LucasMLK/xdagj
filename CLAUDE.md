@@ -203,14 +203,14 @@ All APIs use Jackson for JSON serialization. Pagination is 1-based with 20 items
 ## Important Code Patterns
 
 ### Block Import Flow
-1. Validate structure → PoW → epoch admission → links → DAG depth
+1. Validate structure → PoW → epoch admission → links → time window
 2. Compete within epoch (smallest hash wins)
 3. Save to DagStore with pending height (height=0 if first in epoch)
 4. Assign heights via `checkNewMain()` to all epoch winners
 5. Execute transactions (main blocks only)
 6. Check for reorganization
 
-See `DagChainImpl.tryToConnect()` (lines 441-537) for atomic implementation
+See `DagChainImpl.tryToConnect()` (lines 220-360) for atomic implementation
 
 ### Transaction Processing
 ```java
