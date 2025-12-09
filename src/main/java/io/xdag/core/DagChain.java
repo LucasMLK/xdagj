@@ -448,7 +448,7 @@ public interface DagChain {
    *
    * <p>Used both during block import (fast path) and at epoch end as a
    * best-effort cleanup to demote any stale winners left behind by
-   * concurrent imports (see BUG-CONSENSUS-008).
+   * concurrent imports .
    *
    * @param epoch epoch number that needs verification
    */

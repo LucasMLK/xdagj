@@ -4,9 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-XDAGJ is the Java reference implementation of the XDAG 1.0b blockchain protocol. It implements an epoch-based DAG consensus where the block with the smallest hash wins each 64-second epoch. The project bundles consensus engine, storage layer, P2P networking, HTTP/JSON-RPC APIs, and RandomX mining support in a single Maven-based codebase.
+XDAGJ is the Java reference implementation of the XDAG 1.0 blockchain protocol. It implements an epoch-based DAG consensus where the block with the smallest hash wins each 64-second epoch. The project bundles consensus engine, storage layer, P2P networking, HTTP/JSON-RPC APIs, and RandomX mining support in a single Maven-based codebase.
 
-**Key Technologies**: JDK 21, Maven, RocksDB, Netty, Jackson (JSON/YAML), Apache Tuweni, BouncyCastle, RandomX JNI
+**Key Technologies**: JDK 21, Maven, RocksDB, Netty, Jackson (JSON/YAML), Apache Tuweni, BouncyCastle
+
+**Core Dependencies**:
+- `xdagj-crypto` (0.1.5) - Cryptographic library (ECDSA, BIP32/39/44, AES, Schnorr)
+- `xdagj-native-randomx` (0.2.6) - RandomX PoW native bindings via JNA
+- `xdagj-p2p` (0.1.6) - P2P networking (Kademlia DHT, reputation, message routing)
 
 ## Build & Test Commands
 
@@ -40,13 +45,13 @@ mvn license:format
 ## Running a Node
 
 ```bash
-# Launch devnet node (uses src/test/resources/xdag-devnet.conf)
-./script/xdag.sh -t -c src/test/resources/xdag-devnet.conf
+# Launch devnet node (uses xdag-devnet.conf from classpath)
+./script/xdag.sh
 
-# Launch with custom config
-./script/xdag.sh -c /path/to/xdag.conf
+# Launch with custom config file (via Java system property)
+java -Dconfig.file=/path/to/xdag.conf -jar target/xdagj-*-executable.jar -d
 
-# Note: The -t flag enables test mode (relaxed PoW validation)
+# Note: -d flag = devnet mode, -t flag = testnet mode, no flag = mainnet
 ```
 
 ## Multi-Node Devnet Testing
@@ -84,7 +89,7 @@ Example: Node offline from epoch 102-104
 - Epochs: 100, 101, [offline], 105, 106
 - Heights: 1, 2, 3, 4 (continuous)
 
-### Consensus Flow (1.0b)
+### Consensus Flow (1.0)
 
 1. **Epoch Competition (PRIMARY)**: Smallest hash wins the epoch. Only 16 non-orphan blocks kept per epoch (`MAX_BLOCKS_PER_EPOCH`).
 2. **Height Assignment (SECONDARY)**: `checkNewMain()` assigns continuous heights to epoch winners based on epoch order.
@@ -111,7 +116,7 @@ io.xdag
 ├── Bootstrap              # Main entry point
 ├── DagKernel             # Lifecycle manager, owns all subsystems
 ├── core
-│   ├── DagChainImpl      # Consensus engine (1.0b rules)
+│   ├── DagChainImpl      # Consensus engine (1.0 rules)
 │   ├── BlockImporter     # Block validation & import
 │   ├── PendingBlockManager # Missing dependency retry logic
 │   └── DagAccountManager # Wallet state management
@@ -304,11 +309,11 @@ consensus.powMode = "test"
 
 ## Documentation
 
-- Architecture & protocols: `docs/ARCHITECTURE.md` (primary reference)
+- Design & architecture: `docs/DESIGN.md`
+- HTTP API reference: `docs/API.md`
+- Network protocol: `docs/PROTOCOL.md`
+- Operations manual: `docs/OPERATIONS.md`
 - Multi-node testing: `docs/DEVNET_MULTI_NODE.md`
-- Bug reports: `docs/bugs/`
-- Test reports: `docs/test-reports/`
-- Refactoring notes: `docs/refactoring/`
 
 ## Development Notes
 

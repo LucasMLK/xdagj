@@ -49,10 +49,10 @@ import org.apache.tuweni.units.bigints.UInt256;
  *   <li>Processing transactions atomically</li>
  * </ul>
  *
- * <p><strong>CRITICAL for BUG-CONSENSUS-002 fix:</strong>
- * This class provides the foundation for implementing epoch-based solution collection.
- * Future enhancement will add {@code EpochSolutionCollector} to collect multiple
- * solutions during an epoch and select the best one at epoch end.
+ * <p><strong>Architecture Note:</strong>
+ * This class provides the foundation for epoch-based solution collection.
+ * Works with {@code EpochConsensusManager} to collect multiple solutions
+ * during an epoch and select the best one at epoch end.
  *
  * @since XDAGJ v1.0.0
  */
@@ -113,7 +113,7 @@ public class BlockImporter {
       com.google.common.base.Stopwatch totalWatch = com.google.common.base.Stopwatch.createStarted();
       com.google.common.base.Stopwatch stepWatch = com.google.common.base.Stopwatch.createStarted();
 
-      // Step 0: Check if block already exists (BUG-P2P-001 fix)
+      // Step 0: Check if block already exists
       // Prevent redundant imports that waste CPU and cause log pollution
       Block existingBlock = dagStore.getBlockByHash(blockHash);
       long step0Ms = stepWatch.elapsed().toMillis();
@@ -208,7 +208,7 @@ public class BlockImporter {
       boolean isBestChain = competition.isWinner();
 
       // Step 4.5: Handle epoch competition demotion (if new block wins)
-      // BUG-CONSENSUS-007 Fix: Handle multiple demoted blocks
+      // Handle multiple demoted blocks that lost competition
       stepWatch.reset().start();
       if (competition.isWinner() && !competition.getDemotedBlocks().isEmpty()) {
         List<Block> demotedBlocks = competition.getDemotedBlocks();
@@ -245,7 +245,7 @@ public class BlockImporter {
         log.debug("Updated block {} with final height={}",
             formatHash(block.getHash()), finalHeight);
 
-        // BUG-ORPHAN-001 fix: Delete orphan reason when block becomes main
+        // Delete orphan reason when block becomes main
         if (finalHeight > 0) {
           dagStore.deleteOrphanReason(block.getHash());
         }
@@ -267,7 +267,7 @@ public class BlockImporter {
         log.warn("[PERF] importBlock step6 (processTransactions): {}ms for block {}", step6Ms, blockHashShort);
       }
 
-      // Step 7: Verify epoch integrity (BUG-CONSENSUS-008 dual verification)
+      // Step 7: Verify epoch integrity (dual verification)
       // Quick verification without flush - catches most issues immediately
       // Epoch-end verification (in EpochTimer) provides guaranteed cleanup
       stepWatch.reset().start();
@@ -293,7 +293,7 @@ public class BlockImporter {
       return ImportResult.success(
           blockEpoch,
           finalHeight,
-          competition.getChainLength(),  // BUG-HEIGHT-002 fix: use actual chain length
+          competition.getChainLength(),  // Use actual chain length for mainBlockCount update
           cumulativeDifficulty,
           isBestChain,
           competition.isEpochWinner());
@@ -338,7 +338,7 @@ public class BlockImporter {
         (block.getHash().compareTo(currentWinner.getHash()) < 0);
 
     long height;
-    long chainLength = chainStats.getMainBlockCount();  // BUG-HEIGHT-002: track actual chain length
+    long chainLength = chainStats.getMainBlockCount();  // Track actual chain length
     boolean isBestChain;
     Block demotedBlock = null;  // Track which block needs demotion
 
@@ -356,12 +356,12 @@ public class BlockImporter {
         // Mark old winner for demotion
         demotedBlock = currentWinner;
         height = replacementHeight;
-        // BUG-HEIGHT-002: chainLength stays the same (replacing, not adding)
+        // chainLength stays the same (replacing, not adding)
         isBestChain = true;
 
       } else if (currentWinner != null && currentWinner.getHash().equals(block.getHash())) {
         // Case 2: Block IS the winner, check for other main blocks in same epoch
-        // BUG-CONSENSUS-007 Fix: Find ALL other main blocks, not just the first one
+        // Find ALL other main blocks, not just the first one
         List<Block> allCandidates = dagStore.getCandidateBlocksInEpoch(blockEpoch);
         List<Block> otherMainBlocks = findAllOtherMainBlocksInEpoch(allCandidates, block);
 
@@ -374,14 +374,14 @@ public class BlockImporter {
           Block firstDemoted = otherMainBlocks.getFirst();
           height = firstDemoted.getInfo().getHeight();
 
-          // Return ALL demoted blocks (BUG-CONSENSUS-007 fix)
-          // BUG-HEIGHT-002: chainLength stays the same (replacing, not adding)
+          // Return ALL demoted blocks
+          // chainLength stays the same (replacing, not adding)
           isBestChain = true;
           return new EpochCompetitionResult(height, chainLength, isBestChain, isEpochWinner, otherMainBlocks);
 
         } else {
           // No other main blocks, assign new height
-          // BUG-HEIGHT-001 fix: Assign height based on epoch order
+          // Assign height based on epoch order
           log.debug("Block {} is first winner in epoch {}, assigning height by epoch order",
               formatHash(block.getHash()), blockEpoch);
           if (isGenesisBlock(block)) {
@@ -397,7 +397,7 @@ public class BlockImporter {
 
       } else {
         // Case 3: First block in this epoch
-        // BUG-HEIGHT-001 fix: Assign height based on epoch order, not arrival order
+        // Assign height based on epoch order, not arrival order
         if (isGenesisBlock(block)) {
           height = 1;
           chainLength = 1;
@@ -412,7 +412,7 @@ public class BlockImporter {
       }
 
     } else {
-      // Lost epoch competition - orphan (BUG-LOGGING-001 fix: use DEBUG instead of WARN)
+      // Lost epoch competition - orphan (use DEBUG instead of WARN)
       log.debug("Epoch {} competition: block {} loses (larger hash)",
           blockEpoch, formatHash(block.getHash()));
       log.debug("  Loser: {}, Winner: {} (height {})",
@@ -420,10 +420,10 @@ public class BlockImporter {
           formatHash(currentWinner.getHash()),
           currentWinner.getInfo() != null ? currentWinner.getInfo().getHeight() : 0);
       height = 0;
-      // BUG-HEIGHT-002: chainLength stays the same for orphan blocks
+      // chainLength stays the same for orphan blocks
       isBestChain = false;
 
-      // BUG-ORPHAN-001 fix: Record orphan reason for selective retry
+      // Record orphan reason for selective retry
       // This block lost competition and will never become main (unless chain reorganization)
       dagStore.saveOrphanReason(block.getHash(), OrphanReason.LOST_COMPETITION);
     }
@@ -434,8 +434,7 @@ public class BlockImporter {
   /**
    * Find ALL other main blocks in the same epoch (excluding the specified block)
    *
-   * <p><strong>BUG-CONSENSUS-007 Fix:</strong>
-   * Returns ALL main blocks (height > 0) in the epoch, not just the first one.
+   * <p>Returns ALL main blocks (height > 0) in the epoch, not just the first one.
    * This ensures complete cleanup when epoch competition determines a new winner.
    *
    * @param candidates all blocks in the epoch
@@ -502,12 +501,12 @@ public class BlockImporter {
     dagStore.saveBlockInfo(orphanInfo);
     dagStore.saveBlock(orphanBlock);
 
-    // BUG-HEIGHT-INDEX-001 fix: Delete height-to-hash mapping when demoting block
+    // Delete height-to-hash mapping when demoting block
     // This prevents orphan blocks from appearing in height queries
     dagStore.deleteHeightMapping(previousHeight);
     log.debug("Deleted height mapping for demoted block at height {}", previousHeight);
 
-    // BUG-ORPHAN-001 fix: Record orphan reason
+    // Record orphan reason
     // Demoted blocks lost epoch competition (to a better block that arrived later)
     dagStore.saveOrphanReason(block.getHash(), OrphanReason.LOST_COMPETITION);
 
@@ -518,8 +517,7 @@ public class BlockImporter {
   /**
    * Verify that an epoch has only one main block (height > 0)
    *
-   * <p><strong>BUG-CONSENSUS-007 Fix:</strong>
-   * This method ensures epoch integrity by verifying that only one block
+   * <p>This method ensures epoch integrity by verifying that only one block
    * in the epoch has height > 0 (is a main block). If multiple main blocks
    * are found, it automatically demotes all except the expected winner.
    *
@@ -607,8 +605,7 @@ public class BlockImporter {
   /**
    * Public hook for asynchronous epoch verification (epoch timer).
    *
-   * <p><strong>BUG-CONSENSUS-008 Fix:</strong>
-   * Provides guaranteed cleanup of epoch integrity violations by flushing
+   * <p>Provides guaranteed cleanup of epoch integrity violations by flushing
    * MemTable before verification. This ensures all writes are visible.
    *
    * <p>This method is called at epoch boundaries (every 64 seconds) to:
@@ -626,7 +623,7 @@ public class BlockImporter {
    */
   public void verifyEpochIntegrity(long epoch) {
     // Force MemTable flush to ensure visibility of all recent writes
-    // This is the critical fix for BUG-CONSENSUS-008 (RocksDB snapshot isolation)
+    // This prevents RocksDB snapshot isolation from hiding concurrent writes
     log.debug("Epoch {} integrity check: flushing MemTable", epoch);
     dagStore.flushMemTable();
 
@@ -649,7 +646,7 @@ public class BlockImporter {
    * <ul>
    *   <li>Blocks in SAME epoch do NOT accumulate difficulty</li>
    *   <li>Cross-epoch references accumulate difficulty</li>
-   *   <li>BUG-CONSENSUS-009: Orphan block work is accumulated to prevent wasted hashpower</li>
+   *   <li>Orphan block work is accumulated to prevent wasted hashpower</li>
    * </ul>
    *
    * <p>Formula: cumulative = maxPreviousEpochDifficulty + orphanWorkSum + thisBlockWork
@@ -804,8 +801,7 @@ public class BlockImporter {
   /**
    * Result of height calculation including both block height and chain length.
    *
-   * <p><strong>BUG-HEIGHT-002 Fix:</strong>
-   * When height shifting occurs, the chain length increases by 1 even though
+   * <p>When height shifting occurs, the chain length increases by 1 even though
    * the new block might get a lower height. This class tracks both values.
    */
   @Getter
@@ -822,13 +818,11 @@ public class BlockImporter {
   /**
    * Calculate the correct height for a block based on epoch order.
    *
-   * <p><strong>BUG-HEIGHT-001 Fix:</strong>
-   * Heights must be assigned based on epoch order, not arrival order.
+   * <p>Heights must be assigned based on epoch order, not arrival order.
    * This ensures consistent height assignment across all nodes regardless
    * of the order blocks arrive during sync.
    *
-   * <p><strong>BUG-HEIGHT-002 Fix:</strong>
-   * Returns both block height AND actual chain length. When height shifting
+   * <p>Returns both block height AND actual chain length. When height shifting
    * occurs, chain length = mainBlockCount + 1, which may be different from
    * the new block's height.
    *
@@ -939,7 +933,7 @@ public class BlockImporter {
       log.info("Height shifting complete: shifted {} blocks, new block at height {}, new chain length {}",
           mainBlocks.size() - insertPosition, newHeight, mainBlockCount + 1);
 
-      // BUG-HEIGHT-002 fix: Return both block height AND actual chain length
+      // Return both block height AND actual chain length
       // When shifting occurs, chain length = mainBlockCount + 1
       return new HeightCalculationResult(newHeight, mainBlockCount + 1);
     } else {
@@ -978,7 +972,7 @@ public class BlockImporter {
     private final boolean success;
     private final long epoch;
     private final long height;
-    private final long chainLength;  // BUG-HEIGHT-002 fix: actual chain length for mainBlockCount update
+    private final long chainLength;  // Actual chain length for mainBlockCount update
     private final UInt256 cumulativeDifficulty;
     private final boolean isBestChain;
     private final boolean isEpochWinner;
@@ -1037,15 +1031,15 @@ public class BlockImporter {
   @Getter
   private static class EpochCompetitionResult {
     private final long height;
-    private final long chainLength;  // BUG-HEIGHT-002 fix: actual chain length after operation
+    private final long chainLength;  // Actual chain length after operation
     private final boolean winner;
     private final boolean epochWinner;
     private final Block demotedBlock;         // Single block (for backward compatibility)
     /**
      * -- GETTER --
-     *  Get ALL blocks that need demotion (BUG-CONSENSUS-007 fix)
+     *  Get ALL blocks that need demotion
      */
-    private final List<Block> demotedBlocks;  // ALL blocks that need demotion (BUG-CONSENSUS-007 fix)
+    private final List<Block> demotedBlocks;  // ALL blocks that need demotion
 
     /**
      * Constructor for single block demotion (backward compatible)
@@ -1056,7 +1050,7 @@ public class BlockImporter {
     }
 
     /**
-     * Constructor for multiple blocks demotion (BUG-CONSENSUS-007 fix)
+     * Constructor for multiple blocks demotion
      */
     public EpochCompetitionResult(long height, long chainLength, boolean winner, boolean epochWinner, List<Block> demotedBlocks) {
       this(height, chainLength, winner, epochWinner,

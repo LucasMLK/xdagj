@@ -96,7 +96,6 @@
                     <argLine>@{argLine} -javaagent:${project.build.directory}/agents/byte-buddy-agent.jar -Xmx2048m</argLine>
                     <excludes>
                         <exclude>**/BlockProcessingPerformanceTest.java</exclude>
-                        <exclude>**/TwoNodeSyncReorganizationTest.java</exclude>
                     </excludes>
                 </configuration>
             </plugin>

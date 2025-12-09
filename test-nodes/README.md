@@ -20,7 +20,7 @@ This directory contains test node configurations for multi-node testing.
 
 ```bash
 # Run comparison (script is in test-nodes directory)
-cd /Users/reymondtu/dev/github/xdagj/test-nodes
+cd <xdagj-project-root>/test-nodes  # e.g., ~/dev/xdagj/test-nodes
 ./compare-nodes.sh
 ```
 

@@ -280,7 +280,7 @@ public class BlockBuilder {
 
     // Step 4: Sort by work (descending), take top 16 (MAX_BLOCK_LINKS)
     // Work = MAX_UINT256 / hash → smaller hash = more work
-    // BUG-SYNC-007: Use deterministic multi-level sorting to ensure consistent link order
+    // Use deterministic multi-level sorting to ensure consistent link order
     // across all nodes, as link order affects block hash calculation
     List<Block> top16 = candidates.stream()
         .sorted((b1, b2) -> {

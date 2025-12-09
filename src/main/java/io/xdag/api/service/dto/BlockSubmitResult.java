@@ -43,7 +43,7 @@ import org.apache.tuweni.bytes.Bytes32;
  * <h2>Common Rejection Reasons</h2>
  * <ul>
  *   <li>"Unknown candidate block" - Block not based on known candidate</li>
- *   <li>"Stale candidate" - Parent block was demoted to orphan (BUG-CONSENSUS-010)</li>
+ *   <li>"Stale candidate" - Parent block was demoted to orphan </li>
  *   <li>"Invalid PoW" - Nonce doesn't produce valid hash</li>
  *   <li>"Timestamp out of bounds" - Block timestamp invalid for epoch</li>
  *   <li>"Invalid links" - Block references unknown or invalid blocks</li>

@@ -71,14 +71,12 @@ public class HttpApiServer {
       String[] apiKeys = httpSpec.getRpcHttpApiKeys();
       if (apiKeys != null && apiKeys.length > 0) {
         for (String keyConfig : apiKeys) {
-          // BUGFIX (BUG-024): Use split(":", 2) to handle API keys containing colons
-          // Previously: split(":") would incorrectly split "my:complex:key:READ" into 4 parts
-          // Now: split(":", 2) produces ["my:complex:key", "READ"] (correct)
+          // Use split(":", 2) to handle API keys containing colons
+          // This correctly splits "my:complex:key:READ" into ["my:complex:key", "READ"]
           String[] parts = keyConfig.split(":", 2);
 
           if (parts.length != 2) {
-            // BUGFIX (BUG-024): Log warning for malformed API key configuration
-            // Previously: silently skipped malformed configs, users had no feedback
+            // Log warning for malformed API key configuration
             log.warn("Malformed API key configuration (expected 'key:permission'): {}", keyConfig);
             continue;
           }
@@ -92,9 +90,7 @@ public class HttpApiServer {
             continue;
           }
 
-          // BUGFIX (BUG-024): Catch invalid permission names
-          // Previously: IllegalArgumentException would crash server startup
-          // Now: log error and skip invalid configuration
+          // Catch invalid permission names to prevent server startup crash
           try {
             Permission permission = Permission.valueOf(permissionStr.toUpperCase());
             store.addApiKey(key, permission);
@@ -126,7 +122,7 @@ public class HttpApiServer {
       ServerBootstrap b = new ServerBootstrap();
       b.group(bossGroup, workerGroup)
           .channel(NioServerSocketChannel.class)
-          .handler(new LoggingHandler(LogLevel.DEBUG))  // BUG-LOGGING-002 fix: DEBUG instead of INFO
+          .handler(new LoggingHandler(LogLevel.DEBUG))  // Use DEBUG level to reduce log noise
           .childOption(ChannelOption.SO_KEEPALIVE, true)
           .childHandler(new ChannelInitializer<SocketChannel>() {
             @Override

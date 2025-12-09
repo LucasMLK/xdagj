@@ -74,7 +74,7 @@ import org.rocksdb.WriteOptions;
  *   <li>Memory: ~14 MB L1 cache + 2-4 GB L2 RocksDB cache</li>
  * </ul>
  *
- * <h2><strong>THREAD SAFETY WARNING (DEBT-003)</strong></h2>
+ * <h2><strong>THREAD SAFETY WARNING </strong></h2>
  * <p><strong style="color:red">CRITICAL CONCURRENCY ISSUE</strong>: Many modification methods in this class
  * use non-atomic read-modify-write patterns that are NOT thread-safe:
  *
@@ -95,7 +95,7 @@ import org.rocksdb.WriteOptions;
  * Result: Balance is 130 instead of 180 - Lost 50 XDAG!
  * }</pre>
  *
- * <p><strong>Affected Methods</strong> (DEBT-003):
+ * <p><strong>Affected Methods</strong> 
  * <ul>
  *   <li>{@link #addBalance(Bytes, UInt256)} - Balance loss risk</li>
  *   <li>{@link #subtractBalance(Bytes, UInt256)} - Balance loss risk</li>
@@ -128,7 +128,6 @@ import org.rocksdb.WriteOptions;
  * limitation about separate RocksDB instances.
  *
  * @since AccountStore
- * @see <a href="../../../../../CODE_REVIEW_PLAN.md#debt-003">DEBT-003 Technical Debt Documentation</a>
  */
 @Slf4j
 public class AccountStoreImpl implements AccountStore {

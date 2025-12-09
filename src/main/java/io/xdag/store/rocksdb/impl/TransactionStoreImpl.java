@@ -231,7 +231,7 @@ public class TransactionStoreImpl implements TransactionStore {
   /**
    * Index transaction to block (bidirectional).
    *
-   * <p><strong>THREAD SAFETY WARNING (DEBT-004)</strong>:
+   * <p><strong>THREAD SAFETY WARNING </strong>:
    * This method uses a non-atomic read-modify-write pattern for index append:
    * <pre>{@code
    * existingValue = indexSource.get(key);     // Non-atomic read
@@ -255,7 +255,6 @@ public class TransactionStoreImpl implements TransactionStore {
    *
    * @param blockHash block hash
    * @param txHash    transaction hash
-   * @see <a href="../../../../../CODE_REVIEW_PLAN.md#debt-004">DEBT-004 Technical Debt Documentation</a>
    */
   @Override
   public void indexTransactionToBlock(Bytes32 blockHash, Bytes32 txHash) {
@@ -325,7 +324,7 @@ public class TransactionStoreImpl implements TransactionStore {
   /**
    * Index transaction to address.
    *
-   * <p><strong>THREAD SAFETY WARNING (DEBT-004)</strong>:
+   * <p><strong>THREAD SAFETY WARNING </strong>:
    * This method uses a non-atomic read-modify-write pattern. See
    * {@link #indexTransactionToBlock} for detailed explanation of the concurrency risk.
    *
@@ -337,7 +336,6 @@ public class TransactionStoreImpl implements TransactionStore {
    * @param address address to index
    * @param txHash  transaction hash
    * @see #indexTransactionToBlock
-   * @see <a href="../../../../../CODE_REVIEW_PLAN.md#debt-004">DEBT-004 Technical Debt Documentation</a>
    */
   @Override
   public void indexTransactionToAddress(org.apache.tuweni.bytes.Bytes address, Bytes32 txHash) {

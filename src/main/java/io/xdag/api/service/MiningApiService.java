@@ -113,13 +113,13 @@ public class MiningApiService {
   private final PowAlgorithm powAlgorithm;
 
   /**
-   * Epoch consensus manager for solution collection (optional, for BUG-CONSENSUS fix)
+   * Epoch consensus manager for solution collection (optional)
    * If null, falls back to legacy immediate import behavior
    */
   private volatile EpochConsensusManager epochConsensusManager;
 
   /**
-   * Sync manager for checking synchronization status (BUG-SYNC-001 fix)
+   * Sync manager for checking synchronization status
    * Mining is blocked until node is synchronized with the network
    */
   private volatile SyncManager syncManager;
@@ -157,7 +157,7 @@ public class MiningApiService {
   }
 
   /**
-   * Set the epoch consensus manager (for BUG-CONSENSUS fix integration)
+   * Set the epoch consensus manager for integration
    *
    * <p>This method is called by DagKernel during initialization to enable
    * the new epoch-based consensus mechanism. If not set, the service falls
@@ -175,7 +175,7 @@ public class MiningApiService {
   }
 
   /**
-   * Set the sync manager (for BUG-SYNC-001 fix)
+   * Set the sync manager
    *
    * <p>This method is called by DagKernel during initialization to enable
    * synchronization checks before mining.
@@ -204,7 +204,7 @@ public class MiningApiService {
     try {
       log.info("Pool '{}' requesting candidate block", poolId);
 
-      // BUG-SYNC-001 fix: Block mining until synchronized
+      // Block mining until synchronized
       if (syncManager != null && !syncManager.isSynchronized()) {
         log.debug("Pool '{}' cannot get candidate: node not synchronized " +
             "(localEpoch={}, remoteEpoch={}; localHeight={}, remoteHeight={})",
@@ -255,7 +255,7 @@ public class MiningApiService {
           poolId,
           block.getHash().toHexString().substring(0, 18) + "...");
 
-      // BUG-SYNC-001 fix: Reject mining submissions until synchronized
+      // Reject mining submissions until synchronized
       if (syncManager != null && !syncManager.isSynchronized()) {
         log.debug("Pool '{}' submission rejected: node not synchronized " +
             "(localEpoch={}, remoteEpoch={}; localHeight={}, remoteHeight={})",
@@ -271,7 +271,7 @@ public class MiningApiService {
         return BlockSubmitResult.rejected("Unknown candidate block", "UNKNOWN_CANDIDATE");
       }
 
-      // Step 1.5: BUG-CONSENSUS-010 fix - Validate parent links haven't been demoted
+      // Step 1.5: Validate parent links haven't been demoted
       // When candidate block was created, it linked to the current main block as parent.
       // If that main block was later demoted to orphan (due to epoch competition),
       // the candidate is now stale and should be rejected.
@@ -293,7 +293,7 @@ public class MiningApiService {
 
       // Step 2: Check if epoch consensus is enabled
       if (epochConsensusManager != null && epochConsensusManager.isRunning()) {
-        // NEW: Submit to EpochConsensusManager for collection (BUG-CONSENSUS-002 fix)
+        // NEW: Submit to EpochConsensusManager for collection
         io.xdag.consensus.epoch.SubmitResult result = epochConsensusManager.submitSolution(block, poolId);
 
         if (result.isAccepted()) {
@@ -352,7 +352,7 @@ public class MiningApiService {
       return difficulty;
 
     } catch (Exception e) {
-      // BUGFIX (BUG-028): Return null instead of UInt256.MAX_VALUE on error
+      // Return null instead of UInt256.MAX_VALUE on error
       // Previously: Returned MAX_VALUE (lowest difficulty = easiest mining) which is wrong
       // Now: Return null to signal error - callers must handle null case
       // MAX_VALUE would allow any hash to pass difficulty check, causing invalid mining

@@ -1,0 +1,20 @@
+#!/bin/bash
+# Example script for manually starting test nodes
+# Copy this to start-nodes.sh and customize paths for your environment
+
+# Set JAVA_HOME to your JDK 21+ installation
+export JAVA_HOME="${JAVA_HOME:-/path/to/your/jdk-21}"
+
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+cd "$SCRIPT_DIR/suite1/node"
+$JAVA_HOME/bin/java -jar xdagj-1.0.0-executable.jar -t -c ./xdag-devnet.conf > node.log 2>&1 &
+echo "Started suite1 node with PID $!"
+
+cd "$SCRIPT_DIR/suite2/node"
+$JAVA_HOME/bin/java -jar xdagj-1.0.0-executable.jar -t -c ./xdag-devnet.conf > node.log 2>&1 &
+echo "Started suite2 node with PID $!"
+
+sleep 3
+ps aux | grep xdagj | grep -v grep

@@ -149,7 +149,7 @@ public class DagKernel {
   // Mining API service (for pool server integration)
   private io.xdag.api.service.MiningApiService miningApiService;
 
-  // Epoch consensus manager (for BUG-CONSENSUS-001 and BUG-CONSENSUS-002 fix)
+  // Epoch consensus manager
   private EpochConsensusManager epochConsensusManager;
 
   // P2P service (5)
@@ -166,7 +166,7 @@ public class DagKernel {
   private volatile boolean running = false;
 
   /**
-   * WAL sync scheduler for periodic durability (BUG-PERSISTENCE-001 fix).
+   * WAL sync scheduler for periodic durability.
    * Syncs RocksDB WAL every 10 seconds to prevent data loss on unexpected restarts.
    */
   private ScheduledExecutorService walSyncScheduler;
@@ -252,7 +252,7 @@ public class DagKernel {
     // Note: DagChain and SyncManager will be initialized in start() method
     // because DagChainImpl needs a fully constructed DagKernel instance
 
-    // Register shutdown hook for graceful termination (BUG-STORAGE-002 fix)
+    // Register shutdown hook for graceful termination
     Runtime.getRuntime().addShutdownHook(new Thread(() -> {
       try {
         log.info("Shutdown hook triggered: syncing WAL before exit...");
@@ -325,17 +325,17 @@ public class DagKernel {
       this.miningApiService = new MiningApiService(dagChain, wallet, powAlgorithm);
       log.info("   - MiningApiService initialized");
 
-      // Initialize Epoch Consensus Manager (for BUG-CONSENSUS fix)
+      // Initialize Epoch Consensus Manager
       // Configuration: 2 backup mining threads, minimum difficulty from config
       // NOTE: Using very low difficulty for testing (only first 8 bits must be zero)
       org.apache.tuweni.units.bigints.UInt256 minimumDifficulty =
           org.apache.tuweni.units.bigints.UInt256.fromHexString("0x00ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
 
       this.epochConsensusManager = new EpochConsensusManager(
-          this,  // ✅ Pass DagKernel for SyncManager access (BUG-SYNC-001 fix)
+          this,  // Pass DagKernel for SyncManager access
           dagChain,
-          dagStore,  // ✅ Pass DagStore for WAL sync (BUG-STORAGE-002 fix)
-          miningApiService.getBlockGenerator(),  // ✅ Inject BlockGenerator for candidate block creation
+          dagStore,  // Pass DagStore for WAL sync
+          miningApiService.getBlockGenerator(),  // Inject BlockGenerator for candidate block creation
           2,  // backup mining threads
           minimumDifficulty
       );
@@ -432,13 +432,13 @@ public class DagKernel {
         }
       }
 
-      // Start Epoch Consensus Manager (for BUG-CONSENSUS fix)
+      // Start Epoch Consensus Manager
       if (epochConsensusManager != null) {
         epochConsensusManager.start();
         log.info("EpochConsensusManager started");
       }
 
-      // Start periodic WAL sync scheduler (BUG-PERSISTENCE-001 fix)
+      // Start periodic WAL sync scheduler
       startWalSyncScheduler();
 
       running = true;
@@ -471,7 +471,7 @@ public class DagKernel {
     log.info("========================================");
 
     try {
-      // Stop WAL sync scheduler first (BUG-PERSISTENCE-001 fix)
+      // Stop WAL sync scheduler first
       stopWalSyncScheduler();
 
       // Stop PoW Algorithm (RandomX)
@@ -480,7 +480,7 @@ public class DagKernel {
         log.info("PoW Algorithm stopped: {}", powAlgorithm.getName());
       }
 
-      // Stop Epoch Consensus Manager (for BUG-CONSENSUS fix)
+      // Stop Epoch Consensus Manager
       if (epochConsensusManager != null) {
         epochConsensusManager.stop();
         log.info("EpochConsensusManager stopped");
@@ -499,7 +499,7 @@ public class DagKernel {
       transactionStore.stop();
       log.info("TransactionStore stopped");
 
-      // Sync WAL before stopping DagStore (BUG-STORAGE-002 fix)
+      // Sync WAL before stopping DagStore
       try {
         if (dagStore != null && dagStore.isRunning()) {
           dagStore.syncWal();
@@ -645,7 +645,7 @@ public class DagKernel {
       this.syncManager.start();
       log.info("SyncManager started");
 
-      // BUG-SYNC-001 fix: Connect SyncManager to MiningApiService for sync gate
+      // Connect SyncManager to MiningApiService for sync gate
       if (this.miningApiService != null) {
         this.miningApiService.setSyncManager(this.syncManager);
         log.debug("SyncManager connected to MiningApiService");
@@ -687,7 +687,7 @@ public class DagKernel {
     }
   }
 
-  // ========== WAL Sync Scheduler (BUG-PERSISTENCE-001 fix) ==========
+  // WAL Sync Scheduler
 
   /**
    * Start periodic WAL sync scheduler.
@@ -913,7 +913,7 @@ public class DagKernel {
       log.info("Chain already initialized ({} blocks), verifying genesis...", mainBlockCount);
       verifyGenesisBlock();
 
-      // Verify data consistency (BUG-PERSISTENCE-001 fix)
+      // Verify data consistency after restart
       verifyDataConsistency();
     }
   }
@@ -997,7 +997,7 @@ public class DagKernel {
   }
 
   /**
-   * Verify data consistency after restart (BUG-PERSISTENCE-001 fix).
+   * Verify data consistency after restart.
    *
    * <p>Checks that all blocks in the chain have valid link targets.
    * If blocks with missing dependencies are found, they are removed to allow resync.

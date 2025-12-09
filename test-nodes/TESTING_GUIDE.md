@@ -51,7 +51,7 @@ XDAG_JARNAME="xdagj-${XDAG_VERSION}-executable.jar"
 ### Option 1: Copy the jar directly (simplest)
 ```bash
 # 1. Build from project root
-cd /Users/reymondtu/dev/github/xdagj
+cd <xdagj-project-root>  # e.g., ~/dev/xdagj
 mvn clean install -DskipTests -q
 
 # 2. Enter the node directory and clean artifacts

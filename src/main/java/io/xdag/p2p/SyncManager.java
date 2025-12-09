@@ -66,13 +66,13 @@ public class SyncManager implements AutoCloseable {
   private static final long MAX_PIPELINE_GAP = 4_096;
 
   /**
-   * Interval for historical epoch verification (BUG-SYNC-003 fix).
+   * Interval for historical epoch verification.
    * Check for better blocks in historical epochs every 30 seconds.
    */
   private static final long HISTORICAL_VERIFY_INTERVAL_MS = 30_000;
 
   /**
-   * Number of recent epochs to verify for better blocks (BUG-SYNC-003 fix).
+   * Number of recent epochs to verify for better blocks.
    * After initial full historical scan, verify only recent epochs periodically.
    */
   private static final long HISTORICAL_VERIFY_DEPTH = 10;
@@ -168,7 +168,7 @@ public class SyncManager implements AutoCloseable {
    */
   private final AtomicLong forwardSyncStartEpoch = new AtomicLong(-1);
 
-  // ==================== Historical epoch verification (BUG-SYNC-003 fix) ====================
+  // ==================== Historical epoch verification ====================
 
   /**
    * Last time historical epoch verification was performed.
@@ -182,7 +182,7 @@ public class SyncManager implements AutoCloseable {
    */
   private final AtomicBoolean historicalVerifyInProgress = new AtomicBoolean(false);
 
-  // ==================== Fork Detection (BUG-SYNC-003 fix) ====================
+  // ==================== Fork Detection ====================
 
   /**
    * Flag indicating if initial full historical scan has been completed.
@@ -305,10 +305,10 @@ public class SyncManager implements AutoCloseable {
       return;
     }
 
-    // BUG-SYNC-003 fix: On first peer connection, initiate full historical scan
+    // On first peer connection, initiate full historical scan
     maybeInitiateForkDetection(channels);
 
-    // BUG-SYNC-003 fix: Periodically verify historical epochs for better blocks
+    // Periodically verify historical epochs for better blocks
     maybePerformHistoricalVerification(channels);
 
     // Handle different sync states
@@ -505,12 +505,12 @@ public class SyncManager implements AutoCloseable {
     sendEpochRequest(channel, startEpoch, endEpoch);
   }
 
-  // ==================== Historical Epoch Verification (BUG-SYNC-003 fix) ====================
+  // ==================== Historical Epoch Verification ====================
 
   /**
    * Maybe perform historical epoch verification.
    *
-   * <p>BUG-SYNC-003 fix: Periodically request historical epoch hashes from peers
+   * <p>Periodically request historical epoch hashes from peers
    * to detect if peers have better (smaller hash) blocks for epochs we already have.
    *
    * <p>This is needed because normal forward sync only syncs from localTipEpoch + 1,
@@ -567,12 +567,12 @@ public class SyncManager implements AutoCloseable {
     }
   }
 
-  // ==================== Fork Detection (BUG-SYNC-003 fix) ====================
+  // Fork Detection
 
   /**
    * Initiate fork detection on first peer connection.
    *
-   * <p>BUG-SYNC-003 fix: When nodes start simultaneously, they mine independently
+   * <p>When nodes start simultaneously, they mine independently
    * before P2P sync kicks in. This creates divergent chains for early epochs.
    *
    * <p>On first peer connection, we scan from genesis to find the fork point
@@ -606,7 +606,7 @@ public class SyncManager implements AutoCloseable {
     long genesisEpoch = getGenesisEpoch();
     long localTipEpoch = getLocalTipEpoch();
 
-    log.info("BUG-SYNC-003: Initiating fork detection scan from epoch {} to {}",
+    log.info("Initiating fork detection scan from epoch {} to {}",
         genesisEpoch, localTipEpoch);
 
     // Start fork detection from genesis
@@ -630,7 +630,7 @@ public class SyncManager implements AutoCloseable {
 
     if (currentEpoch < 0 || currentEpoch > targetEpoch) {
       // Fork detection complete - no divergence found
-      log.info("BUG-SYNC-003: Fork detection complete, no divergence found");
+      log.info("Fork detection complete, no divergence found");
       transitionFromForkDetection();
       return;
     }
@@ -695,7 +695,7 @@ public class SyncManager implements AutoCloseable {
 
         if (peerBestHash != null && peerBestHash.compareTo(localWinnerHash) < 0) {
           // Peer has better block - this is the fork point
-          log.info("BUG-SYNC-003: Found fork at epoch {}. Peer has better hash {} (local: {})",
+          log.info("Found fork at epoch {}. Peer has better hash {} (local: {})",
               epoch,
               peerBestHash.toHexString().substring(0, 18),
               localWinnerHash.toHexString().substring(0, 18));
@@ -718,7 +718,7 @@ public class SyncManager implements AutoCloseable {
     long nextStart = endOfBatch + 1;
     if (nextStart > targetEpoch) {
       // Scan complete - no divergence requiring reorganization
-      log.info("BUG-SYNC-003: Fork detection complete, chains are consistent");
+      log.info("Fork detection complete, chains are consistent");
       transitionFromForkDetection();
     } else {
       forkDetectionCurrentEpoch.set(nextStart);
@@ -746,7 +746,7 @@ public class SyncManager implements AutoCloseable {
     long forkPoint = forkPointEpoch.get();
     long target = reorgTargetEpoch.get();
 
-    log.info("BUG-SYNC-003: Starting chain reorganization from epoch {} to {}",
+    log.info("Starting chain reorganization from epoch {} to {}",
         forkPoint + 1, target);
 
     // Reset forward sync to start from fork point
@@ -788,7 +788,7 @@ public class SyncManager implements AutoCloseable {
 
     if (startEpoch > target) {
       // Reorganization complete
-      log.info("BUG-SYNC-003: Chain reorganization complete");
+      log.info("Chain reorganization complete");
       transitionFromChainReorganization();
       return;
     }

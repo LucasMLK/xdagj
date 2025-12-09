@@ -31,7 +31,7 @@ import lombok.Getter;
  * <p>Indicates whether the solution was accepted for collection or rejected,
  * along with a descriptive message.
  *
- * <p>Part of BUG-CONSENSUS-002 fix - solutions are collected (not immediately imported)
+ * <p>Part of consensus fix - solutions are collected (not immediately imported)
  * and processed at epoch end.
  *
  * @see SolutionCollector

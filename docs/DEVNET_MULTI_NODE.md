@@ -8,7 +8,7 @@ Use `script/devnet_manager.py` to spin up multiple local suites (XDAGJ node + po
 - Maven for rebuilding XDAGJ
 - Java-compatible xdagj-pool and xdagj-miner JARs that can be launched with `java -jar <jar> -c <config>`
 
-The default topology includes two suites (`suite1`, `suite2`). Their ports, artifact names, launch arguments, artifact sources, and rendered config files live in `test-nodes/devnet-manager.json`. Each suite is auto-generated from the `suiteTemplate` block, which defines `count`, `namePrefix`, and per-suite variables (node port, HTTP port, Stratum port, worker name, wallet address, etc.) pointing to sibling repos under `/Users/reymondtu/dev/github/{xdagj,xdagj-pool,xdagj-miner}`; adjust those paths if your workspace differs or if you keep custom build commands.
+The default topology includes two suites (`suite1`, `suite2`). Their ports, artifact names, launch arguments, artifact sources, and rendered config files live in `test-nodes/devnet-manager.json`. Each suite is auto-generated from the `suiteTemplate` block, which defines `count`, `namePrefix`, and per-suite variables (node port, HTTP port, Stratum port, worker name, wallet address, etc.) pointing to sibling repos (xdagj, xdagj-pool, xdagj-miner in the same parent directory); adjust those paths in `devnet-manager.json` if your workspace differs.
 
 ## Typical Workflow
 

@@ -187,7 +187,7 @@ public class TransactionBroadcastManager {
    * @return true if should process, false if already seen
    */
   public boolean shouldProcess(Bytes32 txHash) {
-    // BUGFIX (BUG-023): Use putIfAbsent() for atomic check-then-act
+    // BUGFIX : Use putIfAbsent() for atomic check-then-act
     // Previously: getIfPresent() + put() had race condition between check and insert
     // Now: putIfAbsent() guarantees atomicity - returns null only if newly inserted
     Long existing = recentlySeenTxs.asMap().putIfAbsent(txHash, System.currentTimeMillis());
@@ -215,7 +215,7 @@ public class TransactionBroadcastManager {
    * @return true if should broadcast, false if already broadcasted
    */
   public boolean shouldBroadcast(Bytes32 txHash) {
-    // BUGFIX (BUG-023): Use putIfAbsent() for atomic check-then-act
+    // BUGFIX : Use putIfAbsent() for atomic check-then-act
     // Previously: getIfPresent() + put() had race condition between check and insert
     // Now: putIfAbsent() guarantees atomicity - returns null only if newly inserted
     Long existing = recentlyBroadcastedTxs.asMap().putIfAbsent(txHash, System.currentTimeMillis());

@@ -55,7 +55,7 @@ public class AccountApiService {
   /**
    * Convert UInt256 to XAmount for display
    *
-   * <p>BUGFIX BUG-084: Handle large balances safely
+   * <p>Bugfix: Handle large balances safely
    * UInt256 can hold values up to 2^256-1, but XAmount uses long (max 2^63-1).
    * For balances that exceed Long.MAX_VALUE, we display them as MAX_VALUE to avoid overflow.
    *

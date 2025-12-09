@@ -121,7 +121,7 @@ public enum XdagMessageCode implements IMessageCode {
   private final int code;
 
   XdagMessageCode(int code) {
-    // BUGFIX (BUG-045): Corrected Node protocol range check from 0x15 to 0x1F
+    // BUGFIX : Corrected Node protocol range check from 0x15 to 0x1F
     // Previously: Only checked 0x10-0x15, missing 0x16-0x1F
     // Now: Checks full Node protocol range 0x10-0x1F as documented
     //

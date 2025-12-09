@@ -141,7 +141,7 @@ public class BytesUtils {
    * @throws ArrayIndexOutOfBoundsException if index + length > arrays.length
    */
   public static byte[] subArray(byte[] arrays, int index, int length) {
-    // BUGFIX (BUG-030): Add comprehensive input validation
+    // BUGFIX : Add comprehensive input validation
     if (arrays == null) {
       throw new IllegalArgumentException("Source array cannot be null");
     }
@@ -172,7 +172,7 @@ public class BytesUtils {
       return null;
     }
 
-    // BUGFIX (BUG-031): Validate hex string length is even
+    // BUGFIX : Validate hex string length is even
     if (hexString.length() % 2 != 0) {
       throw new IllegalArgumentException(
           "Hex string must have even length, got: " + hexString.length());

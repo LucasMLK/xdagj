@@ -67,7 +67,7 @@ public class XdagMessageFactory {
         case GET_EPOCH_HASHES -> new GetEpochHashesMessage(body);
         case EPOCH_HASHES_REPLY -> new EpochHashesReplyMessage(body);
 
-        // Status exchange messages (BUG-SYNC-001 fix)
+        // Status exchange messages 
         case GET_STATUS -> new GetStatusMessage(body);
         case STATUS_REPLY -> new StatusReplyMessage(body);
 

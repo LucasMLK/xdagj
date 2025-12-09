@@ -140,7 +140,7 @@ public interface TransactionStore extends XdagLifecycle {
    * @param blockHash The block hash
    * @return Number of transactions in the block (0 if none found)
    * @see #getTransactionsByBlock(Bytes32) for full transaction retrieval
-   * @since DEBT-005 Performance Optimization
+   * @since 1.0 Performance Optimization
    */
   int getTransactionCountByBlock(Bytes32 blockHash);
 

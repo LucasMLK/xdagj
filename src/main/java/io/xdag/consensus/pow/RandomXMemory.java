@@ -62,7 +62,7 @@ public class RandomXMemory {
       try {
         poolTemplate.close();
       } catch (Exception e) {
-        // BUGFIX BUG-083: Log cleanup failures for diagnostics
+        // Bugfix: Log cleanup failures for diagnostics
         log.warn("Failed to close poolTemplate (seed height={}): {}",
             seedHeight, e.getMessage(), e);
       }
@@ -73,7 +73,7 @@ public class RandomXMemory {
       try {
         blockTemplate.close();
       } catch (Exception e) {
-        // BUGFIX BUG-083: Log cleanup failures for diagnostics
+        // Bugfix: Log cleanup failures for diagnostics
         log.warn("Failed to close blockTemplate (seed height={}): {}",
             seedHeight, e.getMessage(), e);
       }

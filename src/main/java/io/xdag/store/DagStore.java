@@ -103,7 +103,7 @@ public interface DagStore extends XdagLifecycle {
   byte BLOCK_REFS_INDEX = (byte) 0xb3;
 
   /**
-   * Orphan reason: blockHash → OrphanReason (BUG-ORPHAN-001 fix)
+   * Orphan reason: blockHash → OrphanReason 
    */
   byte ORPHAN_REASON = (byte) 0xb4;
 
@@ -328,7 +328,7 @@ public interface DagStore extends XdagLifecycle {
    */
   long getPendingBlockCount();
 
-  // ==================== Orphan Reason Management (BUG-ORPHAN-001 fix) ====================
+  // ==================== Orphan Reason Management  ====================
 
   /**
    * Save orphan reason for a block
@@ -467,7 +467,7 @@ public interface DagStore extends XdagLifecycle {
    *   <li>Recommended frequency: per-epoch (every 64 seconds)</li>
    * </ul>
    *
-   * <p><strong>BUG-STORAGE-002 Fix</strong>:
+   * <p><strong>Fix</strong>:
    * This method fixes the data loss issue where blocks written with async writes
    * (setSync(false)) are lost when node is force-killed before RocksDB flushes WAL.
    *

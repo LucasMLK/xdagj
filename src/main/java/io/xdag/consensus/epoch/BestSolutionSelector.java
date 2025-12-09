@@ -42,7 +42,7 @@ import java.util.List;
  * <p>This implements the "competition-based mining" mechanism from original XDAG,
  * where miners compete to find the smallest hash during the 64-second epoch period.
  *
- * <p>Part of BUG-CONSENSUS-002 fix - ensures "best solution wins" instead of
+ * <p>Part of consensus fix - ensures "best solution wins" instead of
  * "first solution wins".
  *
  * @see SolutionCollector

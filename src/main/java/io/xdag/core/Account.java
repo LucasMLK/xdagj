@@ -199,7 +199,7 @@ public class Account {
 
     // Contract data (if present)
     if (isContract()) {
-      // BUGFIX BUG-079: Validate contract account has both codeHash and storageRoot
+      // Bugfix: Validate contract account has both codeHash and storageRoot
       if (storageRoot == null) {
         throw new IllegalStateException(
             "Contract account must have both codeHash and storageRoot");
@@ -250,7 +250,7 @@ public class Account {
         .balance(balance)
         .nonce(nonce);
 
-    // Read contract data if present (BUGFIX BUG-078: validate length before reading)
+    // Read contract data if present (Bugfix: validate length before reading)
     if (isContract) {
       if (data.length < 125) {
         throw new IllegalArgumentException(

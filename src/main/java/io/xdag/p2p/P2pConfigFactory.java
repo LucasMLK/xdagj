@@ -54,7 +54,7 @@ public class P2pConfigFactory {
     int minConn = 8;  // Default minimum connections
     int maxConn = Math.min(config.getNodeSpec().getMaxConnections(), 100); // Cap at 100
 
-    // BUGFIX (BUG-021): Ensure maxConnections >= minConnections
+    // BUGFIX : Ensure maxConnections >= minConnections
     // If configured max is less than min, adjust max to min to avoid logic conflict
     if (maxConn < minConn) {
       log.warn("Configured maxConnections ({}) is less than minimum ({}), adjusting max to {}",

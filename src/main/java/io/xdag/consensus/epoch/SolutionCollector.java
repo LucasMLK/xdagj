@@ -49,7 +49,7 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>Block must not have been already produced for this epoch</li>
  * </ul>
  *
- * <p>Part of BUG-CONSENSUS-002 fix - enables "best solution wins" consensus.
+ * <p>Part of consensus fix - enables "best solution wins" consensus.
  *
  * @see EpochConsensusManager
  * @see BestSolutionSelector

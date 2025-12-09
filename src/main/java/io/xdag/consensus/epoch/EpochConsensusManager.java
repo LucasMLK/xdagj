@@ -42,10 +42,10 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * EpochConsensusManager - Central coordinator for epoch-based consensus.
  *
- * <p>This manager implements the unified fix for BUG-CONSENSUS-001 and BUG-CONSENSUS-002:
+ * <p>This manager implements unified epoch-based consensus:
  * <ul>
- *   <li><b>BUG-001 Fix</b>: Backup mining ensures every epoch produces a block</li>
- *   <li><b>BUG-002 Fix</b>: Solution collection enables "best solution wins" at epoch end</li>
+ *   <li><b>Backup mining</b>: Ensures every epoch produces a block</li>
+ *   <li><b>Solution collection</b>: Enables "best solution wins" at epoch end</li>
  * </ul>
  *
  * <p>Architecture:
@@ -109,7 +109,7 @@ public class EpochConsensusManager {
     // ========== Dependencies ==========
 
     /**
-     * DagKernel for accessing SyncManager (BUG-SYNC-001 fix).
+     * DagKernel for accessing SyncManager.
      */
     private final DagKernel dagKernel;
 
@@ -119,7 +119,7 @@ public class EpochConsensusManager {
     private final DagChain dagChain;
 
     /**
-     * DagStore for WAL synchronization (BUG-STORAGE-002 fix).
+     * DagStore for WAL synchronization.
      */
     private final io.xdag.store.DagStore dagStore;
 
@@ -217,7 +217,7 @@ public class EpochConsensusManager {
         long epoch = getCurrentEpoch();
         currentEpoch.set(epoch);
 
-        // BUG FIX (BUG-CONSENSUS-005): Create context for both current and next epoch
+        // Create context for both current and next epoch
         // This ensures the next epoch has a context ready when current epoch ends
         createEpochContext(epoch);
         log.debug("Created epoch context for current epoch {}", epoch);
@@ -303,8 +303,8 @@ public class EpochConsensusManager {
      * @param epoch Epoch number
      */
     private void createEpochContext(long epoch) {
-        // BUG FIX: Use TimeUtils to calculate proper epoch times
-        // Previous code used epoch * EPOCH_DURATION_MS which overflows for large epoch numbers
+        // Use TimeUtils to calculate proper epoch times
+        // Prevents overflow for large epoch numbers by using TimeUtils API
         long epochEndTime = io.xdag.utils.TimeUtils.epochNumberToTimeMillis(epoch);
         long epochStartTime = io.xdag.utils.TimeUtils.epochNumberToTimeMillis(epoch - 1);
 
@@ -333,8 +333,8 @@ public class EpochConsensusManager {
      * @param epoch Epoch number
      */
     private void scheduleBackupMinerTrigger(long epoch) {
-        // BUG FIX: Use TimeUtils to calculate proper epoch end time
-        // Previous code used (epoch + 1) * EPOCH_DURATION_MS which overflows for large epoch numbers
+        // Use TimeUtils to calculate proper epoch end time
+        // Prevents overflow for large epoch numbers by using TimeUtils API
         long epochEndTime = io.xdag.utils.TimeUtils.epochNumberToTimeMillis(epoch);
         long triggerTime = epochEndTime - FORCED_MINING_THRESHOLD_MS;
         long delay = triggerTime - System.currentTimeMillis();
@@ -352,7 +352,7 @@ public class EpochConsensusManager {
     /**
      * Trigger backup miner if no solutions have been collected.
      *
-     * <p>BUG-SYNC-001 fix: Skip backup mining if node is not synchronized.
+     * <p>Skip backup mining if node is not synchronized.
      * This prevents new nodes from mining before catching up with the network.
      *
      * @param epoch Epoch number
@@ -364,7 +364,7 @@ public class EpochConsensusManager {
             return;
         }
 
-        // BUG-SYNC-001 fix: Check sync status before backup mining
+        // Check sync status before backup mining
         SyncManager syncManager = dagKernel != null ? dagKernel.getSyncManager() : null;
         if (syncManager != null && !syncManager.isSynchronized()) {
             log.debug("Skipping backup miner for epoch {}: node not synchronized " +
@@ -377,7 +377,7 @@ public class EpochConsensusManager {
         if (context.getSolutionsCount() == 0 && !context.isBlockProduced()) {
             log.warn("No solutions for epoch {}, triggering backup miner", epoch);
 
-            // BUG FIX: Refresh candidate block before backup mining
+            // Refresh candidate block before backup mining
             // When candidate was created at epoch start, the previous epoch's main block
             // hadn't been imported yet. Now at T-5s, it should be available.
             Block refreshedCandidate = blockGenerator.generateCandidate();
@@ -433,7 +433,7 @@ public class EpochConsensusManager {
 
         // 4. Wait briefly for backup miner if no solutions yet
         if (solutions.isEmpty()) {
-            // BUG-SYNC-001 fix: Check sync status before waiting for backup miner
+            // Check sync status before waiting for backup miner
             SyncManager syncManager = dagKernel != null ? dagKernel.getSyncManager() : null;
             if (syncManager != null && !syncManager.isSynchronized()) {
                 log.debug("Skipping backup miner wait for epoch {}: node not synchronized " +
@@ -497,7 +497,7 @@ public class EpochConsensusManager {
         createEpochContext(epoch + 1);
         scheduleBackupMinerTrigger(epoch + 1);
 
-        // 8. Sync WAL to disk (BUG-STORAGE-002 fix)
+        // 8. Sync WAL to disk
         try {
             dagStore.syncWal();
             log.debug("WAL synced after epoch {} completion", epoch);

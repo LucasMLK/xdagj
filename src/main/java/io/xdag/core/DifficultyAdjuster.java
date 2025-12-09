@@ -186,7 +186,7 @@ public class DifficultyAdjuster {
         .multiply(BigInteger.valueOf((long) (adjustmentFactor * 1000)))
         .divide(BigInteger.valueOf(1000));
 
-    // BUG-DIFFICULTY-001 fix: Cap target at UInt256.MAX_VALUE to prevent overflow
+    //  Cap target at UInt256.MAX_VALUE to prevent overflow
     // This can happen when:
     // 1. DEVNET mode starts with baseDifficultyTarget = MAX_VALUE
     // 2. Too few blocks are produced, causing adjustmentFactor = 2.0

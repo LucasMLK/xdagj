@@ -5,7 +5,32 @@ All notable changes to XDAGJ will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2025-12-09
+
+XDAGJ 1.0 is the first stable release of the Java implementation of the XDAG blockchain protocol.
+
+### Highlights
+
+- **XDAG 1.0 Consensus**: Epoch-based DAG where the block with the smallest hash wins each 64-second epoch
+- **FastDAG Synchronization**: Efficient P2P sync protocol (v3.1) with epoch hash gossip and block backfill
+- **High-Performance Storage**: RocksDB-backed stores with atomic block processing (~85% write reduction)
+- **Modern APIs**: REST + JSON-RPC for wallet, blocks, transactions, and mining operations
+- **RandomX Mining**: Event-driven PoW integration with JNA bindings (92% of native performance)
+- **HD Wallet**: BIP32/39/44 compliant hierarchical deterministic wallet support
+
+### Dependencies
+
+| Module | Version | Description |
+|--------|---------|-------------|
+| [xdagj-crypto](https://github.com/XDagger/xdagj-crypto) | 0.1.5 | Cryptographic library (ECDSA, BIP32/39/44, AES, Schnorr, Dilithium) |
+| [xdagj-native-randomx](https://github.com/XDagger/xdagj-native-randomx) | 0.2.6 | RandomX PoW native bindings via JNA |
+| [xdagj-p2p](https://github.com/XDagger/xdagj-p2p) | 0.1.6 | P2P networking (Kademlia DHT, reputation system, message routing) |
+
+---
+
 ## [Unreleased]
+
+---
 
 ### Removed - Configuration and Snapshot Cleanup (2025-11-22)
 

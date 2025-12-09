@@ -235,7 +235,7 @@ public class DagStoreImpl implements DagStore {
       byte[] blockKey = buildBlockKey(hash);
       byte[] blockData = serializeBlock(block);
 
-      // BUG-SYNC-002 debug: Log serialization result
+      // Log serialization result for debugging
       log.debug("saveBlock: hash={}, blockDataSize={} bytes",
           hash.toHexString().substring(0, 18), blockData.length);
 
@@ -1008,7 +1008,7 @@ public class DagStoreImpl implements DagStore {
   }
 
   /**
-   * Build orphan reason key (BUG-ORPHAN-001 fix)
+   * Build orphan reason key 
    */
   private byte[] buildOrphanReasonKey(Bytes32 hash) {
     byte[] key = new byte[33];
@@ -1277,7 +1277,7 @@ public class DagStoreImpl implements DagStore {
     }
   }
 
-  // ==================== Orphan Reason Management (BUG-ORPHAN-001 fix) ====================
+  // ==================== Orphan Reason Management  ====================
 
   @Override
   public void saveOrphanReason(Bytes32 blockHash, io.xdag.core.OrphanReason reason) {

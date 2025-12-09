@@ -105,7 +105,7 @@ public class RocksdbKVSource implements KVSource<byte[], byte[]> {
         throw new NullPointerException("no name set to the db");
       }
 
-      // BUGFIX BUG-082: Validate config is set before using it
+      // Bugfix: Validate config is set before using it
       if (config == null) {
         throw new IllegalStateException(
             "Config must be set via setConfig() before calling init() on database: " + name);

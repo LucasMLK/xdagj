@@ -360,7 +360,7 @@ public class BlockApiService {
     long timestamp = TimeUtils.epochNumberToTimeMillis(block.getEpoch());
     String state = info.isMainBlock() ? MAIN_STATE : "Orphan";
 
-    // Get transaction count (DEBT-005: Use efficient counting method instead of loading all transactions)
+    // Get transaction count (Technical debt: Use efficient counting method instead of loading all transactions)
     int txCount = dagKernel.getTransactionStore().getTransactionCountByBlock(block.getHash());
 
     // Get coinbase address

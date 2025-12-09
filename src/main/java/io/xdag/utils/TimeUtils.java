@@ -217,7 +217,7 @@ public class TimeUtils {
    * @return Formatted date string, or null if input is null
    */
   public static String format(Date date) {
-    // BUGFIX (BUG-029): Add null check for defensive programming
+    // BUGFIX : Add null check for defensive programming
     // Previously: Would throw NPE if date is null
     // Now: Returns null for null input (consistent with Java conventions)
     if (date == null) {

@@ -37,11 +37,11 @@ import lombok.Getter;
  * </ul>
  *
  * <h2>Why draw the boundary?</h2>
- * <p>In XDAG 1.0b each epoch (64 seconds) stores at most 16 candidate blocks, and only one can
+ * <p>In XDAG 1.0 each epoch (64 seconds) stores at most 16 candidate blocks, and only one can
  * become the main block. The remaining 15 are orphans because they lost the competition, not because
  * they miss parents, so re-importing them is pointless.</p>
  *
- * <p><strong>BUG-ORPHAN-001</strong> fix: PendingBlockManager must only retry
+ * <p>Note fix: PendingBlockManager must only retry
  * {@link OrphanReason#MISSING_DEPENDENCY} blocks and should never retry
  * {@link OrphanReason#LOST_COMPETITION} blocks.</p>
  *

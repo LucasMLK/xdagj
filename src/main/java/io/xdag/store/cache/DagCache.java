@@ -109,7 +109,7 @@ public class DagCache {
   public DagCache() {
     log.info("Initializing DagCache (L1)...");
 
-    // Block cache configuration (BUG-P2P-001 fix: increased capacity to reduce eviction)
+    // Block cache configuration ( increased capacity to reduce eviction)
     this.blockCache = Caffeine.newBuilder()
         .maximumSize(50_000)  // 50K blocks × 500 bytes = 25 MB
         .expireAfterAccess(Duration.ofHours(2))  // 2 hour idle time

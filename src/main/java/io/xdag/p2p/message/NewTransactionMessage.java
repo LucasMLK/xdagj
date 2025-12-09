@@ -160,7 +160,7 @@ public class NewTransactionMessage extends Message {
   public NewTransactionMessage(Transaction transaction, int ttl) {
     super(XdagMessageCode.NEW_TRANSACTION, null);
 
-    // BUGFIX (BUG-055): Add null check for transaction parameter
+    // BUGFIX : Add null check for transaction parameter
     // Previously: Would throw NPE in encode() when calling transaction.toBytes()
     // Now: Validate input and provide clear error message
     if (transaction == null) {

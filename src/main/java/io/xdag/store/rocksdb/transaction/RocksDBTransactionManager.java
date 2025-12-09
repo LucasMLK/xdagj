@@ -198,7 +198,7 @@ public class RocksDBTransactionManager implements TransactionalStore {
     log.info("Shutting down RocksDBTransactionManager ({} active transactions)",
         activeTransactions.size());
 
-    // BUGFIX BUG-081: Copy keys to avoid ConcurrentModificationException
+    // Bugfix: Copy keys to avoid ConcurrentModificationException
     // (rollbackTransaction modifies activeTransactions)
     for (String txId : new java.util.ArrayList<>(activeTransactions.keySet())) {
       log.warn("Rolling back uncommitted transaction during shutdown: {}", txId);

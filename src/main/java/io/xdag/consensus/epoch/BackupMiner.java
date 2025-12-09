@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * BackupMiner - Provides forced block generation when no external solutions are received.
  *
- * <p>This component implements the backup mining mechanism to fix BUG-CONSENSUS-001.
+ * <p>This component implements the backup mining mechanism to fix issue.
  * It ensures that every epoch produces a block, even when external pools/miners
  * don't submit solutions.
  *

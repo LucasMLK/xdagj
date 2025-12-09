@@ -47,9 +47,7 @@ public class CompactSerializer {
      * @throws IOException if serialization fails
      */
     public static byte[] serialize(BlockInfo blockInfo) throws IOException {
-        // BUGFIX (BUG-037): Add null check for defensive programming
-        // Previously: Would throw NullPointerException if blockInfo is null
-        // Now: Throw IllegalArgumentException with clear message
+        // Null check for defensive programming
         if (blockInfo == null) {
             throw new IllegalArgumentException("BlockInfo cannot be null");
         }
@@ -116,9 +114,7 @@ public class CompactSerializer {
      * @throws IOException if serialization fails
      */
     public static byte[] serialize(ChainStats stats) throws IOException {
-        // BUGFIX (BUG-038): Add null check for defensive programming
-        // Previously: Would throw NullPointerException if stats is null
-        // Now: Throw IllegalArgumentException with clear message
+        // Null check for defensive programming
         if (stats == null) {
             throw new IllegalArgumentException("ChainStats cannot be null");
         }
@@ -173,9 +169,7 @@ public class CompactSerializer {
      * @throws IOException if deserialization fails
      */
     public static ChainStats deserializeChainStats(byte[] data) throws IOException {
-        // BUGFIX (BUG-040, BUG-041): Add input validation for defensive programming
-        // Previously: Would throw NullPointerException or IOException with poor context
-        // Now: Validate input and provide clear error messages
+        // Input validation for defensive programming
         if (data == null) {
             throw new IllegalArgumentException("Data cannot be null");
         }
@@ -185,7 +179,7 @@ public class CompactSerializer {
 
         ByteReader reader = new ByteReader(data);
 
-        // LIMITATION (BUG-039): Legacy format detection uses heuristic
+        // LIMITATION: Legacy format detection uses heuristic
         // Current approach: data.length > 150 to detect legacy format
         //
         // Why this works in practice:
@@ -374,9 +368,7 @@ public class CompactSerializer {
         private int position;
 
         public ByteReader(byte[] data) {
-            // BUGFIX (BUG-042): Add null check for defensive programming
-            // Previously: Would throw NullPointerException on first access
-            // Now: Throw IllegalArgumentException with clear message
+            // Null check for defensive programming
             if (data == null) {
                 throw new IllegalArgumentException("Data cannot be null");
             }
@@ -405,9 +397,8 @@ public class CompactSerializer {
         }
 
         public int readVarInt() throws IOException {
-            // BUGFIX (BUG-043): Add overflow protection for malformed input
-            // Previously: Could overflow or loop indefinitely with malicious data
-            // Now: Limit to maximum 5 bytes (32-bit integer)
+            // Add overflow protection for malformed input
+            // Limit to maximum 5 bytes (32-bit integer)
             int result = 0;
             int shift = 0;
             byte b;
@@ -423,9 +414,8 @@ public class CompactSerializer {
         }
 
         public long readVarLong() throws IOException {
-            // BUGFIX (BUG-044): Add overflow protection for malformed input
-            // Previously: Could overflow or loop indefinitely with malicious data
-            // Now: Limit to maximum 10 bytes (64-bit long)
+            // Add overflow protection for malformed input
+            // Limit to maximum 10 bytes (64-bit long)
             long result = 0;
             int shift = 0;
             byte b;

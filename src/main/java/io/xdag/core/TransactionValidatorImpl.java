@@ -216,13 +216,13 @@ public class TransactionValidatorImpl implements TransactionValidator {
       UInt256 balance = accountManager.getBalance(tx.getFrom());
       XAmount required = tx.getAmount().add(tx.getFee());
 
-      // BUGFIX BUG-080: Convert XAmount to UInt256 safely (avoid longValue() overflow)
+      // Bugfix: Convert XAmount to UInt256 safely (avoid longValue() overflow)
       // XAmount stores nano units as long, which is always safe to convert to BigInteger
       BigDecimal requiredNano = required.toDecimal(0, NANO_XDAG);
       UInt256 requiredUInt256 = UInt256.valueOf(requiredNano.toBigInteger());
 
       if (balance.compareTo(requiredUInt256) < 0) {
-        // BUGFIX BUG-080: Safe balance display (avoid toLong() overflow)
+        // Bugfix: Safe balance display (avoid toLong() overflow)
         String balanceStr;
         try {
           balanceStr = XAmount.of(balance.toLong(), NANO_XDAG).toDecimal(9, XUnit.XDAG).toString();

@@ -278,7 +278,7 @@ public class DagChainImpl implements DagChain {
           notifyDagchainMs = postWatch.elapsed().toMillis();
 
           // Update chain stats for main blocks
-          // BUG-HEIGHT-002 fix: use chainLength from importResult instead of blockInfo.getHeight()
+          // Use chainLength from importResult instead of blockInfo.getHeight()
           postWatch.reset().start();
           updateChainStatsForNewMainBlock(importResult.getChainLength(), blockInfo.getDifficulty());
           updateStatsMs = postWatch.elapsed().toMillis();
@@ -294,7 +294,7 @@ public class DagChainImpl implements DagChain {
 
           // Note: PendingBlockManager.cleanupOldOrphans() removed
           // Reason: Each epoch limited to 16 blocks, storage is bounded (~134MB for 16384 epochs)
-          // Deleting orphans risks breaking DAG references (see BUG-LINK-NOT-FOUND)
+          // Deleting orphans risks breaking DAG references
           // Trade-off: Prioritize correctness over storage efficiency
 
         }
@@ -437,15 +437,14 @@ public class DagChainImpl implements DagChain {
   /**
    * Update chain statistics for new main block
    *
-   * <p><strong>BUG-HEIGHT-002 Fix:</strong>
-   * Use chainLength from ImportResult instead of block height. When height shifting occurs,
+   * <p>Use chainLength from ImportResult instead of block height. When height shifting occurs,
    * chainLength = mainBlockCount + 1, which may be different from the new block's height.
    *
    * @param chainLength actual chain length after the import operation
    * @param difficulty cumulative difficulty of the new block
    */
   private synchronized void updateChainStatsForNewMainBlock(long chainLength, UInt256 difficulty) {
-    // BUG-HEIGHT-002 fix: use chainLength directly instead of block height
+    // Use chainLength directly instead of block height
     long newMainBlockCount = Math.max(chainStats.getMainBlockCount(), chainLength);
 
     chainStats = chainStats
@@ -695,7 +694,7 @@ public class DagChainImpl implements DagChain {
   @Override
   public UInt256 calculateCumulativeDifficulty(Block block) {
     // XDAG GHOST Protocol Implementation
-    // BUG-CONSENSUS-009: Accumulate orphan block work to prevent wasted hashpower
+    // Accumulate orphan block work to prevent wasted hashpower
     //
     // Rules:
     // 1. Blocks in SAME epoch do NOT accumulate difficulty

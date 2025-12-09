@@ -1,8 +1,0 @@
-{
-  "networkId": "mainnet",
-  "chainId": 1,
-  "epoch": 23694000,
-  "difficulty": "0x1",
-  "randomXSeed": "0x0000000000000000000000000000000000000000000000000000000000000001",
-  "alloc": {}
-}

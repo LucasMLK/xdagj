@@ -79,7 +79,7 @@ public class BasicUtils {
    * @throws IllegalArgumentException if hex string is invalid or null
    */
   public static MutableBytes32 hexPubAddress2Hash(String hexPubAddress) {
-    // BUGFIX (BUG-034): Add input validation for defensive programming
+    // BUGFIX : Add input validation for defensive programming
     // Previously: Would throw obscure exception from Bytes.fromHexString()
     // Now: Validate input and provide clear error messages
     if (hexPubAddress == null) {
@@ -163,7 +163,7 @@ public class BasicUtils {
    * @throws IllegalArgumentException if src is null or less than 512 bytes
    */
   public static boolean crc32Verify(byte[] src, int crc) {
-    // BUGFIX (BUG-033): Add input validation for array bounds
+    // BUGFIX : Add input validation for array bounds
     // Previously: Would throw ArrayIndexOutOfBoundsException if src.length < 512
     // Now: Validate input and provide clear error message
     if (src == null) {

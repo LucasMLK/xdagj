@@ -70,7 +70,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
   private final DagChain dagChain;
 
   /**
-   * BUG-P2P-008 FIX: Dedicated thread pool for block import operations.
+   * Dedicated thread pool for block import operations.
    *
    * <p>Block import (tryToConnect) is a synchronized method that can take significant time
    * due to RocksDB writes and listener notifications. If executed on Netty EventLoop,
@@ -82,7 +82,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
   private final ExecutorService blockImportExecutor;
 
   /**
-   * BUG-SYNC-006: Track recently requested missing dependencies to avoid duplicate requests.
+   * Track recently requested missing dependencies to avoid duplicate requests.
    * Key: block hash, Value: request timestamp (for expiration)
    */
   private final Map<Bytes32, Long> recentlyRequestedBlocks = new ConcurrentHashMap<>();
@@ -96,14 +96,14 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
     this.dagKernel = dagKernel;
     this.dagChain = dagKernel.getDagChain();
 
-    // BUG-P2P-008 FIX: Create dedicated thread pool for block imports
+    // Create dedicated thread pool for block imports
     // Using single thread to ensure sequential block processing and avoid race conditions
     this.blockImportExecutor = Executors.newSingleThreadExecutor(r -> {
       Thread t = new Thread(r, "BlockImporter");
       t.setDaemon(true);
       return t;
     });
-    log.info("BUG-P2P-008: Created dedicated BlockImporter thread pool");
+    log.info("Created dedicated BlockImporter thread pool");
 
     // Register as NewBlockListener for real-time broadcasting
     this.dagChain.registerNewBlockListener(this);
@@ -121,7 +121,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
     this.messageTypes.add(XdagMessageCode.GET_EPOCH_HASHES.toByte());
     this.messageTypes.add(XdagMessageCode.EPOCH_HASHES_REPLY.toByte());
 
-    // Register status exchange messages (BUG-SYNC-001 fix)
+    // Register status exchange messages
     this.messageTypes.add(XdagMessageCode.GET_STATUS.toByte());
     this.messageTypes.add(XdagMessageCode.STATUS_REPLY.toByte());
   }
@@ -193,7 +193,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
     log.info("Peer connected: {} (Node ID: {})",
         channel.getRemoteAddress(), channel.getNodeId());
 
-    // BUG-SYNC-001 fix: Request peer's chain status on connection
+    // Request peer's chain status on connection
     // This allows us to know the remote tip epoch for sync completion detection
     try {
       channel.send(new GetStatusMessage());
@@ -252,7 +252,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
         case EPOCH_HASHES_REPLY:
           handleEpochHashesReply(channel, body);
           break;
-        // Status exchange handlers (BUG-SYNC-001 fix)
+        // Status exchange handlers
         case GET_STATUS:
           handleGetStatus(channel);
           break;
@@ -275,7 +275,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
   /**
    * Handle NEW_BLOCK_HASH (Inv) - Received notification of a new block
    *
-   * <p>BUG-SYNC-004 fix: During initial sync (when node is not synchronized),
+   * <p>During initial sync (when node is not synchronized),
    * ignore NEW_BLOCK_HASH messages to prevent height inconsistency. These blocks
    * will be fetched through ordered epoch sync instead.
    */
@@ -287,7 +287,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
       log.info("Received NEW_BLOCK_HASH {} (epoch {}) from {}",
           hash.toHexString().substring(0, 16), msg.getEpoch(), channel.getRemoteAddress());
 
-      // BUG-SYNC-004: Check if node is synchronized before processing real-time broadcasts
+      // Check if node is synchronized before processing real-time broadcasts
       // During initial sync, blocks should come through ordered epoch sync to ensure
       // correct height assignment. Ignore NEW_BLOCK_HASH to prevent height inconsistency.
       SyncManager syncManager = dagKernel.getSyncManager();
@@ -359,10 +359,10 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
    *
    * <p>Historical or delayed blocks are imported directly without epoch competition.
    *
-   * <p>BUG-SYNC-006: When import fails due to missing dependency, actively request
+   * <p>When import fails due to missing dependency, actively request
    * the missing block from the peer instead of just waiting passively.
    *
-   * <p>BUG-P2P-008 FIX: Block imports are executed asynchronously in a dedicated thread pool
+   * <p>Block imports are executed asynchronously in a dedicated thread pool
    * to prevent blocking the Netty EventLoop. This ensures P2P communication remains responsive
    * even when block import takes significant time (RocksDB writes, listener notifications).
    */
@@ -373,7 +373,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
 
       log.debug("Received {} blocks from {}, queuing for async import", blocks.size(), channel.getRemoteAddress());
 
-      // BUG-P2P-008 FIX: Execute block imports asynchronously to avoid blocking Netty EventLoop
+      // Execute block imports asynchronously to avoid blocking Netty EventLoop
       // This prevents ReadTimeout disconnections caused by long-running tryToConnect operations
       blockImportExecutor.submit(() -> {
         for (Block block : blocks) {
@@ -431,14 +431,14 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
     log.debug("Imported block {}: {}",
         block.getHash().toHexString().substring(0, 16), importResult.getStatus());
 
-    // BUG-SYNC-006: Handle missing dependency by actively requesting it
+    // Handle missing dependency by actively requesting it
     if (importResult.getStatus() == DagImportResult.ImportStatus.MISSING_DEPENDENCY) {
       handleMissingDependency(channel, block, importResult);
     }
   }
 
   /**
-   * BUG-SYNC-006: Actively request missing dependency block from peer.
+   * Actively request missing dependency block from peer.
    *
    * <p>When a block import fails due to missing dependency (e.g., orphan block reference),
    * this method sends a GET_BLOCKS request to fetch the missing block.
@@ -475,7 +475,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
     recentlyRequestedBlocks.put(missingHash, now);
 
     // Send request for missing block
-    log.info("BUG-SYNC-006: Requesting missing dependency {} for block {}",
+    log.info("Requesting missing dependency {} for block {}",
         missingHash.toHexString().substring(0, 16),
         block.getHash().toHexString().substring(0, 16));
 
@@ -526,7 +526,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
   /**
    * Handle EPOCH_HASHES_REPLY - Received hashes, need to fetch missing blocks
    *
-   * <p>BUG-SYNC-003 fix: Also fetch blocks that have smaller hash than local
+   * <p>Also fetch blocks that have smaller hash than local
    * block for the same epoch (peer has better block).
    */
   private void handleEpochHashesReply(Channel channel, Bytes body) {
@@ -539,7 +539,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
         return;
       }
 
-      // BUG-SYNC-004: Check if SyncManager is in binary search mode
+      // Check if SyncManager is in binary search mode
       if (syncManager.isInBinarySearch()) {
         // Binary search mode: report results to SyncManager
         boolean hasBlocks = !data.isEmpty();
@@ -551,17 +551,17 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
         return; // Don't fetch blocks during binary search, just probe
       }
 
-      // BUG-SYNC-003: Check if SyncManager is in fork detection mode
+      // Check if SyncManager is in fork detection mode
       if (syncManager.isInForkDetection()) {
         log.debug("Fork detection response: {} epochs", data.size());
         syncManager.onForkDetectionResponse(data);
         return; // Fork detection will handle reorganization
       }
 
-      // BUG-SYNC-005: Notify SyncManager about received epochs for empty epoch detection
+      // Notify SyncManager about received epochs for empty epoch detection
       syncManager.onEpochHashesResponse(data.keySet());
 
-      // Normal sync mode: fetch missing blocks AND better blocks (BUG-SYNC-003 fix)
+      // Normal sync mode: fetch missing blocks AND better blocks
       List<Bytes32> hashesToFetch = new ArrayList<>();
 
       for (Map.Entry<Long, List<Bytes32>> entry : data.entrySet()) {
@@ -579,14 +579,14 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
             continue;
           }
 
-          // BUG-SYNC-003 fix: Even if we have this block, check if peer has better block
+          // Even if we have this block, check if peer has better block
           // for the same epoch (smaller hash)
           if (localWinnerHash != null && peerHash.compareTo(localWinnerHash) < 0) {
             // Peer has a block with smaller hash for this epoch!
             // We should already have this block if we received it via normal sync,
             // but the epoch competition might not have been triggered.
             // Re-import it to trigger epoch competition.
-            log.info("BUG-SYNC-003: Epoch {} peer has better hash {} (local: {})",
+            log.info("Epoch {} peer has better hash {} (local: {})",
                 epoch,
                 peerHash.toHexString().substring(0, 18),
                 localWinnerHash.toHexString().substring(0, 18));
@@ -596,12 +596,12 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
             if (betterBlock != null) {
               // Block exists locally but may not be main block
               // Re-import to trigger epoch competition
-              // BUG-P2P-008 FIX: Execute asynchronously to avoid blocking Netty EventLoop
+              // Execute asynchronously to avoid blocking Netty EventLoop
               Block blockToReimport = betterBlock;
               blockImportExecutor.submit(() -> {
                 try {
                   dagChain.tryToConnect(blockToReimport);
-                  log.debug("BUG-SYNC-003: Re-imported block {} for epoch competition",
+                  log.debug("Re-imported block {} for epoch competition",
                       blockToReimport.getHash().toHexString().substring(0, 16));
                 } catch (Exception e) {
                   log.error("Error re-importing block for epoch competition: {}", e.getMessage());
@@ -632,7 +632,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
     }
   }
 
-  // ==================== Status Exchange Handlers (BUG-SYNC-001 fix) ====================
+  // Status Exchange Handlers
 
   /**
    * Handle GET_STATUS - peer requesting our chain status.
@@ -668,8 +668,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
   /**
    * Handle STATUS_REPLY - received peer's chain status.
    * Update SyncManager with the remote tip epoch AND height for sync completion detection.
-   * BUG-SYNC-001 fix (enhanced): Track both epoch and height to prevent mining
-   * before all historical blocks are synced.
+   * Track both epoch and height to prevent mining before all historical blocks are synced.
    */
   private void handleStatusReply(Channel channel, Bytes body) {
     try {
@@ -690,7 +689,7 @@ public class XdagP2pEventHandler extends io.xdag.p2p.P2pEventHandler implements 
     }
   }
 
-  // ==========  Transaction Broadcast Handler (Phase 3) ==========
+  // Transaction Broadcast Handler (Phase 3)
 
   /**
    * Handle NEW_TRANSACTION - received new transaction from peer (Phase 3)

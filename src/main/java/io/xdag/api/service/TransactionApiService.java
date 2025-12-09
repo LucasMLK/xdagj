@@ -133,14 +133,14 @@ public class TransactionApiService {
    * <p><b>Consequence</b>: The last few pages may be empty if many transactions are in orphan blocks.
    * For example, if total=10000 but only 8000 are in main chain, pages 81-100 will be empty.
    *
-   * <p><b>TODO (DEBT-005)</b>: Add a dedicated main chain transaction counter to fix this issue.
+   * <p><b>TODO </b>: Add a dedicated main chain transaction counter to fix this issue.
    *
    * @param page page number (1-based)
    * @param size page size
    * @return paged transaction info list
    */
   public PagedResult<TransactionInfo> getRecentTransactionsPage(int page, int size) {
-    // BUGFIX (BUG-026): Document limitation - total includes all transactions, not just main chain
+    // BUGFIX : Document limitation - total includes all transactions, not just main chain
     // This means the last few pages may be empty if many transactions are in orphan blocks
     long total = dagKernel.getTransactionStore().getTransactionCount();
     if (total <= 0) {
@@ -204,7 +204,7 @@ public class TransactionApiService {
         .signatureValid(tx.verifySignature());
 
     // Decode remark if present
-    // BUGFIX (BUG-027): Safe UTF-8 decoding with validation
+    // BUGFIX : Safe UTF-8 decoding with validation
     // Previously: new String(bytes, UTF_8) could produce � replacement characters for invalid sequences
     // Now: Use String constructor which replaces malformed input with \uFFFD safely
     if (tx.getData() != null && tx.getData().size() > 0) {

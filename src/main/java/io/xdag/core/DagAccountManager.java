@@ -208,7 +208,7 @@ public class DagAccountManager {
   /**
    * Add to account balance in a transaction.
    *
-   * <p><strong>THREAD SAFETY WARNING (DEBT-002)</strong>:
+   * <p><strong>THREAD SAFETY WARNING </strong>:
    * This method uses a non-atomic read-modify-write pattern:
    * <pre>{@code
    *   currentBalance = getBalance(address);      // Non-transactional read
@@ -233,7 +233,6 @@ public class DagAccountManager {
    * @param address account address
    * @param amount  amount to add
    * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
-   * @see <a href="../../../../CODE_REVIEW_PLAN.md#debt-002">DEBT-002 Technical Debt Documentation</a>
    */
   public void addBalanceInTransaction(String txId, Bytes address, UInt256 amount)
       throws io.xdag.store.rocksdb.transaction.TransactionException {
@@ -251,7 +250,7 @@ public class DagAccountManager {
   /**
    * Subtract from account balance in a transaction.
    *
-   * <p><strong>THREAD SAFETY WARNING (DEBT-002)</strong>:
+   * <p><strong>THREAD SAFETY WARNING </strong>:
    * This method uses a non-atomic read-modify-write pattern. See {@link #addBalanceInTransaction}
    * for detailed explanation of the concurrency risk.
    *
@@ -266,7 +265,6 @@ public class DagAccountManager {
    * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
    * @throws IllegalArgumentException                               if insufficient balance
    * @see #addBalanceInTransaction
-   * @see <a href="../../../../CODE_REVIEW_PLAN.md#debt-002">DEBT-002 Technical Debt Documentation</a>
    */
   public void subtractBalanceInTransaction(String txId, Bytes address, UInt256 amount)
       throws io.xdag.store.rocksdb.transaction.TransactionException {
@@ -290,7 +288,7 @@ public class DagAccountManager {
   /**
    * Increment account nonce in a transaction.
    *
-   * <p><strong>THREAD SAFETY WARNING (DEBT-002)</strong>:
+   * <p><strong>THREAD SAFETY WARNING </strong>:
    * This method uses a non-atomic read-modify-write pattern. See {@link #addBalanceInTransaction}
    * for detailed explanation of the concurrency risk.
    *
@@ -303,7 +301,6 @@ public class DagAccountManager {
    * @param address account address
    * @throws io.xdag.store.rocksdb.transaction.TransactionException if transaction operation fails
    * @see #addBalanceInTransaction
-   * @see <a href="../../../../CODE_REVIEW_PLAN.md#debt-002">DEBT-002 Technical Debt Documentation</a>
    */
   public void incrementNonceInTransaction(String txId, Bytes address)
       throws io.xdag.store.rocksdb.transaction.TransactionException {

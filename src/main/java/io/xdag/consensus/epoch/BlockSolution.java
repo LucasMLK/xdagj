@@ -41,7 +41,7 @@ import lombok.Getter;
  * <p>Solutions are collected during an epoch, and at epoch end, the best solution
  * (highest difficulty) is selected for block import.
  *
- * <p>Part of BUG-CONSENSUS-002 fix - enables "best solution wins" instead of
+ * <p>Part of consensus fix - enables "best solution wins" instead of
  * "first solution wins".
  *
  * @see SolutionCollector
