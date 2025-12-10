@@ -23,6 +23,12 @@ release.properties
 sdk/
 *.pid
 
+# Root level runtime data (from manual runs or tests)
+/devnet/
+/testnet/
+/mainnet/
+/logs/
+
 # Test nodes runtime files
 test-nodes/node*/devnet/
 test-nodes/node*/testnet/

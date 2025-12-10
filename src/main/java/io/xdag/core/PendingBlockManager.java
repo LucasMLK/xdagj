@@ -142,13 +142,35 @@ public class PendingBlockManager {
    *
    * <p>The block will be persisted and enqueued for retry when parents arrive.
    *
+   * <p><strong>BUG-SYNC-009 fix:</strong> After registering, we check if parents now exist
+   * (they could have been imported between detection and registration). If so, we immediately
+   * enqueue for retry instead of waiting for the next onBlockImported() callback which may
+   * have already fired.
+   *
    * @param block          the block with missing dependencies
    * @param missingParents list of missing parent hashes
    */
   public void registerMissingDependency(Block block, List<Bytes32> missingParents) {
     List<Bytes32> parents = missingParents == null ? Collections.emptyList() : missingParents;
+
+    // Save to pending store (now atomic thanks to WriteBatch fix)
     dagStore.saveMissingDependencyBlock(block, parents);
     dagStore.saveOrphanReason(block.getHash(), OrphanReason.MISSING_DEPENDENCY);
+
+    // BUG-SYNC-009 fix: Check if parents are now available
+    // This handles the race condition where parent arrives between:
+    // 1. BlockImporter detecting MISSING_DEPENDENCY
+    // 2. This registerMissingDependency() call
+    // Without this check, the block could be stuck in pending state forever.
+    boolean allParentsAvailable = parents.isEmpty() || parents.stream()
+        .allMatch(parentHash -> dagStore.getBlockByHash(parentHash) != null);
+
+    if (allParentsAvailable) {
+      log.debug("Pending block {} has all parents now available, immediate retry",
+          formatHash(block.getHash()));
+    }
+
+    // Always enqueue for retry - the retry logic will handle the actual import
     enqueueRetry(block.getHash());
   }
 

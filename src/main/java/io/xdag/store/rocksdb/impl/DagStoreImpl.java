@@ -1377,27 +1377,37 @@ public class DagStoreImpl implements DagStore {
       return;
     }
 
-    try {
-      deleteMissingDependencyBlock(block.getHash());
+    // BUG-SYNC-009 fix: Use WriteBatch for atomic writes to prevent race condition
+    // Previously, separate db.put() calls created a window where onBlockImported()
+    // could query the index before it was written, causing pending blocks to be missed.
+    try (WriteBatch batch = new WriteBatch()) {
+      // First delete any existing entries (also using batch for consistency)
+      deleteMissingDependencyBlockToBatch(batch, block.getHash());
 
+      // Write block data
       byte[] blockKey = buildMissingBlockKey(block.getHash());
       byte[] blockData = serializeBlock(block);
-      db.put(writeOptions, blockKey, blockData);
+      batch.put(blockKey, blockData);
 
+      // Write parent list
       byte[] parentKey = buildMissingParentKey(block.getHash());
       byte[] parentData = serializeMissingParents(missingParents);
       if (parentData.length > 0) {
-        db.put(writeOptions, parentKey, parentData);
+        batch.put(parentKey, parentData);
       } else {
-        db.delete(writeOptions, parentKey);
+        batch.delete(parentKey);
       }
 
+      // Write parent->child index entries (critical for onBlockImported lookup)
       if (missingParents != null) {
         for (Bytes32 parent : missingParents) {
           byte[] indexKey = buildMissingParentIndexKey(parent, block.getHash());
-          db.put(writeOptions, indexKey, EMPTY_VALUE);
+          batch.put(indexKey, EMPTY_VALUE);
         }
       }
+
+      // Atomic write - all or nothing
+      db.write(writeOptions, batch);
 
       log.debug("Saved missing dependency block {} (missing parents={})",
           block.getHash().toHexString().substring(0, 16),
@@ -1406,6 +1416,38 @@ public class DagStoreImpl implements DagStore {
     } catch (Exception e) {
       log.error("Failed to save missing dependency block {}", block.getHash().toHexString(), e);
       throw new RuntimeException("Failed to save missing dependency block", e);
+    }
+  }
+
+  /**
+   * Delete missing dependency block entries to a WriteBatch (for atomic operations).
+   */
+  private void deleteMissingDependencyBlockToBatch(WriteBatch batch, Bytes32 blockHash) {
+    if (blockHash == null) {
+      return;
+    }
+
+    try {
+      // Get existing missing parents to delete their index entries
+      byte[] parentKey = buildMissingParentKey(blockHash);
+      byte[] existingParentData = db.get(readOptions, parentKey);
+
+      if (existingParentData != null) {
+        List<Bytes32> existingParents = deserializeMissingParents(existingParentData);
+        for (Bytes32 parent : existingParents) {
+          byte[] indexKey = buildMissingParentIndexKey(parent, blockHash);
+          batch.delete(indexKey);
+        }
+      }
+
+      // Delete block and parent list entries
+      byte[] blockKey = buildMissingBlockKey(blockHash);
+      batch.delete(blockKey);
+      batch.delete(parentKey);
+
+    } catch (RocksDBException e) {
+      log.warn("Error preparing delete for missing dependency block {}: {}",
+          blockHash.toHexString().substring(0, 16), e.getMessage());
     }
   }
 

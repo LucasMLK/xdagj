@@ -191,6 +191,13 @@ public class SyncManager implements AutoCloseable {
   private final AtomicBoolean initialHistoricalScanDone = new AtomicBoolean(false);
 
   /**
+   * BUG-SYNC-012 FIX: Flag indicating if node started far behind peers.
+   * Set on first remote tip update if gap > BINARY_SEARCH_THRESHOLD.
+   * When true, fork detection is skipped because all data came from peers.
+   */
+  private final AtomicBoolean startedFarBehind = new AtomicBoolean(false);
+
+  /**
    * Current epoch being scanned during fork detection.
    * Starts from genesis and advances forward until tip.
    */
@@ -341,13 +348,18 @@ public class SyncManager implements AutoCloseable {
     int iterations = binarySearchIterations.get();
 
     // Check termination conditions
-    if (iterations >= MAX_BINARY_SEARCH_ITERATIONS || high - low <= MAX_EPOCHS_PER_REQUEST) {
+    // BUG-SYNC-007 fix: Also check if low > high (can happen when no blocks found)
+    if (iterations >= MAX_BINARY_SEARCH_ITERATIONS || high - low <= MAX_EPOCHS_PER_REQUEST
+        || low > high) {
       // Binary search complete
       long minEpoch = minValidEpochFound.get();
       if (minEpoch == Long.MAX_VALUE) {
-        // No blocks found during binary search, use the narrowed range's lower bound
-        // This is the best estimate of where blocks might exist
-        minEpoch = low;
+        // No blocks found during binary search
+        // BUG-SYNC-007 fix: Ensure we don't use a value past the remote tip
+        // Use the original high bound (remote tip) capped to a reasonable range
+        long originalHigh = binarySearchHigh.get();
+        minEpoch = Math.max(getLocalTipEpoch() + 1, originalHigh - MAX_EPOCHS_PER_REQUEST);
+        log.warn("Binary search found no blocks in range, falling back to epoch {}", minEpoch);
       }
       // IMPORTANT: Update minValidEpochFound so transitionToForwardSync() uses correct value
       minValidEpochFound.set(minEpoch);
@@ -402,9 +414,11 @@ public class SyncManager implements AutoCloseable {
     } else {
       // No blocks at probe point, search later epochs
       // Search upper half
-      binarySearchLow.set(probe + MAX_EPOCHS_PER_REQUEST);
+      // BUG-SYNC-007 fix: Clamp low to not exceed high
+      long newLow = Math.min(probe + MAX_EPOCHS_PER_REQUEST, high);
+      binarySearchLow.set(newLow);
       log.debug("Binary search: no blocks at epoch {}, narrowing to [{}, {}]",
-          probe, probe + MAX_EPOCHS_PER_REQUEST, high);
+          probe, newLow, high);
     }
   }
 
@@ -578,6 +592,10 @@ public class SyncManager implements AutoCloseable {
    * <p>On first peer connection, we scan from genesis to find the fork point
    * (last common epoch), then reorganize from there.
    *
+   * <p>BUG-SYNC-012 FIX: Skip fork detection when the gap is large (beyond binary
+   * search threshold). A node that far behind is doing initial sync from peers
+   * and doesn't need fork detection - all its data came from peers.
+   *
    * @param channels active P2P channels
    */
   private void maybeInitiateForkDetection(List<Channel> channels) {
@@ -589,6 +607,15 @@ public class SyncManager implements AutoCloseable {
     // Skip if in other sync states
     SyncState currentState = syncState.get();
     if (currentState != SyncState.FORWARD_SYNC) {
+      return;
+    }
+
+    // BUG-SYNC-012 FIX: Skip fork detection if node started far behind peers.
+    // A node that was far behind at startup is doing initial sync from peers
+    // and doesn't need fork detection - all its data came from peers.
+    if (startedFarBehind.get()) {
+      log.debug("Skipping fork detection: node started far behind peers");
+      initialHistoricalScanDone.set(true); // Mark done to prevent re-triggering
       return;
     }
 
@@ -683,19 +710,24 @@ public class SyncManager implements AutoCloseable {
         continue;
       }
 
-      // Check if peer has the same winner
-      boolean peerHasLocalWinner = peerHashes.contains(localWinnerHash);
+      // BUG-SYNC-010 FIX: Compare actual winners (smallest hashes), not just block presence
+      // The peer response contains ALL blocks in the epoch, not just their winner.
+      // We must compare the smallest hash on each side to detect winner divergence.
+      Bytes32 peerBestHash = peerHashes.stream()
+          .min(Bytes32::compareTo)
+          .orElse(null);
 
-      if (!peerHasLocalWinner) {
-        // Found divergence! Peer has different blocks for this epoch
-        // Check if peer has a BETTER (smaller hash) block
-        Bytes32 peerBestHash = peerHashes.stream()
-            .min(Bytes32::compareTo)
-            .orElse(null);
+      if (peerBestHash == null) {
+        // No valid peer hashes - continue scanning
+        continue;
+      }
 
-        if (peerBestHash != null && peerBestHash.compareTo(localWinnerHash) < 0) {
-          // Peer has better block - this is the fork point
-          log.info("Found fork at epoch {}. Peer has better hash {} (local: {})",
+      // Compare peer's winner (smallest hash) with our local winner
+      if (!peerBestHash.equals(localWinnerHash)) {
+        // Winners are different - check who has the better (smaller) hash
+        if (peerBestHash.compareTo(localWinnerHash) < 0) {
+          // Peer has better block - this is a fork we need to resolve
+          log.info("Found fork at epoch {}. Peer's winner {} beats local winner {}",
               epoch,
               peerBestHash.toHexString().substring(0, 18),
               localWinnerHash.toHexString().substring(0, 18));
@@ -707,9 +739,17 @@ public class SyncManager implements AutoCloseable {
           // Transition to chain reorganization
           transitionToChainReorganization();
           return;
+        } else {
+          // We have better block - peer should reorg to us
+          // Log but continue (no action needed from us)
+          log.debug("Epoch {}: local winner {} is better than peer's {}",
+              epoch,
+              localWinnerHash.toHexString().substring(0, 18),
+              peerBestHash.toHexString().substring(0, 18));
+          forkPointEpoch.set(epoch);
         }
       } else {
-        // Peer has our winner - update fork point to this epoch
+        // Same winner - chains are consistent at this epoch
         forkPointEpoch.set(epoch);
       }
     }
@@ -748,6 +788,13 @@ public class SyncManager implements AutoCloseable {
 
     log.info("Starting chain reorganization from epoch {} to {}",
         forkPoint + 1, target);
+
+    // BUG-SYNC-011 FIX: Clear confirmed empty epochs cache during chain reorganization.
+    // During reorg, previously marked "empty" epochs may actually have blocks from
+    // peers that we need to sync. Keeping stale entries causes gap detection to
+    // skip epochs that should be synced.
+    confirmedEmptyEpochs.invalidateAll();
+    log.debug("Cleared confirmedEmptyEpochs cache for chain reorganization");
 
     // Reset forward sync to start from fork point
     lastRequestedEpoch.set(forkPoint);
@@ -804,6 +851,11 @@ public class SyncManager implements AutoCloseable {
    */
   private void transitionFromChainReorganization() {
     log.debug("Transitioning from chain reorganization to forward sync");
+
+    // BUG-SYNC-011 FIX: Clear confirmed empty epochs cache after chain reorganization.
+    // Epochs marked during reorg may no longer be accurate now that we have
+    // synced blocks from peers. Clear to allow fresh verification.
+    confirmedEmptyEpochs.invalidateAll();
 
     // Reset state
     forkPointEpoch.set(-1);
@@ -864,6 +916,10 @@ public class SyncManager implements AutoCloseable {
   private void initiateBinarySearch(long localTipEpoch, long knownRemoteTipEpoch) {
     log.info("Sync: initiating binary search (local={}, remote={}, gap={})",
         localTipEpoch, knownRemoteTipEpoch, knownRemoteTipEpoch - localTipEpoch);
+
+    // BUG-SYNC-008 fix: Prevent fork detection from running after binary search
+    // Binary search implies we're syncing from a remote peer, so fork detection is not needed
+    initialHistoricalScanDone.set(true);
 
     // Set search range: from local tip + 1 to remote tip
     binarySearchLow.set(localTipEpoch + 1);
@@ -1022,6 +1078,17 @@ public class SyncManager implements AutoCloseable {
     long prev = remoteTipEpoch.getAndUpdate(old -> Math.max(old, epoch));
     if (epoch > prev) {
       log.debug("Remote tip epoch updated: {} -> {}", prev, epoch);
+
+      // BUG-SYNC-012 FIX: On first remote tip update, check if we're far behind.
+      // If gap > threshold, mark that we started far behind to skip fork detection.
+      if (prev == 0) {
+        long localEpoch = getLocalTipEpoch();
+        long gap = epoch - localEpoch;
+        if (gap > BINARY_SEARCH_THRESHOLD) {
+          startedFarBehind.set(true);
+          log.info("Node started far behind peers (gap={}), will skip fork detection", gap);
+        }
+      }
     }
   }
 

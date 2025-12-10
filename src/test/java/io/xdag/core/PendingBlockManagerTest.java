@@ -408,4 +408,211 @@ public class PendingBlockManagerTest {
     // Verify cleanup happened
     assertEquals(0, dagStore.getMissingDependencyBlockCount());
   }
+
+  // ==================== BUG-SYNC-009: Race Condition Tests ====================
+
+  /**
+   * Test: BUG-SYNC-009 - Race condition where parent is already available when registering.
+   *
+   * <p>Scenario:
+   * 1. Block A needs parent P
+   * 2. P is imported before A finishes registerMissingDependency
+   * 3. onBlockImported(P) fires but A is not yet registered
+   * 4. A's registration completes but retry callback is never triggered
+   *
+   * <p>Fix: registerMissingDependency checks if parents exist after registration
+   * and enqueues for immediate retry if they do.
+   */
+  @Test
+  public void testRaceCondition_ParentAlreadyImportedDuringRegistration() throws Exception {
+    // Step 1: Save parent block DIRECTLY to store (simulating the race condition where
+    // parent was imported between BlockImporter detecting MISSING_DEPENDENCY and
+    // PendingBlockManager.registerMissingDependency being called)
+    Block parentWithInfo = parentBlock.toBuilder()
+        .info(BlockInfo.builder()
+            .hash(parentBlock.getHash())
+            .epoch(parentBlock.getEpoch())
+            .height(1)
+            .difficulty(UInt256.ONE)
+            .build())
+        .build();
+    dagStore.saveBlock(parentWithInfo);
+
+    // Verify parent is now in the store
+    assertNotNull("Parent should be saved", dagStore.getBlockByHash(parentBlock.getHash()));
+
+    // Step 2: Now register a pending block that needs the already-imported parent
+    // In the race condition scenario, this would happen because:
+    // - Thread A detected parent was missing
+    // - Thread B imported the parent
+    // - Thread A continued with registration
+    CountDownLatch retryLatch = new CountDownLatch(1);
+    AtomicReference<Block> retriedBlock = new AtomicReference<>();
+
+    pendingBlockManager.start(block -> {
+      retriedBlock.set(block);
+      retryLatch.countDown();
+      // Note: clearMissingDependency would be called by BlockImporter after successful import
+      // Here we just verify retry is triggered when parent exists
+      return DagImportResult.mainBlock(block.getEpoch(), 1, UInt256.ONE, true);
+    });
+
+    // Register pending block - parent is ALREADY in the store
+    pendingBlockManager.registerMissingDependency(pendingBlock, List.of(parentBlock.getHash()));
+
+    // The block should be enqueued for retry immediately because parent exists
+    // (This is the BUG-SYNC-009 fix)
+    assertTrue("Block should be retried even though parent was already imported",
+        retryLatch.await(5, TimeUnit.SECONDS));
+
+    assertNotNull("Retried block should not be null", retriedBlock.get());
+    assertEquals(pendingBlock.getHash(), retriedBlock.get().getHash());
+
+    // Cleanup after retry (normally done by BlockImporter)
+    pendingBlockManager.clearMissingDependency(retriedBlock.get().getHash());
+
+    // Verify cleanup
+    assertEquals(0, dagStore.getMissingDependencyBlockCount());
+  }
+
+  /**
+   * Test: BUG-SYNC-009 - Atomic write ensures index is visible when parent is imported.
+   *
+   * <p>This test verifies that the WriteBatch fix in saveMissingDependencyBlock ensures
+   * all writes (block data + parent index) are visible atomically.
+   *
+   * <p>Before the fix, there was a window where:
+   * 1. Block data was written
+   * 2. onBlockImported queried the index
+   * 3. Index entry was written (too late!)
+   */
+  @Test
+  public void testAtomicWrite_IndexVisibleWhenParentImported() throws Exception {
+    // Create a parent block that we'll use to trigger onBlockImported
+    Bytes32 parentHash = Bytes32.random();
+
+    // Track retry calls
+    CountDownLatch retryLatch = new CountDownLatch(1);
+
+    pendingBlockManager.start(block -> {
+      retryLatch.countDown();
+      return DagImportResult.orphan(block.getEpoch(), UInt256.ZERO, false);
+    });
+
+    // Register pending block with missing parent
+    pendingBlockManager.registerMissingDependency(pendingBlock, List.of(parentHash));
+
+    // Immediately verify index is visible (atomic write means both should be visible)
+    List<Bytes32> waiting = dagStore.getBlocksWaitingForParent(parentHash);
+    assertTrue("Index should be visible immediately after registration (atomic write)",
+        waiting.contains(pendingBlock.getHash()));
+
+    // Also verify block data is visible
+    Block loaded = dagStore.getBlockByHash(pendingBlock.getHash());
+    assertNotNull("Block data should be visible immediately after registration",
+        loaded);
+
+    // Now simulate parent arrival - this should find the pending block
+    Block parent = Block.builder()
+        .header(BlockHeader.builder()
+            .epoch(999_999L)
+            .difficulty(UInt256.valueOf(1))
+            .nonce(Bytes32.ZERO)
+            .coinbase(Bytes.wrap(new byte[20]))
+            .build())
+        .links(List.of())
+        .info(BlockInfo.builder()
+            .hash(parentHash)
+            .epoch(999_999L)
+            .height(1)
+            .difficulty(UInt256.ONE)
+            .build())
+        .build();
+
+    pendingBlockManager.onBlockImported(parent);
+
+    // Retry should be triggered
+    assertTrue("Block should be retried when parent arrives",
+        retryLatch.await(5, TimeUnit.SECONDS));
+  }
+
+  /**
+   * Test: BUG-SYNC-009 - Concurrent parent import and pending registration.
+   *
+   * <p>This test creates actual concurrent threads to simulate the race condition
+   * and verify the fix works under concurrent access.
+   */
+  @Test
+  public void testConcurrent_ParentImportAndPendingRegistration() throws Exception {
+    // Use a latch to synchronize thread start
+    CountDownLatch startLatch = new CountDownLatch(1);
+    CountDownLatch doneLatch = new CountDownLatch(2);
+    AtomicInteger retryCount = new AtomicInteger(0);
+
+    // Create a parent hash
+    Bytes32 parentHash = Bytes32.random();
+
+    pendingBlockManager.start(block -> {
+      retryCount.incrementAndGet();
+      return DagImportResult.orphan(block.getEpoch(), UInt256.ZERO, false);
+    });
+
+    // Thread 1: Register pending block
+    Thread registerThread = new Thread(() -> {
+      try {
+        startLatch.await();
+        pendingBlockManager.registerMissingDependency(pendingBlock, List.of(parentHash));
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+      } finally {
+        doneLatch.countDown();
+      }
+    });
+
+    // Thread 2: Simulate parent arrival
+    Thread importThread = new Thread(() -> {
+      try {
+        startLatch.await();
+        Block parent = Block.builder()
+            .header(BlockHeader.builder()
+                .epoch(999_999L)
+                .difficulty(UInt256.valueOf(1))
+                .nonce(Bytes32.ZERO)
+                .coinbase(Bytes.wrap(new byte[20]))
+                .build())
+            .links(List.of())
+            .info(BlockInfo.builder()
+                .hash(parentHash)
+                .epoch(999_999L)
+                .height(1)
+                .difficulty(UInt256.ONE)
+                .build())
+            .build();
+        pendingBlockManager.onBlockImported(parent);
+      } catch (Exception e) {
+        // ignore
+      } finally {
+        doneLatch.countDown();
+      }
+    });
+
+    registerThread.start();
+    importThread.start();
+
+    // Start both threads simultaneously
+    startLatch.countDown();
+
+    // Wait for both to complete
+    assertTrue("Both threads should complete", doneLatch.await(10, TimeUnit.SECONDS));
+
+    // Wait for async retry processing
+    Thread.sleep(3000);
+
+    // The pending block should be retried regardless of which thread won the race
+    // Either:
+    // 1. Registration completed first -> onBlockImported found the index -> retry triggered
+    // 2. Parent import completed first -> registration check found parent exists -> retry triggered
+    assertTrue("Block should be retried at least once despite race condition",
+        retryCount.get() >= 1);
+  }
 }

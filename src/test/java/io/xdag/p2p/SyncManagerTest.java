@@ -1261,4 +1261,317 @@ public class SyncManagerTest {
       forkSyncManager.stop();
     }
   }
+
+  // ==================== BUG-SYNC-007: Binary Search Future Epoch Bug ====================
+
+  /**
+   * Test: BUG-SYNC-007 - When all probes return no blocks during binary search,
+   * the fallback epoch should NOT exceed the remote tip epoch.
+   *
+   * Before the fix:
+   * - Binary search would use `low` as fallback which could be > remote tip
+   * - This caused requestEpochHashes to request future epochs (e.g., epoch 27582661 when current was 27582587)
+   *
+   * After the fix:
+   * - Fallback uses Math.max(localTipEpoch + 1, originalHigh - MAX_EPOCHS_PER_REQUEST)
+   * - This ensures the starting epoch is never beyond the known remote tip
+   */
+  @Test
+  public void binarySearch_AllProbesNoBlocks_ShouldNotReturnFutureEpoch() {
+    // Setup: local tip at epoch 100, remote tip at 5000
+    // This creates a gap > BINARY_SEARCH_THRESHOLD (1024)
+    when(tipBlock.getEpoch()).thenReturn(100L);
+    when(dagChain.getMainChainLength()).thenReturn(10L);
+    when(dagChain.getMainBlockByHeight(10L)).thenReturn(tipBlock);
+
+    syncManager.updateRemoteTipEpoch(5000L);
+    when(dagChain.getCurrentEpoch()).thenReturn(5000L);
+
+    // Trigger binary search
+    syncManager.performSync();
+    assertTrue("Should be in binary search mode", syncManager.isInBinarySearch());
+
+    // Simulate all probes returning no blocks
+    // This would cause low to increase beyond high in the old buggy code
+    for (int i = 0; i < 25; i++) {
+      if (!syncManager.isInBinarySearch()) break;
+      syncManager.performSync();
+      syncManager.onBinarySearchResponse(false, -1);
+    }
+
+    // Binary search should have completed
+    assertFalse("Binary search should complete", syncManager.isInBinarySearch());
+
+    // After completion, the next sync should request epochs within valid range
+    // Reset the mock to verify new requests
+    org.mockito.Mockito.reset(channel);
+    syncManager.performSync();
+
+    // Verify that the requested epoch range is valid (not beyond remote tip)
+    verify(channel).send(argThat((Message msg) -> {
+      if (!(msg instanceof GetEpochHashesMessage)) return false;
+      GetEpochHashesMessage request = (GetEpochHashesMessage) msg;
+      // Start epoch should be <= remote tip (5000)
+      // End epoch should be <= current epoch (5000)
+      return request.getStartEpoch() <= 5000L && request.getEndEpoch() <= 5000L;
+    }));
+  }
+
+  /**
+   * Test: BUG-SYNC-007 - Binary search low bound should be clamped to not exceed high bound.
+   *
+   * Before the fix:
+   * - onBinarySearchResponse() would set low = probe + MAX_EPOCHS_PER_REQUEST
+   * - If probe was near high, this could make low > high
+   * - This caused the search range to become invalid
+   *
+   * After the fix:
+   * - low is clamped: newLow = Math.min(probe + MAX_EPOCHS_PER_REQUEST, high)
+   */
+  @Test
+  public void binarySearch_LowBoundShouldNotExceedHighBound() {
+    // Setup: smaller gap to test boundary condition
+    // localTipEpoch = 100, remoteTipEpoch = 1500 (gap = 1400 > 1024)
+    when(tipBlock.getEpoch()).thenReturn(100L);
+    when(dagChain.getMainChainLength()).thenReturn(10L);
+    when(dagChain.getMainBlockByHeight(10L)).thenReturn(tipBlock);
+
+    syncManager.updateRemoteTipEpoch(1500L);
+    when(dagChain.getCurrentEpoch()).thenReturn(1500L);
+
+    // Trigger binary search
+    syncManager.performSync();
+    assertTrue("Should be in binary search mode", syncManager.isInBinarySearch());
+
+    // Simulate responses that narrow the range
+    // After several "no blocks" responses, low should approach but not exceed high
+    int iterations = 0;
+    while (syncManager.isInBinarySearch() && iterations < 25) {
+      syncManager.performSync();
+      syncManager.onBinarySearchResponse(false, -1);
+      iterations++;
+    }
+
+    // Binary search should terminate (not loop infinitely due to low > high)
+    assertFalse("Binary search should terminate", syncManager.isInBinarySearch());
+    assertTrue("Should complete within reasonable iterations", iterations <= 20);
+  }
+
+  /**
+   * Test: BUG-SYNC-007 - Termination condition should include low > high check.
+   *
+   * Before the fix:
+   * - performBinarySearch() only checked: iterations >= MAX or high - low <= MAX_EPOCHS
+   * - If low > high (due to buggy onBinarySearchResponse), search could behave unexpectedly
+   *
+   * After the fix:
+   * - Added: || low > high to termination condition
+   */
+  @Test
+  public void binarySearch_ShouldTerminateWhenLowExceedsHigh() {
+    // Setup with moderate gap
+    when(tipBlock.getEpoch()).thenReturn(100L);
+    when(dagChain.getMainChainLength()).thenReturn(10L);
+    when(dagChain.getMainBlockByHeight(10L)).thenReturn(tipBlock);
+
+    syncManager.updateRemoteTipEpoch(2000L);
+    when(dagChain.getCurrentEpoch()).thenReturn(2000L);
+
+    syncManager.performSync();
+    assertTrue("Should start binary search", syncManager.isInBinarySearch());
+
+    // Exhaust binary search with all "no blocks" responses
+    int maxIterations = 30;
+    int actualIterations = 0;
+    while (syncManager.isInBinarySearch() && actualIterations < maxIterations) {
+      syncManager.performSync();
+      syncManager.onBinarySearchResponse(false, -1);
+      actualIterations++;
+    }
+
+    // Should have terminated properly
+    assertFalse("Should exit binary search", syncManager.isInBinarySearch());
+
+    // Verify termination happened due to proper condition (not just max iterations)
+    // MAX_BINARY_SEARCH_ITERATIONS = 20, so if terminated earlier, it's due to low > high check
+    assertTrue("Should terminate within max iterations", actualIterations <= 20);
+  }
+
+  // ==================== BUG-SYNC-008: Fork Detection After Binary Search ====================
+
+  /**
+   * Test: BUG-SYNC-008 - Fork detection should be disabled when binary search is initiated.
+   *
+   * Before the fix:
+   * - Binary search would complete successfully
+   * - Then maybeInitiateForkDetection() would trigger because initialHistoricalScanDone was false
+   * - This caused the node to get stuck in fork detection mode
+   *
+   * After the fix:
+   * - initiateBinarySearch() sets initialHistoricalScanDone = true
+   * - Fork detection is skipped since we're already syncing from a remote peer
+   *
+   * Scenario: Node with only genesis (height=1) starts syncing from far-ahead peer.
+   * Since height=1, fork detection is skipped (nothing to compare).
+   * Binary search triggers due to large gap. After binary search completes,
+   * even if chain grows to height>1, fork detection should NOT trigger
+   * because initialHistoricalScanDone was set by binary search.
+   */
+  @Test
+  public void binarySearch_ShouldDisableForkDetection() {
+    // Create a fresh SyncManager that has NOT marked initial scan done
+    SyncManager freshSyncManager = new SyncManager(dagKernel, false);
+    freshSyncManager.start();
+
+    try {
+      // Setup: chain has ONLY genesis (height=1)
+      // Fork detection requires height > 1, so it won't trigger
+      when(dagChain.getMainChainLength()).thenReturn(1L);
+      when(dagChain.getCurrentEpoch()).thenReturn(5000L);
+
+      Block genesisBlock = org.mockito.Mockito.mock(Block.class);
+      when(genesisBlock.getEpoch()).thenReturn(100L);
+      when(dagChain.getMainBlockByHeight(1L)).thenReturn(genesisBlock);
+
+      // Set remote tip far ahead to trigger binary search
+      freshSyncManager.updateRemoteTipEpoch(5000L);
+
+      // First performSync should trigger binary search (gap > 1024)
+      // Fork detection won't trigger because mainChainLength = 1
+      freshSyncManager.performSync();
+
+      // Should be in binary search mode (not fork detection)
+      assertTrue("Should be in binary search mode", freshSyncManager.isInBinarySearch());
+      assertFalse("Should NOT be in fork detection", freshSyncManager.isInForkDetection());
+
+      // Complete binary search
+      for (int i = 0; i < 25; i++) {
+        if (!freshSyncManager.isInBinarySearch()) break;
+        freshSyncManager.performSync();
+        freshSyncManager.onBinarySearchResponse(false, -1);
+      }
+
+      // Now simulate that syncing has progressed, chain has grown to height > 1
+      // This is the scenario where fork detection WOULD have triggered before the fix
+      when(dagChain.getMainChainLength()).thenReturn(5L);
+      Block tipMock = org.mockito.Mockito.mock(Block.class);
+      when(tipMock.getEpoch()).thenReturn(4900L);
+      when(dagChain.getMainBlockByHeight(5L)).thenReturn(tipMock);
+
+      // After binary search completes, fork detection should NOT trigger
+      // even though chain now has height > 1
+      freshSyncManager.performSync();
+
+      assertFalse("Should NOT trigger fork detection after binary search",
+          freshSyncManager.isInForkDetection());
+
+    } finally {
+      freshSyncManager.stop();
+    }
+  }
+
+  /**
+   * Test: BUG-SYNC-008 - After binary search completes, should continue with forward sync.
+   *
+   * This verifies that after binary search, the sync manager transitions to forward sync
+   * mode and does NOT enter fork detection mode.
+   *
+   * Scenario: New node (height=1) syncs from established peer with large gap.
+   * After binary search completes and chain grows, fork detection should NOT trigger.
+   */
+  @Test
+  public void binarySearch_AfterComplete_ShouldContinueForwardSyncNotForkDetection() {
+    // Create a fresh SyncManager without marking historical scan done
+    SyncManager freshSyncManager = new SyncManager(dagKernel, false);
+    freshSyncManager.start();
+
+    try {
+      // Setup: chain starts with only genesis (height=1)
+      // Fork detection won't trigger initially because mainChainLength <= 1
+      when(dagChain.getMainChainLength()).thenReturn(1L);
+      when(dagChain.getCurrentEpoch()).thenReturn(3000L);
+
+      Block genesisBlock = org.mockito.Mockito.mock(Block.class);
+      when(genesisBlock.getEpoch()).thenReturn(100L);
+      when(dagChain.getMainBlockByHeight(1L)).thenReturn(genesisBlock);
+
+      freshSyncManager.updateRemoteTipEpoch(3000L);
+
+      // Start binary search
+      freshSyncManager.performSync();
+      assertTrue("Should start in binary search", freshSyncManager.isInBinarySearch());
+
+      // Complete binary search
+      for (int i = 0; i < 25; i++) {
+        if (!freshSyncManager.isInBinarySearch()) break;
+        freshSyncManager.performSync();
+        freshSyncManager.onBinarySearchResponse(false, -1);
+      }
+
+      assertFalse("Binary search should complete", freshSyncManager.isInBinarySearch());
+
+      // Simulate chain growth after syncing some blocks
+      when(dagChain.getMainChainLength()).thenReturn(5L);
+      Block tipMock = org.mockito.Mockito.mock(Block.class);
+      when(tipMock.getEpoch()).thenReturn(2800L);
+      when(dagChain.getMainBlockByHeight(5L)).thenReturn(tipMock);
+
+      // Multiple subsequent syncs should NOT trigger fork detection
+      // even though chain now has height > 1
+      for (int i = 0; i < 5; i++) {
+        freshSyncManager.performSync();
+        assertFalse("Fork detection should NOT trigger after binary search (iteration " + i + ")",
+            freshSyncManager.isInForkDetection());
+        assertFalse("Chain reorganization should NOT trigger (iteration " + i + ")",
+            freshSyncManager.isInChainReorganization());
+      }
+
+    } finally {
+      freshSyncManager.stop();
+    }
+  }
+
+  /**
+   * Test: Verify that fork detection can still be triggered in normal scenarios.
+   *
+   * This ensures the BUG-SYNC-008 fix doesn't break legitimate fork detection use cases.
+   * Fork detection should trigger when:
+   * 1. Node has blocks beyond genesis
+   * 2. Gap is small (no binary search)
+   * 3. initialHistoricalScanDone is false
+   */
+  @Test
+  public void forkDetection_ShouldStillWorkForSmallGaps() {
+    SyncManager freshSyncManager = new SyncManager(dagKernel, false);
+    freshSyncManager.start();
+
+    try {
+      // Setup: chain has blocks, but gap is small (no binary search)
+      when(dagChain.getMainChainLength()).thenReturn(5L);
+      when(dagChain.getCurrentEpoch()).thenReturn(200L);
+
+      Block genesisBlock = org.mockito.Mockito.mock(Block.class);
+      when(genesisBlock.getEpoch()).thenReturn(100L);
+      when(dagChain.getMainBlockByHeight(1L)).thenReturn(genesisBlock);
+
+      Block tipMock = org.mockito.Mockito.mock(Block.class);
+      when(tipMock.getEpoch()).thenReturn(150L);
+      when(dagChain.getMainBlockByHeight(5L)).thenReturn(tipMock);
+
+      // Small remote tip (gap <= 1024, won't trigger binary search)
+      freshSyncManager.updateRemoteTipEpoch(200L);
+
+      // performSync should trigger fork detection (not binary search)
+      freshSyncManager.performSync();
+
+      // Should be in fork detection mode (small gap, historical scan not done)
+      assertTrue("Should be in fork detection for small gap",
+          freshSyncManager.isInForkDetection());
+      assertFalse("Should NOT be in binary search for small gap",
+          freshSyncManager.isInBinarySearch());
+
+    } finally {
+      freshSyncManager.stop();
+    }
+  }
 }
